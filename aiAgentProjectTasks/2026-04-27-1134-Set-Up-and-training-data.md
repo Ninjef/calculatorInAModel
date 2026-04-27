@@ -1,0 +1,113 @@
+# Overview
+I want to experiment with putting a real calculator inside a deep network, such that it can access the computational capabilities of the caluclator directly in its own mind.
+
+I've been chatting with an AI about this for awhile. The AI's insight / plan is below.
+
+# Instructions
+Read the AI Insight / Plan, but only implement up to step 2 for now.
+
+# AI Insight / Plan
+
+Your Calculator-in-the-Brain Sandbox: A Research Plan
+Excellent — you're asking exactly the right meta-questions before writing a line of code. Let me give you the research plan I'd write on a whiteboard if you walked into my office. I'll be concrete about choices and explain why for each, because the "why" is what lets you deviate intelligently later.
+
+Core design principles (read these first)
+Before any specific decisions, internalize these four principles. They'll keep you from wasting weeks.
+
+Start absurdly small. You want to be able to train a model from scratch in under 5 minutes on your M1. If a single experiment takes hours, you can't iterate, and iteration speed is research speed at this stage.
+Make the calculator's job trivially learnable in principle. If even an oracle encoder can't get useful signal through your calculator, you'll never know whether failure is from STE, your architecture, or your task. Pick a task where you know a working solution exists.
+Build the no-calculator baseline first. You need a control. Without it, you can't claim the calculator helps.
+Treat the calculator interface as the experiment, not the model size. Your variable of interest is the interface between neurons and a non-differentiable module. Everything else should be held fixed and minimal.
+
+
+The specifics you should consider
+Model choice: a tiny custom transformer, not GPT-2
+Resist the urge to start with GPT-2. Reasons:
+
+GPT-2's 124M parameters take real time to train on M1, even with MPS backend.
+You need to modify the architecture internals — adding a calculator hook between specific layers, freezing things, routing residual streams. Doing this on HuggingFace's GPT-2 means fighting the abstraction. Doing it on a 200-line custom transformer means the hook is 5 lines.
+You don't need language modeling capability for the first experiment. You need arithmetic from a sequence.
+
+Concrete recommendation: Build a 4-layer, 4-head, 128-dim decoder-only transformer in pure PyTorch. Karpathy's nanoGPT is the right reference — copy the spirit, not the repo. Total parameter count: ~500K to 2M. Trains in minutes.
+Task choice: synthetic arithmetic, framed as next-token prediction
+Your calculator is an adder. So your task should require addition. The cleanest possible version:
+
+Input: "A+B=" where A and B are integers in some range (start with 0–99).
+Output: the digits of A+B, one token at a time.
+Vocabulary: digits 0–9, plus +, =, and an end-of-sequence token. ~13 tokens total.
+Dataset: generated on the fly. Infinite data, no overfitting concerns, no tokenizer headaches.
+
+This is deliberately the easiest possible task where a calculator should help. Once it works, you escalate: multi-digit numbers, mixed operations, arithmetic embedded in word problems, etc.
+Should you train raw first, then add the calculator?
+Yes, absolutely. Three sequential models, not one.
+
+Model A (raw baseline): Vanilla transformer trained on the arithmetic task from scratch. Establishes how well a standard model learns arithmetic on its own. You'll likely see it learn small numbers and fail on bigger ones — this is the well-documented "transformers can't add" finding.
+Model B (calculator-augmented, calculator initially "off"): Same architecture as A, but with the calculator hook plumbed in and outputting zeros (or the identity, passing through the residual stream untouched). Train it. It should match Model A. This is your sanity check that the wiring doesn't itself break learning. Skipping this step is the #1 way people get confused later.
+Model C (calculator on, STE active): Same as B, but calculator now actually computes A+B and writes back into the residual stream. STE handles the backward pass. This is the experiment.
+
+Don't skip B. I've seen too many students conflate "my idea doesn't work" with "I have a bug in my hook."
+How to fit a calculator into a layer
+Here's the conceptual design. There are three sub-decisions:
+a) Where in the network does the calculator sit?
+Pick one layer to start. I'd suggest after layer 2 of 4 (middle of the network). Early enough that downstream layers can use the result; late enough that upstream layers have built up some representation. Later, you'll vary this and it'll be one of your ablations.
+b) What's the interface contract?
+You need to specify exactly four things:
+
+Input projection: A small linear layer that maps the residual stream at position t (a 128-dim vector) to the calculator's input format (two integers). This is the "encoder" the upstream neurons must learn to drive.
+Discretization: The calculator needs integers. Your projection outputs continuous values. You need a discretization step — argmax over a digit vocabulary, or rounding, or Gumbel-Softmax sampling. This is where STE lives. Forward: discretize. Backward: pretend the discretization was the identity.
+Calculator call: Pure Python. result = a + b. Non-differentiable. Wrapped in a torch.no_grad() or a custom autograd function.
+Output projection: A linear layer mapping the calculator's output (an integer, encoded as a one-hot or learned embedding) back into the 128-dim residual stream, added to whatever was already there (preserving the residual structure).
+
+c) How is the residual stream modified?
+Add, don't replace. The calculator's output is injected into the residual stream alongside the normal layer output. This means: even if the calculator produces garbage, the network can route around it. This is critical for stable training and matches how transformers naturally use residual streams.
+How to train it with the calculator embedded
+The training loop itself is almost identical to vanilla transformer training. The differences:
+
+Loss: Standard cross-entropy on next-token prediction. The calculator isn't separately supervised. You want the model to learn to use it via the downstream loss, not by being told "here's the right calculator query."
+STE implementation: A custom torch.autograd.Function whose forward does discretize-then-call-calculator-then-embed, and whose backward returns the upstream gradient unchanged (the identity gradient through the discretization). This is ~20 lines of code.
+Curriculum: Start with single-digit addition. Once it works, expand. This is essential — STE gradients are noisy enough that throwing the full task at the model from epoch 0 may not converge.
+Gradient clipping: Always. STE produces biased gradients that occasionally point in wild directions. Clip the global gradient norm at 1.0.
+Multiple seeds: STE training has higher variance than normal training. Run every experiment with at least 3 seeds. Report mean ± std, not single runs.
+
+
+Order of operations: 10 steps
+Here's the sequence I'd give you for the first 2–3 weeks of work.
+Step 1 — Environment. PyTorch with MPS backend on your M1. Confirm torch.backends.mps.is_available() returns True. Don't bother with CUDA emulation or remote GPUs yet — you don't need them.
+Step 2 — Synthetic data generator. A function that produces (input_tokens, target_tokens) for arithmetic problems. Parameterize digit count so you can scale difficulty later. Verify by eyeballing 20 samples.
+Step 3 — Tiny transformer (Model A). Implement a 4-layer decoder-only transformer in ~200 lines. No fancy optimizations. Use it to overfit a batch of 8 examples to confirm the model can learn anything. This is your "hello world."
+Step 4 — Train Model A on arithmetic. Establish baseline accuracy on 1-digit, 2-digit, 3-digit addition. Save metrics. This is your control condition for the rest of the project.
+Step 5 — Repository hygiene. Now, before you have many models, set up a clean way to save runs. Each training run gets its own directory containing: the config (hyperparameters, architecture, task), the final weights, training curves, and final eval metrics. A simple convention like runs/YYYY-MM-DD_<short-name>/ is enough. Don't use MLflow or W&B yet — they're overkill until you have 20+ runs.
+Step 6 — Build the calculator hook (with calculator OFF) — Model B. Add the input projection, the discretization-with-STE, the calculator call (returning zero), and the output projection. Train. Confirm it matches Model A within noise. If it doesn't match A, stop and debug. Do not proceed to step 7 with a broken hook.
+Step 7 — Turn the calculator ON — Model C. Replace the zero-return with actual addition. Train. Compare to A and B. Three things can happen:
+
+C beats A: your idea works, write it up.
+C matches A: the model is ignoring the calculator. Diagnose by inspecting what the encoder is feeding it.
+C is worse than A: the calculator is actively harmful. Investigate whether the residual is being polluted.
+
+Step 8 — Diagnostics, not new features. Whatever step 7 produces, your next move is diagnostics, not architectural changes. Specifically: log what the encoder is sending to the calculator on held-out problems. Is it sending the right numbers? Is it sending garbage? Plot the calculator's input distribution over training. This tells you whether STE is providing useful signal or not.
+Step 9 — Ablations. Once you understand step 7, run the obvious comparisons: calculator at different depths, with and without the residual injection, with hard-discretization vs Gumbel-Softmax, with vs without an auxiliary loss that supervises the calculator's input. Each ablation is a separate run in your runs/ directory.
+Step 10 — Scale slowly. Only after the toy task is solved cleanly do you scale: bigger numbers, multiple operations, arithmetic embedded in natural language, eventually a real pretrained tiny model like a 6-layer transformer trained on TinyStories with calculator hooks. Resist scaling earlier — you'll lose the ability to iterate.
+
+What you should not do yet
+Equally important: a list of temptations to refuse for at least the first month.
+
+Don't try multiple gradient estimators in parallel. Get STE working end-to-end first.
+Don't add a tokenizer. Custom integer-token vocabulary is fine.
+Don't use HuggingFace's transformers library. The abstractions will fight you.
+Don't try to make this work on GPT-2 yet. You'll burn weeks on infrastructure.
+Don't add Weights & Biases, Hydra, or any other tooling. Plain Python config dicts are enough.
+Don't try multiple tasks. One arithmetic task, well-understood, beats five tasks you don't.
+Don't start with multi-digit numbers. Single digits first — you must see the curve go up before complicating.
+
+
+What "done with the sandbox phase" looks like
+You're ready to graduate from the sandbox when you can answer all of these in one paragraph each, with plots from your own runs:
+
+How well does Model A learn k-digit addition as a function of k?
+Does Model B (calculator wired but off) match Model A?
+Does Model C (calculator on) beat Model A on at least one k where A struggles?
+What is the encoder feeding the calculator over the course of training?
+How sensitive is C's performance to the calculator's depth in the network?
+
+If you can produce those five plots, you have a NeurIPS workshop submission. If you can do it for k up to 5 and embedded in TinyStories-style natural language, you have a main-conference submission.
+Now go write the data generator. That's step 2, and it's the only one you should be thinking about today.
