@@ -1,3 +1,8 @@
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
 import torch
 
 from src.data import EQ_ID, VOCAB_SIZE
@@ -20,6 +25,12 @@ def _small_calculator_cfg(mode: str = "add") -> GPTConfig:
         calculator_operand_vocab_size=10,
         calculator_result_vocab_size=19,
     )
+
+
+def _small_scaled_calculator_cfg(scale: float, mode: str = "add") -> GPTConfig:
+    cfg = _small_calculator_cfg(mode=mode)
+    cfg.calculator_injection_scale = scale
+    return cfg
 
 
 def test_forward_shape() -> None:
@@ -110,6 +121,76 @@ def test_calculator_injection_is_localized_to_equals_positions() -> None:
     assert torch.all(injection[0, 2] != 0)
 
 
+def test_calculator_trace_records_shapes_values_and_equals_positions() -> None:
+    torch.manual_seed(0)
+    hook = CalculatorHook(_small_calculator_cfg(mode="add"))
+    with torch.no_grad():
+        hook.input_proj.weight.zero_()
+        hook.input_proj.bias.fill_(-10.0)
+        hook.input_proj.bias[3] = 10.0
+        hook.input_proj.bias[10 + 4] = 10.0
+        hook.output_proj.weight.fill_(1.0)
+
+    h = torch.randn(1, 5, 32)
+    tokens = torch.tensor([[1, 2, EQ_ID, 3, 4]])
+
+    injection, trace = hook(h, tokens, return_trace=True)
+
+    assert injection.shape == h.shape
+    assert trace["eq_mask"].shape == tokens.shape
+    assert trace["a_pred"][0, 2].item() == 3
+    assert trace["b_pred"][0, 2].item() == 4
+    assert trace["result_pred"][0, 2].item() == 7
+    assert trace["eq_mask"][0].tolist() == [False, False, True, False, False]
+    assert trace["injection_norm"][0, 2].item() > 0
+    assert trace["injection_norm"][0, 0].item() == 0
+
+
+def test_oracle_operands_force_calculator_result_class() -> None:
+    torch.manual_seed(0)
+    hook = CalculatorHook(_small_calculator_cfg(mode="add"))
+    h = torch.randn(1, 5, 32)
+    tokens = torch.tensor([[1, 2, EQ_ID, 3, 4]])
+    oracle = torch.zeros(1, 5, 2, dtype=torch.long)
+    oracle[..., 0] = 2
+    oracle[..., 1] = 5
+
+    _, trace = hook(h, tokens, oracle_operands=oracle, return_trace=True)
+
+    assert trace["a_pred"][0, 2].item() == 2
+    assert trace["b_pred"][0, 2].item() == 5
+    assert trace["result_pred"][0, 2].item() == 7
+    assert trace["oracle_used"][0, 2].item() is True
+
+
+def test_calculator_injection_scale_zero_removes_active_injection() -> None:
+    torch.manual_seed(0)
+    hook_zero = CalculatorHook(_small_scaled_calculator_cfg(scale=0.0))
+    hook_one = CalculatorHook(_small_scaled_calculator_cfg(scale=1.0))
+    hook_one.load_state_dict(hook_zero.state_dict())
+    with torch.no_grad():
+        hook_zero.output_proj.weight.fill_(1.0)
+        hook_one.output_proj.weight.fill_(1.0)
+
+    h = torch.randn(1, 5, 32)
+    tokens = torch.tensor([[1, 2, EQ_ID, 3, 4]])
+    oracle = torch.zeros(1, 5, 2, dtype=torch.long)
+    oracle[..., 0] = 3
+    oracle[..., 1] = 4
+
+    injection_zero, trace_zero = hook_zero(
+        h, tokens, oracle_operands=oracle, return_trace=True
+    )
+    injection_one, trace_one = hook_one(
+        h, tokens, oracle_operands=oracle, return_trace=True
+    )
+
+    assert torch.all(injection_zero == 0)
+    assert torch.all(injection_one[0, 2] != 0)
+    assert trace_zero["injection_norm"][0, 2].item() == 0
+    assert trace_one["injection_norm"][0, 2].item() > 0
+
+
 def test_causal_mask_does_not_leak_future_tokens_with_calculator_enabled() -> None:
     torch.manual_seed(0)
     model = TinyGPT(_small_calculator_cfg(mode="add"))
@@ -142,3 +223,71 @@ def test_masked_cross_entropy_ignores_unmasked_positions() -> None:
     loss = masked_cross_entropy(logits, targets, mask)
 
     assert loss.item() < 1e-3
+
+
+def test_diagnostic_cli_smoke(tmp_path, monkeypatch) -> None:
+    script_path = Path("scripts/diagnose_calculator_protocol.py")
+    spec = importlib.util.spec_from_file_location("diagnose_cli", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    diagnose_cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(diagnose_cli)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(script_path),
+            "--variant",
+            "model-c",
+            "--digits",
+            "1",
+            "--steps",
+            "0",
+            "--samples",
+            "8",
+            "--batch-size",
+            "4",
+            "--operand-max",
+            "2",
+            "--probe",
+            "--probe-steps",
+            "2",
+            "--output-dir",
+            str(tmp_path),
+        ],
+    )
+
+    diagnose_cli.main()
+
+    rows_path = tmp_path / "calculator_trace_rows.csv"
+    summary_path = tmp_path / "diagnostic_summary.json"
+    assert rows_path.exists()
+    assert summary_path.exists()
+    summary = json.loads(summary_path.read_text())
+    assert summary["samples"] == 8
+    assert summary["operand_max"] == 2
+    assert "probe" in summary
+
+
+def test_training_oracle_operand_extraction_from_fixed_width_batch() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    x = torch.tensor(
+        [
+            [0, 7, 10, 0, 5, EQ_ID, 1, 2],
+            [4, 2, 10, 9, 9, EQ_ID, 1, 4],
+        ]
+    )
+
+    oracle = overfit_script.make_oracle_operands_from_batch(x, num_digits=2)
+
+    assert oracle.shape == (2, 8, 2)
+    assert oracle[0, 0].tolist() == [7, 5]
+    assert oracle[0, -1].tolist() == [7, 5]
+    assert oracle[1, 0].tolist() == [42, 99]
+    assert oracle[1, -1].tolist() == [42, 99]

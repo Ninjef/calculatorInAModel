@@ -43,6 +43,7 @@ class TrainConfig:
     weight_decay: float
     grad_clip: float
     fixed_width: bool
+    oracle_train: bool
     model: dict[str, object]
 
 
@@ -71,10 +72,23 @@ def generate_answer(
     prompt_ids: list[int],
     max_new_tokens: int,
     device: str | torch.device,
+    oracle_operands: tuple[int, int] | None = None,
 ) -> list[int]:
-    prompt = torch.tensor([prompt_ids], dtype=torch.long, device=device)
-    generated = model.generate(prompt, max_new_tokens=max_new_tokens)[0].tolist()
-    return generated[len(prompt_ids) :]
+    ids = torch.tensor([prompt_ids], dtype=torch.long, device=device)
+    for _ in range(max_new_tokens):
+        ids_cond = ids[:, -model.cfg.block_size :]
+        oracle_tensor = None
+        if oracle_operands is not None:
+            oracle_tensor = make_oracle_operands_from_values(
+                a=oracle_operands[0],
+                b=oracle_operands[1],
+                shape=ids_cond.shape,
+                device=device,
+            )
+        logits = model(ids_cond, oracle_operands=oracle_tensor)
+        next_id = logits[:, -1, :].argmax(dim=-1, keepdim=True)
+        ids = torch.cat([ids, next_id], dim=1)
+    return ids[0, len(prompt_ids) :].tolist()
 
 
 def trim_after_eos(ids: list[int]) -> list[int]:
@@ -91,6 +105,7 @@ def evaluate(
     seed: int,
     fixed_width: bool,
     device: str | torch.device,
+    oracle_train: bool,
 ) -> dict[str, object]:
     rng = random.Random(seed)
     high = 10**num_digits - 1
@@ -103,8 +118,15 @@ def evaluate(
         a = rng.randint(0, high)
         b = rng.randint(0, high)
         prompt_ids, target = make_problem(a, b, num_digits, fixed_width=fixed_width)
+        oracle_operands = (a, b) if oracle_train else None
         pred_ids = trim_after_eos(
-            generate_answer(model, prompt_ids, max_answer_tokens, device)
+            generate_answer(
+                model,
+                prompt_ids,
+                max_answer_tokens,
+                device,
+                oracle_operands=oracle_operands,
+            )
         )
         pred = decode_tokens(pred_ids)
         ok = pred == target
@@ -135,7 +157,40 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         writer.writerows(curve)
 
 
-def make_model_config(num_digits: int, variant: str) -> GPTConfig:
+def make_oracle_operands_from_values(
+    *,
+    a: int,
+    b: int,
+    shape: tuple[int, int],
+    device: str | torch.device,
+) -> torch.Tensor:
+    oracle = torch.zeros((*shape, 2), dtype=torch.long, device=device)
+    oracle[..., 0] = a
+    oracle[..., 1] = b
+    return oracle
+
+
+def make_oracle_operands_from_batch(
+    x: torch.Tensor, *, num_digits: int
+) -> torch.Tensor:
+    powers = torch.tensor(
+        [10**i for i in range(num_digits - 1, -1, -1)],
+        dtype=torch.long,
+        device=x.device,
+    )
+    a = (x[:, :num_digits].long() * powers).sum(dim=-1)
+    b_start = num_digits + 1
+    b_end = b_start + num_digits
+    b = (x[:, b_start:b_end].long() * powers).sum(dim=-1)
+    oracle = torch.zeros((*x.shape, 2), dtype=torch.long, device=x.device)
+    oracle[..., 0] = a.unsqueeze(-1)
+    oracle[..., 1] = b.unsqueeze(-1)
+    return oracle
+
+
+def make_model_config(
+    num_digits: int, variant: str, *, injection_scale: float = 1.0
+) -> GPTConfig:
     operand_vocab_size = 10**num_digits
     calculator_enabled = variant in {"model-b", "model-c"}
     calculator_mode = "add" if variant == "model-c" else "off"
@@ -146,6 +201,7 @@ def make_model_config(num_digits: int, variant: str) -> GPTConfig:
         calculator_hook_after_layer=2,
         calculator_operand_vocab_size=operand_vocab_size,
         calculator_result_vocab_size=(2 * operand_vocab_size) - 1,
+        calculator_injection_scale=injection_scale,
     )
 
 
@@ -160,7 +216,9 @@ def run_variant(
     torch.manual_seed(seed)
     rng = random.Random(seed)
 
-    cfg = make_model_config(num_digits, args.variant)
+    cfg = make_model_config(
+        num_digits, args.variant, injection_scale=args.injection_scale
+    )
     model = TinyGPT(cfg).to(device)
     optim = torch.optim.AdamW(
         model.parameters(),
@@ -185,6 +243,7 @@ def run_variant(
         weight_decay=args.weight_decay,
         grad_clip=args.grad_clip,
         fixed_width=True,
+        oracle_train=args.oracle_train,
         model=asdict(cfg),
     )
     (run_dir / "config.json").write_text(
@@ -202,7 +261,12 @@ def run_variant(
             fixed_width=True,
             device=device,
         )
-        logits = model(batch.x)
+        oracle_operands = None
+        if args.oracle_train:
+            oracle_operands = make_oracle_operands_from_batch(
+                batch.x, num_digits=num_digits
+            )
+        logits = model(batch.x, oracle_operands=oracle_operands)
         loss = masked_cross_entropy(logits, batch.y, batch.loss_mask)
 
         if step % args.log_every == 0:
@@ -229,11 +293,13 @@ def run_variant(
         seed=seed + 10_000,
         fixed_width=True,
         device=device,
+        oracle_train=args.oracle_train,
     )
     metrics["final_loss"] = final_loss
     metrics["parameter_count"] = model.num_params()
     metrics["run_dir"] = str(run_dir)
     metrics["variant"] = args.variant
+    metrics["oracle_train"] = args.oracle_train
 
     save_curve(run_dir / "training_curve.csv", curve)
     (run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n")
@@ -277,6 +343,17 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=DEFAULT_LR)
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--grad-clip", type=float, default=1.0)
+    parser.add_argument(
+        "--oracle-train",
+        action="store_true",
+        help="Feed true operands into Model C's calculator during training/eval.",
+    )
+    parser.add_argument(
+        "--injection-scale",
+        type=float,
+        default=1.0,
+        help="Scale the calculator residual injection; default preserves existing behavior.",
+    )
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--log-every", type=int, default=LOG_EVERY)
     parser.add_argument(
@@ -289,13 +366,18 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    if args.oracle_train and args.variant != "model-c":
+        raise ValueError("--oracle-train is only meaningful with --variant model-c")
     device = pick_device()
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    base_run_dir = args.run_root / f"{timestamp}_{args.variant}"
+    suffix = f"{args.variant}-oracle" if args.oracle_train else args.variant
+    base_run_dir = args.run_root / f"{timestamp}_{suffix}"
     base_run_dir.mkdir(parents=True, exist_ok=False)
 
     print(f"device: {device}")
     print(f"variant: {args.variant}")
+    print(f"oracle train: {args.oracle_train}")
+    print(f"injection scale: {args.injection_scale}")
     print(f"run root: {base_run_dir}")
 
     all_metrics = []

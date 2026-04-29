@@ -1,5 +1,6 @@
 import math
 from dataclasses import dataclass
+from typing import Any
 
 import torch
 import torch.nn as nn
@@ -22,6 +23,7 @@ class GPTConfig:
     calculator_hook_after_layer: int = 2
     calculator_operand_vocab_size: int = 10
     calculator_result_vocab_size: int = 19
+    calculator_injection_scale: float = 1.0
 
 
 class HardAddSTE(torch.autograd.Function):
@@ -66,23 +68,120 @@ class CalculatorHook(nn.Module):
         self.mode = cfg.calculator_mode
         self.operand_vocab_size = cfg.calculator_operand_vocab_size
         self.result_vocab_size = cfg.calculator_result_vocab_size
+        self.injection_scale = cfg.calculator_injection_scale
         self.input_proj = nn.Linear(cfg.n_embd, 2 * self.operand_vocab_size)
         self.output_proj = nn.Linear(self.result_vocab_size, cfg.n_embd, bias=False)
 
-    def forward(self, h: Tensor, tokens: Tensor) -> Tensor:
+    def forward(
+        self,
+        h: Tensor,
+        tokens: Tensor,
+        *,
+        oracle_operands: Tensor | None = None,
+        return_trace: bool = False,
+    ) -> Tensor | tuple[Tensor, dict[str, Tensor]]:
         eq_mask = (tokens == EQ_ID).unsqueeze(-1)
+        trace: dict[str, Tensor] = {}
         if self.mode == "off" or not eq_mask.any():
-            return h.new_zeros(h.shape)
+            injection = h.new_zeros(h.shape)
+            if return_trace:
+                trace = self._empty_trace(h, tokens, injection)
+                return injection, trace
+            return injection
 
         operand_logits = self.input_proj(h)
         a_logits, b_logits = operand_logits.split(self.operand_vocab_size, dim=-1)
-        flat_result = HardAddSTE.apply(
-            a_logits.reshape(-1, self.operand_vocab_size),
-            b_logits.reshape(-1, self.operand_vocab_size),
-        )
+        if oracle_operands is None:
+            flat_a_logits = a_logits.reshape(-1, self.operand_vocab_size)
+            flat_b_logits = b_logits.reshape(-1, self.operand_vocab_size)
+            flat_result = HardAddSTE.apply(flat_a_logits, flat_b_logits)
+            a_pred = a_logits.argmax(dim=-1)
+            b_pred = b_logits.argmax(dim=-1)
+        else:
+            if oracle_operands.shape != (*h.shape[:2], 2):
+                raise ValueError(
+                    "oracle_operands must have shape "
+                    f"{(*h.shape[:2], 2)}, got {tuple(oracle_operands.shape)}"
+                )
+            oracle_operands = oracle_operands.to(device=h.device, dtype=torch.long)
+            a_pred = oracle_operands[..., 0]
+            b_pred = oracle_operands[..., 1]
+            result_idx = a_pred + b_pred
+            flat_result = F.one_hot(
+                result_idx.reshape(-1), num_classes=self.result_vocab_size
+            ).to(h.dtype)
         result = flat_result.reshape(*h.shape[:2], self.result_vocab_size)
-        injection = self.output_proj(result)
-        return injection * eq_mask.to(injection.dtype)
+        unscaled_injection = self.output_proj(result) * eq_mask.to(h.dtype)
+        injection = unscaled_injection * self.injection_scale
+        if return_trace:
+            trace = self._build_trace(
+                a_logits=a_logits,
+                b_logits=b_logits,
+                a_pred=a_pred,
+                b_pred=b_pred,
+                result=result,
+                tokens=tokens,
+                unscaled_injection=unscaled_injection,
+                scaled_injection=injection,
+                oracle_used=oracle_operands is not None,
+            )
+            return injection, trace
+        return injection
+
+    def _empty_trace(
+        self, h: Tensor, tokens: Tensor, injection: Tensor
+    ) -> dict[str, Tensor]:
+        B, T = tokens.shape
+        nan_float = h.new_full((B, T), float("nan"))
+        neg_one = tokens.new_full((B, T), -1)
+        return {
+            "eq_mask": tokens == EQ_ID,
+            "a_pred": neg_one,
+            "b_pred": neg_one,
+            "result_pred": neg_one,
+            "a_confidence": nan_float,
+            "b_confidence": nan_float,
+            "a_entropy": nan_float,
+            "b_entropy": nan_float,
+            "injection_norm": injection.norm(dim=-1),
+            "unscaled_injection_norm": injection.norm(dim=-1),
+            "oracle_used": torch.zeros((B, T), dtype=torch.bool, device=tokens.device),
+        }
+
+    @staticmethod
+    def _entropy(probs: Tensor) -> Tensor:
+        return -(probs * probs.clamp_min(1e-12).log()).sum(dim=-1)
+
+    def _build_trace(
+        self,
+        *,
+        a_logits: Tensor,
+        b_logits: Tensor,
+        a_pred: Tensor,
+        b_pred: Tensor,
+        result: Tensor,
+        tokens: Tensor,
+        unscaled_injection: Tensor,
+        scaled_injection: Tensor,
+        oracle_used: bool,
+    ) -> dict[str, Tensor]:
+        a_probs = a_logits.softmax(dim=-1)
+        b_probs = b_logits.softmax(dim=-1)
+        return {
+            "eq_mask": tokens == EQ_ID,
+            "a_pred": a_pred,
+            "b_pred": b_pred,
+            "result_pred": result.argmax(dim=-1),
+            "a_confidence": a_probs.max(dim=-1).values,
+            "b_confidence": b_probs.max(dim=-1).values,
+            "a_entropy": self._entropy(a_probs),
+            "b_entropy": self._entropy(b_probs),
+            "injection_norm": scaled_injection.norm(dim=-1),
+            "unscaled_injection_norm": unscaled_injection.norm(dim=-1),
+            "oracle_used": torch.full(
+                tokens.shape, oracle_used, dtype=torch.bool, device=tokens.device
+            ),
+        }
 
 
 class CausalSelfAttention(nn.Module):
@@ -167,20 +266,44 @@ class TinyGPT(nn.Module):
     def num_params(self) -> int:
         return sum(p.numel() for p in self.parameters())
 
-    def forward(self, x: Tensor) -> Tensor:
+    def forward(
+        self,
+        x: Tensor,
+        *,
+        return_diagnostics: bool = False,
+        oracle_operands: Tensor | None = None,
+    ) -> Tensor | tuple[Tensor, dict[str, Any]]:
         B, T = x.shape
         assert T <= self.cfg.block_size, f"sequence length {T} > block_size {self.cfg.block_size}"
         pos = torch.arange(T, device=x.device)
         h = self.tok_emb(x) + self.pos_emb(pos)
+        diagnostics: dict[str, Any] = {}
         for i, block in enumerate(self.blocks, start=1):
             h = block(h)
+            if return_diagnostics and i == self.cfg.calculator_hook_after_layer:
+                diagnostics["calculator_read_residual"] = h.detach()
             if (
                 self.calculator_hook is not None
                 and i == self.cfg.calculator_hook_after_layer
             ):
-                h = h + self.calculator_hook(h, x)
+                if return_diagnostics:
+                    injection, trace = self.calculator_hook(
+                        h,
+                        x,
+                        oracle_operands=oracle_operands,
+                        return_trace=True,
+                    )
+                    diagnostics["calculator_trace"] = trace
+                    h = h + injection
+                else:
+                    h = h + self.calculator_hook(
+                        h, x, oracle_operands=oracle_operands
+                    )
         h = self.ln_f(h)
-        return self.lm_head(h)
+        logits = self.lm_head(h)
+        if return_diagnostics:
+            return logits, diagnostics
+        return logits
 
     @torch.no_grad()
     def generate(self, prompt_ids: Tensor, max_new_tokens: int) -> Tensor:
