@@ -1,148 +1,170 @@
 # Overview
 
-The Step 8 diagnostics matched the expected failure mode: once training has to hop over a discrete calculator program, downstream use of correct calculator results is learnable, but getting the upstream nodes to adjust themselves so they send the right operands is difficult.
+The previous upstream-learning pass confirmed the key failure mode: hard STE plus downstream answer loss does not reliably teach the upstream transformer to emit meaningful calculator operands.
 
-Please design and run the next set of experiments to figure out how the upstream side can learn to use the calculator properly.
+Please implement and run the next strategy: treat calculator operands as stochastic actions sampled from distributions parameterized by the upstream residual stream, then train the input side with policy-gradient / score-function estimators.
 
-# Current findings to build on
+# Findings to build on
 
-The output side is not the primary blocker:
+The calculator output side is learnable:
 
 - Oracle-trained Model C reached `236/256 = 0.922` exact match on 1-digit addition.
-- Oracle diagnostics on that checkpoint reached `59/64 = 0.922`, with perfect operand and calculator-result accuracy.
-- Learned operand diagnostics remain poor:
-  - failed Model C checkpoint: operand exact match `0.000`, calculator result accuracy `0.000`;
-  - oracle-trained checkpoint without oracle operands: operand exact match `0.000`, calculator result accuracy `0.094`.
+- Oracle diagnostics reached `59/64 = 0.922`, with perfect operand and calculator-result accuracy.
+
+The hard-STE input side is not learning the intended protocol from answer loss alone:
+
+- True tiny-vocab `0..1`, `0..2`, and `0..4` Model C runs can reach perfect answer accuracy.
+- But answer accuracy is misleading:
+  - `0..1`: operand exact match `0.203`, calculator result accuracy `0.203`;
+  - `0..2`: operand exact match `0.375`, calculator result accuracy `0.438`;
+  - `0..4`: operand exact match `0.000`, calculator result accuracy `0.000`, with near-1.0 confidence.
+- Representative `0..4` trace rows show the model answering correctly while sending confident wrong calculator operands, so the ordinary transformer path is solving the tiny task around the calculator.
+
+The residual stream and input projection are capable in principle:
+
+- Layer/position probes often recover operands from the residual stream.
+- On `0..4`, auxiliary operand supervision at weight `0.1` moved operand exact match from `0.000` to `0.938` while keeping answer exact match at `1.000`.
 
 Interpretation:
 
-The calculator result path is wired in a learnable way. The main research problem is now the upstream latent operand protocol: how does the transformer learn to put the right discrete operands into the calculator interface when gradients must pass through a hard non-differentiable program?
+The current bottleneck is not missing operand information or output injection. It is credit assignment through the discrete calculator input interface. Hard STE is biased and appears to provide misleading or insufficient signal.
 
-# Step 9 candidate experiments: upstream operand learning
+# Step 10 candidate strategy: stochastic calculator actions
 
-## 1. Tiny-vocabulary learned-operand curriculum
+Treat each calculator input as a sampled action:
 
-Run learned-operand Model C with restricted operand ranges before full `0-9`:
+- upstream residual at the calculator read position produces `a_logits` and `b_logits`;
+- sample `a ~ Categorical(a_logits)` and `b ~ Categorical(b_logits)`;
+- run the hard calculator on sampled operands;
+- inject the calculator result as before;
+- compute normal downstream answer loss;
+- update the operand distributions with a score-function / policy-gradient estimator.
 
-- `0-1`
-- `0-2`
-- `0-4`
-- then `0-9`
+The basic identity:
 
-Keep the same model architecture and calculator hook. Use the diagnostic script to report:
+```text
+grad_theta E[L] = E[L * grad_theta log p_theta(action)]
+```
 
-- answer exact match,
-- operand exact match,
-- calculator result accuracy,
-- operand entropy/confidence,
+For minimization, use an advantage-style loss:
+
+```text
+policy_loss = (answer_loss.detach() - baseline) * (logp_a + logp_b)
+total_loss = answer_loss + policy_loss
+```
+
+Equivalently, using reward `reward = -answer_loss`:
+
+```text
+policy_loss = -(reward - baseline) * (logp_a + logp_b)
+```
+
+The calculator remains fully hard and non-differentiable. Unlike STE, this estimator is unbiased for the stochastic objective, but it may have high variance.
+
+# Experiments to run first
+
+## 1. Vanilla REINFORCE with moving baseline
+
+Add a calculator estimator mode such as `reinforce` or `sampled-policy`.
+
+Run Model C with:
+
+- `0..1`, calculator operand vocab size `2`;
+- `0..2`, calculator operand vocab size `3`;
+- `0..4`, calculator operand vocab size `5`;
+- then `0..9`, calculator operand vocab size `10`.
+
+Use:
+
+- moving-average baseline for answer loss;
+- entropy bonus on operand distributions, initially nonzero and decayed or configurable;
+- multiple seeds;
+- optionally multiple operand samples per prompt if a single-sample estimator is too noisy.
+
+Report:
+
+- answer exact match;
+- operand exact match;
+- calculator result accuracy;
+- operand entropy/confidence;
+- reward/loss baseline curve;
 - representative trace rows.
 
-Research question:
-
-Can the upstream network learn any hard calculator language when the operand vocabulary is extremely small?
-
 Decision rule:
 
-- If `0-1` or `0-2` works but `0-9` fails, the problem is likely optimization/vocabulary scale.
-- If even `0-1` fails, the current hard STE signal is probably too weak or misleading.
+- If policy gradient improves calculator result accuracy but not true operand exact match, the model may be learning a valid but non-human latent calculator language.
+- If it improves true operand exact match, it is directly learning the intended protocol.
+- If it fails even on `0..1`, inspect variance, baseline behavior, and whether downstream loss changes enough across sampled operands.
 
-## 2. Auxiliary operand-loss diagnostic
+## 2. REINFORCE plus tiny auxiliary warmup
 
-Add an optional training-only auxiliary loss on the calculator input projection:
+If vanilla policy gradient is too noisy, add a short auxiliary operand-loss warmup:
 
-- Cross-entropy from `a_logits` to true operand A.
-- Cross-entropy from `b_logits` to true operand B.
-- Configurable weight, for example `0.01`, `0.1`, `1.0`.
-
-This should be a diagnostic, not the final claimed method. Keep normal answer loss as the main metric.
+- start with small aux weight, for example `0.03` or `0.1`;
+- decay aux weight to `0.0`;
+- keep policy-gradient learning active throughout.
 
 Research question:
 
-Can the input projection and upstream residual stream represent the correct operands if given a direct learning signal?
+Can a small supervised nudge establish the protocol, and can unbiased answer-loss policy gradient maintain it after the nudge disappears?
 
 Decision rule:
 
-- If auxiliary loss makes operand accuracy high and answer accuracy high, the representation/output path is fine and the unsupervised downstream loss is the bottleneck.
-- If auxiliary loss makes operand accuracy high but answer accuracy stays low, revisit result injection or downstream integration.
-- If auxiliary loss cannot make operand accuracy high, inspect residual probe results and read-position choice.
+- If operand accuracy survives after aux decay, the protocol can be maintained by answer pressure once discovered.
+- If it collapses, downstream answer loss alone may not identify true operands, only useful sums.
 
-## 3. Probe-informed read-location check
+## 3. Multi-sample estimator diagnostic
 
-Run residual probes at multiple candidate read locations:
+For each prompt, sample `K` operand pairs and evaluate the downstream answer loss for each.
 
-- after layer 1,
-- after layer 2,
-- after layer 3,
-- optionally at the token positions for operand A, operand B, and `=`.
+Try small `K`, for example `2`, `4`, or `8`.
 
 Research question:
 
-Where are operands linearly accessible in the residual stream?
+Does lower-variance action comparison make the calculator protocol discoverable?
 
-Decision rule:
+Implementation note:
 
-- If probes succeed at another layer/position but not the current `=` after layer 2, move or augment the calculator read site.
-- If probes fail everywhere, the model is not making operands linearly available without extra pressure.
+This can be expensive if each sample requires a full downstream pass. Keep it tiny-range first. It is acceptable for this to be diagnostic-only.
 
-## 4. Straight-through estimator variants
+## 4. Control-variate variants, only if needed
 
-Only after the tiny-vocab and auxiliary-loss diagnostics, compare gradient estimators:
+If vanilla policy gradient shows the right direction but too much variance, consider:
 
-- current hard argmax STE,
-- soft expected-sum relaxation during training,
-- Gumbel-Softmax or temperature-annealed softmax,
-- optional hard-forward/soft-backward variant.
+- NVIL-style learned baseline;
+- MuProp;
+- REBAR;
+- RELAX.
 
-Research question:
+Do not jump here until the simple moving-baseline version has been measured.
 
-Is the current gradient estimator the reason upstream operands fail to align?
+# Important measurement warning
 
-Decision rule:
+Do not treat answer accuracy alone as success.
 
-- If a soft estimator learns operands but hard STE does not, the issue is estimator smoothness.
-- If all estimators fail without auxiliary loss, the downstream answer loss alone may be too indirect for operand protocol discovery.
+For this project, a run is calculator-protocol-successful only if at least one of these is true:
 
-## 5. Scheduled oracle-to-learned transition
+- true operand exact match is high;
+- calculator result accuracy is high and trace rows show a coherent alternate protocol worth studying.
 
-Try a curriculum where training starts with oracle operands and gradually shifts to learned operands:
-
-- teacher forcing probability starts at `1.0`,
-- decays to `0.0` over training,
-- diagnostics track whether learned operands take over before oracle support disappears.
-
-Research question:
-
-Can downstream competence stabilize the task enough for the upstream interface to learn?
-
-Decision rule:
-
-- If scheduled transition works, the problem is coordination/bootstrapping.
-- If learned operands collapse when oracle probability decays, the input-side estimator still needs improvement.
-
-# Suggested order
-
-1. Tiny-vocabulary learned-operand curriculum.
-2. Auxiliary operand-loss diagnostic on the smallest failing range.
-3. Probe read-location sweep.
-4. Estimator variants.
-5. Scheduled oracle-to-learned transition.
-
-Do not jump to larger models or multi-digit tasks until at least one learned-operand setup reliably solves 1-digit or tiny-range addition.
+Tiny-range answer success with wrong calculator inputs should be considered "ordinary transformer solved around the calculator," not success for the calculator interface.
 
 # Acceptance criteria
 
-For each experiment, save:
+Save for each experiment:
 
-- config,
-- final checkpoint,
-- training curve,
-- answer metrics,
-- diagnostic summary,
-- calculator trace rows.
+- config;
+- final checkpoint;
+- training curve;
+- answer metrics;
+- diagnostic summary;
+- calculator trace rows;
+- policy-gradient-specific metrics, including baseline, policy loss, entropy, and sampled operand log-probability.
 
-The next useful milestone is a short writeup that answers:
+The next useful milestone is a short writeup answering:
 
-- What is the smallest operand range learned by the current hard STE?
-- Does auxiliary operand supervision make the protocol learnable?
-- Are true operands linearly present at the current calculator read site?
-- Is failure caused by estimator smoothness, bootstrapping, or missing residual information?
+- Does unbiased policy gradient learn any calculator protocol where hard STE did not?
+- What is the smallest operand range where sampled-action learning works?
+- Does it learn true operands or merely useful sums?
+- How sensitive is it to baseline choice, entropy regularization, and number of samples?
+- Does auxiliary warmup plus policy gradient maintain the protocol after aux decay?

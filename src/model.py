@@ -280,6 +280,8 @@ class TinyGPT(nn.Module):
         diagnostics: dict[str, Any] = {}
         for i, block in enumerate(self.blocks, start=1):
             h = block(h)
+            if return_diagnostics:
+                diagnostics.setdefault("layer_residuals", {})[i] = h.detach()
             if return_diagnostics and i == self.cfg.calculator_hook_after_layer:
                 diagnostics["calculator_read_residual"] = h.detach()
             if (

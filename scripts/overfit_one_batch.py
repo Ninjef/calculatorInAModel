@@ -13,10 +13,14 @@ import torch
 
 from src.data import (
     EOS_ID,
+    EQ_ID,
     ID_TO_TOKEN,
+    ArithmeticBatch,
+    make_loss_mask,
     detokenize,
     make_batch,
     max_sequence_length,
+    pad_sequence,
     tokenize,
 )
 from src.model import GPTConfig, TinyGPT, masked_cross_entropy
@@ -43,7 +47,10 @@ class TrainConfig:
     weight_decay: float
     grad_clip: float
     fixed_width: bool
+    operand_max: int | None
+    calculator_operand_vocab_size: int
     oracle_train: bool
+    aux_operand_loss_weight: float
     model: dict[str, object]
 
 
@@ -101,6 +108,7 @@ def evaluate(
     model: TinyGPT,
     *,
     num_digits: int,
+    operand_max: int,
     samples: int,
     seed: int,
     fixed_width: bool,
@@ -108,15 +116,14 @@ def evaluate(
     oracle_train: bool,
 ) -> dict[str, object]:
     rng = random.Random(seed)
-    high = 10**num_digits - 1
     max_answer_tokens = num_digits + 2
     exact = 0
     examples: list[dict[str, str | bool]] = []
 
     model.eval()
     for i in range(samples):
-        a = rng.randint(0, high)
-        b = rng.randint(0, high)
+        a = rng.randint(0, operand_max)
+        b = rng.randint(0, operand_max)
         prompt_ids, target = make_problem(a, b, num_digits, fixed_width=fixed_width)
         oracle_operands = (a, b) if oracle_train else None
         pred_ids = trim_after_eos(
@@ -151,8 +158,9 @@ def evaluate(
 
 
 def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
+    fieldnames = ["step", "loss", "answer_loss", "aux_operand_loss"]
     with path.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=["step", "loss"])
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(curve)
 
@@ -188,10 +196,72 @@ def make_oracle_operands_from_batch(
     return oracle
 
 
+def make_range_batch(
+    *,
+    batch_size: int,
+    num_digits: int,
+    operand_max: int,
+    rng: random.Random,
+    fixed_width: bool,
+    device: str | torch.device,
+) -> ArithmeticBatch:
+    seq_len = max_sequence_length(num_digits)
+    samples: list[list[int]] = []
+    masks: list[list[int]] = []
+    for _ in range(batch_size):
+        a = rng.randint(0, operand_max)
+        b = rng.randint(0, operand_max)
+        if fixed_width:
+            ids = tokenize(f"{a:0{num_digits}d}+{b:0{num_digits}d}={a + b}<eos>")
+        else:
+            ids = tokenize(f"{a}+{b}={a + b}<eos>")
+        samples.append(pad_sequence(ids, seq_len))
+        masks.append(pad_sequence(make_loss_mask(ids), seq_len, pad_id=0))
+
+    tokens = torch.tensor(samples, dtype=torch.long, device=device)
+    loss_mask = torch.tensor(masks, dtype=torch.bool, device=device)
+    return ArithmeticBatch(
+        x=tokens[:, :-1],
+        y=tokens[:, 1:],
+        loss_mask=loss_mask[:, 1:],
+    )
+
+
+def auxiliary_operand_loss(
+    model: TinyGPT, batch: ArithmeticBatch, num_digits: int
+) -> torch.Tensor:
+    if model.calculator_hook is None:
+        raise ValueError("auxiliary operand loss requires a calculator hook")
+    with torch.no_grad():
+        targets = make_oracle_operands_from_batch(batch.x, num_digits=num_digits)
+        eq_pos = (batch.x == EQ_ID).float().argmax(dim=-1).long()
+        batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
+        target_a = targets[batch_idx, eq_pos, 0]
+        target_b = targets[batch_idx, eq_pos, 1]
+
+    _, diagnostics = model(batch.x, return_diagnostics=True)
+    residual = diagnostics["calculator_read_residual"]
+    operand_logits = model.calculator_hook.input_proj(residual)
+    a_logits, b_logits = operand_logits.split(
+        model.cfg.calculator_operand_vocab_size, dim=-1
+    )
+    batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
+    a_eq_logits = a_logits[batch_idx, eq_pos]
+    b_eq_logits = b_logits[batch_idx, eq_pos]
+    return (
+        torch.nn.functional.cross_entropy(a_eq_logits, target_a)
+        + torch.nn.functional.cross_entropy(b_eq_logits, target_b)
+    ) / 2
+
+
 def make_model_config(
-    num_digits: int, variant: str, *, injection_scale: float = 1.0
+    num_digits: int,
+    variant: str,
+    *,
+    injection_scale: float = 1.0,
+    operand_vocab_size: int | None = None,
 ) -> GPTConfig:
-    operand_vocab_size = 10**num_digits
+    operand_vocab_size = operand_vocab_size or 10**num_digits
     calculator_enabled = variant in {"model-b", "model-c"}
     calculator_mode = "add" if variant == "model-c" else "off"
     return GPTConfig(
@@ -216,8 +286,24 @@ def run_variant(
     torch.manual_seed(seed)
     rng = random.Random(seed)
 
+    operand_max = args.operand_max
+    if operand_max is None:
+        operand_max = 10**num_digits - 1
+    if operand_max >= 10**num_digits:
+        raise ValueError("--operand-max must fit inside --digits")
+    calculator_operand_vocab_size = args.calculator_operand_vocab_size
+    if calculator_operand_vocab_size is None:
+        calculator_operand_vocab_size = 10**num_digits
+    if operand_max >= calculator_operand_vocab_size:
+        raise ValueError(
+            "--calculator-operand-vocab-size must be greater than --operand-max"
+        )
+
     cfg = make_model_config(
-        num_digits, args.variant, injection_scale=args.injection_scale
+        num_digits,
+        args.variant,
+        injection_scale=args.injection_scale,
+        operand_vocab_size=calculator_operand_vocab_size,
     )
     model = TinyGPT(cfg).to(device)
     optim = torch.optim.AdamW(
@@ -243,7 +329,10 @@ def run_variant(
         weight_decay=args.weight_decay,
         grad_clip=args.grad_clip,
         fixed_width=True,
+        operand_max=args.operand_max,
+        calculator_operand_vocab_size=calculator_operand_vocab_size,
         oracle_train=args.oracle_train,
+        aux_operand_loss_weight=args.aux_operand_loss_weight,
         model=asdict(cfg),
     )
     (run_dir / "config.json").write_text(
@@ -254,13 +343,23 @@ def run_variant(
     final_loss = float("nan")
     model.train()
     for step in range(args.steps + 1):
-        batch = make_batch(
-            batch_size=args.batch_size,
-            num_digits=num_digits,
-            rng=rng,
-            fixed_width=True,
-            device=device,
-        )
+        if args.operand_max is None:
+            batch = make_batch(
+                batch_size=args.batch_size,
+                num_digits=num_digits,
+                rng=rng,
+                fixed_width=True,
+                device=device,
+            )
+        else:
+            batch = make_range_batch(
+                batch_size=args.batch_size,
+                num_digits=num_digits,
+                operand_max=operand_max,
+                rng=rng,
+                fixed_width=True,
+                device=device,
+            )
         oracle_operands = None
         if args.oracle_train:
             oracle_operands = make_oracle_operands_from_batch(
@@ -268,13 +367,34 @@ def run_variant(
             )
         logits = model(batch.x, oracle_operands=oracle_operands)
         loss = masked_cross_entropy(logits, batch.y, batch.loss_mask)
+        answer_loss = loss
+        aux_loss_value = None
+        if args.aux_operand_loss_weight > 0:
+            if args.variant != "model-c":
+                raise ValueError("--aux-operand-loss-weight requires --variant model-c")
+            aux_loss = auxiliary_operand_loss(model, batch, num_digits)
+            aux_loss_value = aux_loss.item()
+            loss = loss + (args.aux_operand_loss_weight * aux_loss)
 
         if step % args.log_every == 0:
             loss_value = loss.item()
-            curve.append({"step": step, "loss": loss_value})
+            curve_row: dict[str, float | int] = {
+                "step": step,
+                "loss": loss_value,
+                "answer_loss": answer_loss.item(),
+            }
+            if aux_loss_value is not None:
+                curve_row["aux_operand_loss"] = aux_loss_value
+            curve.append(curve_row)
             print(
                 f"variant={args.variant} digits={num_digits} "
-                f"step={step:5d} loss={loss_value:.4f}"
+                f"step={step:5d} loss={loss_value:.4f} "
+                f"answer_loss={answer_loss.item():.4f}"
+                + (
+                    f" aux_operand_loss={aux_loss_value:.4f}"
+                    if aux_loss_value is not None
+                    else ""
+                )
             )
 
         if step == args.steps:
@@ -289,6 +409,7 @@ def run_variant(
     metrics = evaluate(
         model,
         num_digits=num_digits,
+        operand_max=operand_max,
         samples=args.eval_samples,
         seed=seed + 10_000,
         fixed_width=True,
@@ -296,6 +417,8 @@ def run_variant(
         oracle_train=args.oracle_train,
     )
     metrics["final_loss"] = final_loss
+    metrics["operand_max"] = operand_max
+    metrics["calculator_operand_vocab_size"] = calculator_operand_vocab_size
     metrics["parameter_count"] = model.num_params()
     metrics["run_dir"] = str(run_dir)
     metrics["variant"] = args.variant
@@ -340,6 +463,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--steps", type=int, default=DEFAULT_STEPS)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--eval-samples", type=int, default=DEFAULT_EVAL_SAMPLES)
+    parser.add_argument(
+        "--operand-max",
+        type=int,
+        default=None,
+        help="Restrict generated operands to 0..N while keeping fixed-width formatting.",
+    )
+    parser.add_argument(
+        "--calculator-operand-vocab-size",
+        type=int,
+        default=None,
+        help=(
+            "Override calculator operand classes. For true tiny-vocab runs, set this "
+            "to operand_max + 1."
+        ),
+    )
     parser.add_argument("--lr", type=float, default=DEFAULT_LR)
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--grad-clip", type=float, default=1.0)
@@ -347,6 +485,12 @@ def parse_args() -> argparse.Namespace:
         "--oracle-train",
         action="store_true",
         help="Feed true operands into Model C's calculator during training/eval.",
+    )
+    parser.add_argument(
+        "--aux-operand-loss-weight",
+        type=float,
+        default=0.0,
+        help="Training-only diagnostic CE loss on learned calculator operand logits.",
     )
     parser.add_argument(
         "--injection-scale",
@@ -368,9 +512,18 @@ def main() -> None:
     args = parse_args()
     if args.oracle_train and args.variant != "model-c":
         raise ValueError("--oracle-train is only meaningful with --variant model-c")
+    if args.aux_operand_loss_weight < 0:
+        raise ValueError("--aux-operand-loss-weight must be non-negative")
     device = pick_device()
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    suffix = f"{args.variant}-oracle" if args.oracle_train else args.variant
+    suffix_parts = [args.variant]
+    if args.oracle_train:
+        suffix_parts.append("oracle")
+    if args.operand_max is not None:
+        suffix_parts.append(f"op0-{args.operand_max}")
+    if args.aux_operand_loss_weight > 0:
+        suffix_parts.append(f"aux{args.aux_operand_loss_weight:g}")
+    suffix = "-".join(suffix_parts)
     base_run_dir = args.run_root / f"{timestamp}_{suffix}"
     base_run_dir.mkdir(parents=True, exist_ok=False)
 

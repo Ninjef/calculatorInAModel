@@ -37,9 +37,13 @@ def decode_tokens(ids: list[int]) -> str:
 
 
 def make_model_config(
-    *, num_digits: int, variant: str, injection_scale: float = 1.0
+    *,
+    num_digits: int,
+    variant: str,
+    injection_scale: float = 1.0,
+    operand_vocab_size: int | None = None,
 ) -> GPTConfig:
-    operand_vocab_size = 10**num_digits
+    operand_vocab_size = operand_vocab_size or 10**num_digits
     return GPTConfig(
         block_size=max_sequence_length(num_digits) - 1,
         calculator_enabled=variant in {"model-b", "model-c"},
@@ -101,6 +105,7 @@ def train_fresh_model(args: argparse.Namespace, device: str) -> TinyGPT:
         num_digits=args.digits,
         variant=args.variant,
         injection_scale=args.injection_scale,
+        operand_vocab_size=args.calculator_operand_vocab_size,
     )
     model = TinyGPT(cfg).to(device)
     optim = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95))
@@ -260,12 +265,32 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     result_correct = sum(
         int(row["calculator_result"] == row["true_sum"]) for row in operand_rows
     )
+    finite_operand_rows = [
+        row
+        for row in operand_rows
+        if row["a_confidence"] == row["a_confidence"]
+        and row["b_confidence"] == row["b_confidence"]
+        and row["a_entropy"] == row["a_entropy"]
+        and row["b_entropy"] == row["b_entropy"]
+    ]
+
+    def mean_field(name: str) -> float:
+        if not finite_operand_rows:
+            return float("nan")
+        return sum(float(row[name]) for row in finite_operand_rows) / len(
+            finite_operand_rows
+        )
+
     return {
         "samples": len(rows),
         "exact_match": correct / max(len(rows), 1),
         "correct": correct,
         "operand_exact_match": operand_correct / max(len(operand_rows), 1),
         "calculator_result_accuracy": result_correct / max(len(operand_rows), 1),
+        "mean_a_confidence": mean_field("a_confidence"),
+        "mean_b_confidence": mean_field("b_confidence"),
+        "mean_a_entropy": mean_field("a_entropy"),
+        "mean_b_entropy": mean_field("b_entropy"),
     }
 
 
@@ -275,6 +300,8 @@ def collect_probe_data(
     *,
     num_digits: int,
     operand_max: int,
+    layer: int | None,
+    position: str,
     samples: int,
     seed: int,
     device: str | torch.device,
@@ -291,7 +318,20 @@ def collect_probe_data(
         x = torch.tensor([prompt_ids], dtype=torch.long, device=device)
         _, diagnostics = model(x, return_diagnostics=True)
         eq_pos = prompt_ids.index(EQ_ID)
-        residuals.append(diagnostics["calculator_read_residual"][0, eq_pos].detach())
+        if position == "eq":
+            read_pos = eq_pos
+        elif position == "a":
+            read_pos = num_digits - 1
+        elif position == "b":
+            read_pos = (num_digits + 1) + (num_digits - 1)
+        else:
+            raise ValueError(f"unknown probe position: {position}")
+
+        if layer is None:
+            residual = diagnostics["calculator_read_residual"]
+        else:
+            residual = diagnostics["layer_residuals"][layer]
+        residuals.append(residual[0, read_pos].detach())
         targets_a.append(a)
         targets_b.append(b)
     x_probe = torch.stack(residuals)
@@ -330,6 +370,8 @@ def run_probe(
     *,
     num_digits: int,
     operand_max: int,
+    layer: int | None,
+    position: str,
     samples: int,
     seed: int,
     device: str | torch.device,
@@ -340,16 +382,20 @@ def run_probe(
         model=model,
         num_digits=num_digits,
         operand_max=operand_max,
+        layer=layer,
+        position=position,
         samples=samples,
         seed=seed,
         device=device,
     )
     split = max(1, int(0.8 * samples))
-    classes = 10**num_digits
+    classes = model.cfg.calculator_operand_vocab_size
     return {
         "samples": samples,
         "train_samples": split,
         "eval_samples": samples - split,
+        "layer": layer if layer is not None else model.cfg.calculator_hook_after_layer,
+        "position": position,
         "operand_a": train_probe_head(
             x_probe[:split],
             y_a[:split],
@@ -392,6 +438,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--digits", type=int, default=1)
     parser.add_argument("--samples", type=int, default=64)
     parser.add_argument("--operand-max", type=int, default=None)
+    parser.add_argument(
+        "--calculator-operand-vocab-size",
+        type=int,
+        default=None,
+        help="Override calculator operand classes when training a fresh diagnostic model.",
+    )
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--steps", type=int, default=0)
     parser.add_argument("--batch-size", type=int, default=64)
@@ -401,6 +453,13 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--injection-scale", type=float, default=1.0)
     parser.add_argument("--oracle", action="store_true")
     parser.add_argument("--probe", action="store_true")
+    parser.add_argument("--probe-layers", type=int, nargs="+", default=None)
+    parser.add_argument(
+        "--probe-positions",
+        choices=["a", "b", "eq"],
+        nargs="+",
+        default=["eq"],
+    )
     parser.add_argument("--probe-steps", type=int, default=200)
     parser.add_argument("--probe-lr", type=float, default=1e-2)
     parser.add_argument("--output-dir", type=Path)
@@ -415,6 +474,11 @@ def main() -> None:
         operand_max = 10**args.digits - 1
     if operand_max >= 10**args.digits:
         raise ValueError("--operand-max must fit inside --digits")
+    if args.calculator_operand_vocab_size is not None:
+        if operand_max >= args.calculator_operand_vocab_size:
+            raise ValueError(
+                "--calculator-operand-vocab-size must be greater than --operand-max"
+            )
 
     train_config: dict[str, Any] | None = None
     if args.checkpoint is not None:
@@ -461,16 +525,27 @@ def main() -> None:
         }
     )
     if args.probe:
-        summary["probe"] = run_probe(
-            model,
-            num_digits=args.digits,
-            operand_max=operand_max,
-            samples=max(args.samples, 8),
-            seed=args.seed + 20_000,
-            device=device,
-            steps=args.probe_steps,
-            lr=args.probe_lr,
-        )
+        probe_layers = args.probe_layers
+        if probe_layers is None:
+            probe_layers = [model.cfg.calculator_hook_after_layer]
+        summary["probe"] = {}
+        for layer in probe_layers:
+            if not 1 <= layer <= model.cfg.n_layer:
+                raise ValueError(f"probe layer {layer} outside model depth")
+            for position in args.probe_positions:
+                key = f"layer{layer}_{position}"
+                summary["probe"][key] = run_probe(
+                    model,
+                    num_digits=args.digits,
+                    operand_max=operand_max,
+                    layer=layer,
+                    position=position,
+                    samples=max(args.samples, 8),
+                    seed=args.seed + 20_000,
+                    device=device,
+                    steps=args.probe_steps,
+                    lr=args.probe_lr,
+                )
 
     write_rows(output_dir / "calculator_trace_rows.csv", rows)
     (output_dir / "diagnostic_summary.json").write_text(
