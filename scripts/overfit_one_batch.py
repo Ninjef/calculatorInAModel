@@ -32,6 +32,7 @@ LOG_EVERY = 50
 
 @dataclass(frozen=True)
 class TrainConfig:
+    variant: str
     run_name: str
     seed: int
     num_digits: int
@@ -42,7 +43,7 @@ class TrainConfig:
     weight_decay: float
     grad_clip: float
     fixed_width: bool
-    model: dict[str, int | float]
+    model: dict[str, object]
 
 
 def pick_device() -> str:
@@ -134,7 +135,21 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         writer.writerows(curve)
 
 
-def run_baseline(
+def make_model_config(num_digits: int, variant: str) -> GPTConfig:
+    operand_vocab_size = 10**num_digits
+    calculator_enabled = variant in {"model-b", "model-c"}
+    calculator_mode = "add" if variant == "model-c" else "off"
+    return GPTConfig(
+        block_size=max_sequence_length(num_digits) - 1,
+        calculator_enabled=calculator_enabled,
+        calculator_mode=calculator_mode,
+        calculator_hook_after_layer=2,
+        calculator_operand_vocab_size=operand_vocab_size,
+        calculator_result_vocab_size=(2 * operand_vocab_size) - 1,
+    )
+
+
+def run_variant(
     *,
     num_digits: int,
     args: argparse.Namespace,
@@ -145,7 +160,7 @@ def run_baseline(
     torch.manual_seed(seed)
     rng = random.Random(seed)
 
-    cfg = GPTConfig(block_size=max_sequence_length(num_digits) - 1)
+    cfg = make_model_config(num_digits, args.variant)
     model = TinyGPT(cfg).to(device)
     optim = torch.optim.AdamW(
         model.parameters(),
@@ -154,11 +169,12 @@ def run_baseline(
         weight_decay=args.weight_decay,
     )
 
-    run_name = f"model-a-{num_digits}digit-seed{seed}"
+    run_name = f"{args.variant}-{num_digits}digit-seed{seed}"
     run_dir = base_run_dir / run_name
     run_dir.mkdir(parents=True, exist_ok=False)
 
     train_cfg = TrainConfig(
+        variant=args.variant,
         run_name=run_name,
         seed=seed,
         num_digits=num_digits,
@@ -192,7 +208,10 @@ def run_baseline(
         if step % args.log_every == 0:
             loss_value = loss.item()
             curve.append({"step": step, "loss": loss_value})
-            print(f"digits={num_digits} step={step:5d} loss={loss_value:.4f}")
+            print(
+                f"variant={args.variant} digits={num_digits} "
+                f"step={step:5d} loss={loss_value:.4f}"
+            )
 
         if step == args.steps:
             final_loss = loss.item()
@@ -214,6 +233,7 @@ def run_baseline(
     metrics["final_loss"] = final_loss
     metrics["parameter_count"] = model.num_params()
     metrics["run_dir"] = str(run_dir)
+    metrics["variant"] = args.variant
 
     save_curve(run_dir / "training_curve.csv", curve)
     (run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n")
@@ -227,7 +247,7 @@ def run_baseline(
     )
 
     print(
-        f"digits={num_digits} eval exact-match "
+        f"variant={args.variant} digits={num_digits} eval exact-match "
         f"{metrics['correct']}/{metrics['samples']} "
         f"({metrics['exact_match']:.3f}); saved {run_dir}"
     )
@@ -236,7 +256,13 @@ def run_baseline(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Train Model A baseline runs for synthetic addition."
+        description="Train tiny addition models with optional latent calculator hook."
+    )
+    parser.add_argument(
+        "--variant",
+        choices=["model-a", "model-b", "model-c"],
+        default="model-a",
+        help="model-a is the raw baseline, model-b wires the hook off, model-c turns addition on.",
     )
     parser.add_argument(
         "--digits",
@@ -265,16 +291,17 @@ def main() -> None:
     args = parse_args()
     device = pick_device()
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
-    base_run_dir = args.run_root / f"{timestamp}_model-a-baseline"
+    base_run_dir = args.run_root / f"{timestamp}_{args.variant}"
     base_run_dir.mkdir(parents=True, exist_ok=False)
 
     print(f"device: {device}")
+    print(f"variant: {args.variant}")
     print(f"run root: {base_run_dir}")
 
     all_metrics = []
     for num_digits in args.digits:
         all_metrics.append(
-            run_baseline(
+            run_variant(
                 num_digits=num_digits,
                 args=args,
                 base_run_dir=base_run_dir,
@@ -282,7 +309,7 @@ def main() -> None:
             )
         )
 
-    summary = {"device": device, "runs": all_metrics}
+    summary = {"device": device, "variant": args.variant, "runs": all_metrics}
     (base_run_dir / "summary_metrics.json").write_text(
         json.dumps(summary, indent=2) + "\n"
     )
@@ -290,7 +317,7 @@ def main() -> None:
     print("summary:")
     for metrics in all_metrics:
         print(
-            f"  {metrics['num_digits']}-digit: "
+            f"  {args.variant} {metrics['num_digits']}-digit: "
             f"exact-match={metrics['exact_match']:.3f}, "
             f"final_loss={metrics['final_loss']:.4f}"
         )

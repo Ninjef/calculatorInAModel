@@ -15,6 +15,8 @@ pip install -r requirements.txt
 ```bash
 python scripts/check_env.py     # confirms torch + MPS on M1
 python scripts/sample_data.py   # prints 20 arithmetic samples
-python scripts/overfit_one_batch.py   # 500-step overfit smoke test on 8 examples
+python scripts/overfit_one_batch.py   # Model A baseline
+python scripts/overfit_one_batch.py --variant model-b   # calculator hook wired off
+python scripts/overfit_one_batch.py --variant model-c   # latent calculator addition on
 python -m pytest                # runs data generator tests
 ```
