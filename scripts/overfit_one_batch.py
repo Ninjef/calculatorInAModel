@@ -51,6 +51,11 @@ class TrainConfig:
     calculator_operand_vocab_size: int
     oracle_train: bool
     aux_operand_loss_weight: float
+    aux_operand_loss_decay_steps: int
+    calculator_estimator: str
+    reinforce_baseline_beta: float
+    reinforce_entropy_weight: float
+    reinforce_entropy_decay_steps: int
     model: dict[str, object]
 
 
@@ -157,12 +162,163 @@ def evaluate(
     }
 
 
+@torch.no_grad()
+def calculator_trace_rows(
+    model: TinyGPT,
+    *,
+    num_digits: int,
+    operand_max: int,
+    samples: int,
+    seed: int,
+    device: str | torch.device,
+    oracle_train: bool,
+) -> list[dict[str, object]]:
+    rng = random.Random(seed)
+    torch.manual_seed(seed)
+    rows: list[dict[str, object]] = []
+    max_answer_tokens = num_digits + 2
+    model.eval()
+    for i in range(samples):
+        a = rng.randint(0, operand_max)
+        b = rng.randint(0, operand_max)
+        prompt_ids, target = make_problem(a, b, num_digits, fixed_width=True)
+        x = torch.tensor([prompt_ids], dtype=torch.long, device=device)
+        oracle_operands = None
+        if oracle_train:
+            oracle_operands = make_oracle_operands_from_values(
+                a=a, b=b, shape=x.shape, device=device
+            )
+        logits, diagnostics = model(
+            x, return_diagnostics=True, oracle_operands=oracle_operands
+        )
+        probs = logits[:, -1, :].softmax(dim=-1)
+        pred_ids = trim_after_eos(
+            generate_answer(
+                model,
+                prompt_ids,
+                max_answer_tokens,
+                device,
+                oracle_operands=(a, b) if oracle_train else None,
+            )
+        )
+        pred = decode_tokens(pred_ids)
+        eq_pos = prompt_ids.index(EQ_ID)
+        trace = diagnostics.get("calculator_trace", {})
+
+        def trace_value(name: str, default: float | int | bool) -> float | int | bool:
+            if name not in trace:
+                return default
+            value = trace[name][0, eq_pos]
+            if value.dtype == torch.bool:
+                return bool(value.item())
+            if value.dtype.is_floating_point:
+                return float(value.item())
+            return int(value.item())
+
+        rows.append(
+            {
+                "sample": i,
+                "prompt": decode_tokens(prompt_ids),
+                "true_a": a,
+                "true_b": b,
+                "true_sum": a + b,
+                "target_answer": target,
+                "prediction": pred,
+                "correct": pred == target,
+                "first_token_confidence": float(probs.max().item()),
+                "a_pred": trace_value("a_pred", -1),
+                "b_pred": trace_value("b_pred", -1),
+                "calculator_result": trace_value("result_pred", -1),
+                "a_confidence": trace_value("a_confidence", float("nan")),
+                "b_confidence": trace_value("b_confidence", float("nan")),
+                "a_entropy": trace_value("a_entropy", float("nan")),
+                "b_entropy": trace_value("b_entropy", float("nan")),
+                "a_logp": trace_value("a_logp", float("nan")),
+                "b_logp": trace_value("b_logp", float("nan")),
+                "sampled_logp": trace_value("sampled_logp", float("nan")),
+                "injection_norm": trace_value("injection_norm", float("nan")),
+                "oracle_used": trace_value("oracle_used", False),
+            }
+        )
+    return rows
+
+
+def summarize_trace_rows(rows: list[dict[str, object]]) -> dict[str, object]:
+    answer_correct = sum(int(row["correct"]) for row in rows)
+    operand_rows = [row for row in rows if row["a_pred"] >= 0 and row["b_pred"] >= 0]
+    operand_correct = sum(
+        int(row["a_pred"] == row["true_a"] and row["b_pred"] == row["true_b"])
+        for row in operand_rows
+    )
+    result_correct = sum(
+        int(row["calculator_result"] == row["true_sum"]) for row in operand_rows
+    )
+
+    def mean_field(name: str) -> float:
+        finite = [
+            float(row[name])
+            for row in operand_rows
+            if isinstance(row[name], float) and row[name] == row[name]
+        ]
+        return sum(finite) / len(finite) if finite else float("nan")
+
+    return {
+        "samples": len(rows),
+        "exact_match": answer_correct / max(len(rows), 1),
+        "correct": answer_correct,
+        "operand_exact_match": operand_correct / max(len(operand_rows), 1),
+        "calculator_result_accuracy": result_correct / max(len(operand_rows), 1),
+        "mean_a_confidence": mean_field("a_confidence"),
+        "mean_b_confidence": mean_field("b_confidence"),
+        "mean_a_entropy": mean_field("a_entropy"),
+        "mean_b_entropy": mean_field("b_entropy"),
+        "mean_sampled_logp": mean_field("sampled_logp"),
+    }
+
+
+def write_rows(path: Path, rows: list[dict[str, object]]) -> None:
+    if not rows:
+        return
+    with path.open("w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+
+
 def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
-    fieldnames = ["step", "loss", "answer_loss", "aux_operand_loss"]
+    preferred = [
+        "step",
+        "loss",
+        "answer_loss",
+        "aux_operand_loss",
+        "aux_operand_loss_weight",
+        "policy_loss",
+        "policy_baseline",
+        "policy_advantage_mean",
+        "sampled_logp",
+        "operand_entropy",
+        "entropy_weight",
+    ]
+    fieldnames = preferred + sorted(
+        {key for row in curve for key in row.keys()} - set(preferred)
+    )
     with path.open("w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(curve)
+
+
+def masked_cross_entropy_per_example(
+    logits: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor
+) -> torch.Tensor:
+    B, T, V = logits.shape
+    loss = torch.nn.functional.cross_entropy(
+        logits.reshape(B * T, V),
+        targets.reshape(B * T),
+        reduction="none",
+    ).reshape(B, T)
+    mask_f = mask.to(loss.dtype)
+    return (loss * mask_f).sum(dim=-1) / mask_f.sum(dim=-1).clamp(min=1.0)
 
 
 def make_oracle_operands_from_values(
@@ -260,6 +416,7 @@ def make_model_config(
     *,
     injection_scale: float = 1.0,
     operand_vocab_size: int | None = None,
+    calculator_estimator: str = "ste",
 ) -> GPTConfig:
     operand_vocab_size = operand_vocab_size or 10**num_digits
     calculator_enabled = variant in {"model-b", "model-c"}
@@ -272,6 +429,7 @@ def make_model_config(
         calculator_operand_vocab_size=operand_vocab_size,
         calculator_result_vocab_size=(2 * operand_vocab_size) - 1,
         calculator_injection_scale=injection_scale,
+        calculator_estimator=calculator_estimator,
     )
 
 
@@ -304,6 +462,7 @@ def run_variant(
         args.variant,
         injection_scale=args.injection_scale,
         operand_vocab_size=calculator_operand_vocab_size,
+        calculator_estimator=args.calculator_estimator,
     )
     model = TinyGPT(cfg).to(device)
     optim = torch.optim.AdamW(
@@ -333,6 +492,11 @@ def run_variant(
         calculator_operand_vocab_size=calculator_operand_vocab_size,
         oracle_train=args.oracle_train,
         aux_operand_loss_weight=args.aux_operand_loss_weight,
+        aux_operand_loss_decay_steps=args.aux_operand_loss_decay_steps,
+        calculator_estimator=args.calculator_estimator,
+        reinforce_baseline_beta=args.reinforce_baseline_beta,
+        reinforce_entropy_weight=args.reinforce_entropy_weight,
+        reinforce_entropy_decay_steps=args.reinforce_entropy_decay_steps,
         model=asdict(cfg),
     )
     (run_dir / "config.json").write_text(
@@ -341,6 +505,7 @@ def run_variant(
 
     curve: list[dict[str, float | int]] = []
     final_loss = float("nan")
+    policy_baseline: float | None = None
     model.train()
     for step in range(args.steps + 1):
         if args.operand_max is None:
@@ -365,16 +530,71 @@ def run_variant(
             oracle_operands = make_oracle_operands_from_batch(
                 batch.x, num_digits=num_digits
             )
-        logits = model(batch.x, oracle_operands=oracle_operands)
-        loss = masked_cross_entropy(logits, batch.y, batch.loss_mask)
-        answer_loss = loss
+        use_reinforce = (
+            args.variant == "model-c"
+            and args.calculator_estimator == "reinforce"
+            and not args.oracle_train
+        )
+        if use_reinforce:
+            logits, diagnostics = model(
+                batch.x, oracle_operands=oracle_operands, return_diagnostics=True
+            )
+        else:
+            diagnostics = {}
+            logits = model(batch.x, oracle_operands=oracle_operands)
+        per_example_answer_loss = masked_cross_entropy_per_example(
+            logits, batch.y, batch.loss_mask
+        )
+        answer_loss = per_example_answer_loss.mean()
+        loss = answer_loss
+        policy_loss_value = None
+        policy_advantage_mean = None
+        sampled_logp_value = None
+        operand_entropy_value = None
+        entropy_weight = 0.0
+        if use_reinforce:
+            if policy_baseline is None:
+                policy_baseline = float(answer_loss.detach().item())
+            trace = diagnostics["calculator_trace"]
+            eq_mask = trace["eq_mask"]
+            eq_counts = eq_mask.long().sum(dim=-1)
+            if not torch.all(eq_counts == 1):
+                raise ValueError("REINFORCE training expects one '=' token per example")
+            eq_pos = eq_mask.float().argmax(dim=-1).long()
+            batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
+            sampled_logp = trace["sampled_logp"][batch_idx, eq_pos]
+            operand_entropy = (
+                trace["a_entropy"][batch_idx, eq_pos]
+                + trace["b_entropy"][batch_idx, eq_pos]
+            )
+            advantage = per_example_answer_loss.detach() - policy_baseline
+            policy_loss = (advantage * sampled_logp).mean()
+            if args.reinforce_entropy_decay_steps > 0:
+                entropy_weight = args.reinforce_entropy_weight * max(
+                    0.0, 1.0 - (step / args.reinforce_entropy_decay_steps)
+                )
+            else:
+                entropy_weight = args.reinforce_entropy_weight
+            entropy_loss = -entropy_weight * operand_entropy.mean()
+            loss = loss + policy_loss + entropy_loss
+            policy_loss_value = policy_loss.item()
+            policy_advantage_mean = advantage.mean().item()
+            sampled_logp_value = sampled_logp.mean().item()
+            operand_entropy_value = operand_entropy.mean().item()
         aux_loss_value = None
+        aux_weight = 0.0
         if args.aux_operand_loss_weight > 0:
             if args.variant != "model-c":
                 raise ValueError("--aux-operand-loss-weight requires --variant model-c")
+            if args.aux_operand_loss_decay_steps > 0:
+                aux_weight = args.aux_operand_loss_weight * max(
+                    0.0, 1.0 - (step / args.aux_operand_loss_decay_steps)
+                )
+            else:
+                aux_weight = args.aux_operand_loss_weight
             aux_loss = auxiliary_operand_loss(model, batch, num_digits)
             aux_loss_value = aux_loss.item()
-            loss = loss + (args.aux_operand_loss_weight * aux_loss)
+            loss = loss + (aux_weight * aux_loss)
 
         if step % args.log_every == 0:
             loss_value = loss.item()
@@ -385,13 +605,29 @@ def run_variant(
             }
             if aux_loss_value is not None:
                 curve_row["aux_operand_loss"] = aux_loss_value
+                curve_row["aux_operand_loss_weight"] = aux_weight
+            if use_reinforce:
+                curve_row["policy_loss"] = policy_loss_value
+                curve_row["policy_baseline"] = policy_baseline
+                curve_row["policy_advantage_mean"] = policy_advantage_mean
+                curve_row["sampled_logp"] = sampled_logp_value
+                curve_row["operand_entropy"] = operand_entropy_value
+                curve_row["entropy_weight"] = entropy_weight
             curve.append(curve_row)
             print(
                 f"variant={args.variant} digits={num_digits} "
                 f"step={step:5d} loss={loss_value:.4f} "
                 f"answer_loss={answer_loss.item():.4f}"
                 + (
+                    f" policy_loss={policy_loss_value:.4f}"
+                    f" baseline={policy_baseline:.4f}"
+                    f" entropy={operand_entropy_value:.4f}"
+                    if use_reinforce
+                    else ""
+                )
+                + (
                     f" aux_operand_loss={aux_loss_value:.4f}"
+                    f" aux_weight={aux_weight:.4f}"
                     if aux_loss_value is not None
                     else ""
                 )
@@ -405,6 +641,13 @@ def run_variant(
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
         optim.step()
+        if use_reinforce:
+            answer_loss_value = float(answer_loss.detach().item())
+            assert policy_baseline is not None
+            policy_baseline = (
+                args.reinforce_baseline_beta * policy_baseline
+                + (1.0 - args.reinforce_baseline_beta) * answer_loss_value
+            )
 
     metrics = evaluate(
         model,
@@ -423,8 +666,25 @@ def run_variant(
     metrics["run_dir"] = str(run_dir)
     metrics["variant"] = args.variant
     metrics["oracle_train"] = args.oracle_train
+    metrics["calculator_estimator"] = args.calculator_estimator
 
     save_curve(run_dir / "training_curve.csv", curve)
+    if args.variant == "model-c":
+        trace_rows = calculator_trace_rows(
+            model,
+            num_digits=num_digits,
+            operand_max=operand_max,
+            samples=min(args.eval_samples, 128),
+            seed=seed + 20_000,
+            device=device,
+            oracle_train=args.oracle_train,
+        )
+        trace_summary = summarize_trace_rows(trace_rows)
+        metrics["diagnostic_summary"] = trace_summary
+        write_rows(run_dir / "calculator_trace_rows.csv", trace_rows)
+        (run_dir / "diagnostic_summary.json").write_text(
+            json.dumps(trace_summary, indent=2) + "\n"
+        )
     (run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n")
     torch.save(
         {
@@ -493,10 +753,40 @@ def parse_args() -> argparse.Namespace:
         help="Training-only diagnostic CE loss on learned calculator operand logits.",
     )
     parser.add_argument(
+        "--aux-operand-loss-decay-steps",
+        type=int,
+        default=0,
+        help="Linearly decay aux operand loss to zero over this many steps; 0 keeps it constant.",
+    )
+    parser.add_argument(
         "--injection-scale",
         type=float,
         default=1.0,
         help="Scale the calculator residual injection; default preserves existing behavior.",
+    )
+    parser.add_argument(
+        "--calculator-estimator",
+        choices=["ste", "reinforce"],
+        default="ste",
+        help="Estimator for the learned calculator input interface.",
+    )
+    parser.add_argument(
+        "--reinforce-baseline-beta",
+        type=float,
+        default=0.95,
+        help="Exponential moving average coefficient for the answer-loss baseline.",
+    )
+    parser.add_argument(
+        "--reinforce-entropy-weight",
+        type=float,
+        default=0.01,
+        help="Entropy bonus weight for sampled operand distributions.",
+    )
+    parser.add_argument(
+        "--reinforce-entropy-decay-steps",
+        type=int,
+        default=0,
+        help="Linearly decay entropy weight to zero over this many steps; 0 keeps it constant.",
     )
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--log-every", type=int, default=LOG_EVERY)
@@ -514,6 +804,16 @@ def main() -> None:
         raise ValueError("--oracle-train is only meaningful with --variant model-c")
     if args.aux_operand_loss_weight < 0:
         raise ValueError("--aux-operand-loss-weight must be non-negative")
+    if args.aux_operand_loss_decay_steps < 0:
+        raise ValueError("--aux-operand-loss-decay-steps must be non-negative")
+    if args.calculator_estimator == "reinforce" and args.variant != "model-c":
+        raise ValueError("--calculator-estimator reinforce requires --variant model-c")
+    if not 0 <= args.reinforce_baseline_beta < 1:
+        raise ValueError("--reinforce-baseline-beta must be in [0, 1)")
+    if args.reinforce_entropy_weight < 0:
+        raise ValueError("--reinforce-entropy-weight must be non-negative")
+    if args.reinforce_entropy_decay_steps < 0:
+        raise ValueError("--reinforce-entropy-decay-steps must be non-negative")
     device = pick_device()
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
     suffix_parts = [args.variant]
@@ -521,8 +821,12 @@ def main() -> None:
         suffix_parts.append("oracle")
     if args.operand_max is not None:
         suffix_parts.append(f"op0-{args.operand_max}")
+    if args.calculator_estimator != "ste":
+        suffix_parts.append(args.calculator_estimator)
     if args.aux_operand_loss_weight > 0:
         suffix_parts.append(f"aux{args.aux_operand_loss_weight:g}")
+        if args.aux_operand_loss_decay_steps > 0:
+            suffix_parts.append(f"auxdecay{args.aux_operand_loss_decay_steps}")
     suffix = "-".join(suffix_parts)
     base_run_dir = args.run_root / f"{timestamp}_{suffix}"
     base_run_dir.mkdir(parents=True, exist_ok=False)
@@ -531,6 +835,7 @@ def main() -> None:
     print(f"variant: {args.variant}")
     print(f"oracle train: {args.oracle_train}")
     print(f"injection scale: {args.injection_scale}")
+    print(f"calculator estimator: {args.calculator_estimator}")
     print(f"run root: {base_run_dir}")
 
     all_metrics = []

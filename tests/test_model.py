@@ -13,7 +13,7 @@ def _small_cfg() -> GPTConfig:
     return GPTConfig(n_embd=32, n_layer=2, n_head=2, block_size=8)
 
 
-def _small_calculator_cfg(mode: str = "add") -> GPTConfig:
+def _small_calculator_cfg(mode: str = "add", estimator: str = "ste") -> GPTConfig:
     return GPTConfig(
         n_embd=32,
         n_layer=2,
@@ -21,6 +21,7 @@ def _small_calculator_cfg(mode: str = "add") -> GPTConfig:
         block_size=8,
         calculator_enabled=True,
         calculator_mode=mode,
+        calculator_estimator=estimator,
         calculator_hook_after_layer=1,
         calculator_operand_vocab_size=10,
         calculator_result_vocab_size=19,
@@ -144,6 +145,28 @@ def test_calculator_trace_records_shapes_values_and_equals_positions() -> None:
     assert trace["eq_mask"][0].tolist() == [False, False, True, False, False]
     assert trace["injection_norm"][0, 2].item() > 0
     assert trace["injection_norm"][0, 0].item() == 0
+
+
+def test_reinforce_calculator_trace_records_sample_logprob() -> None:
+    torch.manual_seed(0)
+    hook = CalculatorHook(_small_calculator_cfg(mode="add", estimator="reinforce"))
+    with torch.no_grad():
+        hook.input_proj.weight.zero_()
+        hook.input_proj.bias.fill_(-10.0)
+        hook.input_proj.bias[3] = 10.0
+        hook.input_proj.bias[10 + 4] = 10.0
+        hook.output_proj.weight.fill_(1.0)
+
+    h = torch.randn(1, 5, 32)
+    tokens = torch.tensor([[1, 2, EQ_ID, 3, 4]])
+
+    _, trace = hook(h, tokens, return_trace=True)
+
+    assert trace["a_pred"][0, 2].item() == 3
+    assert trace["b_pred"][0, 2].item() == 4
+    assert trace["result_pred"][0, 2].item() == 7
+    assert trace["sampled_logp"][0, 2].item() <= 0
+    assert torch.isfinite(trace["sampled_logp"][0, 2])
 
 
 def test_oracle_operands_force_calculator_result_class() -> None:

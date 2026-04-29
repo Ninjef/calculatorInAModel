@@ -24,6 +24,7 @@ class GPTConfig:
     calculator_operand_vocab_size: int = 10
     calculator_result_vocab_size: int = 19
     calculator_injection_scale: float = 1.0
+    calculator_estimator: str = "ste"
 
 
 class HardAddSTE(torch.autograd.Function):
@@ -56,6 +57,8 @@ class CalculatorHook(nn.Module):
         super().__init__()
         if cfg.calculator_mode not in {"off", "add"}:
             raise ValueError(f"unknown calculator mode: {cfg.calculator_mode}")
+        if cfg.calculator_estimator not in {"ste", "reinforce"}:
+            raise ValueError(f"unknown calculator estimator: {cfg.calculator_estimator}")
         if cfg.calculator_operand_vocab_size < 1:
             raise ValueError("calculator operand vocab size must be positive")
         expected_result_size = (2 * cfg.calculator_operand_vocab_size) - 1
@@ -66,6 +69,7 @@ class CalculatorHook(nn.Module):
             )
 
         self.mode = cfg.calculator_mode
+        self.estimator = cfg.calculator_estimator
         self.operand_vocab_size = cfg.calculator_operand_vocab_size
         self.result_vocab_size = cfg.calculator_result_vocab_size
         self.injection_scale = cfg.calculator_injection_scale
@@ -91,12 +95,26 @@ class CalculatorHook(nn.Module):
 
         operand_logits = self.input_proj(h)
         a_logits, b_logits = operand_logits.split(self.operand_vocab_size, dim=-1)
+        a_logp = None
+        b_logp = None
         if oracle_operands is None:
-            flat_a_logits = a_logits.reshape(-1, self.operand_vocab_size)
-            flat_b_logits = b_logits.reshape(-1, self.operand_vocab_size)
-            flat_result = HardAddSTE.apply(flat_a_logits, flat_b_logits)
-            a_pred = a_logits.argmax(dim=-1)
-            b_pred = b_logits.argmax(dim=-1)
+            if self.estimator == "ste":
+                flat_a_logits = a_logits.reshape(-1, self.operand_vocab_size)
+                flat_b_logits = b_logits.reshape(-1, self.operand_vocab_size)
+                flat_result = HardAddSTE.apply(flat_a_logits, flat_b_logits)
+                a_pred = a_logits.argmax(dim=-1)
+                b_pred = b_logits.argmax(dim=-1)
+            else:
+                a_dist = torch.distributions.Categorical(logits=a_logits)
+                b_dist = torch.distributions.Categorical(logits=b_logits)
+                a_pred = a_dist.sample()
+                b_pred = b_dist.sample()
+                a_logp = a_dist.log_prob(a_pred)
+                b_logp = b_dist.log_prob(b_pred)
+                result_idx = a_pred + b_pred
+                flat_result = F.one_hot(
+                    result_idx.reshape(-1), num_classes=self.result_vocab_size
+                ).to(h.dtype)
         else:
             if oracle_operands.shape != (*h.shape[:2], 2):
                 raise ValueError(
@@ -119,6 +137,8 @@ class CalculatorHook(nn.Module):
                 b_logits=b_logits,
                 a_pred=a_pred,
                 b_pred=b_pred,
+                a_logp=a_logp,
+                b_logp=b_logp,
                 result=result,
                 tokens=tokens,
                 unscaled_injection=unscaled_injection,
@@ -143,6 +163,9 @@ class CalculatorHook(nn.Module):
             "b_confidence": nan_float,
             "a_entropy": nan_float,
             "b_entropy": nan_float,
+            "a_logp": nan_float,
+            "b_logp": nan_float,
+            "sampled_logp": nan_float,
             "injection_norm": injection.norm(dim=-1),
             "unscaled_injection_norm": injection.norm(dim=-1),
             "oracle_used": torch.zeros((B, T), dtype=torch.bool, device=tokens.device),
@@ -159,6 +182,8 @@ class CalculatorHook(nn.Module):
         b_logits: Tensor,
         a_pred: Tensor,
         b_pred: Tensor,
+        a_logp: Tensor | None,
+        b_logp: Tensor | None,
         result: Tensor,
         tokens: Tensor,
         unscaled_injection: Tensor,
@@ -167,6 +192,10 @@ class CalculatorHook(nn.Module):
     ) -> dict[str, Tensor]:
         a_probs = a_logits.softmax(dim=-1)
         b_probs = b_logits.softmax(dim=-1)
+        if a_logp is None:
+            a_logp = a_probs.gather(-1, a_pred.unsqueeze(-1)).squeeze(-1).log()
+        if b_logp is None:
+            b_logp = b_probs.gather(-1, b_pred.unsqueeze(-1)).squeeze(-1).log()
         return {
             "eq_mask": tokens == EQ_ID,
             "a_pred": a_pred,
@@ -176,6 +205,9 @@ class CalculatorHook(nn.Module):
             "b_confidence": b_probs.max(dim=-1).values,
             "a_entropy": self._entropy(a_probs),
             "b_entropy": self._entropy(b_probs),
+            "a_logp": a_logp,
+            "b_logp": b_logp,
+            "sampled_logp": a_logp + b_logp,
             "injection_norm": scaled_injection.norm(dim=-1),
             "unscaled_injection_norm": unscaled_injection.norm(dim=-1),
             "oracle_used": torch.full(
