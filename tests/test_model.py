@@ -45,6 +45,15 @@ def test_forward_shape() -> None:
     assert logits.dtype == torch.float32
 
 
+def test_mlp_expansion_changes_parameter_count() -> None:
+    narrow_cfg = _small_cfg()
+    wide_cfg = _small_cfg()
+    narrow_cfg.mlp_expansion = 1
+    wide_cfg.mlp_expansion = 4
+
+    assert TinyGPT(narrow_cfg).num_params() < TinyGPT(wide_cfg).num_params()
+
+
 def test_causal_mask_does_not_leak_future_tokens() -> None:
     torch.manual_seed(0)
     model = TinyGPT(_small_cfg())
@@ -72,6 +81,34 @@ def test_calculator_off_preserves_forward_and_generate_contracts() -> None:
 
     assert logits.shape == (2, 8, VOCAB_SIZE)
     assert generated.shape == (2, 5)
+
+
+def test_calculator_hook_does_not_change_core_initialization() -> None:
+    seed = 123
+    torch.manual_seed(seed)
+    model_a = TinyGPT(_small_cfg())
+    torch.manual_seed(seed)
+    model_b = TinyGPT(_small_calculator_cfg(mode="off"))
+
+    for name, param in model_a.state_dict().items():
+        if name.startswith("calculator_hook."):
+            continue
+        assert torch.equal(param, model_b.state_dict()[name]), name
+
+
+def test_calculator_off_forward_matches_model_without_hook() -> None:
+    seed = 123
+    torch.manual_seed(seed)
+    model_a = TinyGPT(_small_cfg())
+    torch.manual_seed(seed)
+    model_b = TinyGPT(_small_calculator_cfg(mode="off"))
+    x = torch.tensor([[1, 2, EQ_ID, 3, 4, 5, 6, 7]])
+
+    with torch.no_grad():
+        logits_a = model_a(x)
+        logits_b = model_b(x)
+
+    assert torch.equal(logits_a, logits_b)
 
 
 def test_hard_add_ste_forward_returns_sum_class() -> None:
@@ -184,6 +221,34 @@ def test_oracle_operands_force_calculator_result_class() -> None:
     assert trace["b_pred"][0, 2].item() == 5
     assert trace["result_pred"][0, 2].item() == 7
     assert trace["oracle_used"][0, 2].item() is True
+
+
+def test_calculator_result_override_changes_result_class() -> None:
+    torch.manual_seed(0)
+    hook = CalculatorHook(_small_calculator_cfg(mode="add"))
+    h = torch.randn(1, 5, 32)
+    tokens = torch.tensor([[1, 2, EQ_ID, 3, 4]])
+    oracle = torch.zeros(1, 5, 2, dtype=torch.long)
+    oracle[..., 0] = 3
+    oracle[..., 1] = 4
+
+    _, zero_trace = hook(
+        h,
+        tokens,
+        oracle_operands=oracle,
+        result_override="zero",
+        return_trace=True,
+    )
+    _, plus_one_trace = hook(
+        h,
+        tokens,
+        oracle_operands=oracle,
+        result_override="plus_one",
+        return_trace=True,
+    )
+
+    assert zero_trace["result_pred"][0, 2].item() == 0
+    assert plus_one_trace["result_pred"][0, 2].item() == 8
 
 
 def test_calculator_injection_scale_zero_removes_active_injection() -> None:
@@ -314,3 +379,28 @@ def test_training_oracle_operand_extraction_from_fixed_width_batch() -> None:
     assert oracle[0, -1].tolist() == [7, 5]
     assert oracle[1, 0].tolist() == [42, 99]
     assert oracle[1, -1].tolist() == [42, 99]
+
+
+def test_training_script_builds_legal_one_layer_calculator_config() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_one_layer", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = overfit_script.make_model_config(
+        1,
+        "model-c",
+        n_layer=1,
+        n_head=2,
+        n_embd=32,
+        mlp_expansion=1,
+    )
+
+    assert cfg.n_layer == 1
+    assert cfg.n_head == 2
+    assert cfg.n_embd == 32
+    assert cfg.mlp_expansion == 1
+    assert cfg.calculator_hook_after_layer == 1
+    assert TinyGPT(cfg).num_params() < TinyGPT(GPTConfig()).num_params()

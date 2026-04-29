@@ -56,6 +56,11 @@ class TrainConfig:
     reinforce_baseline_beta: float
     reinforce_entropy_weight: float
     reinforce_entropy_decay_steps: int
+    n_layer: int
+    n_head: int
+    n_embd: int
+    mlp_expansion: int
+    calculator_hook_after_layer: int
     model: dict[str, object]
 
 
@@ -308,6 +313,17 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         writer.writerows(curve)
 
 
+def create_unique_dir(path: Path) -> Path:
+    for attempt in range(100):
+        candidate = path if attempt == 0 else path.with_name(f"{path.name}-{attempt}")
+        try:
+            candidate.mkdir(parents=True, exist_ok=False)
+            return candidate
+        except FileExistsError:
+            continue
+    raise FileExistsError(f"could not create a unique run directory for {path}")
+
+
 def masked_cross_entropy_per_example(
     logits: torch.Tensor, targets: torch.Tensor, mask: torch.Tensor
 ) -> torch.Tensor:
@@ -417,15 +433,26 @@ def make_model_config(
     injection_scale: float = 1.0,
     operand_vocab_size: int | None = None,
     calculator_estimator: str = "ste",
+    n_layer: int = 4,
+    n_head: int = 4,
+    n_embd: int = 128,
+    mlp_expansion: int = 4,
+    calculator_hook_after_layer: int | None = None,
 ) -> GPTConfig:
     operand_vocab_size = operand_vocab_size or 10**num_digits
     calculator_enabled = variant in {"model-b", "model-c"}
     calculator_mode = "add" if variant == "model-c" else "off"
+    if calculator_hook_after_layer is None:
+        calculator_hook_after_layer = min(2, n_layer)
     return GPTConfig(
         block_size=max_sequence_length(num_digits) - 1,
+        n_layer=n_layer,
+        n_head=n_head,
+        n_embd=n_embd,
+        mlp_expansion=mlp_expansion,
         calculator_enabled=calculator_enabled,
         calculator_mode=calculator_mode,
-        calculator_hook_after_layer=2,
+        calculator_hook_after_layer=calculator_hook_after_layer,
         calculator_operand_vocab_size=operand_vocab_size,
         calculator_result_vocab_size=(2 * operand_vocab_size) - 1,
         calculator_injection_scale=injection_scale,
@@ -463,6 +490,11 @@ def run_variant(
         injection_scale=args.injection_scale,
         operand_vocab_size=calculator_operand_vocab_size,
         calculator_estimator=args.calculator_estimator,
+        n_layer=args.n_layer,
+        n_head=args.n_head,
+        n_embd=args.n_embd,
+        mlp_expansion=args.mlp_expansion,
+        calculator_hook_after_layer=args.calculator_hook_after_layer,
     )
     model = TinyGPT(cfg).to(device)
     optim = torch.optim.AdamW(
@@ -497,6 +529,11 @@ def run_variant(
         reinforce_baseline_beta=args.reinforce_baseline_beta,
         reinforce_entropy_weight=args.reinforce_entropy_weight,
         reinforce_entropy_decay_steps=args.reinforce_entropy_decay_steps,
+        n_layer=args.n_layer,
+        n_head=args.n_head,
+        n_embd=args.n_embd,
+        mlp_expansion=args.mlp_expansion,
+        calculator_hook_after_layer=cfg.calculator_hook_after_layer,
         model=asdict(cfg),
     )
     (run_dir / "config.json").write_text(
@@ -770,6 +807,24 @@ def parse_args() -> argparse.Namespace:
         default="ste",
         help="Estimator for the learned calculator input interface.",
     )
+    parser.add_argument("--n-layer", type=int, default=4)
+    parser.add_argument("--n-head", type=int, default=4)
+    parser.add_argument("--n-embd", type=int, default=128)
+    parser.add_argument(
+        "--mlp-expansion",
+        type=int,
+        default=4,
+        help="MLP hidden-size multiplier relative to n_embd.",
+    )
+    parser.add_argument(
+        "--calculator-hook-after-layer",
+        type=int,
+        default=None,
+        help=(
+            "Transformer layer after which to inject the calculator. "
+            "Default is 2 for depth >=2, otherwise 1."
+        ),
+    )
     parser.add_argument(
         "--reinforce-baseline-beta",
         type=float,
@@ -814,8 +869,23 @@ def main() -> None:
         raise ValueError("--reinforce-entropy-weight must be non-negative")
     if args.reinforce_entropy_decay_steps < 0:
         raise ValueError("--reinforce-entropy-decay-steps must be non-negative")
+    if args.n_layer < 1:
+        raise ValueError("--n-layer must be positive")
+    if args.n_head < 1:
+        raise ValueError("--n-head must be positive")
+    if args.n_embd < 1:
+        raise ValueError("--n-embd must be positive")
+    if args.n_embd % args.n_head != 0:
+        raise ValueError("--n-embd must be divisible by --n-head")
+    if args.mlp_expansion < 1:
+        raise ValueError("--mlp-expansion must be positive")
+    if (
+        args.calculator_hook_after_layer is not None
+        and not 0 <= args.calculator_hook_after_layer <= args.n_layer
+    ):
+        raise ValueError("--calculator-hook-after-layer must be within model depth")
     device = pick_device()
-    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S_%f")
     suffix_parts = [args.variant]
     if args.oracle_train:
         suffix_parts.append("oracle")
@@ -828,14 +898,19 @@ def main() -> None:
         if args.aux_operand_loss_decay_steps > 0:
             suffix_parts.append(f"auxdecay{args.aux_operand_loss_decay_steps}")
     suffix = "-".join(suffix_parts)
-    base_run_dir = args.run_root / f"{timestamp}_{suffix}"
-    base_run_dir.mkdir(parents=True, exist_ok=False)
+    base_run_dir = create_unique_dir(args.run_root / f"{timestamp}_{suffix}")
 
     print(f"device: {device}")
     print(f"variant: {args.variant}")
     print(f"oracle train: {args.oracle_train}")
     print(f"injection scale: {args.injection_scale}")
     print(f"calculator estimator: {args.calculator_estimator}")
+    print(
+        "architecture: "
+        f"n_layer={args.n_layer} n_head={args.n_head} "
+        f"n_embd={args.n_embd} mlp_expansion={args.mlp_expansion} "
+        f"hook_after_layer={args.calculator_hook_after_layer}"
+    )
     print(f"run root: {base_run_dir}")
 
     all_metrics = []

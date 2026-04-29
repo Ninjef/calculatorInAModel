@@ -17,6 +17,7 @@ class GPTConfig:
     n_layer: int = 4
     n_head: int = 4
     n_embd: int = 128
+    mlp_expansion: int = 4
     dropout: float = 0.0
     calculator_enabled: bool = False
     calculator_mode: str = "off"
@@ -82,8 +83,11 @@ class CalculatorHook(nn.Module):
         tokens: Tensor,
         *,
         oracle_operands: Tensor | None = None,
+        result_override: str = "add",
         return_trace: bool = False,
     ) -> Tensor | tuple[Tensor, dict[str, Tensor]]:
+        if result_override not in {"add", "zero", "plus_one", "random"}:
+            raise ValueError(f"unknown calculator result override: {result_override}")
         eq_mask = (tokens == EQ_ID).unsqueeze(-1)
         trace: dict[str, Tensor] = {}
         if self.mode == "off" or not eq_mask.any():
@@ -101,9 +105,14 @@ class CalculatorHook(nn.Module):
             if self.estimator == "ste":
                 flat_a_logits = a_logits.reshape(-1, self.operand_vocab_size)
                 flat_b_logits = b_logits.reshape(-1, self.operand_vocab_size)
-                flat_result = HardAddSTE.apply(flat_a_logits, flat_b_logits)
                 a_pred = a_logits.argmax(dim=-1)
                 b_pred = b_logits.argmax(dim=-1)
+                if result_override == "add":
+                    flat_result = HardAddSTE.apply(flat_a_logits, flat_b_logits)
+                else:
+                    flat_result = self._overridden_result(
+                        a_pred, b_pred, result_override, dtype=h.dtype
+                    )
             else:
                 a_dist = torch.distributions.Categorical(logits=a_logits)
                 b_dist = torch.distributions.Categorical(logits=b_logits)
@@ -111,10 +120,9 @@ class CalculatorHook(nn.Module):
                 b_pred = b_dist.sample()
                 a_logp = a_dist.log_prob(a_pred)
                 b_logp = b_dist.log_prob(b_pred)
-                result_idx = a_pred + b_pred
-                flat_result = F.one_hot(
-                    result_idx.reshape(-1), num_classes=self.result_vocab_size
-                ).to(h.dtype)
+                flat_result = self._overridden_result(
+                    a_pred, b_pred, result_override, dtype=h.dtype
+                )
         else:
             if oracle_operands.shape != (*h.shape[:2], 2):
                 raise ValueError(
@@ -124,10 +132,9 @@ class CalculatorHook(nn.Module):
             oracle_operands = oracle_operands.to(device=h.device, dtype=torch.long)
             a_pred = oracle_operands[..., 0]
             b_pred = oracle_operands[..., 1]
-            result_idx = a_pred + b_pred
-            flat_result = F.one_hot(
-                result_idx.reshape(-1), num_classes=self.result_vocab_size
-            ).to(h.dtype)
+            flat_result = self._overridden_result(
+                a_pred, b_pred, result_override, dtype=h.dtype
+            )
         result = flat_result.reshape(*h.shape[:2], self.result_vocab_size)
         unscaled_injection = self.output_proj(result) * eq_mask.to(h.dtype)
         injection = unscaled_injection * self.injection_scale
@@ -147,6 +154,28 @@ class CalculatorHook(nn.Module):
             )
             return injection, trace
         return injection
+
+    def _overridden_result(
+        self, a_pred: Tensor, b_pred: Tensor, mode: str, *, dtype: torch.dtype
+    ) -> Tensor:
+        if mode == "add":
+            result_idx = a_pred + b_pred
+        elif mode == "zero":
+            result_idx = torch.zeros_like(a_pred)
+        elif mode == "plus_one":
+            result_idx = (a_pred + b_pred + 1) % self.result_vocab_size
+        elif mode == "random":
+            result_idx = torch.randint(
+                low=0,
+                high=self.result_vocab_size,
+                size=a_pred.shape,
+                device=a_pred.device,
+            )
+        else:
+            raise ValueError(f"unknown calculator result override: {mode}")
+        return F.one_hot(result_idx.reshape(-1), num_classes=self.result_vocab_size).to(
+            dtype=dtype
+        )
 
     def _empty_trace(
         self, h: Tensor, tokens: Tensor, injection: Tensor
@@ -248,8 +277,9 @@ class CausalSelfAttention(nn.Module):
 class MLP(nn.Module):
     def __init__(self, cfg: GPTConfig) -> None:
         super().__init__()
-        self.fc = nn.Linear(cfg.n_embd, 4 * cfg.n_embd)
-        self.proj = nn.Linear(4 * cfg.n_embd, cfg.n_embd)
+        hidden_size = cfg.mlp_expansion * cfg.n_embd
+        self.fc = nn.Linear(cfg.n_embd, hidden_size)
+        self.proj = nn.Linear(hidden_size, cfg.n_embd)
 
     def forward(self, x: Tensor) -> Tensor:
         return self.proj(F.gelu(self.fc(x)))
@@ -276,15 +306,15 @@ class TinyGPT(nn.Module):
         self.tok_emb = nn.Embedding(cfg.vocab_size, cfg.n_embd)
         self.pos_emb = nn.Embedding(cfg.block_size, cfg.n_embd)
         self.blocks = nn.ModuleList([Block(cfg) for _ in range(cfg.n_layer)])
-        if cfg.calculator_enabled:
-            if not 0 <= cfg.calculator_hook_after_layer <= cfg.n_layer:
-                raise ValueError("calculator hook layer must be within model depth")
-            self.calculator_hook: CalculatorHook | None = CalculatorHook(cfg)
-        else:
-            self.calculator_hook = None
+        self.calculator_hook: CalculatorHook | None = None
         self.ln_f = nn.LayerNorm(cfg.n_embd)
         self.lm_head = nn.Linear(cfg.n_embd, cfg.vocab_size, bias=False)
         self.apply(self._init_weights)
+        if cfg.calculator_enabled:
+            if not 0 <= cfg.calculator_hook_after_layer <= cfg.n_layer:
+                raise ValueError("calculator hook layer must be within model depth")
+            self.calculator_hook = CalculatorHook(cfg)
+            self.calculator_hook.apply(self._init_weights)
 
     @staticmethod
     def _init_weights(module: nn.Module) -> None:
@@ -304,6 +334,7 @@ class TinyGPT(nn.Module):
         *,
         return_diagnostics: bool = False,
         oracle_operands: Tensor | None = None,
+        calculator_result_override: str = "add",
     ) -> Tensor | tuple[Tensor, dict[str, Any]]:
         B, T = x.shape
         assert T <= self.cfg.block_size, f"sequence length {T} > block_size {self.cfg.block_size}"
@@ -325,13 +356,17 @@ class TinyGPT(nn.Module):
                         h,
                         x,
                         oracle_operands=oracle_operands,
+                        result_override=calculator_result_override,
                         return_trace=True,
                     )
                     diagnostics["calculator_trace"] = trace
                     h = h + injection
                 else:
                     h = h + self.calculator_hook(
-                        h, x, oracle_operands=oracle_operands
+                        h,
+                        x,
+                        oracle_operands=oracle_operands,
+                        result_override=calculator_result_override,
                     )
         h = self.ln_f(h)
         logits = self.lm_head(h)

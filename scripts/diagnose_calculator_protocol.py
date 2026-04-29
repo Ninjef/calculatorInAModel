@@ -42,13 +42,24 @@ def make_model_config(
     variant: str,
     injection_scale: float = 1.0,
     operand_vocab_size: int | None = None,
+    n_layer: int = 4,
+    n_head: int = 4,
+    n_embd: int = 128,
+    mlp_expansion: int = 4,
+    calculator_hook_after_layer: int | None = None,
 ) -> GPTConfig:
     operand_vocab_size = operand_vocab_size or 10**num_digits
+    if calculator_hook_after_layer is None:
+        calculator_hook_after_layer = min(2, n_layer)
     return GPTConfig(
         block_size=max_sequence_length(num_digits) - 1,
+        n_layer=n_layer,
+        n_head=n_head,
+        n_embd=n_embd,
+        mlp_expansion=mlp_expansion,
         calculator_enabled=variant in {"model-b", "model-c"},
         calculator_mode="add" if variant == "model-c" else "off",
-        calculator_hook_after_layer=2,
+        calculator_hook_after_layer=calculator_hook_after_layer,
         calculator_operand_vocab_size=operand_vocab_size,
         calculator_result_vocab_size=(2 * operand_vocab_size) - 1,
         calculator_injection_scale=injection_scale,
@@ -106,6 +117,11 @@ def train_fresh_model(args: argparse.Namespace, device: str) -> TinyGPT:
         variant=args.variant,
         injection_scale=args.injection_scale,
         operand_vocab_size=args.calculator_operand_vocab_size,
+        n_layer=args.n_layer,
+        n_head=args.n_head,
+        n_embd=args.n_embd,
+        mlp_expansion=args.mlp_expansion,
+        calculator_hook_after_layer=args.calculator_hook_after_layer,
     )
     model = TinyGPT(cfg).to(device)
     optim = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95))
@@ -153,6 +169,7 @@ def generate_answer(
     max_new_tokens: int,
     device: str | torch.device,
     oracle: bool,
+    calculator_result_override: str,
 ) -> tuple[list[int], float]:
     model.eval()
     ids = torch.tensor([prompt_ids], dtype=torch.long, device=device)
@@ -164,7 +181,11 @@ def generate_answer(
             oracle_operands = make_oracle_operands(
                 a=a, b=b, shape=ids_cond.shape, device=device
             )
-        logits = model(ids_cond, oracle_operands=oracle_operands)
+        logits = model(
+            ids_cond,
+            oracle_operands=oracle_operands,
+            calculator_result_override=calculator_result_override,
+        )
         probs = logits[:, -1, :].softmax(dim=-1)
         next_id = probs.argmax(dim=-1, keepdim=True)
         confidences.append(float(probs.max().item()))
@@ -184,8 +205,10 @@ def diagnostic_rows(
     seed: int,
     device: str | torch.device,
     oracle: bool,
+    calculator_result_override: str,
 ) -> list[dict[str, Any]]:
     rng = random.Random(seed)
+    torch.manual_seed(seed)
     rows: list[dict[str, Any]] = []
     max_answer_tokens = num_digits + 2
     model.eval()
@@ -198,7 +221,10 @@ def diagnostic_rows(
         if oracle:
             oracle_operands = make_oracle_operands(a=a, b=b, shape=x.shape, device=device)
         logits, diagnostics = model(
-            x, return_diagnostics=True, oracle_operands=oracle_operands
+            x,
+            return_diagnostics=True,
+            oracle_operands=oracle_operands,
+            calculator_result_override=calculator_result_override,
         )
         probs = logits[:, -1, :].softmax(dim=-1)
         first_token_confidence = float(probs.max().item())
@@ -210,6 +236,7 @@ def diagnostic_rows(
             max_new_tokens=max_answer_tokens,
             device=device,
             oracle=oracle,
+            calculator_result_override=calculator_result_override,
         )
         pred = decode_tokens(trim_after_eos(pred_ids))
         eq_pos = prompt_ids.index(EQ_ID)
@@ -451,7 +478,34 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--log-every", type=int, default=50)
     parser.add_argument("--injection-scale", type=float, default=1.0)
+    parser.add_argument("--n-layer", type=int, default=4)
+    parser.add_argument("--n-head", type=int, default=4)
+    parser.add_argument("--n-embd", type=int, default=128)
+    parser.add_argument(
+        "--mlp-expansion",
+        type=int,
+        default=4,
+        help="MLP hidden-size multiplier relative to n_embd.",
+    )
+    parser.add_argument(
+        "--calculator-hook-after-layer",
+        type=int,
+        default=None,
+        help=(
+            "Transformer layer after which to inject the calculator. "
+            "Default is 2 for depth >=2, otherwise 1."
+        ),
+    )
     parser.add_argument("--oracle", action="store_true")
+    parser.add_argument(
+        "--calculator-result-override",
+        choices=["add", "zero", "plus_one", "random"],
+        default="add",
+        help=(
+            "Eval-only counterfactual for the calculator result class. "
+            "'add' preserves normal behavior."
+        ),
+    )
     parser.add_argument("--probe", action="store_true")
     parser.add_argument("--probe-layers", type=int, nargs="+", default=None)
     parser.add_argument(
@@ -479,6 +533,21 @@ def main() -> None:
             raise ValueError(
                 "--calculator-operand-vocab-size must be greater than --operand-max"
             )
+    if args.n_layer < 1:
+        raise ValueError("--n-layer must be positive")
+    if args.n_head < 1:
+        raise ValueError("--n-head must be positive")
+    if args.n_embd < 1:
+        raise ValueError("--n-embd must be positive")
+    if args.n_embd % args.n_head != 0:
+        raise ValueError("--n-embd must be divisible by --n-head")
+    if args.mlp_expansion < 1:
+        raise ValueError("--mlp-expansion must be positive")
+    if (
+        args.calculator_hook_after_layer is not None
+        and not 0 <= args.calculator_hook_after_layer <= args.n_layer
+    ):
+        raise ValueError("--calculator-hook-after-layer must be within model depth")
 
     train_config: dict[str, Any] | None = None
     if args.checkpoint is not None:
@@ -492,7 +561,7 @@ def main() -> None:
         if args.checkpoint is not None:
             output_dir = args.checkpoint.resolve().parent / "diagnostics"
         else:
-            timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S")
+            timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S_%f")
             output_dir = (
                 Path(__file__).resolve().parent.parent
                 / "runs"
@@ -510,6 +579,7 @@ def main() -> None:
         seed=args.seed + 10_000,
         device=device,
         oracle=args.oracle,
+        calculator_result_override=args.calculator_result_override,
     )
     summary = summarize_rows(rows)
     summary.update(
@@ -518,6 +588,7 @@ def main() -> None:
             "digits": args.digits,
             "operand_max": operand_max,
             "oracle": args.oracle,
+            "calculator_result_override": args.calculator_result_override,
             "injection_scale": args.injection_scale,
             "checkpoint": str(args.checkpoint) if args.checkpoint else None,
             "train_config": train_config,
