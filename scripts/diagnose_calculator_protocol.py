@@ -5,6 +5,7 @@ import math
 import random
 import sys
 from collections import Counter, defaultdict
+from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -26,6 +27,14 @@ from src.data import (
     tokenize,
 )
 from src.model import GPTConfig, TinyGPT, masked_cross_entropy
+
+
+READ_SITE_INTERVENTIONS = {
+    "swap_a_read_vector",
+    "swap_b_read_vector",
+    "corrupt_a_read_vector",
+    "corrupt_b_read_vector",
+}
 
 
 def pick_device() -> str:
@@ -164,6 +173,19 @@ def load_checkpoint(
     return model, train_config
 
 
+@contextmanager
+def temporary_calculator_injection_scale(model: TinyGPT, scale: float | None) -> Any:
+    if scale is None or model.calculator_hook is None:
+        yield
+        return
+    old_scale = model.calculator_hook.injection_scale
+    model.calculator_hook.injection_scale = scale
+    try:
+        yield
+    finally:
+        model.calculator_hook.injection_scale = old_scale
+
+
 @torch.no_grad()
 def generate_answer(
     model: TinyGPT,
@@ -175,7 +197,8 @@ def generate_answer(
     device: str | torch.device,
     oracle: bool,
     calculator_result_override: str,
-    forced_calculator_result_class: int | None = None,
+    forced_calculator_result_class: int | torch.Tensor | None = None,
+    calculator_read_intervention: str | None = None,
 ) -> tuple[list[int], float]:
     model.eval()
     ids = torch.tensor([prompt_ids], dtype=torch.long, device=device)
@@ -192,6 +215,7 @@ def generate_answer(
             oracle_operands=oracle_operands,
             calculator_result_override=calculator_result_override,
             forced_calculator_result_class=forced_calculator_result_class,
+            calculator_read_intervention=calculator_read_intervention,
         )
         probs = logits[:, -1, :].softmax(dim=-1)
         next_id = probs.argmax(dim=-1, keepdim=True)
@@ -200,6 +224,51 @@ def generate_answer(
     generated = ids[0, len(prompt_ids) :].tolist()
     confidence = sum(confidences) / max(len(confidences), 1)
     return generated, confidence
+
+
+@torch.no_grad()
+def generate_answers_forced_classes(
+    model: TinyGPT,
+    *,
+    prompt_ids: list[int],
+    a: int,
+    b: int,
+    forced_classes: list[int],
+    max_new_tokens: int,
+    device: str | torch.device,
+    oracle: bool,
+    calculator_result_override: str,
+) -> list[tuple[list[int], float]]:
+    model.eval()
+    ids = torch.tensor(
+        [prompt_ids for _ in forced_classes], dtype=torch.long, device=device
+    )
+    forced = torch.tensor(forced_classes, dtype=torch.long, device=device)
+    confidences: list[list[float]] = [[] for _ in forced_classes]
+    for _ in range(max_new_tokens):
+        ids_cond = ids[:, -model.cfg.block_size :]
+        oracle_operands = None
+        if oracle:
+            oracle_operands = make_oracle_operands(
+                a=a, b=b, shape=ids_cond.shape, device=device
+            )
+        logits = model(
+            ids_cond,
+            oracle_operands=oracle_operands,
+            calculator_result_override=calculator_result_override,
+            forced_calculator_result_class=forced,
+        )
+        probs = logits[:, -1, :].softmax(dim=-1)
+        next_id = probs.argmax(dim=-1, keepdim=True)
+        for i, confidence in enumerate(probs.max(dim=-1).values.tolist()):
+            confidences[i].append(float(confidence))
+        ids = torch.cat([ids, next_id], dim=1)
+    results = []
+    for i in range(len(forced_classes)):
+        generated = ids[i, len(prompt_ids) :].tolist()
+        confidence = sum(confidences[i]) / max(len(confidences[i]), 1)
+        results.append((generated, confidence))
+    return results
 
 
 @torch.no_grad()
@@ -213,16 +282,24 @@ def diagnostic_rows(
     device: str | torch.device,
     oracle: bool,
     calculator_result_override: str,
-    forced_calculator_result_class: int | None = None,
+    forced_calculator_result_class: int | torch.Tensor | None = None,
+    calculator_read_intervention: str | None = None,
+    sample_specs: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, Any]]:
     rng = random.Random(seed)
     torch.manual_seed(seed)
     rows: list[dict[str, Any]] = []
     max_answer_tokens = num_digits + 2
     model.eval()
-    for i in range(samples):
-        a = rng.randint(0, operand_max)
-        b = rng.randint(0, operand_max)
+    if sample_specs is None:
+        sample_specs = [
+            {"sample": i, "true_a": rng.randint(0, operand_max), "true_b": rng.randint(0, operand_max)}
+            for i in range(samples)
+        ]
+    for fallback_i, spec in enumerate(sample_specs):
+        i = int(spec.get("sample", fallback_i))
+        a = int(spec["true_a"])
+        b = int(spec["true_b"])
         prompt_ids, target = make_problem(a, b, num_digits)
         x = torch.tensor([prompt_ids], dtype=torch.long, device=device)
         oracle_operands = None
@@ -234,6 +311,7 @@ def diagnostic_rows(
             oracle_operands=oracle_operands,
             calculator_result_override=calculator_result_override,
             forced_calculator_result_class=forced_calculator_result_class,
+            calculator_read_intervention=calculator_read_intervention,
         )
         probs = logits[:, -1, :].softmax(dim=-1)
         first_token_confidence = float(probs.max().item())
@@ -247,6 +325,7 @@ def diagnostic_rows(
             oracle=oracle,
             calculator_result_override=calculator_result_override,
             forced_calculator_result_class=forced_calculator_result_class,
+            calculator_read_intervention=calculator_read_intervention,
         )
         pred = decode_tokens(trim_after_eos(pred_ids))
         eq_pos = prompt_ids.index(EQ_ID)
@@ -278,7 +357,10 @@ def diagnostic_rows(
                 "a_pred": trace_value("a_pred", -1),
                 "b_pred": trace_value("b_pred", -1),
                 "calculator_result": trace_value("result_pred", -1),
-                "forced_calculator_result_class": forced_calculator_result_class,
+                "forced_calculator_result_class": ""
+                if forced_calculator_result_class is None
+                else str(forced_calculator_result_class),
+                "calculator_read_intervention": calculator_read_intervention or "none",
                 "a_confidence": trace_value("a_confidence", float("nan")),
                 "b_confidence": trace_value("b_confidence", float("nan")),
                 "a_entropy": trace_value("a_entropy", float("nan")),
@@ -325,6 +407,16 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
             finite_operand_rows
         )
 
+    mi_rows = [
+        {
+            **row,
+            "first_answer_token": answer_token_ids(str(row["target_answer"]))[0],
+            "carry": int(int(row["true_sum"]) >= 10),
+            "answer_length": len(str(row["true_sum"])),
+        }
+        for row in operand_rows
+    ]
+
     return {
         "samples": len(rows),
         "exact_match": correct / max(len(rows), 1),
@@ -335,6 +427,25 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "mean_b_confidence": mean_field("b_confidence"),
         "mean_a_entropy": mean_field("a_entropy"),
         "mean_b_entropy": mean_field("b_entropy"),
+        "learned_result_distribution": compact_distribution(
+            [row["calculator_result"] for row in operand_rows], limit=20
+        ),
+        "mutual_information_bits": {
+            "learned_a_true_a": mutual_information(mi_rows, "a_pred", "true_a"),
+            "learned_b_true_b": mutual_information(mi_rows, "b_pred", "true_b"),
+            "learned_result_true_sum": mutual_information(
+                mi_rows, "calculator_result", "true_sum"
+            ),
+            "learned_result_first_answer_token": mutual_information(
+                mi_rows, "calculator_result", "first_answer_token"
+            ),
+            "learned_result_carry": mutual_information(
+                mi_rows, "calculator_result", "carry"
+            ),
+            "learned_result_answer_length": mutual_information(
+                mi_rows, "calculator_result", "answer_length"
+            ),
+        },
     }
 
 
@@ -353,7 +464,7 @@ def answer_log_probability(
     device: str | torch.device,
     oracle: bool,
     calculator_result_override: str,
-    forced_calculator_result_class: int | None,
+    forced_calculator_result_class: int | torch.Tensor | None,
 ) -> tuple[float, float, float]:
     target_ids = answer_token_ids(target_answer)
     full_ids = prompt_ids + target_ids
@@ -379,6 +490,50 @@ def answer_log_probability(
     first_token_probs = logits[0, len(prompt_ids) - 1].softmax(dim=-1)
     first_correct_prob = float(first_token_probs[target_ids[0]].item())
     return total, mean, first_correct_prob
+
+
+@torch.no_grad()
+def answer_log_probabilities_forced_classes(
+    model: TinyGPT,
+    *,
+    prompt_ids: list[int],
+    target_answer: str,
+    a: int,
+    b: int,
+    forced_classes: list[int],
+    device: str | torch.device,
+    oracle: bool,
+    calculator_result_override: str,
+) -> list[tuple[float, float, float]]:
+    target_ids = answer_token_ids(target_answer)
+    full_ids = prompt_ids + target_ids
+    x_single = full_ids[:-1]
+    y_single = full_ids[1:]
+    x = torch.tensor([x_single for _ in forced_classes], dtype=torch.long, device=device)
+    y = torch.tensor([y_single for _ in forced_classes], dtype=torch.long, device=device)
+    forced = torch.tensor(forced_classes, dtype=torch.long, device=device)
+    oracle_operands = None
+    if oracle:
+        oracle_operands = make_oracle_operands(a=a, b=b, shape=x.shape, device=device)
+    logits = model(
+        x,
+        oracle_operands=oracle_operands,
+        calculator_result_override=calculator_result_override,
+        forced_calculator_result_class=forced,
+    )
+    log_probs = logits.log_softmax(dim=-1)
+    start = len(prompt_ids) - 1
+    token_log_probs = log_probs[:, start : start + len(target_ids)].gather(
+        -1, y[:, start : start + len(target_ids)].unsqueeze(-1)
+    )
+    totals = token_log_probs.squeeze(-1).sum(dim=-1)
+    means = totals / max(len(target_ids), 1)
+    first_token_probs = logits[:, len(prompt_ids) - 1].softmax(dim=-1)
+    first_correct_probs = first_token_probs[:, target_ids[0]]
+    return [
+        (float(total.item()), float(mean.item()), float(first_prob.item()))
+        for total, mean, first_prob in zip(totals, means, first_correct_probs)
+    ]
 
 
 def mutual_information(rows: list[dict[str, Any]], x_key: str, y_key: str) -> float:
@@ -437,6 +592,42 @@ def write_codebook(path: Path, normal_rows: list[dict[str, Any]]) -> list[dict[s
     return codebook_rows
 
 
+def write_operand_codebook(
+    path: Path, normal_rows: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    grouped: dict[tuple[int, int], list[dict[str, Any]]] = defaultdict(list)
+    for row in normal_rows:
+        if int(row["a_pred"]) >= 0 and int(row["b_pred"]) >= 0:
+            grouped[(int(row["a_pred"]), int(row["b_pred"]))].append(row)
+
+    codebook_rows: list[dict[str, Any]] = []
+    for (learned_a, learned_b), rows in sorted(grouped.items()):
+        correct = sum(int(row["correct"]) for row in rows)
+        codebook_rows.append(
+            {
+                "learned_a": learned_a,
+                "learned_b": learned_b,
+                "learned_result_class": learned_a + learned_b,
+                "count": len(rows),
+                "answer_accuracy": correct / max(len(rows), 1),
+                "true_a_distribution": compact_distribution(
+                    [row["true_a"] for row in rows]
+                ),
+                "true_b_distribution": compact_distribution(
+                    [row["true_b"] for row in rows]
+                ),
+                "true_sum_distribution": compact_distribution(
+                    [row["true_sum"] for row in rows]
+                ),
+                "target_answer_distribution": compact_distribution(
+                    [row["target_answer"] for row in rows]
+                ),
+            }
+        )
+    write_rows(path, codebook_rows)
+    return codebook_rows
+
+
 @torch.no_grad()
 def forced_result_sweep(
     model: TinyGPT,
@@ -446,6 +637,7 @@ def forced_result_sweep(
     device: str | torch.device,
     oracle: bool,
     calculator_result_override: str,
+    batch_size: int = 64,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if model.calculator_hook is None:
         raise ValueError("--forced-result-sweep requires a calculator-enabled model")
@@ -459,52 +651,59 @@ def forced_result_sweep(
         target = str(normal_row["target_answer"])
         learned_class = int(normal_row["calculator_result"])
         true_sum = int(normal_row["true_sum"])
-        for forced_class in range(result_vocab_size):
-            pred_ids, prediction_confidence = generate_answer(
+        forced_class_batches = [
+            list(range(start, min(start + batch_size, result_vocab_size)))
+            for start in range(0, result_vocab_size, batch_size)
+        ]
+        for forced_classes in forced_class_batches:
+            generated = generate_answers_forced_classes(
                 model,
                 prompt_ids=prompt_ids,
                 a=a,
                 b=b,
+                forced_classes=forced_classes,
                 max_new_tokens=max_answer_tokens,
                 device=device,
                 oracle=oracle,
                 calculator_result_override=calculator_result_override,
-                forced_calculator_result_class=forced_class,
             )
-            prediction = decode_tokens(trim_after_eos(pred_ids))
-            target_logprob, target_mean_logprob, correct_first_token_prob = (
-                answer_log_probability(
-                    model,
-                    prompt_ids=prompt_ids,
-                    target_answer=target,
-                    a=a,
-                    b=b,
-                    device=device,
-                    oracle=oracle,
-                    calculator_result_override=calculator_result_override,
-                    forced_calculator_result_class=forced_class,
+            logprobs = answer_log_probabilities_forced_classes(
+                model,
+                prompt_ids=prompt_ids,
+                target_answer=target,
+                a=a,
+                b=b,
+                forced_classes=forced_classes,
+                device=device,
+                oracle=oracle,
+                calculator_result_override=calculator_result_override,
+            )
+            for forced_class, (pred_ids, prediction_confidence), (
+                target_logprob,
+                target_mean_logprob,
+                correct_first_token_prob,
+            ) in zip(forced_classes, generated, logprobs):
+                prediction = decode_tokens(trim_after_eos(pred_ids))
+                sweep_rows.append(
+                    {
+                        "sample": normal_row["sample"],
+                        "prompt": normal_row["prompt"],
+                        "true_a": a,
+                        "true_b": b,
+                        "true_sum": true_sum,
+                        "target_answer": target,
+                        "learned_result_class": learned_class,
+                        "forced_result_class": forced_class,
+                        "forced_matches_learned": forced_class == learned_class,
+                        "forced_matches_true_sum": forced_class == true_sum,
+                        "prediction": prediction,
+                        "correct": prediction == target,
+                        "prediction_confidence": prediction_confidence,
+                        "correct_first_token_prob": correct_first_token_prob,
+                        "target_logprob": target_logprob,
+                        "target_mean_logprob": target_mean_logprob,
+                    }
                 )
-            )
-            sweep_rows.append(
-                {
-                    "sample": normal_row["sample"],
-                    "prompt": normal_row["prompt"],
-                    "true_a": a,
-                    "true_b": b,
-                    "true_sum": true_sum,
-                    "target_answer": target,
-                    "learned_result_class": learned_class,
-                    "forced_result_class": forced_class,
-                    "forced_matches_learned": forced_class == learned_class,
-                    "forced_matches_true_sum": forced_class == true_sum,
-                    "prediction": prediction,
-                    "correct": prediction == target,
-                    "prediction_confidence": prediction_confidence,
-                    "correct_first_token_prob": correct_first_token_prob,
-                    "target_logprob": target_logprob,
-                    "target_mean_logprob": target_mean_logprob,
-                }
-            )
 
     by_class: dict[int, list[dict[str, Any]]] = defaultdict(list)
     by_sample: dict[int, list[dict[str, Any]]] = defaultdict(list)
@@ -582,6 +781,7 @@ def forced_result_sweep(
     ]
     summary = {
         "result_vocab_size": result_vocab_size,
+        "forced_result_batch_size": batch_size,
         "sweep_rows": len(sweep_rows),
         "samples": len(normal_rows),
         "aggregate_by_forced_class": aggregate_by_forced_class,
@@ -609,6 +809,186 @@ def forced_result_sweep(
         },
     }
     return sweep_rows, summary
+
+
+@torch.no_grad()
+def evaluate_exact_match_from_rows(
+    model: TinyGPT,
+    *,
+    base_rows: list[dict[str, Any]],
+    num_digits: int,
+    device: str | torch.device,
+    oracle: bool = False,
+    calculator_result_override: str = "add",
+    injection_scale: float | None = None,
+    force_learned_result: bool = False,
+    calculator_read_intervention: str | None = None,
+) -> dict[str, Any]:
+    correct = 0
+    rows: list[dict[str, Any]] = []
+    max_answer_tokens = num_digits + 2
+    with temporary_calculator_injection_scale(model, injection_scale):
+        for row in base_rows:
+            a = int(row["true_a"])
+            b = int(row["true_b"])
+            prompt_ids = tokenize(str(row["prompt"]))
+            target = str(row["target_answer"])
+            forced_class = (
+                int(row["calculator_result"])
+                if force_learned_result and int(row["calculator_result"]) >= 0
+                else None
+            )
+            pred_ids, confidence = generate_answer(
+                model,
+                prompt_ids=prompt_ids,
+                a=a,
+                b=b,
+                max_new_tokens=max_answer_tokens,
+                device=device,
+                oracle=oracle,
+                calculator_result_override=calculator_result_override,
+                forced_calculator_result_class=forced_class,
+                calculator_read_intervention=calculator_read_intervention,
+            )
+            prediction = decode_tokens(trim_after_eos(pred_ids))
+            ok = prediction == target
+            correct += int(ok)
+            rows.append(
+                {
+                    "sample": row["sample"],
+                    "prompt": row["prompt"],
+                    "target_answer": target,
+                    "prediction": prediction,
+                    "correct": ok,
+                    "prediction_confidence": confidence,
+                }
+            )
+    return {
+        "samples": len(base_rows),
+        "correct": correct,
+        "exact_match": correct / max(len(base_rows), 1),
+        "rows": rows,
+    }
+
+
+def counterfactual_exact_match_table(
+    model: TinyGPT,
+    *,
+    base_rows: list[dict[str, Any]],
+    num_digits: int,
+    device: str | torch.device,
+    base_oracle: bool = False,
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    specs = [
+        ("normal", {"oracle": base_oracle}),
+        ("injection_zero", {"oracle": base_oracle, "injection_scale": 0.0}),
+        ("forced_zero", {"oracle": base_oracle, "calculator_result_override": "zero"}),
+        (
+            "forced_random",
+            {"oracle": base_oracle, "calculator_result_override": "random"},
+        ),
+        ("oracle_at_eval", {"oracle": True}),
+        (
+            "force_learned_result",
+            {"oracle": base_oracle, "force_learned_result": True},
+        ),
+    ]
+    for intervention in sorted(READ_SITE_INTERVENTIONS):
+        specs.append(
+            (
+                intervention,
+                {"oracle": base_oracle, "calculator_read_intervention": intervention},
+            )
+        )
+
+    table = []
+    detail_rows = {}
+    for name, kwargs in specs:
+        result = evaluate_exact_match_from_rows(
+            model,
+            base_rows=base_rows,
+            num_digits=num_digits,
+            device=device,
+            **kwargs,
+        )
+        table.append(
+            {
+                "condition": name,
+                "samples": result["samples"],
+                "correct": result["correct"],
+                "exact_match": result["exact_match"],
+            }
+        )
+        detail_rows[name] = result["rows"]
+    return table, detail_rows
+
+
+def classify_checkpoint(
+    *,
+    model: TinyGPT,
+    summary: dict[str, Any],
+    counterfactual_table: list[dict[str, Any]],
+    train_config: dict[str, Any] | None,
+    leakage_control_exact_match: float | None = None,
+) -> dict[str, Any]:
+    by_condition = {row["condition"]: row for row in counterfactual_table}
+    normal = float(by_condition.get("normal", summary).get("exact_match", 0.0))
+    injection_zero = float(
+        by_condition.get("injection_zero", {}).get("exact_match", normal)
+    )
+    forced_random = float(
+        by_condition.get("forced_random", {}).get("exact_match", normal)
+    )
+    oracle_at_eval = float(
+        by_condition.get("oracle_at_eval", {}).get("exact_match", normal)
+    )
+    operand_exact = float(summary.get("operand_exact_match", 0.0))
+    result_accuracy = float(summary.get("calculator_result_accuracy", 0.0))
+    injection_mode = model.cfg.calculator_injection_mode
+    calculator_mode = model.cfg.calculator_mode
+    oracle_train = bool(train_config.get("oracle_train", False)) if train_config else False
+
+    if injection_mode == "add":
+        bottleneck = "non_bottleneck_leaky_by_design"
+    elif injection_mode == "replace":
+        bottleneck = "invalid_or_leaky_bottleneck"
+    else:
+        bottleneck = "unknown"
+
+    if calculator_mode == "off":
+        category = "calculator_ignored_or_bypassed"
+    elif oracle_train and operand_exact > 0.99 and result_accuracy > 0.99 and normal > 0.95:
+        category = "valid_oracle_calculator_use"
+    elif operand_exact > 0.9 and result_accuracy > 0.9 and normal > injection_zero + 0.2:
+        category = "intended_true_operand_calculator_use"
+    elif normal < injection_zero - 0.05 or normal < forced_random - 0.05:
+        category = "calculator_harmful"
+    elif normal <= injection_zero + 0.05 and normal <= forced_random + 0.05:
+        category = "calculator_ignored_or_bypassed"
+    elif result_accuracy < 0.5:
+        category = "causally_useful_opaque_private_code"
+    else:
+        category = "semantically_decodable_private_calculator_code"
+
+    return {
+        "category": category,
+        "bottleneck_classification": bottleneck,
+        "normal_exact_match": normal,
+        "injection_zero_exact_match": injection_zero,
+        "forced_random_exact_match": forced_random,
+        "oracle_at_eval_exact_match": oracle_at_eval,
+        "operand_exact_match": operand_exact,
+        "calculator_result_accuracy": result_accuracy,
+        "calculator_mode": calculator_mode,
+        "calculator_injection_mode": injection_mode,
+        "model_b_off_replace_control_exact_match": leakage_control_exact_match,
+        "notes": (
+            "Current replace mode only replaces active '=' residual positions; "
+            "autoregressive answer-token positions can still use normal context."
+            if injection_mode == "replace"
+            else "Additive mode preserves the normal residual stream and is not a bottleneck."
+        ),
+    }
 
 
 @torch.no_grad()
@@ -828,6 +1208,18 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Force every result class for each prompt and save causal sweep CSV/JSON.",
     )
+    parser.add_argument(
+        "--forced-result-batch-size",
+        type=int,
+        default=64,
+        help="Number of forced result classes to evaluate together during sweeps.",
+    )
+    parser.add_argument(
+        "--leakage-control-exact-match",
+        type=float,
+        default=None,
+        help="Optional Model B/off replacement-control exact match for classification.",
+    )
     parser.add_argument("--output-dir", type=Path)
     return parser.parse_args()
 
@@ -864,6 +1256,8 @@ def main() -> None:
         raise ValueError(
             "--forced-result-sweep and --forced-calculator-result-class are mutually exclusive"
         )
+    if args.forced_result_batch_size < 1:
+        raise ValueError("--forced-result-batch-size must be positive")
 
     train_config: dict[str, Any] | None = None
     if args.checkpoint is not None:
@@ -899,6 +1293,25 @@ def main() -> None:
         forced_calculator_result_class=args.forced_calculator_result_class,
     )
     summary = summarize_rows(rows)
+    result_codebook = write_codebook(output_dir / "result_codebook.csv", rows)
+    operand_codebook = write_operand_codebook(output_dir / "operand_codebook.csv", rows)
+    counterfactual_table, counterfactual_detail_rows = counterfactual_exact_match_table(
+        model,
+        base_rows=rows,
+        num_digits=args.digits,
+        device=device,
+        base_oracle=args.oracle,
+    )
+    write_rows(output_dir / "counterfactual_exact_match.csv", counterfactual_table)
+    for condition, condition_rows in counterfactual_detail_rows.items():
+        write_rows(output_dir / f"counterfactual_{condition}_rows.csv", condition_rows)
+    classification = classify_checkpoint(
+        model=model,
+        summary=summary,
+        counterfactual_table=counterfactual_table,
+        train_config=train_config,
+        leakage_control_exact_match=args.leakage_control_exact_match,
+    )
     summary.update(
         {
             "device": device,
@@ -913,6 +1326,10 @@ def main() -> None:
             "checkpoint": str(args.checkpoint) if args.checkpoint else None,
             "train_config": train_config,
             "fresh_config": None if args.checkpoint else asdict(model.cfg),
+            "result_codebook_rows": len(result_codebook),
+            "operand_codebook_rows": len(operand_codebook),
+            "counterfactual_exact_match": counterfactual_table,
+            "classification": classification,
         }
     )
     if args.probe:
@@ -946,9 +1363,9 @@ def main() -> None:
             device=device,
             oracle=args.oracle,
             calculator_result_override=args.calculator_result_override,
+            batch_size=args.forced_result_batch_size,
         )
         write_rows(output_dir / "forced_result_sweep.csv", sweep_rows)
-        write_codebook(output_dir / "result_codebook.csv", rows)
         (output_dir / "forced_result_summary.json").write_text(
             json.dumps(sweep_summary, indent=2) + "\n"
         )

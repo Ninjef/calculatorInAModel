@@ -418,6 +418,27 @@ def test_forced_calculator_result_class_overrides_learned_sum() -> None:
     assert trace["result_pred"][0, 2].item() == 12
 
 
+def test_tensor_forced_calculator_result_class_overrides_per_example() -> None:
+    torch.manual_seed(0)
+    hook = CalculatorHook(_small_calculator_cfg(mode="add"))
+    h = torch.randn(2, 5, 32)
+    tokens = torch.tensor([[1, 2, EQ_ID, 3, 4], [4, 3, EQ_ID, 2, 1]])
+    oracle = torch.zeros(2, 5, 2, dtype=torch.long)
+    oracle[..., 0] = 3
+    oracle[..., 1] = 4
+
+    _, trace = hook(
+        h,
+        tokens,
+        oracle_operands=oracle,
+        forced_result_class=torch.tensor([5, 12]),
+        return_trace=True,
+    )
+
+    assert trace["result_pred"][0, 2].item() == 5
+    assert trace["result_pred"][1, 2].item() == 12
+
+
 def test_invalid_forced_calculator_result_class_raises() -> None:
     hook = CalculatorHook(_small_calculator_cfg(mode="add"))
     h = torch.randn(1, 5, 32)
@@ -425,6 +446,15 @@ def test_invalid_forced_calculator_result_class_raises() -> None:
 
     with pytest.raises(ValueError, match="forced_result_class"):
         hook(h, tokens, forced_result_class=19)
+
+
+def test_invalid_tensor_forced_calculator_result_class_raises() -> None:
+    hook = CalculatorHook(_small_calculator_cfg(mode="add"))
+    h = torch.randn(2, 5, 32)
+    tokens = torch.tensor([[1, 2, EQ_ID, 3, 4], [4, 3, EQ_ID, 2, 1]])
+
+    with pytest.raises(ValueError, match="forced_result_class tensor values"):
+        hook(h, tokens, forced_result_class=torch.tensor([1, 19]))
 
 
 def test_tiny_gpt_forwards_forced_calculator_result_class() -> None:
@@ -438,6 +468,41 @@ def test_tiny_gpt_forwards_forced_calculator_result_class() -> None:
     )
 
     assert diagnostics["calculator_trace"]["result_pred"][0, 2].item() == 5
+
+
+def test_read_site_swap_and_corrupt_change_only_calculator_read_input() -> None:
+    torch.manual_seed(0)
+    cfg = _small_calculator_cfg(mode="add")
+    cfg.calculator_read_position = "operands"
+    model = TinyGPT(cfg)
+    x = torch.tensor(
+        [
+            [1, 2, PLUS_ID, 3, 4, EQ_ID, 5, 6],
+            [7, 8, PLUS_ID, 9, 0, EQ_ID, 1, 2],
+        ]
+    )
+
+    _, normal = model(x, return_diagnostics=True)
+    _, swapped = model(
+        x,
+        return_diagnostics=True,
+        calculator_read_intervention="swap_a_read_vector",
+    )
+    _, corrupted = model(
+        x,
+        return_diagnostics=True,
+        calculator_read_intervention="corrupt_b_read_vector",
+    )
+
+    normal_read = normal["calculator_read_residual"]
+    swapped_read = swapped["calculator_read_residual_intervened"]
+    corrupted_read = corrupted["calculator_read_residual_intervened"]
+    assert torch.equal(normal_read, swapped["calculator_read_residual"])
+    assert torch.equal(normal_read[:, 4], swapped_read[:, 4])
+    assert torch.equal(swapped_read[0, 1], normal_read[1, 1])
+    assert torch.equal(swapped_read[1, 1], normal_read[0, 1])
+    assert torch.equal(normal_read[:, 1], corrupted_read[:, 1])
+    assert torch.all(corrupted_read[:, 4] == 0)
 
 
 def test_oracle_operands_with_replace_mode_record_expected_result() -> None:
@@ -548,6 +613,8 @@ def test_diagnostic_cli_smoke(tmp_path, monkeypatch) -> None:
             "--probe",
             "--probe-steps",
             "2",
+            "--forced-result-batch-size",
+            "7",
             "--output-dir",
             str(tmp_path),
         ],
@@ -559,10 +626,16 @@ def test_diagnostic_cli_smoke(tmp_path, monkeypatch) -> None:
     summary_path = tmp_path / "diagnostic_summary.json"
     assert rows_path.exists()
     assert summary_path.exists()
+    assert (tmp_path / "result_codebook.csv").exists()
+    assert (tmp_path / "operand_codebook.csv").exists()
+    assert (tmp_path / "counterfactual_exact_match.csv").exists()
     summary = json.loads(summary_path.read_text())
     assert summary["samples"] == 8
     assert summary["operand_max"] == 2
     assert summary["calculator_read_position"] == "operands"
+    assert "mutual_information_bits" in summary
+    assert "counterfactual_exact_match" in summary
+    assert "classification" in summary
     assert "probe" in summary
 
 
@@ -593,6 +666,8 @@ def test_diagnostic_cli_forced_result_sweep_writes_outputs(
             "--operand-max",
             "2",
             "--forced-result-sweep",
+            "--forced-result-batch-size",
+            "4",
             "--output-dir",
             str(tmp_path),
         ],
@@ -618,6 +693,7 @@ def test_diagnostic_cli_forced_result_sweep_writes_outputs(
     summary = json.loads(summary_path.read_text())
     assert summary["samples"] == 2
     assert summary["result_vocab_size"] == 19
+    assert summary["forced_result_batch_size"] == 4
 
 
 def test_training_oracle_operand_extraction_from_fixed_width_batch() -> None:

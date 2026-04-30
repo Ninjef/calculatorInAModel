@@ -1,6 +1,6 @@
 import math
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Literal
 
 import torch
 import torch.nn as nn
@@ -8,6 +8,14 @@ import torch.nn.functional as F
 from torch import Tensor
 
 from src.data import EQ_ID, VOCAB_SIZE
+
+
+ReadSiteIntervention = Literal[
+    "swap_a_read_vector",
+    "swap_b_read_vector",
+    "corrupt_a_read_vector",
+    "corrupt_b_read_vector",
+]
 
 
 @dataclass
@@ -92,18 +100,14 @@ class CalculatorHook(nn.Module):
         *,
         oracle_operands: Tensor | None = None,
         result_override: str = "add",
-        forced_result_class: int | None = None,
+        forced_result_class: int | Tensor | None = None,
         return_trace: bool = False,
     ) -> Tensor | tuple[Tensor, dict[str, Tensor]]:
         if result_override not in {"add", "zero", "plus_one", "random"}:
             raise ValueError(f"unknown calculator result override: {result_override}")
-        if forced_result_class is not None and not (
-            0 <= forced_result_class < self.result_vocab_size
-        ):
-            raise ValueError(
-                "forced_result_class must be in "
-                f"[0, {self.result_vocab_size}), got {forced_result_class}"
-            )
+        forced_result_class = self._validate_forced_result_class(
+            forced_result_class, like=tokens
+        )
         eq_mask = (tokens == EQ_ID).unsqueeze(-1)
         trace: dict[str, Tensor] = {}
         if self.mode == "off" or not eq_mask.any():
@@ -255,12 +259,45 @@ class CalculatorHook(nn.Module):
         )
 
     def _forced_result(
-        self, like: Tensor, forced_result_class: int, *, dtype: torch.dtype
+        self, like: Tensor, forced_result_class: int | Tensor, *, dtype: torch.dtype
     ) -> Tensor:
-        result_idx = torch.full_like(like, forced_result_class)
+        if isinstance(forced_result_class, Tensor):
+            result_idx = forced_result_class.to(device=like.device, dtype=torch.long)
+            if result_idx.shape == (like.shape[0],):
+                result_idx = result_idx.unsqueeze(-1).expand_as(like)
+            elif result_idx.shape != like.shape:
+                raise ValueError(
+                    "forced_result_class tensor must have shape "
+                    f"{tuple(like.shape)} or {(like.shape[0],)}, "
+                    f"got {tuple(result_idx.shape)}"
+                )
+        else:
+            result_idx = torch.full_like(like, forced_result_class)
         return F.one_hot(result_idx.reshape(-1), num_classes=self.result_vocab_size).to(
             dtype=dtype
         )
+
+    def _validate_forced_result_class(
+        self, forced_result_class: int | Tensor | None, *, like: Tensor
+    ) -> int | Tensor | None:
+        if forced_result_class is None:
+            return None
+        if isinstance(forced_result_class, Tensor):
+            forced = forced_result_class.to(device=like.device, dtype=torch.long)
+            if forced.numel() == 0:
+                raise ValueError("forced_result_class tensor must be non-empty")
+            if torch.any(forced < 0) or torch.any(forced >= self.result_vocab_size):
+                raise ValueError(
+                    "forced_result_class tensor values must be in "
+                    f"[0, {self.result_vocab_size})"
+                )
+            return forced
+        if not 0 <= forced_result_class < self.result_vocab_size:
+            raise ValueError(
+                "forced_result_class must be in "
+                f"[0, {self.result_vocab_size}), got {forced_result_class}"
+            )
+        return forced_result_class
 
     def _empty_trace(
         self, h: Tensor, tokens: Tensor, injection: Tensor
@@ -445,6 +482,76 @@ class TinyGPT(nn.Module):
             f"unknown calculator injection mode: {self.cfg.calculator_injection_mode}"
         )
 
+    def _calculator_read_positions(self, tokens: Tensor) -> dict[str, Tensor]:
+        if self.calculator_hook is None:
+            raise ValueError("calculator read positions require a calculator hook")
+        if self.cfg.calculator_read_position == "eq":
+            return self.calculator_hook._eq_trace_positions(tokens)
+        return self.calculator_hook._operand_read_positions(tokens)
+
+    def _apply_read_site_intervention(
+        self, h: Tensor, tokens: Tensor, intervention: ReadSiteIntervention | None
+    ) -> Tensor:
+        if intervention is None:
+            return h
+        if intervention not in {
+            "swap_a_read_vector",
+            "swap_b_read_vector",
+            "corrupt_a_read_vector",
+            "corrupt_b_read_vector",
+        }:
+            raise ValueError(f"unknown calculator read-site intervention: {intervention}")
+        positions = self._calculator_read_positions(tokens)
+        key = "a" if "_a_" in intervention else "b"
+        target_pos = positions[key]
+        batch_idx = torch.arange(h.shape[0], device=h.device)
+        intervened = h.clone()
+        if intervention.startswith("swap_"):
+            source = h[batch_idx.roll(1), target_pos[batch_idx.roll(1)]]
+        else:
+            source = torch.zeros_like(h[batch_idx, target_pos])
+        intervened[batch_idx, target_pos] = source
+        return intervened
+
+    def _call_calculator_hook(
+        self,
+        h: Tensor,
+        x: Tensor,
+        *,
+        diagnostics: dict[str, Any],
+        return_diagnostics: bool,
+        oracle_operands: Tensor | None,
+        calculator_result_override: str,
+        forced_calculator_result_class: int | Tensor | None,
+        calculator_read_intervention: ReadSiteIntervention | None,
+    ) -> Tensor:
+        assert self.calculator_hook is not None
+        read_h = self._apply_read_site_intervention(
+            h, x, calculator_read_intervention
+        )
+        if return_diagnostics:
+            diagnostics["calculator_read_residual"] = h.detach()
+            diagnostics["calculator_read_residual_intervened"] = read_h.detach()
+            diagnostics["calculator_read_intervention"] = calculator_read_intervention
+            injection, trace = self.calculator_hook(
+                read_h,
+                x,
+                oracle_operands=oracle_operands,
+                result_override=calculator_result_override,
+                forced_result_class=forced_calculator_result_class,
+                return_trace=True,
+            )
+            diagnostics["calculator_trace"] = trace
+        else:
+            injection = self.calculator_hook(
+                read_h,
+                x,
+                oracle_operands=oracle_operands,
+                result_override=calculator_result_override,
+                forced_result_class=forced_calculator_result_class,
+            )
+        return self._apply_calculator_injection(h, injection, x)
+
     def forward(
         self,
         x: Tensor,
@@ -452,7 +559,8 @@ class TinyGPT(nn.Module):
         return_diagnostics: bool = False,
         oracle_operands: Tensor | None = None,
         calculator_result_override: str = "add",
-        forced_calculator_result_class: int | None = None,
+        forced_calculator_result_class: int | Tensor | None = None,
+        calculator_read_intervention: ReadSiteIntervention | None = None,
     ) -> Tensor | tuple[Tensor, dict[str, Any]]:
         B, T = x.shape
         assert T <= self.cfg.block_size, f"sequence length {T} > block_size {self.cfg.block_size}"
@@ -463,27 +571,16 @@ class TinyGPT(nn.Module):
             self.calculator_hook is not None
             and self.cfg.calculator_hook_after_layer == 0
         ):
-            if return_diagnostics:
-                diagnostics["calculator_read_residual"] = h.detach()
-                injection, trace = self.calculator_hook(
-                    h,
-                    x,
-                    oracle_operands=oracle_operands,
-                    result_override=calculator_result_override,
-                    forced_result_class=forced_calculator_result_class,
-                    return_trace=True,
-                )
-                diagnostics["calculator_trace"] = trace
-                h = self._apply_calculator_injection(h, injection, x)
-            else:
-                injection = self.calculator_hook(
-                    h,
-                    x,
-                    oracle_operands=oracle_operands,
-                    result_override=calculator_result_override,
-                    forced_result_class=forced_calculator_result_class,
-                )
-                h = self._apply_calculator_injection(h, injection, x)
+            h = self._call_calculator_hook(
+                h,
+                x,
+                diagnostics=diagnostics,
+                return_diagnostics=return_diagnostics,
+                oracle_operands=oracle_operands,
+                calculator_result_override=calculator_result_override,
+                forced_calculator_result_class=forced_calculator_result_class,
+                calculator_read_intervention=calculator_read_intervention,
+            )
         for i, block in enumerate(self.blocks, start=1):
             h = block(h)
             if return_diagnostics:
@@ -494,26 +591,16 @@ class TinyGPT(nn.Module):
                 self.calculator_hook is not None
                 and i == self.cfg.calculator_hook_after_layer
             ):
-                if return_diagnostics:
-                    injection, trace = self.calculator_hook(
-                        h,
-                        x,
-                        oracle_operands=oracle_operands,
-                        result_override=calculator_result_override,
-                        forced_result_class=forced_calculator_result_class,
-                        return_trace=True,
-                    )
-                    diagnostics["calculator_trace"] = trace
-                    h = self._apply_calculator_injection(h, injection, x)
-                else:
-                    injection = self.calculator_hook(
-                        h,
-                        x,
-                        oracle_operands=oracle_operands,
-                        result_override=calculator_result_override,
-                        forced_result_class=forced_calculator_result_class,
-                    )
-                    h = self._apply_calculator_injection(h, injection, x)
+                h = self._call_calculator_hook(
+                    h,
+                    x,
+                    diagnostics=diagnostics,
+                    return_diagnostics=return_diagnostics,
+                    oracle_operands=oracle_operands,
+                    calculator_result_override=calculator_result_override,
+                    forced_calculator_result_class=forced_calculator_result_class,
+                    calculator_read_intervention=calculator_read_intervention,
+                )
         h = self.ln_f(h)
         logits = self.lm_head(h)
         if return_diagnostics:
