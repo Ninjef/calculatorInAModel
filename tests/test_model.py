@@ -1,8 +1,10 @@
+import csv
 import importlib.util
 import json
 import sys
 from pathlib import Path
 
+import pytest
 import torch
 
 from src.data import EQ_ID, VOCAB_SIZE
@@ -159,6 +161,30 @@ def test_calculator_injection_is_localized_to_equals_positions() -> None:
     assert torch.all(injection[0, 2] != 0)
 
 
+def test_calculator_hook_after_layer_zero_runs_at_embedding_stream() -> None:
+    torch.manual_seed(0)
+    cfg = _small_calculator_cfg(mode="add")
+    cfg.calculator_hook_after_layer = 0
+    model = TinyGPT(cfg)
+    assert model.calculator_hook is not None
+    with torch.no_grad():
+        model.calculator_hook.input_proj.weight.zero_()
+        model.calculator_hook.input_proj.bias.fill_(-10.0)
+        model.calculator_hook.input_proj.bias[3] = 10.0
+        model.calculator_hook.input_proj.bias[10 + 4] = 10.0
+        model.calculator_hook.output_proj.weight.fill_(1.0)
+
+    x = torch.tensor([[1, 2, EQ_ID, 3, 4, 5, 6, 7]])
+
+    _, diagnostics = model(x, return_diagnostics=True)
+    trace = diagnostics["calculator_trace"]
+
+    assert trace["a_pred"][0, 2].item() == 3
+    assert trace["b_pred"][0, 2].item() == 4
+    assert trace["result_pred"][0, 2].item() == 7
+    assert trace["injection_norm"][0, 2].item() > 0
+
+
 def test_calculator_trace_records_shapes_values_and_equals_positions() -> None:
     torch.manual_seed(0)
     hook = CalculatorHook(_small_calculator_cfg(mode="add"))
@@ -249,6 +275,50 @@ def test_calculator_result_override_changes_result_class() -> None:
 
     assert zero_trace["result_pred"][0, 2].item() == 0
     assert plus_one_trace["result_pred"][0, 2].item() == 8
+
+
+def test_forced_calculator_result_class_overrides_learned_sum() -> None:
+    torch.manual_seed(0)
+    hook = CalculatorHook(_small_calculator_cfg(mode="add"))
+    h = torch.randn(1, 5, 32)
+    tokens = torch.tensor([[1, 2, EQ_ID, 3, 4]])
+    oracle = torch.zeros(1, 5, 2, dtype=torch.long)
+    oracle[..., 0] = 3
+    oracle[..., 1] = 4
+
+    _, trace = hook(
+        h,
+        tokens,
+        oracle_operands=oracle,
+        forced_result_class=12,
+        return_trace=True,
+    )
+
+    assert trace["a_pred"][0, 2].item() == 3
+    assert trace["b_pred"][0, 2].item() == 4
+    assert trace["result_pred"][0, 2].item() == 12
+
+
+def test_invalid_forced_calculator_result_class_raises() -> None:
+    hook = CalculatorHook(_small_calculator_cfg(mode="add"))
+    h = torch.randn(1, 5, 32)
+    tokens = torch.tensor([[1, 2, EQ_ID, 3, 4]])
+
+    with pytest.raises(ValueError, match="forced_result_class"):
+        hook(h, tokens, forced_result_class=19)
+
+
+def test_tiny_gpt_forwards_forced_calculator_result_class() -> None:
+    torch.manual_seed(0)
+    model = TinyGPT(_small_calculator_cfg(mode="add"))
+    assert model.calculator_hook is not None
+    x = torch.tensor([[1, 2, EQ_ID, 3, 4, 5, 6, 7]])
+
+    _, diagnostics = model(
+        x, return_diagnostics=True, forced_calculator_result_class=5
+    )
+
+    assert diagnostics["calculator_trace"]["result_pred"][0, 2].item() == 5
 
 
 def test_calculator_injection_scale_zero_removes_active_injection() -> None:
@@ -355,6 +425,60 @@ def test_diagnostic_cli_smoke(tmp_path, monkeypatch) -> None:
     assert summary["samples"] == 8
     assert summary["operand_max"] == 2
     assert "probe" in summary
+
+
+def test_diagnostic_cli_forced_result_sweep_writes_outputs(
+    tmp_path, monkeypatch
+) -> None:
+    script_path = Path("scripts/diagnose_calculator_protocol.py")
+    spec = importlib.util.spec_from_file_location("diagnose_cli_sweep", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    diagnose_cli = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(diagnose_cli)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(script_path),
+            "--variant",
+            "model-c",
+            "--digits",
+            "1",
+            "--steps",
+            "0",
+            "--samples",
+            "2",
+            "--batch-size",
+            "4",
+            "--operand-max",
+            "2",
+            "--forced-result-sweep",
+            "--output-dir",
+            str(tmp_path),
+        ],
+    )
+
+    diagnose_cli.main()
+
+    sweep_path = tmp_path / "forced_result_sweep.csv"
+    codebook_path = tmp_path / "result_codebook.csv"
+    summary_path = tmp_path / "forced_result_summary.json"
+    assert sweep_path.exists()
+    assert codebook_path.exists()
+    assert summary_path.exists()
+    with sweep_path.open() as f:
+        rows = list(csv.DictReader(f))
+    assert len(rows) == 38
+    assert {
+        "forced_result_class",
+        "forced_matches_learned",
+        "correct_first_token_prob",
+        "target_logprob",
+    }.issubset(rows[0])
+    summary = json.loads(summary_path.read_text())
+    assert summary["samples"] == 2
+    assert summary["result_vocab_size"] == 19
 
 
 def test_training_oracle_operand_extraction_from_fixed_width_batch() -> None:

@@ -84,10 +84,18 @@ class CalculatorHook(nn.Module):
         *,
         oracle_operands: Tensor | None = None,
         result_override: str = "add",
+        forced_result_class: int | None = None,
         return_trace: bool = False,
     ) -> Tensor | tuple[Tensor, dict[str, Tensor]]:
         if result_override not in {"add", "zero", "plus_one", "random"}:
             raise ValueError(f"unknown calculator result override: {result_override}")
+        if forced_result_class is not None and not (
+            0 <= forced_result_class < self.result_vocab_size
+        ):
+            raise ValueError(
+                "forced_result_class must be in "
+                f"[0, {self.result_vocab_size}), got {forced_result_class}"
+            )
         eq_mask = (tokens == EQ_ID).unsqueeze(-1)
         trace: dict[str, Tensor] = {}
         if self.mode == "off" or not eq_mask.any():
@@ -107,7 +115,11 @@ class CalculatorHook(nn.Module):
                 flat_b_logits = b_logits.reshape(-1, self.operand_vocab_size)
                 a_pred = a_logits.argmax(dim=-1)
                 b_pred = b_logits.argmax(dim=-1)
-                if result_override == "add":
+                if forced_result_class is not None:
+                    flat_result = self._forced_result(
+                        a_pred, forced_result_class, dtype=h.dtype
+                    )
+                elif result_override == "add":
                     flat_result = HardAddSTE.apply(flat_a_logits, flat_b_logits)
                 else:
                     flat_result = self._overridden_result(
@@ -120,9 +132,14 @@ class CalculatorHook(nn.Module):
                 b_pred = b_dist.sample()
                 a_logp = a_dist.log_prob(a_pred)
                 b_logp = b_dist.log_prob(b_pred)
-                flat_result = self._overridden_result(
-                    a_pred, b_pred, result_override, dtype=h.dtype
-                )
+                if forced_result_class is not None:
+                    flat_result = self._forced_result(
+                        a_pred, forced_result_class, dtype=h.dtype
+                    )
+                else:
+                    flat_result = self._overridden_result(
+                        a_pred, b_pred, result_override, dtype=h.dtype
+                    )
         else:
             if oracle_operands.shape != (*h.shape[:2], 2):
                 raise ValueError(
@@ -132,9 +149,14 @@ class CalculatorHook(nn.Module):
             oracle_operands = oracle_operands.to(device=h.device, dtype=torch.long)
             a_pred = oracle_operands[..., 0]
             b_pred = oracle_operands[..., 1]
-            flat_result = self._overridden_result(
-                a_pred, b_pred, result_override, dtype=h.dtype
-            )
+            if forced_result_class is not None:
+                flat_result = self._forced_result(
+                    a_pred, forced_result_class, dtype=h.dtype
+                )
+            else:
+                flat_result = self._overridden_result(
+                    a_pred, b_pred, result_override, dtype=h.dtype
+                )
         result = flat_result.reshape(*h.shape[:2], self.result_vocab_size)
         unscaled_injection = self.output_proj(result) * eq_mask.to(h.dtype)
         injection = unscaled_injection * self.injection_scale
@@ -173,6 +195,14 @@ class CalculatorHook(nn.Module):
             )
         else:
             raise ValueError(f"unknown calculator result override: {mode}")
+        return F.one_hot(result_idx.reshape(-1), num_classes=self.result_vocab_size).to(
+            dtype=dtype
+        )
+
+    def _forced_result(
+        self, like: Tensor, forced_result_class: int, *, dtype: torch.dtype
+    ) -> Tensor:
+        result_idx = torch.full_like(like, forced_result_class)
         return F.one_hot(result_idx.reshape(-1), num_classes=self.result_vocab_size).to(
             dtype=dtype
         )
@@ -335,12 +365,37 @@ class TinyGPT(nn.Module):
         return_diagnostics: bool = False,
         oracle_operands: Tensor | None = None,
         calculator_result_override: str = "add",
+        forced_calculator_result_class: int | None = None,
     ) -> Tensor | tuple[Tensor, dict[str, Any]]:
         B, T = x.shape
         assert T <= self.cfg.block_size, f"sequence length {T} > block_size {self.cfg.block_size}"
         pos = torch.arange(T, device=x.device)
         h = self.tok_emb(x) + self.pos_emb(pos)
         diagnostics: dict[str, Any] = {}
+        if (
+            self.calculator_hook is not None
+            and self.cfg.calculator_hook_after_layer == 0
+        ):
+            if return_diagnostics:
+                diagnostics["calculator_read_residual"] = h.detach()
+                injection, trace = self.calculator_hook(
+                    h,
+                    x,
+                    oracle_operands=oracle_operands,
+                    result_override=calculator_result_override,
+                    forced_result_class=forced_calculator_result_class,
+                    return_trace=True,
+                )
+                diagnostics["calculator_trace"] = trace
+                h = h + injection
+            else:
+                h = h + self.calculator_hook(
+                    h,
+                    x,
+                    oracle_operands=oracle_operands,
+                    result_override=calculator_result_override,
+                    forced_result_class=forced_calculator_result_class,
+                )
         for i, block in enumerate(self.blocks, start=1):
             h = block(h)
             if return_diagnostics:
@@ -357,6 +412,7 @@ class TinyGPT(nn.Module):
                         x,
                         oracle_operands=oracle_operands,
                         result_override=calculator_result_override,
+                        forced_result_class=forced_calculator_result_class,
                         return_trace=True,
                     )
                     diagnostics["calculator_trace"] = trace
@@ -367,6 +423,7 @@ class TinyGPT(nn.Module):
                         x,
                         oracle_operands=oracle_operands,
                         result_override=calculator_result_override,
+                        forced_result_class=forced_calculator_result_class,
                     )
         h = self.ln_f(h)
         logits = self.lm_head(h)
