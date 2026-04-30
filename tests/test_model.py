@@ -696,6 +696,56 @@ def test_diagnostic_cli_forced_result_sweep_writes_outputs(
     assert summary["forced_result_batch_size"] == 4
 
 
+def test_track4_action_loss_diagnostic_reports_operand_action_gaps() -> None:
+    script_path = Path("scripts/run_track4_action_loss_diagnostic.py")
+    spec = importlib.util.spec_from_file_location("track4_action_loss", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    track4 = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(track4)
+
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_read_position="operands",
+    )
+    model = TinyGPT(cfg)
+
+    action_rows, prompt_rows, summary = track4.action_loss_diagnostic(
+        model,
+        sample_specs=[
+            {"sample": 0, "true_a": 1, "true_b": 2},
+            {"sample": 1, "true_a": 2, "true_b": 0},
+        ],
+        num_digits=1,
+        operand_max=2,
+        random_actions=2,
+        seed=0,
+        device="cpu",
+        oracle_base=False,
+    )
+
+    assert len(action_rows) == 12
+    assert len(prompt_rows) == 2
+    assert summary["samples"] == 2
+    assert summary["random_actions_per_prompt"] == 2
+    assert {
+        "mean_random_minus_true_gap",
+        "mean_action_loss_std",
+        "operand_exact_match",
+        "calculator_result_accuracy",
+    }.issubset(summary)
+
+
 def test_training_oracle_operand_extraction_from_fixed_width_batch() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_script", script_path)

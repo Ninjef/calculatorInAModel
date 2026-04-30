@@ -240,6 +240,29 @@ This document aggregates facts from `aiAgentWorkHistory/` and the completed task
   - Replacement answer-only learned Model C: exact `0.094`, operand `0.000`, calc result `0.047`, classification `calculator_ignored_or_bypassed`.
   - Replacement aux decay transient candidate: exact `0.078`, operand `0.000`, calc result `0.031`, zero injection `0.016`, forced random `0.047`, classification `causally_useful_opaque_private_code`.
 
+### Track 4 Action-Loss Sensitivity
+
+- Track 4 added `scripts/run_track4_action_loss_diagnostic.py`.
+- The diagnostic reuses the Track 3 six-checkpoint manifest and classification labels.
+- For each prompt, it measures target answer negative log likelihood under:
+  - the normal learned calculator action;
+  - the learned operand pair forced back through the calculator;
+  - the true operand pair;
+  - a shuffled true operand pair from another prompt;
+  - multiple random operand pairs.
+- Outputs include `action_loss_rows.csv`, `prompt_action_loss_summary.csv`, and `action_loss_summary.json` under each checkpoint's `track4_action_loss/` directory.
+- Full run command: `PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 scripts/run_track4_action_loss_diagnostic.py --samples 64 --random-actions 16`.
+- Results on the six priority checkpoints:
+  - Additive answer-only learned Model C: true NLL `0.2204`, random NLL `0.2145`, random-minus-true gap `-0.0060`, operand exact `0.000`.
+  - Additive high-answer aux `0.01` Model C: true NLL `0.0858`, random NLL `0.1114`, gap `+0.0256`, operand exact `0.0156`.
+  - Replacement Model B/off leakage control: true/random/normal NLL all `0.1553`, action-loss std `0.0000`.
+  - Replacement oracle Model C control: true NLL `0.0000`, random NLL `9.3949`, gap `+9.3949`, operand exact `1.000`.
+  - Replacement answer-only learned Model C: true NLL `1.0149`, random NLL `1.0214`, gap `+0.0065`, operand exact `0.000`.
+  - Replacement aux decay transient candidate: true NLL `1.6634`, random NLL `1.5016`, gap `-0.1618`, operand exact `0.000`.
+- The oracle replacement result is the clean positive control: when true operands are supplied and the downstream path has learned to depend on the calculator, random operand actions are catastrophically worse than true actions.
+- The learned and bypass checkpoints do not show a reliable intended true-action advantage. This weakens the case for rushing to estimator complexity before a valid bottleneck exists.
+- Track 4 does not validate the current replacement mode as a bottleneck; it inherits Track 3's `invalid_or_leaky_bottleneck` label for replacement checkpoints.
+
 ### Implementation Review Facts
 
 - A review found no serious implementation bug invalidating the main recent conclusions.
@@ -276,7 +299,7 @@ This document aggregates facts from `aiAgentWorkHistory/` and the completed task
 | Softer bottleneck / compressed context | Proposed if strict bottleneck removes too much context | Not yet tried. | Try if strict bottleneck or oracle bottleneck fails due to missing formatting/context. |
 | Explicit decoder phase | Proposed as a stronger bottleneck option | Not yet tried. | Candidate for separating prompt encoding from answer decoding so calculator result is the arithmetic bridge. |
 | Gumbel-Softmax / soft expected-sum / hard-forward-soft-backward | Mentioned in task docs as estimator variants | Not yet run in the documented histories. | Still on the plate after STE/REINFORCE diagnostics; compare only with protocol metrics, not answer accuracy alone. |
-| Multi-sample estimator diagnostics | Proposed after REINFORCE | Not yet run in the documented histories. | Next estimator diagnostic: sample K operand pairs per prompt and measure downstream loss sensitivity. |
+| Multi-sample action-loss diagnostics | Track 4 forced true/learned/shuffled/random operand actions on six priority checkpoints | Oracle replacement has a huge true-vs-random loss signal; learned/bypass checkpoints mostly do not show a reliable true-action advantage. Model B/off has zero action sensitivity. | Use this as the pre-estimator gate. Next run it under a valid strict bottleneck before comparing estimator families. |
 | Control-variate estimators: NVIL, MuProp, REBAR, RELAX | Mentioned as later variants | Not yet tried. | Only worth trying if multi-sample diagnostics show calculator choices affect loss but vanilla baseline is too noisy. |
 | Larger-scale progression to `operand_max=49/99`, 3-digit, natural language | Planned guardrailed escalation | Not reached as a justified next step from Track 1/2 results. | Do not scale until a smaller setting shows credible calculator-use signature. |
 
@@ -287,6 +310,7 @@ This document aggregates facts from `aiAgentWorkHistory/` and the completed task
 - Answer accuracy alone is not a valid success metric for this project; it repeatedly hid bypass behavior or private-code behavior.
 - Some learned checkpoints are not pure bypass: at least one tiny checkpoint causally used a non-human calculator-result code.
 - The first replacement bottleneck did not make the calculator strictly required because autoregressive answer positions still carried bypass information.
+- Track 4 shows that the downstream objective can strongly distinguish true from random operand actions in the oracle replacement control, but the learned/bypass checkpoints generally do not present the intended true-action loss advantage.
 - The most important next technical distinction is between:
   - learning a human-readable true-operand protocol,
   - learning any causally useful private calculator protocol,
@@ -296,7 +320,8 @@ This document aggregates facts from `aiAgentWorkHistory/` and the completed task
 
 - Build a stricter calculator-required bottleneck where Model B/off cannot solve by ordinary residual context.
 - Run oracle first under any new bottleneck; learned failures are uninterpretable if oracle fails.
+- Run the Track 4 action-loss diagnostic under that new bottleneck before estimator sweeps; true actions should reduce loss relative to random and shuffled actions.
 - If oracle bottleneck works, test learned STE and supervised/auxiliary variants under that stricter bottleneck.
-- Run multi-sample per-prompt diagnostics for sampled calculator actions before moving to higher-complexity gradient estimators.
+- Compare estimator families only after the bottleneck passes Model B/off, oracle, counterfactual, and action-loss-sensitivity checks.
 - Continue using forced-result sweeps, codebooks, read-site interventions, injection-zero, forced-zero, forced-random, and oracle-at-eval checks for every promising checkpoint.
 - Keep `operand_max=49/99`, larger models, and natural-language arithmetic behind a credible calculator-use signature in the smaller regimes.
