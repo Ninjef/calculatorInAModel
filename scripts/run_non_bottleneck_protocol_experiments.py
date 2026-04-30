@@ -42,6 +42,7 @@ def train_cmd(
     operand_max: int,
     operand_vocab_size: int,
     seed: int,
+    args: argparse.Namespace,
     extra: list[str] | None = None,
 ) -> list[str]:
     cmd = [
@@ -57,6 +58,8 @@ def train_cmd(
         "--seed",
         str(seed),
     ]
+    if args.calculator_read_position != "eq":
+        cmd.extend(["--calculator-read-position", args.calculator_read_position])
     if extra:
         cmd.extend(extra)
     return cmd
@@ -75,6 +78,7 @@ def run_ladder(args: argparse.Namespace) -> None:
                         operand_max=operand_max,
                         operand_vocab_size=vocab_size,
                         seed=seed,
+                        args=args,
                     ),
                     dry_run=args.dry_run,
                 )
@@ -108,6 +112,7 @@ def run_aux(args: argparse.Namespace) -> None:
                     operand_vocab_size=20,
                     seed=seed,
                     extra=extra,
+                    args=args,
                 ),
                 dry_run=args.dry_run,
             )
@@ -128,6 +133,7 @@ def run_warmup(args: argparse.Namespace) -> None:
                     operand_vocab_size=20,
                     seed=seed,
                     extra=extra,
+                    args=args,
                 ),
                 dry_run=args.dry_run,
             )
@@ -164,6 +170,8 @@ def run_private_trajectory(args: argparse.Namespace) -> None:
         "--snapshot-samples",
         str(args.snapshot_samples),
     ]
+    if args.calculator_read_position != "eq":
+        cmd.extend(["--calculator-read-position", args.calculator_read_position])
     for seed in args.seeds:
         run_command([*cmd, "--seed", str(seed)], dry_run=args.dry_run)
 
@@ -216,6 +224,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--checkpoint", dest="checkpoints", type=Path, nargs="*")
     parser.add_argument("--probe-operand-max", type=int, default=19)
+    parser.add_argument(
+        "--calculator-read-position",
+        choices=["eq", "operands"],
+        default="eq",
+        help="Forward read-position setting to training commands.",
+    )
     parser.add_argument("--snapshot-every", type=int, default=100)
     parser.add_argument("--snapshot-samples", type=int, default=64)
     parser.add_argument("--dry-run", action="store_true")

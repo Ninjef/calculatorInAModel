@@ -26,6 +26,7 @@ class GPTConfig:
     calculator_result_vocab_size: int = 19
     calculator_injection_scale: float = 1.0
     calculator_estimator: str = "ste"
+    calculator_read_position: str = "eq"
 
 
 class HardAddSTE(torch.autograd.Function):
@@ -60,6 +61,11 @@ class CalculatorHook(nn.Module):
             raise ValueError(f"unknown calculator mode: {cfg.calculator_mode}")
         if cfg.calculator_estimator not in {"ste", "reinforce"}:
             raise ValueError(f"unknown calculator estimator: {cfg.calculator_estimator}")
+        if cfg.calculator_read_position not in {"eq", "operands"}:
+            raise ValueError(
+                "calculator_read_position must be one of {'eq', 'operands'}, "
+                f"got {cfg.calculator_read_position!r}"
+            )
         if cfg.calculator_operand_vocab_size < 1:
             raise ValueError("calculator operand vocab size must be positive")
         expected_result_size = (2 * cfg.calculator_operand_vocab_size) - 1
@@ -74,6 +80,7 @@ class CalculatorHook(nn.Module):
         self.operand_vocab_size = cfg.calculator_operand_vocab_size
         self.result_vocab_size = cfg.calculator_result_vocab_size
         self.injection_scale = cfg.calculator_injection_scale
+        self.read_position = cfg.calculator_read_position
         self.input_proj = nn.Linear(cfg.n_embd, 2 * self.operand_vocab_size)
         self.output_proj = nn.Linear(self.result_vocab_size, cfg.n_embd, bias=False)
 
@@ -106,7 +113,15 @@ class CalculatorHook(nn.Module):
             return injection
 
         operand_logits = self.input_proj(h)
-        a_logits, b_logits = operand_logits.split(self.operand_vocab_size, dim=-1)
+        a_logits_all, b_logits_all = operand_logits.split(self.operand_vocab_size, dim=-1)
+        if self.read_position == "eq":
+            read_positions = self._eq_trace_positions(tokens)
+            a_logits = a_logits_all
+            b_logits = b_logits_all
+        else:
+            read_positions = self._operand_read_positions(tokens)
+            a_logits = self._select_operand_logits(a_logits_all, read_positions["a"])
+            b_logits = self._select_operand_logits(b_logits_all, read_positions["b"])
         a_logp = None
         b_logp = None
         if oracle_operands is None:
@@ -170,12 +185,51 @@ class CalculatorHook(nn.Module):
                 b_logp=b_logp,
                 result=result,
                 tokens=tokens,
+                read_positions=read_positions,
                 unscaled_injection=unscaled_injection,
                 scaled_injection=injection,
                 oracle_used=oracle_operands is not None,
             )
             return injection, trace
         return injection
+
+    def _eq_trace_positions(self, tokens: Tensor) -> dict[str, Tensor]:
+        eq_mask = tokens == EQ_ID
+        any_eq = eq_mask.any(dim=-1)
+        eq_pos = eq_mask.float().argmax(dim=-1).long()
+        eq_pos = torch.where(any_eq, eq_pos, torch.full_like(eq_pos, -1))
+        return {"a": eq_pos, "b": eq_pos, "eq": eq_pos}
+
+    def _operand_read_positions(self, tokens: Tensor) -> dict[str, Tensor]:
+        B, T = tokens.shape
+        eq_mask = tokens == EQ_ID
+        eq_counts = eq_mask.long().sum(dim=-1)
+        if not torch.all(eq_counts == 1):
+            raise ValueError("calculator read position expects one '=' token per example")
+        eq_pos = eq_mask.float().argmax(dim=-1).long()
+        # Fixed-width prompt shape is A + B =, so final A/B digit positions are
+        # determined by the unique '=' location.
+        if torch.any((eq_pos - 1) % 2 != 0):
+            raise ValueError(
+                "calculator_read_position='operands' requires fixed-width A+B= prompts"
+            )
+        num_digits = (eq_pos - 1) // 2
+        if torch.any(num_digits < 1):
+            raise ValueError(
+                "calculator_read_position='operands' requires at least one digit"
+            )
+        a_pos = num_digits - 1
+        b_pos = (num_digits + 1) + (num_digits - 1)
+        if torch.any(a_pos < 0) or torch.any(b_pos >= T):
+            raise ValueError("computed operand read position is outside sequence")
+        return {"a": a_pos.long(), "b": b_pos.long(), "eq": eq_pos}
+
+    @staticmethod
+    def _select_operand_logits(logits: Tensor, positions: Tensor) -> Tensor:
+        B, T, C = logits.shape
+        batch_idx = torch.arange(B, device=logits.device)
+        selected = logits[batch_idx, positions]
+        return selected.unsqueeze(1).expand(B, T, C)
 
     def _overridden_result(
         self, a_pred: Tensor, b_pred: Tensor, mode: str, *, dtype: torch.dtype
@@ -228,6 +282,12 @@ class CalculatorHook(nn.Module):
             "injection_norm": injection.norm(dim=-1),
             "unscaled_injection_norm": injection.norm(dim=-1),
             "oracle_used": torch.zeros((B, T), dtype=torch.bool, device=tokens.device),
+            "calculator_read_position_id": tokens.new_full(
+                (B, T), 0 if self.read_position == "eq" else 1
+            ),
+            "a_read_position": neg_one,
+            "b_read_position": neg_one,
+            "eq_read_position": neg_one,
         }
 
     @staticmethod
@@ -245,6 +305,7 @@ class CalculatorHook(nn.Module):
         b_logp: Tensor | None,
         result: Tensor,
         tokens: Tensor,
+        read_positions: dict[str, Tensor],
         unscaled_injection: Tensor,
         scaled_injection: Tensor,
         oracle_used: bool,
@@ -255,6 +316,8 @@ class CalculatorHook(nn.Module):
             a_logp = a_probs.gather(-1, a_pred.unsqueeze(-1)).squeeze(-1).log()
         if b_logp is None:
             b_logp = b_probs.gather(-1, b_pred.unsqueeze(-1)).squeeze(-1).log()
+        read_position_id = 0 if self.read_position == "eq" else 1
+        B, T = tokens.shape
         return {
             "eq_mask": tokens == EQ_ID,
             "a_pred": a_pred,
@@ -272,6 +335,12 @@ class CalculatorHook(nn.Module):
             "oracle_used": torch.full(
                 tokens.shape, oracle_used, dtype=torch.bool, device=tokens.device
             ),
+            "calculator_read_position_id": tokens.new_full(
+                tokens.shape, read_position_id
+            ),
+            "a_read_position": read_positions["a"].unsqueeze(-1).expand(B, T),
+            "b_read_position": read_positions["b"].unsqueeze(-1).expand(B, T),
+            "eq_read_position": read_positions["eq"].unsqueeze(-1).expand(B, T),
         }
 
 

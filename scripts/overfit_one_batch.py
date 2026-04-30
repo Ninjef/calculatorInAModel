@@ -58,6 +58,7 @@ class TrainConfig:
     snapshot_every: int
     snapshot_samples: int
     calculator_estimator: str
+    calculator_read_position: str
     reinforce_baseline_beta: float
     reinforce_entropy_weight: float
     reinforce_entropy_decay_steps: int
@@ -282,6 +283,12 @@ def calculator_trace_rows(
                     "b_logp": trace_value("b_logp", float("nan")),
                     "sampled_logp": trace_value("sampled_logp", float("nan")),
                     "injection_norm": trace_value("injection_norm", float("nan")),
+                    "calculator_read_position_id": trace_value(
+                        "calculator_read_position_id", -1
+                    ),
+                    "a_read_position": trace_value("a_read_position", -1),
+                    "b_read_position": trace_value("b_read_position", -1),
+                    "eq_read_position": trace_value("eq_read_position", -1),
                     "oracle_used": trace_value("oracle_used", False),
                 }
             )
@@ -543,8 +550,14 @@ def auxiliary_operand_loss(
         targets = make_oracle_operands_from_batch(batch.x, num_digits=num_digits)
         eq_pos = (batch.x == EQ_ID).float().argmax(dim=-1).long()
         batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
-        target_a = targets[batch_idx, eq_pos, 0]
-        target_b = targets[batch_idx, eq_pos, 1]
+        if model.cfg.calculator_read_position == "operands":
+            a_pos = torch.full_like(eq_pos, num_digits - 1)
+            b_pos = torch.full_like(eq_pos, (num_digits + 1) + (num_digits - 1))
+        else:
+            a_pos = eq_pos
+            b_pos = eq_pos
+        target_a = targets[batch_idx, a_pos, 0]
+        target_b = targets[batch_idx, b_pos, 1]
 
     _, diagnostics = model(batch.x, return_diagnostics=True)
     residual = diagnostics["calculator_read_residual"]
@@ -553,8 +566,8 @@ def auxiliary_operand_loss(
         model.cfg.calculator_operand_vocab_size, dim=-1
     )
     batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
-    a_eq_logits = a_logits[batch_idx, eq_pos]
-    b_eq_logits = b_logits[batch_idx, eq_pos]
+    a_eq_logits = a_logits[batch_idx, a_pos]
+    b_eq_logits = b_logits[batch_idx, b_pos]
     return (
         torch.nn.functional.cross_entropy(a_eq_logits, target_a)
         + torch.nn.functional.cross_entropy(b_eq_logits, target_b)
@@ -579,6 +592,7 @@ def make_model_config(
     injection_scale: float = 1.0,
     operand_vocab_size: int | None = None,
     calculator_estimator: str = "ste",
+    calculator_read_position: str = "eq",
     n_layer: int = 4,
     n_head: int = 4,
     n_embd: int = 128,
@@ -603,6 +617,7 @@ def make_model_config(
         calculator_result_vocab_size=(2 * operand_vocab_size) - 1,
         calculator_injection_scale=injection_scale,
         calculator_estimator=calculator_estimator,
+        calculator_read_position=calculator_read_position,
     )
 
 
@@ -636,6 +651,7 @@ def run_variant(
         injection_scale=args.injection_scale,
         operand_vocab_size=calculator_operand_vocab_size,
         calculator_estimator=args.calculator_estimator,
+        calculator_read_position=args.calculator_read_position,
         n_layer=args.n_layer,
         n_head=args.n_head,
         n_embd=args.n_embd,
@@ -676,6 +692,7 @@ def run_variant(
         snapshot_every=args.snapshot_every,
         snapshot_samples=args.snapshot_samples,
         calculator_estimator=args.calculator_estimator,
+        calculator_read_position=args.calculator_read_position,
         reinforce_baseline_beta=args.reinforce_baseline_beta,
         reinforce_entropy_weight=args.reinforce_entropy_weight,
         reinforce_entropy_decay_steps=args.reinforce_entropy_decay_steps,
@@ -890,6 +907,7 @@ def run_variant(
     metrics["oracle_warmup_steps"] = args.oracle_warmup_steps
     metrics["aux_operand_loss_floor"] = args.aux_operand_loss_floor
     metrics["calculator_estimator"] = args.calculator_estimator
+    metrics["calculator_read_position"] = args.calculator_read_position
 
     save_curve(run_dir / "training_curve.csv", curve)
     if snapshots:
@@ -1069,6 +1087,15 @@ def parse_args() -> argparse.Namespace:
         choices=["ste", "reinforce"],
         default="ste",
         help="Estimator for the learned calculator input interface.",
+    )
+    parser.add_argument(
+        "--calculator-read-position",
+        choices=["eq", "operands"],
+        default="eq",
+        help=(
+            "Residual positions used for calculator operand logits. "
+            "'eq' preserves existing behavior; 'operands' reads final A/B digits."
+        ),
     )
     parser.add_argument("--n-layer", type=int, default=4)
     parser.add_argument("--n-head", type=int, default=4)

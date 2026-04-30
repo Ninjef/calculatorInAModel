@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from src.data import EQ_ID, VOCAB_SIZE
+from src.data import EQ_ID, PLUS_ID, VOCAB_SIZE
 from src.model import CalculatorHook, GPTConfig, HardAddSTE, TinyGPT, masked_cross_entropy
 
 
@@ -208,6 +208,49 @@ def test_calculator_trace_records_shapes_values_and_equals_positions() -> None:
     assert trace["eq_mask"][0].tolist() == [False, False, True, False, False]
     assert trace["injection_norm"][0, 2].item() > 0
     assert trace["injection_norm"][0, 0].item() == 0
+    assert trace["calculator_read_position_id"][0, 2].item() == 0
+    assert trace["a_read_position"][0, 2].item() == 2
+    assert trace["b_read_position"][0, 2].item() == 2
+    assert trace["eq_read_position"][0, 2].item() == 2
+
+
+def test_calculator_operands_read_position_reads_operand_tokens_and_injects_at_equals() -> None:
+    torch.manual_seed(0)
+    cfg = _small_calculator_cfg(mode="add")
+    cfg.calculator_read_position = "operands"
+    hook = CalculatorHook(cfg)
+    with torch.no_grad():
+        hook.input_proj.weight.zero_()
+        hook.input_proj.bias.zero_()
+        hook.input_proj.weight[3, 0] = 1.0
+        hook.input_proj.weight[10 + 4, 1] = 1.0
+        hook.output_proj.weight.fill_(1.0)
+
+    h = torch.zeros(1, 8, 32)
+    h[0, 1, 0] = 10.0
+    h[0, 4, 1] = 10.0
+    tokens = torch.tensor([[0, 7, PLUS_ID, 0, 5, EQ_ID, 1, 2]])
+
+    injection, trace = hook(h, tokens, return_trace=True)
+
+    assert trace["a_pred"][0, 5].item() == 3
+    assert trace["b_pred"][0, 5].item() == 4
+    assert trace["result_pred"][0, 5].item() == 7
+    assert trace["calculator_read_position_id"][0, 5].item() == 1
+    assert trace["a_read_position"][0, 5].item() == 1
+    assert trace["b_read_position"][0, 5].item() == 4
+    assert trace["eq_read_position"][0, 5].item() == 5
+    assert torch.all(injection[0, :5] == 0)
+    assert torch.all(injection[0, 6:] == 0)
+    assert torch.all(injection[0, 5] != 0)
+
+
+def test_invalid_calculator_read_position_raises() -> None:
+    cfg = _small_calculator_cfg(mode="add")
+    cfg.calculator_read_position = "middle"
+
+    with pytest.raises(ValueError, match="calculator_read_position"):
+        CalculatorHook(cfg)
 
 
 def test_reinforce_calculator_trace_records_sample_logprob() -> None:
@@ -407,6 +450,8 @@ def test_diagnostic_cli_smoke(tmp_path, monkeypatch) -> None:
             "4",
             "--operand-max",
             "2",
+            "--calculator-read-position",
+            "operands",
             "--probe",
             "--probe-steps",
             "2",
@@ -424,6 +469,7 @@ def test_diagnostic_cli_smoke(tmp_path, monkeypatch) -> None:
     summary = json.loads(summary_path.read_text())
     assert summary["samples"] == 8
     assert summary["operand_max"] == 2
+    assert summary["calculator_read_position"] == "operands"
     assert "probe" in summary
 
 
@@ -590,6 +636,8 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
             "1",
             "--calculator-hook-after-layer",
             "1",
+            "--calculator-read-position",
+            "operands",
             "--oracle-warmup-steps",
             "1",
             "--aux-operand-loss-weight",
@@ -617,6 +665,8 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     config = json.loads((run_dir / "config.json").read_text())
     metrics = json.loads((run_dir / "metrics.json").read_text())
     assert config["oracle_warmup_steps"] == 1
+    assert config["calculator_read_position"] == "operands"
+    assert config["model"]["calculator_read_position"] == "operands"
     assert config["aux_operand_loss_floor"] == 0.01
     assert config["snapshot_every"] == 1
     assert (run_dir / "diagnostic_snapshots.csv").exists()

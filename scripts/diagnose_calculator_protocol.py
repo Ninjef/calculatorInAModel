@@ -49,6 +49,7 @@ def make_model_config(
     n_embd: int = 128,
     mlp_expansion: int = 4,
     calculator_hook_after_layer: int | None = None,
+    calculator_read_position: str = "eq",
 ) -> GPTConfig:
     operand_vocab_size = operand_vocab_size or 10**num_digits
     if calculator_hook_after_layer is None:
@@ -65,6 +66,7 @@ def make_model_config(
         calculator_operand_vocab_size=operand_vocab_size,
         calculator_result_vocab_size=(2 * operand_vocab_size) - 1,
         calculator_injection_scale=injection_scale,
+        calculator_read_position=calculator_read_position,
     )
 
 
@@ -124,6 +126,7 @@ def train_fresh_model(args: argparse.Namespace, device: str) -> TinyGPT:
         n_embd=args.n_embd,
         mlp_expansion=args.mlp_expansion,
         calculator_hook_after_layer=args.calculator_hook_after_layer,
+        calculator_read_position=args.calculator_read_position,
     )
     model = TinyGPT(cfg).to(device)
     optim = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95))
@@ -284,6 +287,12 @@ def diagnostic_rows(
                 "unscaled_injection_norm": trace_value(
                     "unscaled_injection_norm", float("nan")
                 ),
+                "calculator_read_position_id": trace_value(
+                    "calculator_read_position_id", -1
+                ),
+                "a_read_position": trace_value("a_read_position", -1),
+                "b_read_position": trace_value("b_read_position", -1),
+                "eq_read_position": trace_value("eq_read_position", -1),
                 "oracle_used": trace_value("oracle_used", False),
             }
         )
@@ -779,6 +788,15 @@ def parse_args() -> argparse.Namespace:
             "Default is 2 for depth >=2, otherwise 1."
         ),
     )
+    parser.add_argument(
+        "--calculator-read-position",
+        choices=["eq", "operands"],
+        default="eq",
+        help=(
+            "Residual positions used for calculator operand logits. "
+            "'eq' preserves existing behavior; 'operands' reads final A/B digits."
+        ),
+    )
     parser.add_argument("--oracle", action="store_true")
     parser.add_argument(
         "--calculator-result-override",
@@ -891,6 +909,7 @@ def main() -> None:
             "forced_calculator_result_class": args.forced_calculator_result_class,
             "forced_result_sweep": args.forced_result_sweep,
             "injection_scale": args.injection_scale,
+            "calculator_read_position": model.cfg.calculator_read_position,
             "checkpoint": str(args.checkpoint) if args.checkpoint else None,
             "train_config": train_config,
             "fresh_config": None if args.checkpoint else asdict(model.cfg),
