@@ -59,6 +59,7 @@ class TrainConfig:
     snapshot_samples: int
     calculator_estimator: str
     calculator_read_position: str
+    calculator_injection_mode: str
     reinforce_baseline_beta: float
     reinforce_entropy_weight: float
     reinforce_entropy_decay_steps: int
@@ -593,6 +594,7 @@ def make_model_config(
     operand_vocab_size: int | None = None,
     calculator_estimator: str = "ste",
     calculator_read_position: str = "eq",
+    calculator_injection_mode: str = "add",
     n_layer: int = 4,
     n_head: int = 4,
     n_embd: int = 128,
@@ -616,6 +618,7 @@ def make_model_config(
         calculator_operand_vocab_size=operand_vocab_size,
         calculator_result_vocab_size=(2 * operand_vocab_size) - 1,
         calculator_injection_scale=injection_scale,
+        calculator_injection_mode=calculator_injection_mode,
         calculator_estimator=calculator_estimator,
         calculator_read_position=calculator_read_position,
     )
@@ -652,6 +655,7 @@ def run_variant(
         operand_vocab_size=calculator_operand_vocab_size,
         calculator_estimator=args.calculator_estimator,
         calculator_read_position=args.calculator_read_position,
+        calculator_injection_mode=args.calculator_injection_mode,
         n_layer=args.n_layer,
         n_head=args.n_head,
         n_embd=args.n_embd,
@@ -693,6 +697,7 @@ def run_variant(
         snapshot_samples=args.snapshot_samples,
         calculator_estimator=args.calculator_estimator,
         calculator_read_position=args.calculator_read_position,
+        calculator_injection_mode=args.calculator_injection_mode,
         reinforce_baseline_beta=args.reinforce_baseline_beta,
         reinforce_entropy_weight=args.reinforce_entropy_weight,
         reinforce_entropy_decay_steps=args.reinforce_entropy_decay_steps,
@@ -908,6 +913,7 @@ def run_variant(
     metrics["aux_operand_loss_floor"] = args.aux_operand_loss_floor
     metrics["calculator_estimator"] = args.calculator_estimator
     metrics["calculator_read_position"] = args.calculator_read_position
+    metrics["calculator_injection_mode"] = args.calculator_injection_mode
 
     save_curve(run_dir / "training_curve.csv", curve)
     if snapshots:
@@ -1097,6 +1103,15 @@ def parse_args() -> argparse.Namespace:
             "'eq' preserves existing behavior; 'operands' reads final A/B digits."
         ),
     )
+    parser.add_argument(
+        "--calculator-injection-mode",
+        choices=["add", "replace"],
+        default="add",
+        help=(
+            "How to apply the calculator injection. 'add' preserves the residual "
+            "stream; 'replace' bottlenecks active '=' positions to the injection."
+        ),
+    )
     parser.add_argument("--n-layer", type=int, default=4)
     parser.add_argument("--n-head", type=int, default=4)
     parser.add_argument("--n-embd", type=int, default=128)
@@ -1204,6 +1219,8 @@ def main() -> None:
         suffix_parts.append(f"op0-{args.operand_max}")
     if args.calculator_estimator != "ste":
         suffix_parts.append(args.calculator_estimator)
+    if args.calculator_injection_mode != "add":
+        suffix_parts.append(args.calculator_injection_mode)
     if args.aux_operand_loss_weight > 0:
         suffix_parts.append(f"aux{args.aux_operand_loss_weight:g}")
         if args.aux_operand_loss_decay_steps > 0:
@@ -1218,6 +1235,7 @@ def main() -> None:
     print(f"oracle train: {args.oracle_train}")
     print(f"oracle warmup steps: {args.oracle_warmup_steps}")
     print(f"injection scale: {args.injection_scale}")
+    print(f"calculator injection mode: {args.calculator_injection_mode}")
     print(
         "aux operand loss: "
         f"weight={args.aux_operand_loss_weight} "

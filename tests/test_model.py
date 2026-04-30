@@ -15,7 +15,9 @@ def _small_cfg() -> GPTConfig:
     return GPTConfig(n_embd=32, n_layer=2, n_head=2, block_size=8)
 
 
-def _small_calculator_cfg(mode: str = "add", estimator: str = "ste") -> GPTConfig:
+def _small_calculator_cfg(
+    mode: str = "add", estimator: str = "ste", injection_mode: str = "add"
+) -> GPTConfig:
     return GPTConfig(
         n_embd=32,
         n_layer=2,
@@ -24,6 +26,7 @@ def _small_calculator_cfg(mode: str = "add", estimator: str = "ste") -> GPTConfi
         calculator_enabled=True,
         calculator_mode=mode,
         calculator_estimator=estimator,
+        calculator_injection_mode=injection_mode,
         calculator_hook_after_layer=1,
         calculator_operand_vocab_size=10,
         calculator_result_vocab_size=19,
@@ -111,6 +114,53 @@ def test_calculator_off_forward_matches_model_without_hook() -> None:
         logits_b = model_b(x)
 
     assert torch.equal(logits_a, logits_b)
+
+
+def test_invalid_calculator_injection_mode_raises() -> None:
+    cfg = _small_calculator_cfg(injection_mode="middle")
+
+    with pytest.raises(ValueError, match="calculator_injection_mode"):
+        TinyGPT(cfg)
+
+
+def test_add_calculator_injection_mode_adds_residual() -> None:
+    model = TinyGPT(_small_calculator_cfg(injection_mode="add"))
+    h = torch.arange(40, dtype=torch.float32).reshape(1, 5, 8)
+    injection = torch.ones_like(h)
+    tokens = torch.tensor([[1, 2, EQ_ID, 3, 4]])
+
+    updated = model._apply_calculator_injection(h, injection, tokens)
+
+    assert torch.equal(updated, h + injection)
+
+
+def test_replace_calculator_injection_mode_only_replaces_equals_positions() -> None:
+    model = TinyGPT(_small_calculator_cfg(injection_mode="replace"))
+    h = torch.arange(40, dtype=torch.float32).reshape(1, 5, 8)
+    injection = torch.full_like(h, -1.0)
+    tokens = torch.tensor([[1, 2, EQ_ID, 3, 4]])
+
+    updated = model._apply_calculator_injection(h, injection, tokens)
+
+    assert torch.equal(updated[0, :2], h[0, :2])
+    assert torch.equal(updated[0, 3:], h[0, 3:])
+    assert torch.equal(updated[0, 2], injection[0, 2])
+
+
+def test_calculator_off_replace_mode_zeros_equals_residual_only() -> None:
+    model = TinyGPT(_small_calculator_cfg(mode="off", injection_mode="replace"))
+    h = torch.arange(40, dtype=torch.float32).reshape(1, 5, 8)
+    tokens = torch.tensor([[1, 2, EQ_ID, 3, 4]])
+    assert model.calculator_hook is not None
+
+    injection, trace = model.calculator_hook(h, tokens, return_trace=True)
+    updated = model._apply_calculator_injection(h, injection, tokens)
+
+    assert torch.all(injection == 0)
+    assert trace["injection_norm"][0, 2].item() == 0
+    assert torch.equal(updated[0, :2], h[0, :2])
+    assert torch.equal(updated[0, 3:], h[0, 3:])
+    assert torch.equal(updated[0, 2], torch.zeros_like(updated[0, 2]))
 
 
 def test_hard_add_ste_forward_returns_sum_class() -> None:
@@ -245,6 +295,32 @@ def test_calculator_operands_read_position_reads_operand_tokens_and_injects_at_e
     assert torch.all(injection[0, 5] != 0)
 
 
+def test_calculator_operands_read_position_uses_first_equals_as_prompt_anchor() -> None:
+    torch.manual_seed(0)
+    cfg = _small_calculator_cfg(mode="add")
+    cfg.calculator_read_position = "operands"
+    hook = CalculatorHook(cfg)
+    with torch.no_grad():
+        hook.input_proj.weight.zero_()
+        hook.input_proj.bias.zero_()
+        hook.input_proj.weight[3, 0] = 1.0
+        hook.input_proj.weight[10 + 4, 1] = 1.0
+        hook.output_proj.weight.fill_(1.0)
+
+    h = torch.zeros(1, 8, 32)
+    h[0, 1, 0] = 10.0
+    h[0, 4, 1] = 10.0
+    tokens = torch.tensor([[0, 7, PLUS_ID, 0, 5, EQ_ID, 1, EQ_ID]])
+
+    injection, trace = hook(h, tokens, return_trace=True)
+
+    assert trace["a_pred"][0, 5].item() == 3
+    assert trace["b_pred"][0, 5].item() == 4
+    assert trace["eq_read_position"][0, 7].item() == 5
+    assert torch.all(injection[0, 5] != 0)
+    assert torch.all(injection[0, 7] != 0)
+
+
 def test_invalid_calculator_read_position_raises() -> None:
     cfg = _small_calculator_cfg(mode="add")
     cfg.calculator_read_position = "middle"
@@ -362,6 +438,23 @@ def test_tiny_gpt_forwards_forced_calculator_result_class() -> None:
     )
 
     assert diagnostics["calculator_trace"]["result_pred"][0, 2].item() == 5
+
+
+def test_oracle_operands_with_replace_mode_record_expected_result() -> None:
+    torch.manual_seed(0)
+    model = TinyGPT(_small_calculator_cfg(mode="add", injection_mode="replace"))
+    x = torch.tensor([[1, 2, EQ_ID, 3, 4, 5, 6, 7]])
+    oracle = torch.zeros(1, 8, 2, dtype=torch.long)
+    oracle[..., 0] = 2
+    oracle[..., 1] = 5
+
+    _, diagnostics = model(x, return_diagnostics=True, oracle_operands=oracle)
+    trace = diagnostics["calculator_trace"]
+
+    assert trace["a_pred"][0, 2].item() == 2
+    assert trace["b_pred"][0, 2].item() == 5
+    assert trace["result_pred"][0, 2].item() == 7
+    assert trace["oracle_used"][0, 2].item() is True
 
 
 def test_calculator_injection_scale_zero_removes_active_injection() -> None:
@@ -638,6 +731,8 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
             "1",
             "--calculator-read-position",
             "operands",
+            "--calculator-injection-mode",
+            "replace",
             "--oracle-warmup-steps",
             "1",
             "--aux-operand-loss-weight",
@@ -666,8 +761,11 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     metrics = json.loads((run_dir / "metrics.json").read_text())
     assert config["oracle_warmup_steps"] == 1
     assert config["calculator_read_position"] == "operands"
+    assert config["calculator_injection_mode"] == "replace"
     assert config["model"]["calculator_read_position"] == "operands"
+    assert config["model"]["calculator_injection_mode"] == "replace"
     assert config["aux_operand_loss_floor"] == 0.01
     assert config["snapshot_every"] == 1
     assert (run_dir / "diagnostic_snapshots.csv").exists()
     assert "counterfactuals" in metrics
+    assert metrics["calculator_injection_mode"] == "replace"

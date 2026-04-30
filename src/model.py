@@ -25,6 +25,7 @@ class GPTConfig:
     calculator_operand_vocab_size: int = 10
     calculator_result_vocab_size: int = 19
     calculator_injection_scale: float = 1.0
+    calculator_injection_mode: str = "add"
     calculator_estimator: str = "ste"
     calculator_read_position: str = "eq"
 
@@ -204,8 +205,8 @@ class CalculatorHook(nn.Module):
         B, T = tokens.shape
         eq_mask = tokens == EQ_ID
         eq_counts = eq_mask.long().sum(dim=-1)
-        if not torch.all(eq_counts == 1):
-            raise ValueError("calculator read position expects one '=' token per example")
+        if torch.any(eq_counts < 1):
+            raise ValueError("calculator read position expects an '=' token per example")
         eq_pos = eq_mask.float().argmax(dim=-1).long()
         # Fixed-width prompt shape is A + B =, so final A/B digit positions are
         # determined by the unique '=' location.
@@ -401,6 +402,11 @@ class Block(nn.Module):
 class TinyGPT(nn.Module):
     def __init__(self, cfg: GPTConfig) -> None:
         super().__init__()
+        if cfg.calculator_injection_mode not in {"add", "replace"}:
+            raise ValueError(
+                "calculator_injection_mode must be one of {'add', 'replace'}, "
+                f"got {cfg.calculator_injection_mode!r}"
+            )
         self.cfg = cfg
         self.tok_emb = nn.Embedding(cfg.vocab_size, cfg.n_embd)
         self.pos_emb = nn.Embedding(cfg.block_size, cfg.n_embd)
@@ -426,6 +432,18 @@ class TinyGPT(nn.Module):
 
     def num_params(self) -> int:
         return sum(p.numel() for p in self.parameters())
+
+    def _apply_calculator_injection(
+        self, h: Tensor, injection: Tensor, tokens: Tensor
+    ) -> Tensor:
+        if self.cfg.calculator_injection_mode == "add":
+            return h + injection
+        if self.cfg.calculator_injection_mode == "replace":
+            eq_mask = (tokens == EQ_ID).unsqueeze(-1)
+            return torch.where(eq_mask, injection, h)
+        raise ValueError(
+            f"unknown calculator injection mode: {self.cfg.calculator_injection_mode}"
+        )
 
     def forward(
         self,
@@ -456,15 +474,16 @@ class TinyGPT(nn.Module):
                     return_trace=True,
                 )
                 diagnostics["calculator_trace"] = trace
-                h = h + injection
+                h = self._apply_calculator_injection(h, injection, x)
             else:
-                h = h + self.calculator_hook(
+                injection = self.calculator_hook(
                     h,
                     x,
                     oracle_operands=oracle_operands,
                     result_override=calculator_result_override,
                     forced_result_class=forced_calculator_result_class,
                 )
+                h = self._apply_calculator_injection(h, injection, x)
         for i, block in enumerate(self.blocks, start=1):
             h = block(h)
             if return_diagnostics:
@@ -485,15 +504,16 @@ class TinyGPT(nn.Module):
                         return_trace=True,
                     )
                     diagnostics["calculator_trace"] = trace
-                    h = h + injection
+                    h = self._apply_calculator_injection(h, injection, x)
                 else:
-                    h = h + self.calculator_hook(
+                    injection = self.calculator_hook(
                         h,
                         x,
                         oracle_operands=oracle_operands,
                         result_override=calculator_result_override,
                         forced_result_class=forced_calculator_result_class,
                     )
+                    h = self._apply_calculator_injection(h, injection, x)
         h = self.ln_f(h)
         logits = self.lm_head(h)
         if return_diagnostics:
