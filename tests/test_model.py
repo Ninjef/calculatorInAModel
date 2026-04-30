@@ -528,3 +528,96 @@ def test_training_script_builds_legal_one_layer_calculator_config() -> None:
     assert cfg.mlp_expansion == 1
     assert cfg.calculator_hook_after_layer == 1
     assert TinyGPT(cfg).num_params() < TinyGPT(GPTConfig()).num_params()
+
+
+def test_training_aux_operand_weight_respects_floor() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_aux", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    assert overfit_script.auxiliary_operand_weight(
+        initial_weight=0.1, decay_steps=1000, floor=0.01, step=0
+    ) == pytest.approx(0.1)
+    assert overfit_script.auxiliary_operand_weight(
+        initial_weight=0.1, decay_steps=1000, floor=0.01, step=500
+    ) == pytest.approx(0.05)
+    assert overfit_script.auxiliary_operand_weight(
+        initial_weight=0.1, decay_steps=1000, floor=0.01, step=1000
+    ) == pytest.approx(0.01)
+    assert overfit_script.auxiliary_operand_weight(
+        initial_weight=0.1, decay_steps=0, floor=0.01, step=1000
+    ) == pytest.approx(0.1)
+
+
+def test_training_cli_supports_oracle_warmup_and_snapshots(
+    tmp_path, monkeypatch
+) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_cli", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(script_path),
+            "--variant",
+            "model-c",
+            "--digits",
+            "1",
+            "--steps",
+            "1",
+            "--batch-size",
+            "4",
+            "--eval-samples",
+            "4",
+            "--operand-max",
+            "2",
+            "--calculator-operand-vocab-size",
+            "3",
+            "--n-layer",
+            "1",
+            "--n-head",
+            "1",
+            "--n-embd",
+            "8",
+            "--mlp-expansion",
+            "1",
+            "--calculator-hook-after-layer",
+            "1",
+            "--oracle-warmup-steps",
+            "1",
+            "--aux-operand-loss-weight",
+            "0.1",
+            "--aux-operand-loss-decay-steps",
+            "1",
+            "--aux-operand-loss-floor",
+            "0.01",
+            "--snapshot-every",
+            "1",
+            "--snapshot-samples",
+            "2",
+            "--run-root",
+            str(tmp_path),
+        ],
+    )
+
+    overfit_script.main()
+
+    run_dirs = list(tmp_path.glob("*"))
+    assert len(run_dirs) == 1
+    child_dirs = list(run_dirs[0].glob("model-c-1digit-seed1"))
+    assert len(child_dirs) == 1
+    run_dir = child_dirs[0]
+    config = json.loads((run_dir / "config.json").read_text())
+    metrics = json.loads((run_dir / "metrics.json").read_text())
+    assert config["oracle_warmup_steps"] == 1
+    assert config["aux_operand_loss_floor"] == 0.01
+    assert config["snapshot_every"] == 1
+    assert (run_dir / "diagnostic_snapshots.csv").exists()
+    assert "counterfactuals" in metrics

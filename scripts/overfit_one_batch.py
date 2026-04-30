@@ -3,6 +3,7 @@ import csv
 import json
 import random
 import sys
+from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -50,8 +51,12 @@ class TrainConfig:
     operand_max: int | None
     calculator_operand_vocab_size: int
     oracle_train: bool
+    oracle_warmup_steps: int
     aux_operand_loss_weight: float
     aux_operand_loss_decay_steps: int
+    aux_operand_loss_floor: float
+    snapshot_every: int
+    snapshot_samples: int
     calculator_estimator: str
     reinforce_baseline_beta: float
     reinforce_entropy_weight: float
@@ -84,12 +89,28 @@ def make_problem(
     return tokenize(prompt), f"{a + b}<eos>"
 
 
+@contextmanager
+def temporary_calculator_injection_scale(
+    model: TinyGPT, scale: float | None
+) -> object:
+    if scale is None or model.calculator_hook is None:
+        yield
+        return
+    old_scale = model.calculator_hook.injection_scale
+    model.calculator_hook.injection_scale = scale
+    try:
+        yield
+    finally:
+        model.calculator_hook.injection_scale = old_scale
+
+
 def generate_answer(
     model: TinyGPT,
     prompt_ids: list[int],
     max_new_tokens: int,
     device: str | torch.device,
     oracle_operands: tuple[int, int] | None = None,
+    calculator_result_override: str = "add",
 ) -> list[int]:
     ids = torch.tensor([prompt_ids], dtype=torch.long, device=device)
     for _ in range(max_new_tokens):
@@ -102,7 +123,11 @@ def generate_answer(
                 shape=ids_cond.shape,
                 device=device,
             )
-        logits = model(ids_cond, oracle_operands=oracle_tensor)
+        logits = model(
+            ids_cond,
+            oracle_operands=oracle_tensor,
+            calculator_result_override=calculator_result_override,
+        )
         next_id = logits[:, -1, :].argmax(dim=-1, keepdim=True)
         ids = torch.cat([ids, next_id], dim=1)
     return ids[0, len(prompt_ids) :].tolist()
@@ -124,39 +149,46 @@ def evaluate(
     fixed_width: bool,
     device: str | torch.device,
     oracle_train: bool,
+    calculator_result_override: str = "add",
+    injection_scale: float | None = None,
 ) -> dict[str, object]:
     rng = random.Random(seed)
     max_answer_tokens = num_digits + 2
     exact = 0
     examples: list[dict[str, str | bool]] = []
 
+    was_training = model.training
     model.eval()
-    for i in range(samples):
-        a = rng.randint(0, operand_max)
-        b = rng.randint(0, operand_max)
-        prompt_ids, target = make_problem(a, b, num_digits, fixed_width=fixed_width)
-        oracle_operands = (a, b) if oracle_train else None
-        pred_ids = trim_after_eos(
-            generate_answer(
-                model,
-                prompt_ids,
-                max_answer_tokens,
-                device,
-                oracle_operands=oracle_operands,
+    with temporary_calculator_injection_scale(model, injection_scale):
+        for i in range(samples):
+            a = rng.randint(0, operand_max)
+            b = rng.randint(0, operand_max)
+            prompt_ids, target = make_problem(a, b, num_digits, fixed_width=fixed_width)
+            oracle_operands = (a, b) if oracle_train else None
+            pred_ids = trim_after_eos(
+                generate_answer(
+                    model,
+                    prompt_ids,
+                    max_answer_tokens,
+                    device,
+                    oracle_operands=oracle_operands,
+                    calculator_result_override=calculator_result_override,
+                )
             )
-        )
-        pred = decode_tokens(pred_ids)
-        ok = pred == target
-        exact += int(ok)
-        if i < 8:
-            examples.append(
-                {
-                    "prompt": detokenize(prompt_ids),
-                    "target": target,
-                    "prediction": pred,
-                    "correct": ok,
-                }
-            )
+            pred = decode_tokens(pred_ids)
+            ok = pred == target
+            exact += int(ok)
+            if i < 8:
+                examples.append(
+                    {
+                        "prompt": detokenize(prompt_ids),
+                        "target": target,
+                        "prediction": pred,
+                        "correct": ok,
+                    }
+                )
+    if was_training:
+        model.train()
 
     return {
         "num_digits": num_digits,
@@ -177,74 +209,84 @@ def calculator_trace_rows(
     seed: int,
     device: str | torch.device,
     oracle_train: bool,
+    calculator_result_override: str = "add",
+    injection_scale: float | None = None,
 ) -> list[dict[str, object]]:
     rng = random.Random(seed)
     torch.manual_seed(seed)
     rows: list[dict[str, object]] = []
     max_answer_tokens = num_digits + 2
+    was_training = model.training
     model.eval()
-    for i in range(samples):
-        a = rng.randint(0, operand_max)
-        b = rng.randint(0, operand_max)
-        prompt_ids, target = make_problem(a, b, num_digits, fixed_width=True)
-        x = torch.tensor([prompt_ids], dtype=torch.long, device=device)
-        oracle_operands = None
-        if oracle_train:
-            oracle_operands = make_oracle_operands_from_values(
-                a=a, b=b, shape=x.shape, device=device
+    with temporary_calculator_injection_scale(model, injection_scale):
+        for i in range(samples):
+            a = rng.randint(0, operand_max)
+            b = rng.randint(0, operand_max)
+            prompt_ids, target = make_problem(a, b, num_digits, fixed_width=True)
+            x = torch.tensor([prompt_ids], dtype=torch.long, device=device)
+            oracle_operands = None
+            if oracle_train:
+                oracle_operands = make_oracle_operands_from_values(
+                    a=a, b=b, shape=x.shape, device=device
+                )
+            logits, diagnostics = model(
+                x,
+                return_diagnostics=True,
+                oracle_operands=oracle_operands,
+                calculator_result_override=calculator_result_override,
             )
-        logits, diagnostics = model(
-            x, return_diagnostics=True, oracle_operands=oracle_operands
-        )
-        probs = logits[:, -1, :].softmax(dim=-1)
-        pred_ids = trim_after_eos(
-            generate_answer(
-                model,
-                prompt_ids,
-                max_answer_tokens,
-                device,
-                oracle_operands=(a, b) if oracle_train else None,
+            probs = logits[:, -1, :].softmax(dim=-1)
+            pred_ids = trim_after_eos(
+                generate_answer(
+                    model,
+                    prompt_ids,
+                    max_answer_tokens,
+                    device,
+                    oracle_operands=(a, b) if oracle_train else None,
+                    calculator_result_override=calculator_result_override,
+                )
             )
-        )
-        pred = decode_tokens(pred_ids)
-        eq_pos = prompt_ids.index(EQ_ID)
-        trace = diagnostics.get("calculator_trace", {})
+            pred = decode_tokens(pred_ids)
+            eq_pos = prompt_ids.index(EQ_ID)
+            trace = diagnostics.get("calculator_trace", {})
 
-        def trace_value(name: str, default: float | int | bool) -> float | int | bool:
-            if name not in trace:
-                return default
-            value = trace[name][0, eq_pos]
-            if value.dtype == torch.bool:
-                return bool(value.item())
-            if value.dtype.is_floating_point:
-                return float(value.item())
-            return int(value.item())
+            def trace_value(name: str, default: float | int | bool) -> float | int | bool:
+                if name not in trace:
+                    return default
+                value = trace[name][0, eq_pos]
+                if value.dtype == torch.bool:
+                    return bool(value.item())
+                if value.dtype.is_floating_point:
+                    return float(value.item())
+                return int(value.item())
 
-        rows.append(
-            {
-                "sample": i,
-                "prompt": decode_tokens(prompt_ids),
-                "true_a": a,
-                "true_b": b,
-                "true_sum": a + b,
-                "target_answer": target,
-                "prediction": pred,
-                "correct": pred == target,
-                "first_token_confidence": float(probs.max().item()),
-                "a_pred": trace_value("a_pred", -1),
-                "b_pred": trace_value("b_pred", -1),
-                "calculator_result": trace_value("result_pred", -1),
-                "a_confidence": trace_value("a_confidence", float("nan")),
-                "b_confidence": trace_value("b_confidence", float("nan")),
-                "a_entropy": trace_value("a_entropy", float("nan")),
-                "b_entropy": trace_value("b_entropy", float("nan")),
-                "a_logp": trace_value("a_logp", float("nan")),
-                "b_logp": trace_value("b_logp", float("nan")),
-                "sampled_logp": trace_value("sampled_logp", float("nan")),
-                "injection_norm": trace_value("injection_norm", float("nan")),
-                "oracle_used": trace_value("oracle_used", False),
-            }
-        )
+            rows.append(
+                {
+                    "sample": i,
+                    "prompt": decode_tokens(prompt_ids),
+                    "true_a": a,
+                    "true_b": b,
+                    "true_sum": a + b,
+                    "target_answer": target,
+                    "prediction": pred,
+                    "correct": pred == target,
+                    "first_token_confidence": float(probs.max().item()),
+                    "a_pred": trace_value("a_pred", -1),
+                    "b_pred": trace_value("b_pred", -1),
+                    "calculator_result": trace_value("result_pred", -1),
+                    "a_confidence": trace_value("a_confidence", float("nan")),
+                    "b_confidence": trace_value("b_confidence", float("nan")),
+                    "a_entropy": trace_value("a_entropy", float("nan")),
+                    "b_entropy": trace_value("b_entropy", float("nan")),
+                    "a_logp": trace_value("a_logp", float("nan")),
+                    "b_logp": trace_value("b_logp", float("nan")),
+                    "sampled_logp": trace_value("sampled_logp", float("nan")),
+                    "injection_norm": trace_value("injection_norm", float("nan")),
+                    "oracle_used": trace_value("oracle_used", False),
+                }
+            )
+    if was_training:
+        model.train()
     return rows
 
 
@@ -278,6 +320,99 @@ def summarize_trace_rows(rows: list[dict[str, object]]) -> dict[str, object]:
         "mean_a_entropy": mean_field("a_entropy"),
         "mean_b_entropy": mean_field("b_entropy"),
         "mean_sampled_logp": mean_field("sampled_logp"),
+    }
+
+
+def compact_distribution(values: list[object], *, limit: int = 12) -> str:
+    counts: dict[object, int] = {}
+    for value in values:
+        counts[value] = counts.get(value, 0) + 1
+    ordered = sorted(counts.items(), key=lambda item: (-item[1], item[0]))
+    return json.dumps(dict(ordered[:limit]), sort_keys=True)
+
+
+def snapshot_row_from_model(
+    model: TinyGPT,
+    *,
+    step: int,
+    num_digits: int,
+    operand_max: int,
+    samples: int,
+    seed: int,
+    device: str | torch.device,
+) -> dict[str, object]:
+    normal_rows = calculator_trace_rows(
+        model,
+        num_digits=num_digits,
+        operand_max=operand_max,
+        samples=samples,
+        seed=seed,
+        device=device,
+        oracle_train=False,
+    )
+    normal = summarize_trace_rows(normal_rows)
+
+    injection_zero = evaluate(
+        model,
+        num_digits=num_digits,
+        operand_max=operand_max,
+        samples=samples,
+        seed=seed,
+        fixed_width=True,
+        device=device,
+        oracle_train=False,
+        injection_scale=0.0,
+    )
+    oracle = evaluate(
+        model,
+        num_digits=num_digits,
+        operand_max=operand_max,
+        samples=samples,
+        seed=seed,
+        fixed_width=True,
+        device=device,
+        oracle_train=True,
+    )
+    forced_zero = evaluate(
+        model,
+        num_digits=num_digits,
+        operand_max=operand_max,
+        samples=samples,
+        seed=seed,
+        fixed_width=True,
+        device=device,
+        oracle_train=False,
+        calculator_result_override="zero",
+    )
+    forced_random = evaluate(
+        model,
+        num_digits=num_digits,
+        operand_max=operand_max,
+        samples=samples,
+        seed=seed,
+        fixed_width=True,
+        device=device,
+        oracle_train=False,
+        calculator_result_override="random",
+    )
+
+    return {
+        "step": step,
+        "samples": samples,
+        "normal_exact_match": normal["exact_match"],
+        "injection_zero_exact_match": injection_zero["exact_match"],
+        "oracle_exact_match": oracle["exact_match"],
+        "forced_zero_exact_match": forced_zero["exact_match"],
+        "forced_random_exact_match": forced_random["exact_match"],
+        "operand_exact_match": normal["operand_exact_match"],
+        "calculator_result_accuracy": normal["calculator_result_accuracy"],
+        "mean_a_confidence": normal["mean_a_confidence"],
+        "mean_b_confidence": normal["mean_b_confidence"],
+        "mean_a_entropy": normal["mean_a_entropy"],
+        "mean_b_entropy": normal["mean_b_entropy"],
+        "learned_result_distribution": compact_distribution(
+            [row["calculator_result"] for row in normal_rows]
+        ),
     }
 
 
@@ -426,6 +561,17 @@ def auxiliary_operand_loss(
     ) / 2
 
 
+def auxiliary_operand_weight(
+    *, initial_weight: float, decay_steps: int, floor: float, step: int
+) -> float:
+    if initial_weight <= 0:
+        return 0.0
+    if decay_steps <= 0:
+        return initial_weight
+    decayed = initial_weight * max(0.0, 1.0 - (step / decay_steps))
+    return max(floor, decayed)
+
+
 def make_model_config(
     num_digits: int,
     variant: str,
@@ -523,8 +669,12 @@ def run_variant(
         operand_max=args.operand_max,
         calculator_operand_vocab_size=calculator_operand_vocab_size,
         oracle_train=args.oracle_train,
+        oracle_warmup_steps=args.oracle_warmup_steps,
         aux_operand_loss_weight=args.aux_operand_loss_weight,
         aux_operand_loss_decay_steps=args.aux_operand_loss_decay_steps,
+        aux_operand_loss_floor=args.aux_operand_loss_floor,
+        snapshot_every=args.snapshot_every,
+        snapshot_samples=args.snapshot_samples,
         calculator_estimator=args.calculator_estimator,
         reinforce_baseline_beta=args.reinforce_baseline_beta,
         reinforce_entropy_weight=args.reinforce_entropy_weight,
@@ -541,6 +691,7 @@ def run_variant(
     )
 
     curve: list[dict[str, float | int]] = []
+    snapshots: list[dict[str, object]] = []
     final_loss = float("nan")
     policy_baseline: float | None = None
     model.train()
@@ -563,7 +714,10 @@ def run_variant(
                 device=device,
             )
         oracle_operands = None
-        if args.oracle_train:
+        use_oracle_for_step = args.oracle_train or (
+            args.variant == "model-c" and step < args.oracle_warmup_steps
+        )
+        if use_oracle_for_step:
             oracle_operands = make_oracle_operands_from_batch(
                 batch.x, num_digits=num_digits
             )
@@ -623,12 +777,12 @@ def run_variant(
         if args.aux_operand_loss_weight > 0:
             if args.variant != "model-c":
                 raise ValueError("--aux-operand-loss-weight requires --variant model-c")
-            if args.aux_operand_loss_decay_steps > 0:
-                aux_weight = args.aux_operand_loss_weight * max(
-                    0.0, 1.0 - (step / args.aux_operand_loss_decay_steps)
-                )
-            else:
-                aux_weight = args.aux_operand_loss_weight
+            aux_weight = auxiliary_operand_weight(
+                initial_weight=args.aux_operand_loss_weight,
+                decay_steps=args.aux_operand_loss_decay_steps,
+                floor=args.aux_operand_loss_floor,
+                step=step,
+            )
             aux_loss = auxiliary_operand_loss(model, batch, num_digits)
             aux_loss_value = aux_loss.item()
             loss = loss + (aux_weight * aux_loss)
@@ -639,6 +793,7 @@ def run_variant(
                 "step": step,
                 "loss": loss_value,
                 "answer_loss": answer_loss.item(),
+                "oracle_operands_used": int(use_oracle_for_step),
             }
             if aux_loss_value is not None:
                 curve_row["aux_operand_loss"] = aux_loss_value
@@ -656,6 +811,11 @@ def run_variant(
                 f"step={step:5d} loss={loss_value:.4f} "
                 f"answer_loss={answer_loss.item():.4f}"
                 + (
+                    " oracle_warmup=1"
+                    if use_oracle_for_step and not args.oracle_train
+                    else ""
+                )
+                + (
                     f" policy_loss={policy_loss_value:.4f}"
                     f" baseline={policy_baseline:.4f}"
                     f" entropy={operand_entropy_value:.4f}"
@@ -669,6 +829,30 @@ def run_variant(
                     else ""
                 )
             )
+
+        if (
+            args.variant == "model-c"
+            and args.snapshot_every > 0
+            and step % args.snapshot_every == 0
+        ):
+            snapshot = snapshot_row_from_model(
+                model,
+                step=step,
+                num_digits=num_digits,
+                operand_max=operand_max,
+                samples=args.snapshot_samples,
+                seed=seed + 30_000 + step,
+                device=device,
+            )
+            snapshots.append(snapshot)
+            print(
+                f"snapshot step={step:5d} "
+                f"normal={snapshot['normal_exact_match']:.3f} "
+                f"zero_inj={snapshot['injection_zero_exact_match']:.3f} "
+                f"oracle={snapshot['oracle_exact_match']:.3f} "
+                f"operand={snapshot['operand_exact_match']:.3f}"
+            )
+            model.train()
 
         if step == args.steps:
             final_loss = loss.item()
@@ -703,9 +887,13 @@ def run_variant(
     metrics["run_dir"] = str(run_dir)
     metrics["variant"] = args.variant
     metrics["oracle_train"] = args.oracle_train
+    metrics["oracle_warmup_steps"] = args.oracle_warmup_steps
+    metrics["aux_operand_loss_floor"] = args.aux_operand_loss_floor
     metrics["calculator_estimator"] = args.calculator_estimator
 
     save_curve(run_dir / "training_curve.csv", curve)
+    if snapshots:
+        write_rows(run_dir / "diagnostic_snapshots.csv", snapshots)
     if args.variant == "model-c":
         trace_rows = calculator_trace_rows(
             model,
@@ -718,6 +906,53 @@ def run_variant(
         )
         trace_summary = summarize_trace_rows(trace_rows)
         metrics["diagnostic_summary"] = trace_summary
+        counterfactual_samples = min(args.eval_samples, 128)
+        metrics["counterfactuals"] = {
+            "samples": counterfactual_samples,
+            "injection_zero_exact_match": evaluate(
+                model,
+                num_digits=num_digits,
+                operand_max=operand_max,
+                samples=counterfactual_samples,
+                seed=seed + 21_000,
+                fixed_width=True,
+                device=device,
+                oracle_train=False,
+                injection_scale=0.0,
+            )["exact_match"],
+            "oracle_at_eval_exact_match": evaluate(
+                model,
+                num_digits=num_digits,
+                operand_max=operand_max,
+                samples=counterfactual_samples,
+                seed=seed + 21_000,
+                fixed_width=True,
+                device=device,
+                oracle_train=True,
+            )["exact_match"],
+            "forced_zero_exact_match": evaluate(
+                model,
+                num_digits=num_digits,
+                operand_max=operand_max,
+                samples=counterfactual_samples,
+                seed=seed + 21_000,
+                fixed_width=True,
+                device=device,
+                oracle_train=False,
+                calculator_result_override="zero",
+            )["exact_match"],
+            "forced_random_exact_match": evaluate(
+                model,
+                num_digits=num_digits,
+                operand_max=operand_max,
+                samples=counterfactual_samples,
+                seed=seed + 21_000,
+                fixed_width=True,
+                device=device,
+                oracle_train=False,
+                calculator_result_override="random",
+            )["exact_match"],
+        }
         write_rows(run_dir / "calculator_trace_rows.csv", trace_rows)
         (run_dir / "diagnostic_summary.json").write_text(
             json.dumps(trace_summary, indent=2) + "\n"
@@ -784,6 +1019,16 @@ def parse_args() -> argparse.Namespace:
         help="Feed true operands into Model C's calculator during training/eval.",
     )
     parser.add_argument(
+        "--oracle-warmup-steps",
+        type=int,
+        default=0,
+        help=(
+            "For Model C, feed true operands for the first K training steps, then "
+            "switch to learned operands. Final eval remains learned unless "
+            "--oracle-train is also set."
+        ),
+    )
+    parser.add_argument(
         "--aux-operand-loss-weight",
         type=float,
         default=0.0,
@@ -794,6 +1039,24 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=0,
         help="Linearly decay aux operand loss to zero over this many steps; 0 keeps it constant.",
+    )
+    parser.add_argument(
+        "--aux-operand-loss-floor",
+        type=float,
+        default=0.0,
+        help="Minimum aux operand loss weight after decay; only used with decay steps.",
+    )
+    parser.add_argument(
+        "--snapshot-every",
+        type=int,
+        default=0,
+        help="For Model C, save lightweight calculator-dependence diagnostics every N steps.",
+    )
+    parser.add_argument(
+        "--snapshot-samples",
+        type=int,
+        default=64,
+        help="Samples per periodic diagnostic snapshot.",
     )
     parser.add_argument(
         "--injection-scale",
@@ -857,10 +1120,29 @@ def main() -> None:
     args = parse_args()
     if args.oracle_train and args.variant != "model-c":
         raise ValueError("--oracle-train is only meaningful with --variant model-c")
+    if args.oracle_warmup_steps < 0:
+        raise ValueError("--oracle-warmup-steps must be non-negative")
+    if args.oracle_warmup_steps > 0 and args.variant != "model-c":
+        raise ValueError("--oracle-warmup-steps requires --variant model-c")
     if args.aux_operand_loss_weight < 0:
         raise ValueError("--aux-operand-loss-weight must be non-negative")
     if args.aux_operand_loss_decay_steps < 0:
         raise ValueError("--aux-operand-loss-decay-steps must be non-negative")
+    if args.aux_operand_loss_floor < 0:
+        raise ValueError("--aux-operand-loss-floor must be non-negative")
+    if (
+        args.aux_operand_loss_floor > 0
+        and args.aux_operand_loss_weight <= 0
+    ):
+        raise ValueError("--aux-operand-loss-floor requires --aux-operand-loss-weight")
+    if args.aux_operand_loss_floor > args.aux_operand_loss_weight:
+        raise ValueError("--aux-operand-loss-floor cannot exceed aux weight")
+    if args.snapshot_every < 0:
+        raise ValueError("--snapshot-every must be non-negative")
+    if args.snapshot_every > 0 and args.variant != "model-c":
+        raise ValueError("--snapshot-every requires --variant model-c")
+    if args.snapshot_samples < 1:
+        raise ValueError("--snapshot-samples must be positive")
     if args.calculator_estimator == "reinforce" and args.variant != "model-c":
         raise ValueError("--calculator-estimator reinforce requires --variant model-c")
     if not 0 <= args.reinforce_baseline_beta < 1:
@@ -889,6 +1171,8 @@ def main() -> None:
     suffix_parts = [args.variant]
     if args.oracle_train:
         suffix_parts.append("oracle")
+    elif args.oracle_warmup_steps > 0:
+        suffix_parts.append(f"oraclewarm{args.oracle_warmup_steps}")
     if args.operand_max is not None:
         suffix_parts.append(f"op0-{args.operand_max}")
     if args.calculator_estimator != "ste":
@@ -897,13 +1181,26 @@ def main() -> None:
         suffix_parts.append(f"aux{args.aux_operand_loss_weight:g}")
         if args.aux_operand_loss_decay_steps > 0:
             suffix_parts.append(f"auxdecay{args.aux_operand_loss_decay_steps}")
+        if args.aux_operand_loss_floor > 0:
+            suffix_parts.append(f"auxfloor{args.aux_operand_loss_floor:g}")
     suffix = "-".join(suffix_parts)
     base_run_dir = create_unique_dir(args.run_root / f"{timestamp}_{suffix}")
 
     print(f"device: {device}")
     print(f"variant: {args.variant}")
     print(f"oracle train: {args.oracle_train}")
+    print(f"oracle warmup steps: {args.oracle_warmup_steps}")
     print(f"injection scale: {args.injection_scale}")
+    print(
+        "aux operand loss: "
+        f"weight={args.aux_operand_loss_weight} "
+        f"decay_steps={args.aux_operand_loss_decay_steps} "
+        f"floor={args.aux_operand_loss_floor}"
+    )
+    print(
+        "diagnostic snapshots: "
+        f"every={args.snapshot_every} samples={args.snapshot_samples}"
+    )
     print(f"calculator estimator: {args.calculator_estimator}")
     print(
         "architecture: "
