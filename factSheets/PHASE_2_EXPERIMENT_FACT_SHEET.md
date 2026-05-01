@@ -62,7 +62,7 @@ Conclusion:
 ## Stabilized adaptive-interface objective ladder
 
 - Date: 2026-05-01.
-- Task: `aiAgentProjectTasks/2026-05-01-phase-2-second-task-Stabilize-adaptive-interface-objective.md`.
+- Task: `aiAgentProjectTasks/completed/phase2/2026-05-01-phase-2-second-task-Stabilize-adaptive-interface-objective.md`.
 - Work history: `aiAgentWorkHistory/phase2/2026-05-01-stabilize-adaptive-interface-objective.md`.
 - Starting decoder checkpoint: `runs/2026-04-30_175805_513968_model-c-oracle-op0-19-answer_decoder/model-c-2digit-seed2/final_weights.pt`.
 - Shared config: `digits=2`, `operand_max=19`, operand vocab `20`, `2L/1H/16d/mlp1`, hook after layer `1`, `calculator_read_position=operands`, `calculator_bottleneck_mode=answer_decoder`, `calculator_estimator=adaptive_interface`.

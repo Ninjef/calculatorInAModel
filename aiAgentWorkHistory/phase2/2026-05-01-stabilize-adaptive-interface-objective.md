@@ -1,6 +1,6 @@
 # 2026-05-01 - Stabilize adaptive calculator interface objective
 
-Task: `aiAgentProjectTasks/2026-05-01-phase-2-second-task-Stabilize-adaptive-interface-objective.md`
+Task: `aiAgentProjectTasks/completed/phase2/2026-05-01-phase-2-second-task-Stabilize-adaptive-interface-objective.md`
 
 ## Implementation
 
