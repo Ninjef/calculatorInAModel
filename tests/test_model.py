@@ -898,6 +898,31 @@ def test_adaptive_interface_selects_high_probability_operand_pair() -> None:
     assert b_target.tolist() == [1, 2]
 
 
+def test_adaptive_soft_result_loss_rewards_total_valid_pair_mass() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_adaptive_soft", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    result_targets = torch.tensor([2])
+    high_valid_a = torch.tensor([[10.0, 10.0, -10.0]])
+    high_valid_b = torch.tensor([[-10.0, 10.0, 10.0]])
+    high_invalid_a = torch.tensor([[10.0, -10.0, -10.0]])
+    high_invalid_b = torch.tensor([[10.0, -10.0, -10.0]])
+
+    valid_loss, valid_mass = overfit_script.adaptive_soft_result_loss(
+        high_valid_a, high_valid_b, result_targets
+    )
+    invalid_loss, invalid_mass = overfit_script.adaptive_soft_result_loss(
+        high_invalid_a, high_invalid_b, result_targets
+    )
+
+    assert valid_mass.item() > invalid_mass.item()
+    assert valid_loss.item() < invalid_loss.item()
+
+
 def test_adaptive_interface_loss_updates_input_interface_and_upstream() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_script_adaptive_loss", script_path)
@@ -935,7 +960,7 @@ def test_adaptive_interface_loss_updates_input_interface_and_upstream() -> None:
     assert model.calculator_hook is not None
     before = model.calculator_hook.input_proj.weight.detach().clone()
     loss, metrics = overfit_script.adaptive_interface_loss(
-        model, batch, num_digits=1
+        model, batch, num_digits=1, target_mode="hard_pair"
     )
     loss.backward()
 
@@ -948,6 +973,104 @@ def test_adaptive_interface_loss_updates_input_interface_and_upstream() -> None:
     optim.step()
 
     assert not torch.equal(before, model.calculator_hook.input_proj.weight)
+
+
+def test_adaptive_interface_entropy_term_produces_finite_input_gradients() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_adaptive_entropy", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_estimator="adaptive_interface",
+        calculator_read_position="operands",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    model = TinyGPT(cfg)
+    batch = overfit_script.make_range_batch(
+        batch_size=4,
+        num_digits=1,
+        operand_max=2,
+        rng=__import__("random").Random(1),
+        fixed_width=True,
+        device="cpu",
+    )
+
+    assert model.calculator_hook is not None
+    loss, metrics = overfit_script.adaptive_interface_loss(
+        model,
+        batch,
+        num_digits=1,
+        target_mode="soft_result",
+        entropy_weight=0.01,
+    )
+    loss.backward()
+
+    grad = model.calculator_hook.input_proj.weight.grad
+    assert metrics["adaptive_interface_entropy"] > 0
+    assert grad is not None
+    assert torch.isfinite(grad).all()
+
+
+def test_adaptive_optimizer_groups_assign_lrs_and_exclude_frozen_decoder() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_adaptive_groups", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_estimator="adaptive_interface",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    model = TinyGPT(cfg)
+    assert model.calculator_hook is not None
+    assert model.answer_decoder is not None
+    overfit_script.freeze_semantic_decoder_parameters(model)
+
+    groups = overfit_script.adaptive_optimizer_param_groups(
+        model,
+        lr=3e-3,
+        input_proj_lr=3e-4,
+        upstream_lr=1e-4,
+        weight_decay=0.0,
+    )
+    group_by_name = {group["name"]: group for group in groups}
+    grouped_params = {
+        id(param)
+        for group in groups
+        for param in group["params"]
+    }
+
+    assert group_by_name["calculator_hook.input_proj"]["lr"] == pytest.approx(3e-4)
+    assert group_by_name["upstream"]["lr"] == pytest.approx(1e-4)
+    assert id(model.calculator_hook.input_proj.weight) in grouped_params
+    assert id(model.answer_decoder.weight) not in grouped_params
+    assert id(model.calculator_hook.output_proj.weight) not in grouped_params
 
 
 def test_freeze_semantic_decoder_preserves_decoder_but_not_interface() -> None:
@@ -1027,6 +1150,18 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
             "replace",
             "--calculator-bottleneck-mode",
             "answer_decoder",
+            "--calculator-estimator",
+            "adaptive_interface",
+            "--semantic-decoder-checkpoint",
+            str(tmp_path / "seed.pt"),
+            "--input-proj-lr",
+            "0.0003",
+            "--upstream-lr",
+            "0.0001",
+            "--adaptive-interface-target-mode",
+            "soft_result",
+            "--adaptive-interface-entropy-weight",
+            "0.003",
             "--oracle-warmup-steps",
             "1",
             "--aux-operand-loss-weight",
@@ -1043,10 +1178,29 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
             str(tmp_path),
         ],
     )
+    torch.manual_seed(0)
+    seed_model = TinyGPT(
+        GPTConfig(
+            n_embd=8,
+            n_layer=1,
+            n_head=1,
+            block_size=6,
+            mlp_expansion=1,
+            calculator_enabled=True,
+            calculator_mode="add",
+            calculator_hook_after_layer=1,
+            calculator_operand_vocab_size=3,
+            calculator_result_vocab_size=5,
+            calculator_estimator="adaptive_interface",
+            calculator_read_position="operands",
+            calculator_bottleneck_mode="answer_decoder",
+        )
+    )
+    torch.save({"model_state_dict": seed_model.state_dict()}, tmp_path / "seed.pt")
 
     overfit_script.main()
 
-    run_dirs = list(tmp_path.glob("*"))
+    run_dirs = [path for path in tmp_path.glob("*") if path.is_dir()]
     assert len(run_dirs) == 1
     child_dirs = list(run_dirs[0].glob("model-c-1digit-seed1"))
     assert len(child_dirs) == 1
@@ -1057,6 +1211,11 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     assert config["calculator_read_position"] == "operands"
     assert config["calculator_injection_mode"] == "replace"
     assert config["calculator_bottleneck_mode"] == "answer_decoder"
+    assert config["calculator_estimator"] == "adaptive_interface"
+    assert config["adaptive_interface_target_mode"] == "soft_result"
+    assert config["adaptive_interface_entropy_weight"] == 0.003
+    assert config["input_proj_lr"] == 0.0003
+    assert config["upstream_lr"] == 0.0001
     assert config["model"]["calculator_read_position"] == "operands"
     assert config["model"]["calculator_injection_mode"] == "replace"
     assert config["model"]["calculator_bottleneck_mode"] == "answer_decoder"
@@ -1066,3 +1225,7 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     assert "counterfactuals" in metrics
     assert metrics["calculator_injection_mode"] == "replace"
     assert metrics["calculator_bottleneck_mode"] == "answer_decoder"
+    assert metrics["adaptive_interface_target_mode"] == "soft_result"
+    assert metrics["adaptive_interface_entropy_weight"] == 0.003
+    assert metrics["input_proj_lr"] == 0.0003
+    assert metrics["upstream_lr"] == 0.0001

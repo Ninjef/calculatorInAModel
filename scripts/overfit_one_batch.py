@@ -63,6 +63,10 @@ class TrainConfig:
     calculator_bottleneck_mode: str
     semantic_decoder_checkpoint: str | None
     adaptive_interface_loss_weight: float
+    adaptive_interface_target_mode: str
+    adaptive_interface_entropy_weight: float
+    input_proj_lr: float
+    upstream_lr: float
     freeze_semantic_decoder: bool
     freeze_upstream_encoder: bool
     reinforce_baseline_beta: float
@@ -452,9 +456,14 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "operand_entropy",
         "entropy_weight",
         "adaptive_interface_loss",
+        "adaptive_interface_target_loss",
+        "adaptive_interface_objective",
+        "adaptive_interface_entropy",
+        "adaptive_interface_entropy_weight",
         "adaptive_target_result_accuracy",
         "adaptive_learned_target_agreement",
         "adaptive_target_operand_exact_match",
+        "adaptive_target_pair_mass",
     ]
     fieldnames = preferred + sorted(
         {key for row in curve for key in row.keys()} - set(preferred)
@@ -590,6 +599,36 @@ def select_adaptive_operand_targets(
     return a_target, b_target
 
 
+def adaptive_soft_result_loss(
+    a_logits: torch.Tensor, b_logits: torch.Tensor, result_targets: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if a_logits.shape != b_logits.shape:
+        raise ValueError("a_logits and b_logits must have the same shape")
+    if a_logits.ndim != 2:
+        raise ValueError("soft result loss expects [batch, classes] logits")
+    classes = a_logits.shape[-1]
+    a_idx = torch.arange(classes, device=a_logits.device).view(1, classes, 1)
+    b_idx = torch.arange(classes, device=b_logits.device).view(1, 1, classes)
+    valid = (a_idx + b_idx) == result_targets.view(-1, 1, 1)
+    pair_logp = (
+        a_logits.log_softmax(dim=-1).unsqueeze(-1)
+        + b_logits.log_softmax(dim=-1).unsqueeze(-2)
+    )
+    valid_logp = pair_logp.masked_fill(~valid, float("-inf"))
+    log_mass = torch.logsumexp(valid_logp.reshape(a_logits.shape[0], -1), dim=-1)
+    return -log_mass.mean(), log_mass.exp()
+
+
+def operand_distribution_entropy(
+    a_logits: torch.Tensor, b_logits: torch.Tensor
+) -> torch.Tensor:
+    a_probs = a_logits.softmax(dim=-1)
+    b_probs = b_logits.softmax(dim=-1)
+    a_entropy = -(a_probs * a_probs.clamp_min(1e-12).log()).sum(dim=-1)
+    b_entropy = -(b_probs * b_probs.clamp_min(1e-12).log()).sum(dim=-1)
+    return a_entropy + b_entropy
+
+
 def calculator_read_operand_logits(
     model: TinyGPT, batch: ArithmeticBatch
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -623,17 +662,32 @@ def calculator_read_operand_logits(
 
 
 def adaptive_interface_loss(
-    model: TinyGPT, batch: ArithmeticBatch, *, num_digits: int
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    target_mode: str,
+    entropy_weight: float = 0.0,
 ) -> tuple[torch.Tensor, dict[str, float]]:
+    if target_mode not in {"hard_pair", "soft_result"}:
+        raise ValueError("adaptive target mode must be hard_pair or soft_result")
     result_targets, _ = counterfactual_result_targets(model, batch)
     a_logits, b_logits, _, _ = calculator_read_operand_logits(model, batch)
     a_targets, b_targets = select_adaptive_operand_targets(
         a_logits, b_logits, result_targets
     )
-    loss = (
-        torch.nn.functional.cross_entropy(a_logits, a_targets)
-        + torch.nn.functional.cross_entropy(b_logits, b_targets)
-    ) / 2
+    if target_mode == "hard_pair":
+        target_loss = (
+            torch.nn.functional.cross_entropy(a_logits, a_targets)
+            + torch.nn.functional.cross_entropy(b_logits, b_targets)
+        ) / 2
+        target_pair_mass = torch.full_like(result_targets, float("nan"), dtype=torch.float)
+    else:
+        target_loss, target_pair_mass = adaptive_soft_result_loss(
+            a_logits, b_logits, result_targets
+        )
+    operand_entropy = operand_distribution_entropy(a_logits, b_logits)
+    objective_loss = target_loss - (entropy_weight * operand_entropy.mean())
     true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
     true_sum = true_a + true_b
     learned_a = a_logits.argmax(dim=-1)
@@ -649,8 +703,11 @@ def adaptive_interface_loss(
         "adaptive_target_operand_exact_match": float(
             ((a_targets == true_a) & (b_targets == true_b)).float().mean().item()
         ),
+        "adaptive_interface_target_loss": float(target_loss.item()),
+        "adaptive_interface_entropy": float(operand_entropy.mean().item()),
+        "adaptive_target_pair_mass": float(target_pair_mass.nanmean().item()),
     }
-    return loss, metrics
+    return objective_loss, metrics
 
 
 @torch.no_grad()
@@ -662,6 +719,7 @@ def adaptive_interface_trace_rows(
     samples: int,
     seed: int,
     device: str | torch.device,
+    target_mode: str,
 ) -> list[dict[str, object]]:
     rng = random.Random(seed)
     batch = make_range_batch(
@@ -679,6 +737,14 @@ def adaptive_interface_trace_rows(
     a_targets, b_targets = select_adaptive_operand_targets(
         a_logits, b_logits, result_targets
     )
+    if target_mode == "soft_result":
+        _, target_pair_mass = adaptive_soft_result_loss(
+            a_logits, b_logits, result_targets
+        )
+    else:
+        target_pair_mass = torch.full(
+            result_targets.shape, float("nan"), dtype=torch.float, device=batch.x.device
+        )
     true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
     learned_a = a_logits.argmax(dim=-1)
     learned_b = b_logits.argmax(dim=-1)
@@ -701,6 +767,7 @@ def adaptive_interface_trace_rows(
                 "target_result_loss": float(
                     result_losses[i, result_targets[i]].item()
                 ),
+                "target_pair_mass": float(target_pair_mass[i].item()),
                 "target_matches_true_sum": bool(
                     result_targets[i].item() == (true_a[i] + true_b[i]).item()
                 ),
@@ -727,7 +794,14 @@ def summarize_adaptive_interface_rows(
             "target_result_accuracy": 0.0,
             "learned_target_result_agreement": 0.0,
             "target_operand_exact_match": 0.0,
+            "target_pair_mass": float("nan"),
         }
+    pair_masses = [
+        float(row["target_pair_mass"])
+        for row in rows
+        if isinstance(row.get("target_pair_mass"), float)
+        and row["target_pair_mass"] == row["target_pair_mass"]
+    ]
     return {
         "samples": len(rows),
         "target_result_accuracy": sum(
@@ -742,6 +816,9 @@ def summarize_adaptive_interface_rows(
             int(row["target_operands_match_true"]) for row in rows
         )
         / len(rows),
+        "target_pair_mass": sum(pair_masses) / len(pair_masses)
+        if pair_masses
+        else float("nan"),
     }
 
 
@@ -767,6 +844,50 @@ def freeze_upstream_encoder_parameters(model: TinyGPT) -> None:
     for module in [model.tok_emb, model.pos_emb, model.blocks, model.ln_f, model.lm_head]:
         for param in module.parameters():
             param.requires_grad = False
+
+
+def adaptive_optimizer_param_groups(
+    model: TinyGPT,
+    *,
+    lr: float,
+    input_proj_lr: float | None,
+    upstream_lr: float | None,
+    weight_decay: float,
+) -> list[dict[str, object]]:
+    effective_input_lr = lr if input_proj_lr is None else input_proj_lr
+    effective_upstream_lr = lr if upstream_lr is None else upstream_lr
+    input_params: list[torch.nn.Parameter] = []
+    upstream_params: list[torch.nn.Parameter] = []
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        if name.startswith("calculator_hook.input_proj."):
+            input_params.append(param)
+        else:
+            upstream_params.append(param)
+
+    groups: list[dict[str, object]] = []
+    if input_params:
+        groups.append(
+            {
+                "params": input_params,
+                "lr": effective_input_lr,
+                "weight_decay": weight_decay,
+                "name": "calculator_hook.input_proj",
+            }
+        )
+    if upstream_params:
+        groups.append(
+            {
+                "params": upstream_params,
+                "lr": effective_upstream_lr,
+                "weight_decay": weight_decay,
+                "name": "upstream",
+            }
+        )
+    if not groups:
+        raise ValueError("no trainable parameters for adaptive optimizer")
+    return groups
 
 
 def make_range_batch(
@@ -930,12 +1051,24 @@ def run_variant(
         freeze_semantic_decoder_parameters(model)
     if args.calculator_estimator == "adaptive_interface" and args.freeze_upstream_encoder:
         freeze_upstream_encoder_parameters(model)
-    optim = torch.optim.AdamW(
-        [param for param in model.parameters() if param.requires_grad],
-        lr=args.lr,
-        betas=(0.9, 0.95),
-        weight_decay=args.weight_decay,
-    )
+    if args.calculator_estimator == "adaptive_interface":
+        optim = torch.optim.AdamW(
+            adaptive_optimizer_param_groups(
+                model,
+                lr=args.lr,
+                input_proj_lr=args.input_proj_lr,
+                upstream_lr=args.upstream_lr,
+                weight_decay=args.weight_decay,
+            ),
+            betas=(0.9, 0.95),
+        )
+    else:
+        optim = torch.optim.AdamW(
+            [param for param in model.parameters() if param.requires_grad],
+            lr=args.lr,
+            betas=(0.9, 0.95),
+            weight_decay=args.weight_decay,
+        )
 
     run_name = f"{args.variant}-{num_digits}digit-seed{seed}"
     run_dir = base_run_dir / run_name
@@ -972,6 +1105,12 @@ def run_variant(
             else None
         ),
         adaptive_interface_loss_weight=args.adaptive_interface_loss_weight,
+        adaptive_interface_target_mode=args.adaptive_interface_target_mode,
+        adaptive_interface_entropy_weight=args.adaptive_interface_entropy_weight,
+        input_proj_lr=(
+            args.lr if args.input_proj_lr is None else args.input_proj_lr
+        ),
+        upstream_lr=args.lr if args.upstream_lr is None else args.upstream_lr,
         freeze_semantic_decoder=args.freeze_semantic_decoder,
         freeze_upstream_encoder=args.freeze_upstream_encoder,
         reinforce_baseline_beta=args.reinforce_baseline_beta,
@@ -1047,6 +1186,7 @@ def run_variant(
         operand_entropy_value = None
         entropy_weight = 0.0
         adaptive_interface_loss_value = None
+        adaptive_interface_objective_value = None
         adaptive_metrics: dict[str, float] = {}
         if use_reinforce:
             if policy_baseline is None:
@@ -1079,10 +1219,18 @@ def run_variant(
             operand_entropy_value = operand_entropy.mean().item()
         if use_adaptive_interface:
             adaptive_loss, adaptive_metrics = adaptive_interface_loss(
-                model, batch, num_digits=num_digits
+                model,
+                batch,
+                num_digits=num_digits,
+                target_mode=args.adaptive_interface_target_mode,
+                entropy_weight=args.adaptive_interface_entropy_weight,
             )
-            adaptive_interface_loss_value = adaptive_loss.item()
-            loss = loss + (args.adaptive_interface_loss_weight * adaptive_loss)
+            adaptive_interface_loss_value = adaptive_metrics[
+                "adaptive_interface_target_loss"
+            ]
+            adaptive_objective = args.adaptive_interface_loss_weight * adaptive_loss
+            adaptive_interface_objective_value = float(adaptive_objective.item())
+            loss = loss + adaptive_objective
         aux_loss_value = None
         aux_weight = 0.0
         if args.aux_operand_loss_weight > 0:
@@ -1118,6 +1266,12 @@ def run_variant(
                 curve_row["entropy_weight"] = entropy_weight
             if use_adaptive_interface:
                 curve_row["adaptive_interface_loss"] = adaptive_interface_loss_value
+                curve_row["adaptive_interface_objective"] = (
+                    adaptive_interface_objective_value
+                )
+                curve_row["adaptive_interface_entropy_weight"] = (
+                    args.adaptive_interface_entropy_weight
+                )
                 curve_row.update(adaptive_metrics)
             curve.append(curve_row)
             print(
@@ -1145,6 +1299,7 @@ def run_variant(
                 + (
                     f" adaptive_interface_loss={adaptive_interface_loss_value:.4f}"
                     f" target_acc={adaptive_metrics['adaptive_target_result_accuracy']:.3f}"
+                    f" entropy={adaptive_metrics['adaptive_interface_entropy']:.3f}"
                     if use_adaptive_interface
                     else ""
                 )
@@ -1219,6 +1374,10 @@ def run_variant(
         else None
     )
     metrics["adaptive_interface_loss_weight"] = args.adaptive_interface_loss_weight
+    metrics["adaptive_interface_target_mode"] = args.adaptive_interface_target_mode
+    metrics["adaptive_interface_entropy_weight"] = args.adaptive_interface_entropy_weight
+    metrics["input_proj_lr"] = args.lr if args.input_proj_lr is None else args.input_proj_lr
+    metrics["upstream_lr"] = args.lr if args.upstream_lr is None else args.upstream_lr
     metrics["freeze_semantic_decoder"] = args.freeze_semantic_decoder
     metrics["freeze_upstream_encoder"] = args.freeze_upstream_encoder
 
@@ -1296,6 +1455,7 @@ def run_variant(
                 samples=min(args.eval_samples, 128),
                 seed=seed + 22_000,
                 device=device,
+                target_mode=args.adaptive_interface_target_mode,
             )
             adaptive_summary = summarize_adaptive_interface_rows(adaptive_rows)
             metrics["adaptive_interface_diagnostic_summary"] = adaptive_summary
@@ -1357,6 +1517,18 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument("--lr", type=float, default=DEFAULT_LR)
+    parser.add_argument(
+        "--input-proj-lr",
+        type=float,
+        default=None,
+        help="Adaptive-interface LR for calculator_hook.input_proj; defaults to --lr.",
+    )
+    parser.add_argument(
+        "--upstream-lr",
+        type=float,
+        default=None,
+        help="Adaptive-interface LR for trainable non-input-proj parameters; defaults to --lr.",
+    )
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument(
@@ -1430,6 +1602,18 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=1.0,
         help="Weight for counterfactual adaptive-interface operand target loss.",
+    )
+    parser.add_argument(
+        "--adaptive-interface-target-mode",
+        choices=["hard_pair", "soft_result"],
+        default="hard_pair",
+        help="Hard best-pair CE or soft mass over all operand pairs producing the target result.",
+    )
+    parser.add_argument(
+        "--adaptive-interface-entropy-weight",
+        type=float,
+        default=0.0,
+        help="Entropy bonus weight for adaptive-interface operand distributions.",
     )
     parser.add_argument(
         "--freeze-semantic-decoder",
@@ -1566,6 +1750,12 @@ def main() -> None:
         raise ValueError("--semantic-decoder-checkpoint does not exist")
     if args.adaptive_interface_loss_weight < 0:
         raise ValueError("--adaptive-interface-loss-weight must be non-negative")
+    if args.adaptive_interface_entropy_weight < 0:
+        raise ValueError("--adaptive-interface-entropy-weight must be non-negative")
+    if args.input_proj_lr is not None and args.input_proj_lr <= 0:
+        raise ValueError("--input-proj-lr must be positive")
+    if args.upstream_lr is not None and args.upstream_lr <= 0:
+        raise ValueError("--upstream-lr must be positive")
     if not 0 <= args.reinforce_baseline_beta < 1:
         raise ValueError("--reinforce-baseline-beta must be in [0, 1)")
     if args.reinforce_entropy_weight < 0:
@@ -1598,6 +1788,15 @@ def main() -> None:
         suffix_parts.append(f"op0-{args.operand_max}")
     if args.calculator_estimator != "ste":
         suffix_parts.append(args.calculator_estimator)
+    if args.calculator_estimator == "adaptive_interface":
+        if args.adaptive_interface_target_mode != "hard_pair":
+            suffix_parts.append(args.adaptive_interface_target_mode)
+        if args.input_proj_lr is not None:
+            suffix_parts.append(f"inlr{args.input_proj_lr:g}")
+        if args.upstream_lr is not None:
+            suffix_parts.append(f"uplr{args.upstream_lr:g}")
+        if args.adaptive_interface_entropy_weight > 0:
+            suffix_parts.append(f"ient{args.adaptive_interface_entropy_weight:g}")
     if args.calculator_injection_mode != "add":
         suffix_parts.append(args.calculator_injection_mode)
     if args.calculator_bottleneck_mode != "none":
@@ -1629,6 +1828,13 @@ def main() -> None:
         f"every={args.snapshot_every} samples={args.snapshot_samples}"
     )
     print(f"calculator estimator: {args.calculator_estimator}")
+    print(
+        "adaptive interface: "
+        f"target_mode={args.adaptive_interface_target_mode} "
+        f"entropy_weight={args.adaptive_interface_entropy_weight} "
+        f"input_proj_lr={args.lr if args.input_proj_lr is None else args.input_proj_lr} "
+        f"upstream_lr={args.lr if args.upstream_lr is None else args.upstream_lr}"
+    )
     print(
         "architecture: "
         f"n_layer={args.n_layer} n_head={args.n_head} "
