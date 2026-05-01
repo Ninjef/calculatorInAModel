@@ -45,6 +45,7 @@ class TrainConfig:
     batch_size: int
     eval_samples: int
     lr: float
+    answer_loss_weight: float
     weight_decay: float
     grad_clip: float
     fixed_width: bool
@@ -55,6 +56,7 @@ class TrainConfig:
     aux_operand_loss_weight: float
     aux_operand_loss_decay_steps: int
     aux_operand_loss_floor: float
+    aux_operand_loss_grad_upstream: bool
     snapshot_every: int
     snapshot_samples: int
     calculator_estimator: str
@@ -69,6 +71,7 @@ class TrainConfig:
     upstream_lr: float
     freeze_semantic_decoder: bool
     freeze_upstream_encoder: bool
+    trainable_parameter_groups: list[dict[str, object]]
     reinforce_baseline_beta: float
     reinforce_entropy_weight: float
     reinforce_entropy_decay_steps: int
@@ -447,6 +450,7 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "step",
         "loss",
         "answer_loss",
+        "answer_loss_weight",
         "aux_operand_loss",
         "aux_operand_loss_weight",
         "policy_loss",
@@ -890,6 +894,25 @@ def adaptive_optimizer_param_groups(
     return groups
 
 
+def trainable_parameter_summary(model: TinyGPT) -> list[dict[str, object]]:
+    groups: dict[str, dict[str, object]] = {}
+    for name, param in model.named_parameters():
+        if not param.requires_grad:
+            continue
+        group_name = (
+            "calculator_hook.input_proj"
+            if name.startswith("calculator_hook.input_proj.")
+            else "upstream"
+        )
+        group = groups.setdefault(
+            group_name,
+            {"name": group_name, "parameter_count": 0, "parameters": []},
+        )
+        group["parameter_count"] = int(group["parameter_count"]) + param.numel()
+        group["parameters"].append(name)
+    return [groups[name] for name in sorted(groups)]
+
+
 def make_range_batch(
     *,
     batch_size: int,
@@ -922,7 +945,11 @@ def make_range_batch(
 
 
 def auxiliary_operand_loss(
-    model: TinyGPT, batch: ArithmeticBatch, num_digits: int
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    num_digits: int,
+    *,
+    grad_upstream: bool = False,
 ) -> torch.Tensor:
     if model.calculator_hook is None:
         raise ValueError("auxiliary operand loss requires a calculator hook")
@@ -939,15 +966,17 @@ def auxiliary_operand_loss(
         target_a = targets[batch_idx, a_pos, 0]
         target_b = targets[batch_idx, b_pos, 1]
 
-    _, diagnostics = model(batch.x, return_diagnostics=True)
-    residual = diagnostics["calculator_read_residual"]
-    operand_logits = model.calculator_hook.input_proj(residual)
-    a_logits, b_logits = operand_logits.split(
-        model.cfg.calculator_operand_vocab_size, dim=-1
-    )
-    batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
-    a_eq_logits = a_logits[batch_idx, a_pos]
-    b_eq_logits = b_logits[batch_idx, b_pos]
+    if grad_upstream:
+        a_eq_logits, b_eq_logits, _, _ = calculator_read_operand_logits(model, batch)
+    else:
+        _, diagnostics = model(batch.x, return_diagnostics=True)
+        residual = diagnostics["calculator_read_residual"]
+        operand_logits = model.calculator_hook.input_proj(residual)
+        a_logits, b_logits = operand_logits.split(
+            model.cfg.calculator_operand_vocab_size, dim=-1
+        )
+        a_eq_logits = a_logits[batch_idx, a_pos]
+        b_eq_logits = b_logits[batch_idx, b_pos]
     return (
         torch.nn.functional.cross_entropy(a_eq_logits, target_a)
         + torch.nn.functional.cross_entropy(b_eq_logits, target_b)
@@ -1051,6 +1080,7 @@ def run_variant(
         freeze_semantic_decoder_parameters(model)
     if args.calculator_estimator == "adaptive_interface" and args.freeze_upstream_encoder:
         freeze_upstream_encoder_parameters(model)
+    trainable_groups = trainable_parameter_summary(model)
     if args.calculator_estimator == "adaptive_interface":
         optim = torch.optim.AdamW(
             adaptive_optimizer_param_groups(
@@ -1083,6 +1113,7 @@ def run_variant(
         batch_size=args.batch_size,
         eval_samples=args.eval_samples,
         lr=args.lr,
+        answer_loss_weight=args.answer_loss_weight,
         weight_decay=args.weight_decay,
         grad_clip=args.grad_clip,
         fixed_width=True,
@@ -1093,6 +1124,7 @@ def run_variant(
         aux_operand_loss_weight=args.aux_operand_loss_weight,
         aux_operand_loss_decay_steps=args.aux_operand_loss_decay_steps,
         aux_operand_loss_floor=args.aux_operand_loss_floor,
+        aux_operand_loss_grad_upstream=args.aux_operand_loss_grad_upstream,
         snapshot_every=args.snapshot_every,
         snapshot_samples=args.snapshot_samples,
         calculator_estimator=args.calculator_estimator,
@@ -1113,6 +1145,7 @@ def run_variant(
         upstream_lr=args.lr if args.upstream_lr is None else args.upstream_lr,
         freeze_semantic_decoder=args.freeze_semantic_decoder,
         freeze_upstream_encoder=args.freeze_upstream_encoder,
+        trainable_parameter_groups=trainable_groups,
         reinforce_baseline_beta=args.reinforce_baseline_beta,
         reinforce_entropy_weight=args.reinforce_entropy_weight,
         reinforce_entropy_decay_steps=args.reinforce_entropy_decay_steps,
@@ -1179,7 +1212,7 @@ def run_variant(
             logits, batch.y, batch.loss_mask
         )
         answer_loss = per_example_answer_loss.mean()
-        loss = answer_loss
+        loss = args.answer_loss_weight * answer_loss
         policy_loss_value = None
         policy_advantage_mean = None
         sampled_logp_value = None
@@ -1242,7 +1275,12 @@ def run_variant(
                 floor=args.aux_operand_loss_floor,
                 step=step,
             )
-            aux_loss = auxiliary_operand_loss(model, batch, num_digits)
+            aux_loss = auxiliary_operand_loss(
+                model,
+                batch,
+                num_digits,
+                grad_upstream=args.aux_operand_loss_grad_upstream,
+            )
             aux_loss_value = aux_loss.item()
             loss = loss + (aux_weight * aux_loss)
 
@@ -1252,6 +1290,7 @@ def run_variant(
                 "step": step,
                 "loss": loss_value,
                 "answer_loss": answer_loss.item(),
+                "answer_loss_weight": args.answer_loss_weight,
                 "oracle_operands_used": int(use_oracle_for_step),
             }
             if aux_loss_value is not None:
@@ -1363,6 +1402,7 @@ def run_variant(
     metrics["variant"] = args.variant
     metrics["oracle_train"] = args.oracle_train
     metrics["oracle_warmup_steps"] = args.oracle_warmup_steps
+    metrics["answer_loss_weight"] = args.answer_loss_weight
     metrics["aux_operand_loss_floor"] = args.aux_operand_loss_floor
     metrics["calculator_estimator"] = args.calculator_estimator
     metrics["calculator_read_position"] = args.calculator_read_position
@@ -1380,6 +1420,33 @@ def run_variant(
     metrics["upstream_lr"] = args.lr if args.upstream_lr is None else args.upstream_lr
     metrics["freeze_semantic_decoder"] = args.freeze_semantic_decoder
     metrics["freeze_upstream_encoder"] = args.freeze_upstream_encoder
+    metrics["aux_operand_loss_grad_upstream"] = args.aux_operand_loss_grad_upstream
+    metrics["trainable_parameter_groups"] = trainable_groups
+    metrics["final_aux_operand_loss_weight"] = auxiliary_operand_weight(
+        initial_weight=args.aux_operand_loss_weight,
+        decay_steps=args.aux_operand_loss_decay_steps,
+        floor=args.aux_operand_loss_floor,
+        step=args.steps,
+    )
+    if args.variant == "model-c":
+        aux_eval_rng = random.Random(seed + 40_000)
+        aux_eval_batch = make_range_batch(
+            batch_size=min(args.eval_samples, 128),
+            num_digits=num_digits,
+            operand_max=operand_max,
+            rng=aux_eval_rng,
+            fixed_width=True,
+            device=device,
+        )
+        with torch.no_grad():
+            metrics["final_aux_operand_loss"] = float(
+                auxiliary_operand_loss(
+                    model,
+                    aux_eval_batch,
+                    num_digits,
+                    grad_upstream=args.aux_operand_loss_grad_upstream,
+                ).item()
+            )
 
     save_curve(run_dir / "training_curve.csv", curve)
     if snapshots:
@@ -1502,6 +1569,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
     parser.add_argument("--eval-samples", type=int, default=DEFAULT_EVAL_SAMPLES)
     parser.add_argument(
+        "--answer-loss-weight",
+        type=float,
+        default=1.0,
+        help="Weight on normal next-token answer loss; set to 0 for aux-only warm starts.",
+    )
+    parser.add_argument(
         "--operand-max",
         type=int,
         default=None,
@@ -1563,6 +1636,15 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.0,
         help="Minimum aux operand loss weight after decay; only used with decay steps.",
+    )
+    parser.add_argument(
+        "--aux-operand-loss-grad-upstream",
+        action="store_true",
+        help=(
+            "Route aux operand loss through calculator_read_operand_logits so its "
+            "gradient flows into the upstream encoder. Default uses the detached "
+            "diagnostics path that only updates input_proj."
+        ),
     )
     parser.add_argument(
         "--snapshot-every",
@@ -1707,6 +1789,8 @@ def main() -> None:
         raise ValueError("--oracle-warmup-steps must be non-negative")
     if args.oracle_warmup_steps > 0 and args.variant != "model-c":
         raise ValueError("--oracle-warmup-steps requires --variant model-c")
+    if args.answer_loss_weight < 0:
+        raise ValueError("--answer-loss-weight must be non-negative")
     if args.aux_operand_loss_weight < 0:
         raise ValueError("--aux-operand-loss-weight must be non-negative")
     if args.aux_operand_loss_decay_steps < 0:
@@ -1814,6 +1898,7 @@ def main() -> None:
     print(f"variant: {args.variant}")
     print(f"oracle train: {args.oracle_train}")
     print(f"oracle warmup steps: {args.oracle_warmup_steps}")
+    print(f"answer loss weight: {args.answer_loss_weight}")
     print(f"injection scale: {args.injection_scale}")
     print(f"calculator injection mode: {args.calculator_injection_mode}")
     print(f"calculator bottleneck mode: {args.calculator_bottleneck_mode}")

@@ -133,3 +133,44 @@ Conclusion:
 - Useful negative result. The small decaying true-operand stabilizer did not bootstrap a stable learned calculator interface after the aux weight reached zero.
 - The strict semantic decoder remains healthy, and the canonical diagnostics still show that true calculator actions would solve the task, but the learned interface does not maintain those actions.
 - Recommendation: no-go on claiming adaptive-interface success. Further work should either change the interface optimization more substantially or test a deliberately supervised warm-start protocol while keeping success evidence limited to post-supervision calculator-dependent learned actions.
+
+## Warm-started interface retention under strict bottleneck
+
+- Date: 2026-05-01.
+- Task: `aiAgentProjectTasks/2026-05-01-phase-2-fourth-task-Warm-started-interface-retention.md`.
+- Work history: `aiAgentWorkHistory/phase2/2026-05-01-warm-started-interface-retention.md`.
+- Code changes: added `--answer-loss-weight`; recorded trainable parameter groups, final aux CE/weight, and aux gradient-routing metadata in training outputs.
+- Starting decoder checkpoint: `runs/2026-04-30_175805_513968_model-c-oracle-op0-19-answer_decoder/model-c-2digit-seed2/final_weights.pt`.
+- Shared config: `digits=2`, `operand_max=19`, operand vocab `20`, `2L/1H/16d/mlp1`, hook after layer `1`, `calculator_read_position=operands`, `calculator_bottleneck_mode=answer_decoder`, `calculator_estimator=adaptive_interface`, `freeze_semantic_decoder=true`.
+- Retained primary stages froze upstream and trained only `calculator_hook.input_proj`.
+- Failed setup attempts showed mixed answer+aux Stage A did not warm start the interface. The successful Stage A used `answer_loss_weight=0.0`, aux weight `1.0`, adaptive weight `0.0`.
+
+Primary staged checkpoints:
+
+| Stage | Run | Aux weight at end | Eval exact | Trace operand exact | Trace calc result acc | Learned-target agree | Action learned-true gap | Learned best |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| A warm start | `runs/2026-05-01_112203_955074_model-c-op0-19-adaptive_interface-inlr0.003-uplr0.003-answer_decoder-aux1/model-c-2digit-seed2` | `1.0` | `0.3809` | `0.2500` | `0.3750` | `0.2969` | `4.1302` | `0.0000` |
+| B supervision-zero | `runs/2026-05-01_112523_133504_model-c-op0-19-adaptive_interface-inlr0.003-uplr0.003-answer_decoder-aux1-auxdecay500/model-c-2digit-seed2` | `0.0` | `0.4258` | `0.4844` | `0.5078` | `0.3828` | `3.0642` | `0.0000` |
+| C adaptive-only final | `runs/2026-05-01_112843_524620_model-c-op0-19-adaptive_interface-inlr0.003-uplr0.003-answer_decoder/model-c-2digit-seed2` | `0.0` | `0.2734` | `0.2578` | `0.3516` | `0.1953` | `5.5241` | `0.0000` |
+
+Canonical diagnostic notes:
+
+- Stage C final evaluation happened after true-operand supervision was exactly `0.0`.
+- Stage C remained calculator-dependent: canonical normal `0.2500`, injection-zero `0.0000`, forced-zero `0.0156`, forced-random `0.0625`, oracle-at-eval `0.9063`.
+- Canonical causal classification for A/B/C remained `causally_useful_opaque_private_code` with `strict_bottleneck_unvalidated`.
+- Forced-result sweep true-sum-best fraction stayed `0.9219`; learned-best fraction was `0.2656` at A, `0.3750` at B, and `0.2500` at C.
+- Canonical action-loss true/random/shuffled NLLs stayed `0.1181`, `9.9763`, and `10.4317`; learned NLL improved versus prior baselines but was still never best.
+- Frozen semantic components stayed unchanged at every primary checkpoint: `calculator_hook.output_proj`, `answer_offset_emb`, and `answer_decoder` deltas were all `0.0`.
+
+Comparison to prior baselines:
+
+- Failed adaptive baseline: eval `0.0098`, operand exact `0.0000`, calc result acc `0.0156`, learned-target agree `0.0156`, learned-true gap `14.3265`.
+- Lower-LR baseline: eval `0.0664`, operand exact `0.0156`, calc result acc `0.0469`, learned-target agree `0.0703`, learned-true gap `10.4115`.
+- Best previous aux stabilizer: eval `0.0391`, operand exact `0.0156`, calc result acc `0.0469`, learned-target agree `0.0547`, learned-true gap `9.8871`.
+- Stage C final is materially above all three on eval exact, operand exact, calculator-result accuracy, learned-target agreement, and learned-minus-true action-loss gap, but learned-best fraction remains `0.0`.
+
+Conclusion:
+
+- Useful partial positive. A deliberately warm-started `input_proj` interface can retain a materially better calculator-dependent protocol after direct operand supervision is removed.
+- Not a solved adaptive-interface result. Stage C degraded from the supervision-zero handoff and canonical diagnostics still label the learned protocol as opaque/private rather than a stable true-operand protocol.
+- Recommendation: continue retention work with lower adaptive-only LR or slower Stage C, then test upstream unfreezing only after input-proj-only retention is stable.

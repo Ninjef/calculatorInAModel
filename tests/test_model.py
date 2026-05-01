@@ -1208,6 +1208,7 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     config = json.loads((run_dir / "config.json").read_text())
     metrics = json.loads((run_dir / "metrics.json").read_text())
     assert config["oracle_warmup_steps"] == 1
+    assert config["answer_loss_weight"] == 1.0
     assert config["calculator_read_position"] == "operands"
     assert config["calculator_injection_mode"] == "replace"
     assert config["calculator_bottleneck_mode"] == "answer_decoder"
@@ -1221,11 +1222,16 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     assert config["model"]["calculator_bottleneck_mode"] == "answer_decoder"
     assert config["aux_operand_loss_floor"] == 0.01
     assert config["snapshot_every"] == 1
+    assert config["trainable_parameter_groups"]
     assert (run_dir / "diagnostic_snapshots.csv").exists()
     assert "counterfactuals" in metrics
+    assert metrics["answer_loss_weight"] == 1.0
     assert metrics["calculator_injection_mode"] == "replace"
     assert metrics["calculator_bottleneck_mode"] == "answer_decoder"
     assert metrics["adaptive_interface_target_mode"] == "soft_result"
     assert metrics["adaptive_interface_entropy_weight"] == 0.003
     assert metrics["input_proj_lr"] == 0.0003
     assert metrics["upstream_lr"] == 0.0001
+    assert metrics["final_aux_operand_loss_weight"] == 0.01
+    assert metrics["final_aux_operand_loss"] >= 0.0
+    assert metrics["trainable_parameter_groups"] == config["trainable_parameter_groups"]
