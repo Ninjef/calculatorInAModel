@@ -1106,6 +1106,51 @@ def test_freeze_semantic_decoder_preserves_decoder_but_not_interface() -> None:
     assert not model.answer_decoder.weight.requires_grad
 
 
+def test_input_proj_anchor_loss_and_decay() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_anchor", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_estimator="adaptive_interface",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    model = TinyGPT(cfg)
+    assert model.calculator_hook is not None
+    anchor = {
+        "weight": model.calculator_hook.input_proj.weight.detach().clone(),
+        "bias": model.calculator_hook.input_proj.bias.detach().clone(),
+    }
+
+    assert overfit_script.input_proj_anchor_weight(
+        initial_weight=0.01, decay_steps=100, step=50
+    ) == pytest.approx(0.005)
+    assert overfit_script.input_proj_anchor_loss(model, anchor).item() == pytest.approx(0.0)
+
+    with torch.no_grad():
+        model.calculator_hook.input_proj.bias.add_(1.0)
+
+    loss = overfit_script.input_proj_anchor_loss(model, anchor)
+    delta = overfit_script.input_proj_anchor_delta_summary(model, anchor)
+
+    assert loss.item() > 0.0
+    assert delta["bias_l2"] > 0.0
+    assert delta["weight_l2"] == pytest.approx(0.0)
+
+
 def test_training_cli_supports_oracle_warmup_and_snapshots(
     tmp_path, monkeypatch
 ) -> None:
@@ -1154,6 +1199,12 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
             "adaptive_interface",
             "--semantic-decoder-checkpoint",
             str(tmp_path / "seed.pt"),
+            "--input-proj-anchor-checkpoint",
+            str(tmp_path / "seed.pt"),
+            "--input-proj-anchor-weight",
+            "0.01",
+            "--input-proj-anchor-decay-steps",
+            "1",
             "--input-proj-lr",
             "0.0003",
             "--upstream-lr",
@@ -1215,6 +1266,9 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     assert config["calculator_estimator"] == "adaptive_interface"
     assert config["adaptive_interface_target_mode"] == "soft_result"
     assert config["adaptive_interface_entropy_weight"] == 0.003
+    assert config["input_proj_anchor_checkpoint"] == str(tmp_path / "seed.pt")
+    assert config["input_proj_anchor_weight"] == 0.01
+    assert config["input_proj_anchor_decay_steps"] == 1
     assert config["input_proj_lr"] == 0.0003
     assert config["upstream_lr"] == 0.0001
     assert config["model"]["calculator_read_position"] == "operands"
@@ -1230,6 +1284,11 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     assert metrics["calculator_bottleneck_mode"] == "answer_decoder"
     assert metrics["adaptive_interface_target_mode"] == "soft_result"
     assert metrics["adaptive_interface_entropy_weight"] == 0.003
+    assert metrics["input_proj_anchor_checkpoint"] == str(tmp_path / "seed.pt")
+    assert metrics["input_proj_anchor_weight"] == 0.01
+    assert metrics["final_input_proj_anchor_weight"] == 0.0
+    assert metrics["final_input_proj_anchor_loss"] >= 0.0
+    assert "input_proj_anchor_delta" in metrics
     assert metrics["input_proj_lr"] == 0.0003
     assert metrics["upstream_lr"] == 0.0001
     assert metrics["final_aux_operand_loss_weight"] == 0.01

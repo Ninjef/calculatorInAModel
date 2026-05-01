@@ -174,3 +174,47 @@ Conclusion:
 - Useful partial positive. A deliberately warm-started `input_proj` interface can retain a materially better calculator-dependent protocol after direct operand supervision is removed.
 - Not a solved adaptive-interface result. Stage C degraded from the supervision-zero handoff and canonical diagnostics still label the learned protocol as opaque/private rather than a stable true-operand protocol.
 - Recommendation: continue retention work with lower adaptive-only LR or slower Stage C, then test upstream unfreezing only after input-proj-only retention is stable.
+
+## Post-supervision retention stabilization under strict bottleneck
+
+- Date: 2026-05-01.
+- Task: `aiAgentProjectTasks/2026-05-01-phase-2-fifth-task-Post-supervision-retention-stabilization.md`.
+- Work history: `aiAgentWorkHistory/phase2/2026-05-01-post-supervision-retention-stabilization.md`.
+- Code changes: added optional checkpoint-relative `calculator_hook.input_proj` anchor flags (`--input-proj-anchor-checkpoint`, `--input-proj-anchor-weight`, `--input-proj-anchor-decay-steps`) with training-curve and metrics logging. Anchor runs were not needed because lower-LR pure Stage C stabilized the handoff.
+- Starting Stage B handoff: `runs/2026-05-01_112523_133504_model-c-op0-19-adaptive_interface-inlr0.003-uplr0.003-answer_decoder-aux1-auxdecay500/model-c-2digit-seed2/final_weights.pt`.
+- Shared Stage C config: `digits=2`, `operand_max=19`, operand vocab `20`, `2L/1H/16d/mlp1`, hook after layer `1`, `calculator_read_position=operands`, `calculator_bottleneck_mode=answer_decoder`, `calculator_estimator=adaptive_interface`, `freeze_semantic_decoder=true`, `freeze_upstream_encoder=true`, trainable `calculator_hook.input_proj` only.
+- All Stage C variants ended with `final_aux_operand_loss_weight=0.0`.
+
+Stage C run comparison:
+
+| Variant | Run | Steps | Input LR | Adaptive weight | Eval exact | Trace operand exact | Trace calc result acc | Learned-target agree | Action learned-true gap | Learned best |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Stage B target | `runs/2026-05-01_112523_133504_model-c-op0-19-adaptive_interface-inlr0.003-uplr0.003-answer_decoder-aux1-auxdecay500/model-c-2digit-seed2` | 500 | `0.003` | `1.0` | `0.4258` | `0.4844` | `0.5078` | `0.3828` | `3.0642` | `0.0000` |
+| Prior/control Stage C drift | `runs/2026-05-01_114850_422866_model-c-op0-19-adaptive_interface-inlr0.003-uplr0.003-answer_decoder/model-c-2digit-seed2` | 500 | `0.003` | `1.0` | `0.2734` | `0.2578` | `0.3516` | `0.1953` | `5.5241` | `0.0000` |
+| C-low-lr | `runs/2026-05-01_114850_238336_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder/model-c-2digit-seed2` | 1000 | `0.0003` | `1.0` | `0.4492` | `0.5547` | `0.5859` | `0.4766` | `3.0466` | `0.0000` |
+| C-very-low-lr | `runs/2026-05-01_114849_026560_model-c-op0-19-adaptive_interface-inlr0.0001-uplr0.0001-answer_decoder/model-c-2digit-seed2` | 1000 | `0.0001` | `1.0` | `0.4199` | `0.4531` | `0.4766` | `0.3672` | n/a | n/a |
+| C-adaptive-low-weight | `runs/2026-05-01_114850_842904_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder/model-c-2digit-seed2` | 1000 | `0.0003` | `0.3` | `0.4395` | `0.5781` | `0.5859` | `0.4609` | `3.3089` | `0.0000` |
+
+Canonical diagnostic notes:
+
+- `C-low-lr` canonical causal: normal `0.4375`, injection-zero `0.0000`, forced-zero `0.0156`, forced-random `0.0625`, oracle-at-eval `0.9063`, operand exact `0.4219`, calc result acc `0.4844`.
+- `C-low-lr` forced-result sweep: learned-best `0.4375`, true-sum-best `0.9219`.
+- `C-low-lr` action-loss: true NLL `0.1181`, learned NLL `3.1647`, random NLL `9.9763`, shuffled NLL `10.4317`, learned-true gap `3.0466`.
+- `C-adaptive-low-weight` had slightly better canonical operand exact (`0.4688`) but worse learned-true action gap (`3.3089`) than `C-low-lr`.
+- All diagnosed checkpoints remained `causally_useful_opaque_private_code` with `strict_bottleneck_unvalidated`.
+
+Parameter movement:
+
+| Checkpoint | vs Stage B weight L2/max | vs Stage B bias L2/max |
+| --- | --- | --- |
+| C-control-repeat | `13.6511 / 1.1142` | `4.4675 / 0.8399` |
+| C-low-lr | `3.1749 / 0.2437` | `0.9003 / 0.2122` |
+| C-very-low-lr | `1.1427 / 0.0839` | `0.3053 / 0.0795` |
+| C-adaptive-low-weight | `3.1840 / 0.2409` | `0.8723 / 0.2112` |
+
+Conclusion:
+
+- Strong positive for input-proj-only Stage C retention: `input_proj_lr=0.0003`, adaptive weight `1.0`, 1000 steps, no anchors, and true-operand aux weight exactly `0.0` preserved/improved the Stage B handoff.
+- Lower LR slows enough drift to keep the useful interface; this is not merely an answer-decoder artifact because injection-zero remains `0.0` and oracle-at-eval remains high.
+- Remaining limitation: the interface is still canonical opaque/private-code and learned actions are never action-loss best.
+- Recommendation: replicate `C-low-lr` before upstream unfreezing. Do not use anchor stabilization unless lower-LR replication regresses.

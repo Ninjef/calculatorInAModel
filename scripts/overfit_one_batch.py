@@ -67,6 +67,9 @@ class TrainConfig:
     adaptive_interface_loss_weight: float
     adaptive_interface_target_mode: str
     adaptive_interface_entropy_weight: float
+    input_proj_anchor_checkpoint: str | None
+    input_proj_anchor_weight: float
+    input_proj_anchor_decay_steps: int
     input_proj_lr: float
     upstream_lr: float
     freeze_semantic_decoder: bool
@@ -832,6 +835,63 @@ def load_semantic_decoder_checkpoint(model: TinyGPT, checkpoint_path: Path) -> N
     model.load_state_dict(state_dict)
 
 
+def load_input_proj_anchor(
+    model: TinyGPT, checkpoint_path: Path, *, device: str | torch.device
+) -> dict[str, torch.Tensor]:
+    if model.calculator_hook is None:
+        raise ValueError("input-proj anchor requires a calculator hook")
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    state_dict = checkpoint.get("model_state_dict", checkpoint)
+    required = {
+        "weight": "calculator_hook.input_proj.weight",
+        "bias": "calculator_hook.input_proj.bias",
+    }
+    anchor: dict[str, torch.Tensor] = {}
+    model_state = model.state_dict()
+    for short_name, full_name in required.items():
+        if full_name not in state_dict:
+            raise ValueError(f"anchor checkpoint missing {full_name}")
+        if state_dict[full_name].shape != model_state[full_name].shape:
+            raise ValueError(f"anchor checkpoint has incompatible {full_name} shape")
+        anchor[short_name] = state_dict[full_name].detach().clone().to(device)
+    return anchor
+
+
+def input_proj_anchor_weight(
+    *, initial_weight: float, decay_steps: int, step: int
+) -> float:
+    if initial_weight <= 0:
+        return 0.0
+    if decay_steps <= 0:
+        return initial_weight
+    return initial_weight * max(0.0, 1.0 - (step / decay_steps))
+
+
+def input_proj_anchor_loss(
+    model: TinyGPT, anchor: dict[str, torch.Tensor]
+) -> torch.Tensor:
+    if model.calculator_hook is None:
+        raise ValueError("input-proj anchor loss requires a calculator hook")
+    weight_delta = model.calculator_hook.input_proj.weight - anchor["weight"]
+    bias_delta = model.calculator_hook.input_proj.bias - anchor["bias"]
+    return 0.5 * (weight_delta.pow(2).mean() + bias_delta.pow(2).mean())
+
+
+def input_proj_anchor_delta_summary(
+    model: TinyGPT, anchor: dict[str, torch.Tensor]
+) -> dict[str, float]:
+    if model.calculator_hook is None:
+        raise ValueError("input-proj anchor delta requires a calculator hook")
+    weight_delta = model.calculator_hook.input_proj.weight.detach() - anchor["weight"]
+    bias_delta = model.calculator_hook.input_proj.bias.detach() - anchor["bias"]
+    return {
+        "weight_l2": float(weight_delta.norm().item()),
+        "weight_max_abs": float(weight_delta.abs().max().item()),
+        "bias_l2": float(bias_delta.norm().item()),
+        "bias_max_abs": float(bias_delta.abs().max().item()),
+    }
+
+
 def freeze_semantic_decoder_parameters(model: TinyGPT) -> None:
     if model.calculator_hook is not None:
         for param in model.calculator_hook.output_proj.parameters():
@@ -1076,6 +1136,11 @@ def run_variant(
     model = TinyGPT(cfg).to(device)
     if args.semantic_decoder_checkpoint is not None:
         load_semantic_decoder_checkpoint(model, args.semantic_decoder_checkpoint)
+    input_proj_anchor = None
+    if args.input_proj_anchor_checkpoint is not None:
+        input_proj_anchor = load_input_proj_anchor(
+            model, args.input_proj_anchor_checkpoint, device=device
+        )
     if args.calculator_estimator == "adaptive_interface" and args.freeze_semantic_decoder:
         freeze_semantic_decoder_parameters(model)
     if args.calculator_estimator == "adaptive_interface" and args.freeze_upstream_encoder:
@@ -1139,6 +1204,13 @@ def run_variant(
         adaptive_interface_loss_weight=args.adaptive_interface_loss_weight,
         adaptive_interface_target_mode=args.adaptive_interface_target_mode,
         adaptive_interface_entropy_weight=args.adaptive_interface_entropy_weight,
+        input_proj_anchor_checkpoint=(
+            str(args.input_proj_anchor_checkpoint)
+            if args.input_proj_anchor_checkpoint is not None
+            else None
+        ),
+        input_proj_anchor_weight=args.input_proj_anchor_weight,
+        input_proj_anchor_decay_steps=args.input_proj_anchor_decay_steps,
         input_proj_lr=(
             args.lr if args.input_proj_lr is None else args.input_proj_lr
         ),
@@ -1221,6 +1293,8 @@ def run_variant(
         adaptive_interface_loss_value = None
         adaptive_interface_objective_value = None
         adaptive_metrics: dict[str, float] = {}
+        anchor_loss_value = None
+        anchor_weight = 0.0
         if use_reinforce:
             if policy_baseline is None:
                 policy_baseline = float(answer_loss.detach().item())
@@ -1264,6 +1338,15 @@ def run_variant(
             adaptive_objective = args.adaptive_interface_loss_weight * adaptive_loss
             adaptive_interface_objective_value = float(adaptive_objective.item())
             loss = loss + adaptive_objective
+        if input_proj_anchor is not None:
+            anchor_weight = input_proj_anchor_weight(
+                initial_weight=args.input_proj_anchor_weight,
+                decay_steps=args.input_proj_anchor_decay_steps,
+                step=step,
+            )
+            anchor_loss = input_proj_anchor_loss(model, input_proj_anchor)
+            anchor_loss_value = float(anchor_loss.detach().item())
+            loss = loss + (anchor_weight * anchor_loss)
         aux_loss_value = None
         aux_weight = 0.0
         if args.aux_operand_loss_weight > 0:
@@ -1312,6 +1395,9 @@ def run_variant(
                     args.adaptive_interface_entropy_weight
                 )
                 curve_row.update(adaptive_metrics)
+            if anchor_loss_value is not None:
+                curve_row["input_proj_anchor_loss"] = anchor_loss_value
+                curve_row["input_proj_anchor_weight"] = anchor_weight
             curve.append(curve_row)
             print(
                 f"variant={args.variant} digits={num_digits} "
@@ -1340,6 +1426,12 @@ def run_variant(
                     f" target_acc={adaptive_metrics['adaptive_target_result_accuracy']:.3f}"
                     f" entropy={adaptive_metrics['adaptive_interface_entropy']:.3f}"
                     if use_adaptive_interface
+                    else ""
+                )
+                + (
+                    f" input_proj_anchor_loss={anchor_loss_value:.6f}"
+                    f" anchor_weight={anchor_weight:.6f}"
+                    if anchor_loss_value is not None
                     else ""
                 )
             )
@@ -1416,6 +1508,25 @@ def run_variant(
     metrics["adaptive_interface_loss_weight"] = args.adaptive_interface_loss_weight
     metrics["adaptive_interface_target_mode"] = args.adaptive_interface_target_mode
     metrics["adaptive_interface_entropy_weight"] = args.adaptive_interface_entropy_weight
+    metrics["input_proj_anchor_checkpoint"] = (
+        str(args.input_proj_anchor_checkpoint)
+        if args.input_proj_anchor_checkpoint is not None
+        else None
+    )
+    metrics["input_proj_anchor_weight"] = args.input_proj_anchor_weight
+    metrics["input_proj_anchor_decay_steps"] = args.input_proj_anchor_decay_steps
+    metrics["final_input_proj_anchor_weight"] = input_proj_anchor_weight(
+        initial_weight=args.input_proj_anchor_weight,
+        decay_steps=args.input_proj_anchor_decay_steps,
+        step=args.steps,
+    )
+    if input_proj_anchor is not None:
+        metrics["final_input_proj_anchor_loss"] = float(
+            input_proj_anchor_loss(model, input_proj_anchor).item()
+        )
+        metrics["input_proj_anchor_delta"] = input_proj_anchor_delta_summary(
+            model, input_proj_anchor
+        )
     metrics["input_proj_lr"] = args.lr if args.input_proj_lr is None else args.input_proj_lr
     metrics["upstream_lr"] = args.lr if args.upstream_lr is None else args.upstream_lr
     metrics["freeze_semantic_decoder"] = args.freeze_semantic_decoder
@@ -1698,6 +1809,27 @@ def parse_args() -> argparse.Namespace:
         help="Entropy bonus weight for adaptive-interface operand distributions.",
     )
     parser.add_argument(
+        "--input-proj-anchor-checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Optional checkpoint-relative L2 anchor target for "
+            "calculator_hook.input_proj during adaptive-interface retention runs."
+        ),
+    )
+    parser.add_argument(
+        "--input-proj-anchor-weight",
+        type=float,
+        default=0.0,
+        help="Initial weight for checkpoint-relative calculator_hook.input_proj L2 anchor.",
+    )
+    parser.add_argument(
+        "--input-proj-anchor-decay-steps",
+        type=int,
+        default=0,
+        help="Linearly decay input-proj anchor weight to zero over this many steps; 0 keeps it constant.",
+    )
+    parser.add_argument(
         "--freeze-semantic-decoder",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -1836,6 +1968,17 @@ def main() -> None:
         raise ValueError("--adaptive-interface-loss-weight must be non-negative")
     if args.adaptive_interface_entropy_weight < 0:
         raise ValueError("--adaptive-interface-entropy-weight must be non-negative")
+    if args.input_proj_anchor_weight < 0:
+        raise ValueError("--input-proj-anchor-weight must be non-negative")
+    if args.input_proj_anchor_decay_steps < 0:
+        raise ValueError("--input-proj-anchor-decay-steps must be non-negative")
+    if args.input_proj_anchor_weight > 0 and args.input_proj_anchor_checkpoint is None:
+        raise ValueError("--input-proj-anchor-weight requires --input-proj-anchor-checkpoint")
+    if (
+        args.input_proj_anchor_checkpoint is not None
+        and not args.input_proj_anchor_checkpoint.exists()
+    ):
+        raise ValueError("--input-proj-anchor-checkpoint does not exist")
     if args.input_proj_lr is not None and args.input_proj_lr <= 0:
         raise ValueError("--input-proj-lr must be positive")
     if args.upstream_lr is not None and args.upstream_lr <= 0:
@@ -1881,6 +2024,10 @@ def main() -> None:
             suffix_parts.append(f"uplr{args.upstream_lr:g}")
         if args.adaptive_interface_entropy_weight > 0:
             suffix_parts.append(f"ient{args.adaptive_interface_entropy_weight:g}")
+        if args.input_proj_anchor_weight > 0:
+            suffix_parts.append(f"inanchor{args.input_proj_anchor_weight:g}")
+            if args.input_proj_anchor_decay_steps > 0:
+                suffix_parts.append(f"inanchordecay{args.input_proj_anchor_decay_steps}")
     if args.calculator_injection_mode != "add":
         suffix_parts.append(args.calculator_injection_mode)
     if args.calculator_bottleneck_mode != "none":
@@ -1918,7 +2065,9 @@ def main() -> None:
         f"target_mode={args.adaptive_interface_target_mode} "
         f"entropy_weight={args.adaptive_interface_entropy_weight} "
         f"input_proj_lr={args.lr if args.input_proj_lr is None else args.input_proj_lr} "
-        f"upstream_lr={args.lr if args.upstream_lr is None else args.upstream_lr}"
+        f"upstream_lr={args.lr if args.upstream_lr is None else args.upstream_lr} "
+        f"input_proj_anchor_weight={args.input_proj_anchor_weight} "
+        f"input_proj_anchor_decay_steps={args.input_proj_anchor_decay_steps}"
     )
     print(
         "architecture: "
