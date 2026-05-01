@@ -218,3 +218,51 @@ Conclusion:
 - Lower LR slows enough drift to keep the useful interface; this is not merely an answer-decoder artifact because injection-zero remains `0.0` and oracle-at-eval remains high.
 - Remaining limitation: the interface is still canonical opaque/private-code and learned actions are never action-loss best.
 - Recommendation: replicate `C-low-lr` before upstream unfreezing. Do not use anchor stabilization unless lower-LR replication regresses.
+
+## Lower-LR retention replication and private-protocol decoding
+
+- Date: 2026-05-01.
+- Task: `aiAgentProjectTasks/2026-05-01-phase-2-sixth-task-Lower-LR-retention-replication-and-protocol-decoding.md`.
+- Work history: `aiAgentWorkHistory/phase2/2026-05-01-lower-lr-retention-replication-private-protocol.md`.
+- Code changes: added checkpoint-first `scripts/diagnose_private_protocol.py` for all-pair confusion matrices, per-operand/group summaries, affine/majority mappings, read-vector intervention summaries, and example rows.
+- Starting Stage B handoff: `runs/2026-05-01_112523_133504_model-c-op0-19-adaptive_interface-inlr0.003-uplr0.003-answer_decoder-aux1-auxdecay500/model-c-2digit-seed2/final_weights.pt`.
+- Shared primary config: strict answer-decoder bottleneck, `calculator_estimator=adaptive_interface`, `adaptive_interface_target_mode=hard_pair`, `freeze_semantic_decoder=true`, `freeze_upstream_encoder=true`, `trainable_parameter_groups=[calculator_hook.input_proj]`, `answer_loss_weight=1.0`, `aux_operand_loss_weight=0.0`, no anchor.
+- All primary replications and the long continuation ended with `final_aux_operand_loss_weight=0.0`.
+
+Primary replication result:
+
+| Checkpoint | CLI seed -> run seed | Eval exact | Canonical operand exact | Canonical calc acc | Learned-target agree | Action learned-true gap | Learned best | Classification |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| Drift control | `0 -> 2` | `0.2734` | `0.2031` | `0.2656` | `0.1953` | `5.5241` | `0.0000` | `causally_useful_opaque_private_code` |
+| Prior C-low-lr | `0 -> 2` | `0.4492` | `0.4219` | `0.4844` | `0.4766` | `3.0466` | `0.0000` | `causally_useful_opaque_private_code` |
+| Rep seed1 | `1 -> 3` | `0.5195` | `0.4219` | `0.4688` | `0.5078` | `2.4786` | `0.0000` | `causally_useful_opaque_private_code` |
+| Rep seed2 | `2 -> 4` | `0.4902` | `0.4375` | `0.4375` | `0.4688` | `2.9001` | `0.0000` | `causally_useful_opaque_private_code` |
+| Rep seed3 | `3 -> 5` | `0.4746` | `0.3438` | `0.4063` | `0.4688` | `2.6357` | `0.0000` | `causally_useful_opaque_private_code` |
+| Long 3000 | `0 -> 2` | `0.3613` | `0.3125` | `0.3594` | `0.3828` | `4.4470` | `0.0000` | `causally_useful_opaque_private_code` |
+
+Canonical causal controls:
+
+- Every diagnosed checkpoint kept injection-zero at `0.0000`, forced-zero at `0.0156`, forced-random at `0.0625`, oracle-at-eval at `0.9063`, and true-sum forced-result best at `0.9219`.
+- The canonical bottleneck label stayed `strict_bottleneck_unvalidated` throughout.
+- The 1000-step replications beat the high-LR drift control on the required retention metrics, but the 3000-step continuation regressed, so lower LR gives a useful retention window rather than a monotonic improvement path.
+
+Private-protocol decoding:
+
+| Checkpoint | All-pair answer | Operand exact | Calc result acc | Majority-mapped operand | Majority-mapped calc | Result-code majority acc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Stage B handoff | `0.4500` | `0.4575` | `0.4875` | `0.4775` | `0.4850` | `0.4975` |
+| Prior C-low-lr | `0.4875` | `0.4900` | `0.5250` | `0.4900` | `0.5250` | `0.5300` |
+| Best replication | `0.5000` | `0.5100` | `0.5425` | `0.5200` | `0.5575` | `0.5475` |
+
+Private-protocol interpretation:
+
+- The interface is partly true-operand-like, not a clean learned permutation. The best affine modulo-20 mapping is identity for A and B; A is strong (`0.85` exact), while B remains noisy (`0.54` to `0.5975` exact).
+- Majority mapping provides only small gains overall, although it helps small/no-carry examples more.
+- Errors concentrate on carry and large-operand cases. For the best replication, all-pair exact is `0.5000`, carry answer exact is `0.4812`, no-carry answer exact is `0.6182`, large-operand answer exact is `0.4800`, and small-operand answer exact is `0.5600`.
+- Corrupting read vectors collapses best-replication answer exact to `0.0350`/`0.0475`; swap interventions were no-ops in this setup. The retained interface is causal and stable enough to use, but still canonical opaque/private-code.
+
+Conclusion:
+
+- Robust positive for 1000-step lower-LR post-supervision retention: all three no-aux, no-anchor, frozen-upstream replications beat the drift control, and at least one improves on the prior C-low-lr result.
+- Not a stronger protocol result: classification remains `causally_useful_opaque_private_code`, learned-best action-loss fraction remains `0.0`, and simple mapping explains only a small part of the gap.
+- Recommendation: no-go on upstream unfreezing. Continue with input-proj-only stabilization, early-selection/stop criteria, and protocol-decoding probes before relaxing the frozen-upstream constraint.
