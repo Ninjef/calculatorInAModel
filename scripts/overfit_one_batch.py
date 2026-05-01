@@ -537,21 +537,32 @@ def fixed_width_operands_from_batch(
 
 @torch.no_grad()
 def counterfactual_result_targets(
-    model: TinyGPT, batch: ArithmeticBatch
+    model: TinyGPT, batch: ArithmeticBatch, *, forced_result_batch_size: int = 256
 ) -> tuple[torch.Tensor, torch.Tensor]:
     if model.calculator_hook is None:
         raise ValueError("adaptive interface targets require a calculator hook")
-    result_losses: list[torch.Tensor] = []
     was_training = model.training
     model.eval()
-    for result_class in range(model.cfg.calculator_result_vocab_size):
-        logits = model(batch.x, forced_calculator_result_class=result_class)
-        result_losses.append(masked_cross_entropy_per_example(
-            logits, batch.y, batch.loss_mask
-        ))
+    result_losses: list[torch.Tensor] = []
+    result_vocab_size = model.cfg.calculator_result_vocab_size
+    for start in range(0, result_vocab_size, forced_result_batch_size):
+        forced_classes = torch.arange(
+            start,
+            min(start + forced_result_batch_size, result_vocab_size),
+            device=batch.x.device,
+        )
+        expanded_x = batch.x.repeat_interleave(len(forced_classes), dim=0)
+        expanded_y = batch.y.repeat_interleave(len(forced_classes), dim=0)
+        expanded_mask = batch.loss_mask.repeat_interleave(len(forced_classes), dim=0)
+        forced = forced_classes.repeat(batch.x.shape[0])
+        logits = model(expanded_x, forced_calculator_result_class=forced)
+        losses = masked_cross_entropy_per_example(
+            logits, expanded_y, expanded_mask
+        ).reshape(batch.x.shape[0], len(forced_classes))
+        result_losses.append(losses)
     if was_training:
         model.train()
-    losses = torch.stack(result_losses, dim=-1)
+    losses = torch.cat(result_losses, dim=-1)
     targets = losses.argmin(dim=-1)
     return targets, losses
 
