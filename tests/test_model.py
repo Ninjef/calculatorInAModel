@@ -16,7 +16,10 @@ def _small_cfg() -> GPTConfig:
 
 
 def _small_calculator_cfg(
-    mode: str = "add", estimator: str = "ste", injection_mode: str = "add"
+    mode: str = "add",
+    estimator: str = "ste",
+    injection_mode: str = "add",
+    bottleneck_mode: str = "none",
 ) -> GPTConfig:
     return GPTConfig(
         n_embd=32,
@@ -27,6 +30,7 @@ def _small_calculator_cfg(
         calculator_mode=mode,
         calculator_estimator=estimator,
         calculator_injection_mode=injection_mode,
+        calculator_bottleneck_mode=bottleneck_mode,
         calculator_hook_after_layer=1,
         calculator_operand_vocab_size=10,
         calculator_result_vocab_size=19,
@@ -123,6 +127,13 @@ def test_invalid_calculator_injection_mode_raises() -> None:
         TinyGPT(cfg)
 
 
+def test_invalid_calculator_bottleneck_mode_raises() -> None:
+    cfg = _small_calculator_cfg(bottleneck_mode="middle")
+
+    with pytest.raises(ValueError, match="calculator_bottleneck_mode"):
+        TinyGPT(cfg)
+
+
 def test_add_calculator_injection_mode_adds_residual() -> None:
     model = TinyGPT(_small_calculator_cfg(injection_mode="add"))
     h = torch.arange(40, dtype=torch.float32).reshape(1, 5, 8)
@@ -161,6 +172,49 @@ def test_calculator_off_replace_mode_zeros_equals_residual_only() -> None:
     assert torch.equal(updated[0, :2], h[0, :2])
     assert torch.equal(updated[0, 3:], h[0, 3:])
     assert torch.equal(updated[0, 2], torch.zeros_like(updated[0, 2]))
+
+
+def test_answer_decoder_bottleneck_blocks_operand_bypass_with_zero_calculator() -> None:
+    torch.manual_seed(0)
+    model = TinyGPT(
+        _small_calculator_cfg(mode="off", bottleneck_mode="answer_decoder")
+    )
+    model.eval()
+    x1 = torch.tensor([[1, 2, PLUS_ID, 3, 4, EQ_ID, 5, 6]])
+    x2 = torch.tensor([[7, 8, PLUS_ID, 9, 0, EQ_ID, 5, 6]])
+
+    with torch.no_grad():
+        logits1 = model(x1)
+        logits2 = model(x2)
+
+    assert not torch.allclose(logits1[:, :5], logits2[:, :5])
+    assert torch.equal(logits1[:, 5:], logits2[:, 5:])
+
+
+def test_answer_decoder_bottleneck_uses_forced_calculator_result() -> None:
+    torch.manual_seed(0)
+    model = TinyGPT(
+        _small_calculator_cfg(mode="add", bottleneck_mode="answer_decoder")
+    )
+    assert model.calculator_hook is not None
+    assert model.answer_decoder is not None
+    with torch.no_grad():
+        model.calculator_hook.input_proj.weight.zero_()
+        model.calculator_hook.input_proj.bias.fill_(-10.0)
+        model.calculator_hook.input_proj.bias[2] = 10.0
+        model.calculator_hook.input_proj.bias[10 + 3] = 10.0
+        model.calculator_hook.output_proj.weight.zero_()
+        model.calculator_hook.output_proj.weight[0, 5] = 10.0
+        model.answer_decoder.weight.zero_()
+        model.answer_decoder.weight[0, 0] = 1.0
+
+    x = torch.tensor([[1, 2, PLUS_ID, 3, 4, EQ_ID, 5, 6]])
+
+    with torch.no_grad():
+        zero_logits = model(x, forced_calculator_result_class=0)
+        five_logits = model(x, forced_calculator_result_class=5)
+
+    assert five_logits[0, 5, 0].item() > zero_logits[0, 5, 0].item() + 1.0
 
 
 def test_hard_add_ste_forward_returns_sum_class() -> None:
@@ -610,6 +664,8 @@ def test_diagnostic_cli_smoke(tmp_path, monkeypatch) -> None:
             "2",
             "--calculator-read-position",
             "operands",
+            "--calculator-bottleneck-mode",
+            "answer_decoder",
             "--probe",
             "--probe-steps",
             "2",
@@ -633,6 +689,11 @@ def test_diagnostic_cli_smoke(tmp_path, monkeypatch) -> None:
     assert summary["samples"] == 8
     assert summary["operand_max"] == 2
     assert summary["calculator_read_position"] == "operands"
+    assert summary["calculator_bottleneck_mode"] == "answer_decoder"
+    assert summary["classification"]["bottleneck_classification"] in {
+        "calculator_required_bottleneck",
+        "strict_bottleneck_unvalidated",
+    }
     assert "mutual_information_bits" in summary
     assert "counterfactual_exact_match" in summary
     assert "classification" in summary
@@ -817,6 +878,111 @@ def test_training_aux_operand_weight_respects_floor() -> None:
     ) == pytest.approx(0.1)
 
 
+def test_adaptive_interface_selects_high_probability_operand_pair() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_adaptive_select", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    a_logits = torch.tensor([[0.0, 4.0, 1.0], [5.0, 0.0, 3.0]])
+    b_logits = torch.tensor([[3.0, 0.0, 2.0], [0.0, 1.0, 4.0]])
+    result_targets = torch.tensor([2, 2])
+
+    a_target, b_target = overfit_script.select_adaptive_operand_targets(
+        a_logits, b_logits, result_targets
+    )
+
+    assert a_target.tolist() == [1, 0]
+    assert b_target.tolist() == [1, 2]
+
+
+def test_adaptive_interface_loss_updates_input_interface_and_upstream() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_adaptive_loss", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_estimator="adaptive_interface",
+        calculator_read_position="operands",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    model = TinyGPT(cfg)
+    batch = overfit_script.make_range_batch(
+        batch_size=4,
+        num_digits=1,
+        operand_max=2,
+        rng=__import__("random").Random(0),
+        fixed_width=True,
+        device="cpu",
+    )
+
+    assert model.calculator_hook is not None
+    before = model.calculator_hook.input_proj.weight.detach().clone()
+    loss, metrics = overfit_script.adaptive_interface_loss(
+        model, batch, num_digits=1
+    )
+    loss.backward()
+
+    assert loss.item() > 0
+    assert "adaptive_target_result_accuracy" in metrics
+    assert model.calculator_hook.input_proj.weight.grad is not None
+    assert model.tok_emb.weight.grad is not None
+
+    optim = torch.optim.SGD(model.parameters(), lr=0.1)
+    optim.step()
+
+    assert not torch.equal(before, model.calculator_hook.input_proj.weight)
+
+
+def test_freeze_semantic_decoder_preserves_decoder_but_not_interface() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_adaptive_freeze", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_estimator="adaptive_interface",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    model = TinyGPT(cfg)
+    assert model.calculator_hook is not None
+    assert model.answer_decoder is not None
+
+    overfit_script.freeze_semantic_decoder_parameters(model)
+
+    assert model.calculator_hook.input_proj.weight.requires_grad
+    assert not model.calculator_hook.output_proj.weight.requires_grad
+    assert not model.answer_decoder.weight.requires_grad
+
+
 def test_training_cli_supports_oracle_warmup_and_snapshots(
     tmp_path, monkeypatch
 ) -> None:
@@ -859,6 +1025,8 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
             "operands",
             "--calculator-injection-mode",
             "replace",
+            "--calculator-bottleneck-mode",
+            "answer_decoder",
             "--oracle-warmup-steps",
             "1",
             "--aux-operand-loss-weight",
@@ -888,10 +1056,13 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     assert config["oracle_warmup_steps"] == 1
     assert config["calculator_read_position"] == "operands"
     assert config["calculator_injection_mode"] == "replace"
+    assert config["calculator_bottleneck_mode"] == "answer_decoder"
     assert config["model"]["calculator_read_position"] == "operands"
     assert config["model"]["calculator_injection_mode"] == "replace"
+    assert config["model"]["calculator_bottleneck_mode"] == "answer_decoder"
     assert config["aux_operand_loss_floor"] == 0.01
     assert config["snapshot_every"] == 1
     assert (run_dir / "diagnostic_snapshots.csv").exists()
     assert "counterfactuals" in metrics
     assert metrics["calculator_injection_mode"] == "replace"
+    assert metrics["calculator_bottleneck_mode"] == "answer_decoder"

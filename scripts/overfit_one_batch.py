@@ -60,6 +60,11 @@ class TrainConfig:
     calculator_estimator: str
     calculator_read_position: str
     calculator_injection_mode: str
+    calculator_bottleneck_mode: str
+    semantic_decoder_checkpoint: str | None
+    adaptive_interface_loss_weight: float
+    freeze_semantic_decoder: bool
+    freeze_upstream_encoder: bool
     reinforce_baseline_beta: float
     reinforce_entropy_weight: float
     reinforce_entropy_decay_steps: int
@@ -446,6 +451,10 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "sampled_logp",
         "operand_entropy",
         "entropy_weight",
+        "adaptive_interface_loss",
+        "adaptive_target_result_accuracy",
+        "adaptive_learned_target_agreement",
+        "adaptive_target_operand_exact_match",
     ]
     fieldnames = preferred + sorted(
         {key for row in curve for key in row.keys()} - set(preferred)
@@ -509,6 +518,244 @@ def make_oracle_operands_from_batch(
     oracle[..., 0] = a.unsqueeze(-1)
     oracle[..., 1] = b.unsqueeze(-1)
     return oracle
+
+
+def fixed_width_operands_from_batch(
+    x: torch.Tensor, *, num_digits: int
+) -> tuple[torch.Tensor, torch.Tensor]:
+    powers = torch.tensor(
+        [10**i for i in range(num_digits - 1, -1, -1)],
+        dtype=torch.long,
+        device=x.device,
+    )
+    a = (x[:, :num_digits].long() * powers).sum(dim=-1)
+    b_start = num_digits + 1
+    b_end = b_start + num_digits
+    b = (x[:, b_start:b_end].long() * powers).sum(dim=-1)
+    return a, b
+
+
+@torch.no_grad()
+def counterfactual_result_targets(
+    model: TinyGPT, batch: ArithmeticBatch
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if model.calculator_hook is None:
+        raise ValueError("adaptive interface targets require a calculator hook")
+    result_losses: list[torch.Tensor] = []
+    was_training = model.training
+    model.eval()
+    for result_class in range(model.cfg.calculator_result_vocab_size):
+        logits = model(batch.x, forced_calculator_result_class=result_class)
+        result_losses.append(masked_cross_entropy_per_example(
+            logits, batch.y, batch.loss_mask
+        ))
+    if was_training:
+        model.train()
+    losses = torch.stack(result_losses, dim=-1)
+    targets = losses.argmin(dim=-1)
+    return targets, losses
+
+
+def select_adaptive_operand_targets(
+    a_logits: torch.Tensor, b_logits: torch.Tensor, result_targets: torch.Tensor
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if a_logits.shape != b_logits.shape:
+        raise ValueError("a_logits and b_logits must have the same shape")
+    if a_logits.ndim != 2:
+        raise ValueError("operand target selection expects [batch, classes] logits")
+    classes = a_logits.shape[-1]
+    a_idx = torch.arange(classes, device=a_logits.device).view(1, classes, 1)
+    b_idx = torch.arange(classes, device=a_logits.device).view(1, 1, classes)
+    sum_idx = a_idx + b_idx
+    valid = sum_idx == result_targets.view(-1, 1, 1)
+    pair_scores = (
+        a_logits.log_softmax(dim=-1).unsqueeze(-1)
+        + b_logits.log_softmax(dim=-1).unsqueeze(-2)
+    )
+    pair_scores = pair_scores.masked_fill(~valid, float("-inf"))
+    best_pair = pair_scores.reshape(a_logits.shape[0], -1).argmax(dim=-1)
+    a_target = best_pair // classes
+    b_target = best_pair % classes
+    return a_target, b_target
+
+
+def calculator_read_operand_logits(
+    model: TinyGPT, batch: ArithmeticBatch
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    if model.calculator_hook is None:
+        raise ValueError("calculator operand logits require a calculator hook")
+    B, T = batch.x.shape
+    assert T <= model.cfg.block_size, (
+        f"sequence length {T} > block_size {model.cfg.block_size}"
+    )
+    pos = torch.arange(T, device=batch.x.device)
+    residual = model.tok_emb(batch.x) + model.pos_emb(pos)
+    if model.cfg.calculator_hook_after_layer > 0:
+        for i, block in enumerate(model.blocks, start=1):
+            residual = block(residual)
+            if i == model.cfg.calculator_hook_after_layer:
+                break
+    operand_logits = model.calculator_hook.input_proj(residual)
+    a_logits_all, b_logits_all = operand_logits.split(
+        model.cfg.calculator_operand_vocab_size, dim=-1
+    )
+    positions = model._calculator_read_positions(batch.x)
+    batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
+    a_pos = positions["a"]
+    b_pos = positions["b"]
+    return (
+        a_logits_all[batch_idx, a_pos],
+        b_logits_all[batch_idx, b_pos],
+        a_pos,
+        b_pos,
+    )
+
+
+def adaptive_interface_loss(
+    model: TinyGPT, batch: ArithmeticBatch, *, num_digits: int
+) -> tuple[torch.Tensor, dict[str, float]]:
+    result_targets, _ = counterfactual_result_targets(model, batch)
+    a_logits, b_logits, _, _ = calculator_read_operand_logits(model, batch)
+    a_targets, b_targets = select_adaptive_operand_targets(
+        a_logits, b_logits, result_targets
+    )
+    loss = (
+        torch.nn.functional.cross_entropy(a_logits, a_targets)
+        + torch.nn.functional.cross_entropy(b_logits, b_targets)
+    ) / 2
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = true_a + true_b
+    learned_a = a_logits.argmax(dim=-1)
+    learned_b = b_logits.argmax(dim=-1)
+    learned_sum = learned_a + learned_b
+    metrics = {
+        "adaptive_target_result_accuracy": float(
+            (result_targets == true_sum).float().mean().item()
+        ),
+        "adaptive_learned_target_agreement": float(
+            (learned_sum == result_targets).float().mean().item()
+        ),
+        "adaptive_target_operand_exact_match": float(
+            ((a_targets == true_a) & (b_targets == true_b)).float().mean().item()
+        ),
+    }
+    return loss, metrics
+
+
+@torch.no_grad()
+def adaptive_interface_trace_rows(
+    model: TinyGPT,
+    *,
+    num_digits: int,
+    operand_max: int,
+    samples: int,
+    seed: int,
+    device: str | torch.device,
+) -> list[dict[str, object]]:
+    rng = random.Random(seed)
+    batch = make_range_batch(
+        batch_size=samples,
+        num_digits=num_digits,
+        operand_max=operand_max,
+        rng=rng,
+        fixed_width=True,
+        device=device,
+    )
+    was_training = model.training
+    model.eval()
+    result_targets, result_losses = counterfactual_result_targets(model, batch)
+    a_logits, b_logits, _, _ = calculator_read_operand_logits(model, batch)
+    a_targets, b_targets = select_adaptive_operand_targets(
+        a_logits, b_logits, result_targets
+    )
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    learned_a = a_logits.argmax(dim=-1)
+    learned_b = b_logits.argmax(dim=-1)
+    prompts = [decode_tokens(row.tolist()).split("=")[0] + "=" for row in batch.x]
+    rows: list[dict[str, object]] = []
+    for i in range(samples):
+        rows.append(
+            {
+                "sample": i,
+                "prompt": prompts[i],
+                "true_a": int(true_a[i].item()),
+                "true_b": int(true_b[i].item()),
+                "true_sum": int((true_a[i] + true_b[i]).item()),
+                "target_result": int(result_targets[i].item()),
+                "target_a": int(a_targets[i].item()),
+                "target_b": int(b_targets[i].item()),
+                "learned_a": int(learned_a[i].item()),
+                "learned_b": int(learned_b[i].item()),
+                "learned_result": int((learned_a[i] + learned_b[i]).item()),
+                "target_result_loss": float(
+                    result_losses[i, result_targets[i]].item()
+                ),
+                "target_matches_true_sum": bool(
+                    result_targets[i].item() == (true_a[i] + true_b[i]).item()
+                ),
+                "learned_matches_target_result": bool(
+                    (learned_a[i] + learned_b[i]).item() == result_targets[i].item()
+                ),
+                "target_operands_match_true": bool(
+                    a_targets[i].item() == true_a[i].item()
+                    and b_targets[i].item() == true_b[i].item()
+                ),
+            }
+        )
+    if was_training:
+        model.train()
+    return rows
+
+
+def summarize_adaptive_interface_rows(
+    rows: list[dict[str, object]]
+) -> dict[str, float | int]:
+    if not rows:
+        return {
+            "samples": 0,
+            "target_result_accuracy": 0.0,
+            "learned_target_result_agreement": 0.0,
+            "target_operand_exact_match": 0.0,
+        }
+    return {
+        "samples": len(rows),
+        "target_result_accuracy": sum(
+            int(row["target_matches_true_sum"]) for row in rows
+        )
+        / len(rows),
+        "learned_target_result_agreement": sum(
+            int(row["learned_matches_target_result"]) for row in rows
+        )
+        / len(rows),
+        "target_operand_exact_match": sum(
+            int(row["target_operands_match_true"]) for row in rows
+        )
+        / len(rows),
+    }
+
+
+def load_semantic_decoder_checkpoint(model: TinyGPT, checkpoint_path: Path) -> None:
+    checkpoint = torch.load(checkpoint_path, map_location="cpu")
+    state_dict = checkpoint.get("model_state_dict", checkpoint)
+    model.load_state_dict(state_dict)
+
+
+def freeze_semantic_decoder_parameters(model: TinyGPT) -> None:
+    if model.calculator_hook is not None:
+        for param in model.calculator_hook.output_proj.parameters():
+            param.requires_grad = False
+    if model.answer_offset_emb is not None:
+        for param in model.answer_offset_emb.parameters():
+            param.requires_grad = False
+    if model.answer_decoder is not None:
+        for param in model.answer_decoder.parameters():
+            param.requires_grad = False
+
+
+def freeze_upstream_encoder_parameters(model: TinyGPT) -> None:
+    for module in [model.tok_emb, model.pos_emb, model.blocks, model.ln_f, model.lm_head]:
+        for param in module.parameters():
+            param.requires_grad = False
 
 
 def make_range_batch(
@@ -595,6 +842,7 @@ def make_model_config(
     calculator_estimator: str = "ste",
     calculator_read_position: str = "eq",
     calculator_injection_mode: str = "add",
+    calculator_bottleneck_mode: str = "none",
     n_layer: int = 4,
     n_head: int = 4,
     n_embd: int = 128,
@@ -621,6 +869,7 @@ def make_model_config(
         calculator_injection_mode=calculator_injection_mode,
         calculator_estimator=calculator_estimator,
         calculator_read_position=calculator_read_position,
+        calculator_bottleneck_mode=calculator_bottleneck_mode,
     )
 
 
@@ -656,6 +905,7 @@ def run_variant(
         calculator_estimator=args.calculator_estimator,
         calculator_read_position=args.calculator_read_position,
         calculator_injection_mode=args.calculator_injection_mode,
+        calculator_bottleneck_mode=args.calculator_bottleneck_mode,
         n_layer=args.n_layer,
         n_head=args.n_head,
         n_embd=args.n_embd,
@@ -663,8 +913,14 @@ def run_variant(
         calculator_hook_after_layer=args.calculator_hook_after_layer,
     )
     model = TinyGPT(cfg).to(device)
+    if args.semantic_decoder_checkpoint is not None:
+        load_semantic_decoder_checkpoint(model, args.semantic_decoder_checkpoint)
+    if args.calculator_estimator == "adaptive_interface" and args.freeze_semantic_decoder:
+        freeze_semantic_decoder_parameters(model)
+    if args.calculator_estimator == "adaptive_interface" and args.freeze_upstream_encoder:
+        freeze_upstream_encoder_parameters(model)
     optim = torch.optim.AdamW(
-        model.parameters(),
+        [param for param in model.parameters() if param.requires_grad],
         lr=args.lr,
         betas=(0.9, 0.95),
         weight_decay=args.weight_decay,
@@ -698,6 +954,15 @@ def run_variant(
         calculator_estimator=args.calculator_estimator,
         calculator_read_position=args.calculator_read_position,
         calculator_injection_mode=args.calculator_injection_mode,
+        calculator_bottleneck_mode=args.calculator_bottleneck_mode,
+        semantic_decoder_checkpoint=(
+            str(args.semantic_decoder_checkpoint)
+            if args.semantic_decoder_checkpoint is not None
+            else None
+        ),
+        adaptive_interface_loss_weight=args.adaptive_interface_loss_weight,
+        freeze_semantic_decoder=args.freeze_semantic_decoder,
+        freeze_upstream_encoder=args.freeze_upstream_encoder,
         reinforce_baseline_beta=args.reinforce_baseline_beta,
         reinforce_entropy_weight=args.reinforce_entropy_weight,
         reinforce_entropy_decay_steps=args.reinforce_entropy_decay_steps,
@@ -748,6 +1013,11 @@ def run_variant(
             and args.calculator_estimator == "reinforce"
             and not args.oracle_train
         )
+        use_adaptive_interface = (
+            args.variant == "model-c"
+            and args.calculator_estimator == "adaptive_interface"
+            and not args.oracle_train
+        )
         if use_reinforce:
             logits, diagnostics = model(
                 batch.x, oracle_operands=oracle_operands, return_diagnostics=True
@@ -765,6 +1035,8 @@ def run_variant(
         sampled_logp_value = None
         operand_entropy_value = None
         entropy_weight = 0.0
+        adaptive_interface_loss_value = None
+        adaptive_metrics: dict[str, float] = {}
         if use_reinforce:
             if policy_baseline is None:
                 policy_baseline = float(answer_loss.detach().item())
@@ -794,6 +1066,12 @@ def run_variant(
             policy_advantage_mean = advantage.mean().item()
             sampled_logp_value = sampled_logp.mean().item()
             operand_entropy_value = operand_entropy.mean().item()
+        if use_adaptive_interface:
+            adaptive_loss, adaptive_metrics = adaptive_interface_loss(
+                model, batch, num_digits=num_digits
+            )
+            adaptive_interface_loss_value = adaptive_loss.item()
+            loss = loss + (args.adaptive_interface_loss_weight * adaptive_loss)
         aux_loss_value = None
         aux_weight = 0.0
         if args.aux_operand_loss_weight > 0:
@@ -827,6 +1105,9 @@ def run_variant(
                 curve_row["sampled_logp"] = sampled_logp_value
                 curve_row["operand_entropy"] = operand_entropy_value
                 curve_row["entropy_weight"] = entropy_weight
+            if use_adaptive_interface:
+                curve_row["adaptive_interface_loss"] = adaptive_interface_loss_value
+                curve_row.update(adaptive_metrics)
             curve.append(curve_row)
             print(
                 f"variant={args.variant} digits={num_digits} "
@@ -848,6 +1129,12 @@ def run_variant(
                     f" aux_operand_loss={aux_loss_value:.4f}"
                     f" aux_weight={aux_weight:.4f}"
                     if aux_loss_value is not None
+                    else ""
+                )
+                + (
+                    f" adaptive_interface_loss={adaptive_interface_loss_value:.4f}"
+                    f" target_acc={adaptive_metrics['adaptive_target_result_accuracy']:.3f}"
+                    if use_adaptive_interface
                     else ""
                 )
             )
@@ -914,6 +1201,15 @@ def run_variant(
     metrics["calculator_estimator"] = args.calculator_estimator
     metrics["calculator_read_position"] = args.calculator_read_position
     metrics["calculator_injection_mode"] = args.calculator_injection_mode
+    metrics["calculator_bottleneck_mode"] = args.calculator_bottleneck_mode
+    metrics["semantic_decoder_checkpoint"] = (
+        str(args.semantic_decoder_checkpoint)
+        if args.semantic_decoder_checkpoint is not None
+        else None
+    )
+    metrics["adaptive_interface_loss_weight"] = args.adaptive_interface_loss_weight
+    metrics["freeze_semantic_decoder"] = args.freeze_semantic_decoder
+    metrics["freeze_upstream_encoder"] = args.freeze_upstream_encoder
 
     save_curve(run_dir / "training_curve.csv", curve)
     if snapshots:
@@ -981,6 +1277,21 @@ def run_variant(
         (run_dir / "diagnostic_summary.json").write_text(
             json.dumps(trace_summary, indent=2) + "\n"
         )
+        if args.calculator_estimator == "adaptive_interface":
+            adaptive_rows = adaptive_interface_trace_rows(
+                model,
+                num_digits=num_digits,
+                operand_max=operand_max,
+                samples=min(args.eval_samples, 128),
+                seed=seed + 22_000,
+                device=device,
+            )
+            adaptive_summary = summarize_adaptive_interface_rows(adaptive_rows)
+            metrics["adaptive_interface_diagnostic_summary"] = adaptive_summary
+            write_rows(run_dir / "adaptive_interface_trace_rows.csv", adaptive_rows)
+            (run_dir / "adaptive_interface_summary.json").write_text(
+                json.dumps(adaptive_summary, indent=2) + "\n"
+            )
     (run_dir / "metrics.json").write_text(json.dumps(metrics, indent=2) + "\n")
     torch.save(
         {
@@ -1090,9 +1401,35 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--calculator-estimator",
-        choices=["ste", "reinforce"],
+        choices=["ste", "reinforce", "adaptive_interface"],
         default="ste",
         help="Estimator for the learned calculator input interface.",
+    )
+    parser.add_argument(
+        "--semantic-decoder-checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Checkpoint whose oracle-trained strict decoder/output interface should "
+            "seed adaptive-interface training."
+        ),
+    )
+    parser.add_argument(
+        "--adaptive-interface-loss-weight",
+        type=float,
+        default=1.0,
+        help="Weight for counterfactual adaptive-interface operand target loss.",
+    )
+    parser.add_argument(
+        "--freeze-semantic-decoder",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Freeze calculator output projection and strict answer decoder.",
+    )
+    parser.add_argument(
+        "--freeze-upstream-encoder",
+        action="store_true",
+        help="Diagnostic: freeze transformer encoder and train only the interface.",
     )
     parser.add_argument(
         "--calculator-read-position",
@@ -1110,6 +1447,15 @@ def parse_args() -> argparse.Namespace:
         help=(
             "How to apply the calculator injection. 'add' preserves the residual "
             "stream; 'replace' bottlenecks active '=' positions to the injection."
+        ),
+    )
+    parser.add_argument(
+        "--calculator-bottleneck-mode",
+        choices=["none", "answer_decoder"],
+        default="none",
+        help=(
+            "Optional stricter answer path. 'answer_decoder' predicts answer tokens "
+            "only from calculator output plus answer-position metadata."
         ),
     )
     parser.add_argument("--n-layer", type=int, default=4)
@@ -1187,6 +1533,28 @@ def main() -> None:
         raise ValueError("--snapshot-samples must be positive")
     if args.calculator_estimator == "reinforce" and args.variant != "model-c":
         raise ValueError("--calculator-estimator reinforce requires --variant model-c")
+    if args.calculator_estimator == "adaptive_interface" and args.variant != "model-c":
+        raise ValueError(
+            "--calculator-estimator adaptive_interface requires --variant model-c"
+        )
+    if args.calculator_estimator == "adaptive_interface":
+        if args.oracle_train:
+            raise ValueError("adaptive_interface is for learned operands, not --oracle-train")
+        if args.calculator_bottleneck_mode != "answer_decoder":
+            raise ValueError(
+                "adaptive_interface requires --calculator-bottleneck-mode answer_decoder"
+            )
+        if args.semantic_decoder_checkpoint is None:
+            raise ValueError(
+                "adaptive_interface requires --semantic-decoder-checkpoint"
+            )
+    if (
+        args.semantic_decoder_checkpoint is not None
+        and not args.semantic_decoder_checkpoint.exists()
+    ):
+        raise ValueError("--semantic-decoder-checkpoint does not exist")
+    if args.adaptive_interface_loss_weight < 0:
+        raise ValueError("--adaptive-interface-loss-weight must be non-negative")
     if not 0 <= args.reinforce_baseline_beta < 1:
         raise ValueError("--reinforce-baseline-beta must be in [0, 1)")
     if args.reinforce_entropy_weight < 0:
@@ -1221,6 +1589,8 @@ def main() -> None:
         suffix_parts.append(args.calculator_estimator)
     if args.calculator_injection_mode != "add":
         suffix_parts.append(args.calculator_injection_mode)
+    if args.calculator_bottleneck_mode != "none":
+        suffix_parts.append(args.calculator_bottleneck_mode)
     if args.aux_operand_loss_weight > 0:
         suffix_parts.append(f"aux{args.aux_operand_loss_weight:g}")
         if args.aux_operand_loss_decay_steps > 0:
@@ -1236,6 +1606,7 @@ def main() -> None:
     print(f"oracle warmup steps: {args.oracle_warmup_steps}")
     print(f"injection scale: {args.injection_scale}")
     print(f"calculator injection mode: {args.calculator_injection_mode}")
+    print(f"calculator bottleneck mode: {args.calculator_bottleneck_mode}")
     print(
         "aux operand loss: "
         f"weight={args.aux_operand_loss_weight} "

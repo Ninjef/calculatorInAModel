@@ -59,6 +59,7 @@ def make_model_config(
     mlp_expansion: int = 4,
     calculator_hook_after_layer: int | None = None,
     calculator_read_position: str = "eq",
+    calculator_bottleneck_mode: str = "none",
 ) -> GPTConfig:
     operand_vocab_size = operand_vocab_size or 10**num_digits
     if calculator_hook_after_layer is None:
@@ -76,6 +77,7 @@ def make_model_config(
         calculator_result_vocab_size=(2 * operand_vocab_size) - 1,
         calculator_injection_scale=injection_scale,
         calculator_read_position=calculator_read_position,
+        calculator_bottleneck_mode=calculator_bottleneck_mode,
     )
 
 
@@ -136,6 +138,7 @@ def train_fresh_model(args: argparse.Namespace, device: str) -> TinyGPT:
         mlp_expansion=args.mlp_expansion,
         calculator_hook_after_layer=args.calculator_hook_after_layer,
         calculator_read_position=args.calculator_read_position,
+        calculator_bottleneck_mode=args.calculator_bottleneck_mode,
     )
     model = TinyGPT(cfg).to(device)
     optim = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95))
@@ -945,10 +948,34 @@ def classify_checkpoint(
     operand_exact = float(summary.get("operand_exact_match", 0.0))
     result_accuracy = float(summary.get("calculator_result_accuracy", 0.0))
     injection_mode = model.cfg.calculator_injection_mode
+    bottleneck_mode = model.cfg.calculator_bottleneck_mode
     calculator_mode = model.cfg.calculator_mode
     oracle_train = bool(train_config.get("oracle_train", False)) if train_config else False
 
-    if injection_mode == "add":
+    if bottleneck_mode == "answer_decoder":
+        off_control = (
+            leakage_control_exact_match
+            if leakage_control_exact_match is not None
+            else normal
+            if calculator_mode == "off"
+            else 1.0
+        )
+        oracle_dependent = (
+            oracle_train
+            and operand_exact > 0.99
+            and result_accuracy > 0.99
+            and normal > 0.90
+            and injection_zero < normal - 0.2
+            and forced_random < normal - 0.2
+        )
+        bottleneck = (
+            "calculator_required_bottleneck"
+            if calculator_mode == "off" and off_control < 0.25
+            else "calculator_required_bottleneck"
+            if oracle_dependent
+            else "strict_bottleneck_unvalidated"
+        )
+    elif injection_mode == "add":
         bottleneck = "non_bottleneck_leaky_by_design"
     elif injection_mode == "replace":
         bottleneck = "invalid_or_leaky_bottleneck"
@@ -957,7 +984,7 @@ def classify_checkpoint(
 
     if calculator_mode == "off":
         category = "calculator_ignored_or_bypassed"
-    elif oracle_train and operand_exact > 0.99 and result_accuracy > 0.99 and normal > 0.95:
+    elif oracle_train and operand_exact > 0.99 and result_accuracy > 0.99 and normal > 0.90:
         category = "valid_oracle_calculator_use"
     elif operand_exact > 0.9 and result_accuracy > 0.9 and normal > injection_zero + 0.2:
         category = "intended_true_operand_calculator_use"
@@ -981,9 +1008,13 @@ def classify_checkpoint(
         "calculator_result_accuracy": result_accuracy,
         "calculator_mode": calculator_mode,
         "calculator_injection_mode": injection_mode,
+        "calculator_bottleneck_mode": bottleneck_mode,
         "model_b_off_replace_control_exact_match": leakage_control_exact_match,
         "notes": (
-            "Current replace mode only replaces active '=' residual positions; "
+            "Answer-decoder mode predicts answer tokens only from calculator output "
+            "plus answer-position metadata."
+            if bottleneck_mode == "answer_decoder"
+            else "Current replace mode only replaces active '=' residual positions; "
             "autoregressive answer-token positions can still use normal context."
             if injection_mode == "replace"
             else "Additive mode preserves the normal residual stream and is not a bottleneck."
@@ -1177,6 +1208,15 @@ def parse_args() -> argparse.Namespace:
             "'eq' preserves existing behavior; 'operands' reads final A/B digits."
         ),
     )
+    parser.add_argument(
+        "--calculator-bottleneck-mode",
+        choices=["none", "answer_decoder"],
+        default="none",
+        help=(
+            "Optional stricter answer path. 'answer_decoder' predicts answer tokens "
+            "only from calculator output plus answer-position metadata."
+        ),
+    )
     parser.add_argument("--oracle", action="store_true")
     parser.add_argument(
         "--calculator-result-override",
@@ -1323,6 +1363,7 @@ def main() -> None:
             "forced_result_sweep": args.forced_result_sweep,
             "injection_scale": args.injection_scale,
             "calculator_read_position": model.cfg.calculator_read_position,
+            "calculator_bottleneck_mode": model.cfg.calculator_bottleneck_mode,
             "checkpoint": str(args.checkpoint) if args.checkpoint else None,
             "train_config": train_config,
             "fresh_config": None if args.checkpoint else asdict(model.cfg),

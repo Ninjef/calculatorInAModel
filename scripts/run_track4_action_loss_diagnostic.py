@@ -84,6 +84,45 @@ MANIFEST = [
 ]
 
 
+def load_manifest_items(args: argparse.Namespace) -> list[Track4Checkpoint]:
+    if args.manifest_json is not None and args.checkpoint:
+        raise ValueError("--manifest-json and --checkpoint are mutually exclusive")
+    if args.manifest_json is not None:
+        path = args.manifest_json
+        if not path.is_absolute():
+            path = REPO_ROOT / path
+        payload = json.loads(path.read_text())
+        if not isinstance(payload, list):
+            raise ValueError("--manifest-json must contain a JSON list")
+        return [
+            Track4Checkpoint(
+                name=str(item["name"]),
+                purpose=str(item.get("purpose", item["name"])),
+                checkpoint=str(item["checkpoint"]),
+                digits=int(item.get("digits", args.digits)),
+                operand_max=int(item.get("operand_max", args.operand_max)),
+                oracle=bool(item.get("oracle", False)),
+            )
+            for item in payload
+        ]
+    if args.checkpoint:
+        items: list[Track4Checkpoint] = []
+        for i, checkpoint in enumerate(args.checkpoint):
+            name = checkpoint.parent.name or f"checkpoint_{i}"
+            items.append(
+                Track4Checkpoint(
+                    name=name,
+                    purpose=name,
+                    checkpoint=str(checkpoint),
+                    digits=args.digits,
+                    operand_max=args.operand_max,
+                    oracle=args.oracle,
+                )
+            )
+        return items
+    return MANIFEST
+
+
 def read_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text())
 
@@ -387,16 +426,20 @@ def track3_classification(checkpoint: Path) -> dict[str, Any]:
 
 
 def run_manifest(args: argparse.Namespace) -> list[dict[str, Any]]:
-    if args.limit < 1 or args.limit > len(MANIFEST):
-        raise ValueError(f"--limit must be in [1, {len(MANIFEST)}]")
+    manifest = load_manifest_items(args)
+    limit = len(manifest) if args.limit is None else args.limit
+    if limit < 1 or limit > len(manifest):
+        raise ValueError(f"--limit must be in [1, {len(manifest)}]")
     if args.samples < 1:
         raise ValueError("--samples must be positive")
     if args.random_actions < 1:
         raise ValueError("--random-actions must be positive")
     device = pick_device()
     results: list[dict[str, Any]] = []
-    for item in MANIFEST[: args.limit]:
-        checkpoint = REPO_ROOT / item.checkpoint
+    for item in manifest[:limit]:
+        checkpoint = Path(item.checkpoint)
+        if not checkpoint.is_absolute():
+            checkpoint = REPO_ROOT / checkpoint
         output_dir = (
             args.output_root / item.name
             if args.output_root is not None
@@ -414,8 +457,8 @@ def run_manifest(args: argparse.Namespace) -> list[dict[str, Any]]:
                 {
                     "name": item.name,
                     "purpose": item.purpose,
-                    "checkpoint": item.checkpoint,
-                    "output_dir": str(output_dir.relative_to(REPO_ROOT)),
+                    "checkpoint": str(checkpoint),
+                    "output_dir": str(output_dir),
                     "summary": {},
                     "classification": {},
                 }
@@ -444,10 +487,11 @@ def run_manifest(args: argparse.Namespace) -> list[dict[str, Any]]:
             {
                 "name": item.name,
                 "purpose": item.purpose,
-                "checkpoint": item.checkpoint,
+                "checkpoint": str(checkpoint),
                 "device": device,
                 "oracle_base": item.oracle,
                 "calculator_injection_mode": model.cfg.calculator_injection_mode,
+                "calculator_bottleneck_mode": model.cfg.calculator_bottleneck_mode,
                 "calculator_read_position": model.cfg.calculator_read_position,
                 "calculator_estimator": model.cfg.calculator_estimator,
                 "train_config": train_config,
@@ -464,8 +508,8 @@ def run_manifest(args: argparse.Namespace) -> list[dict[str, Any]]:
             {
                 "name": item.name,
                 "purpose": item.purpose,
-                "checkpoint": item.checkpoint,
-                "output_dir": str(output_dir.relative_to(REPO_ROOT)),
+                "checkpoint": str(checkpoint),
+                "output_dir": str(output_dir),
                 "summary": summary,
                 "classification": classification,
             }
@@ -549,9 +593,32 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--samples", type=int, default=64)
     parser.add_argument("--random-actions", type=int, default=16)
-    parser.add_argument("--limit", type=int, default=len(MANIFEST))
+    parser.add_argument("--limit", type=int, default=None)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--output-root", type=Path, default=None)
+    parser.add_argument(
+        "--manifest-json",
+        type=Path,
+        default=None,
+        help=(
+            "Optional JSON list of checkpoints with name, checkpoint, digits, "
+            "operand_max, and oracle fields."
+        ),
+    )
+    parser.add_argument(
+        "--checkpoint",
+        type=Path,
+        nargs="+",
+        default=None,
+        help="Run the action-loss diagnostic on explicit checkpoint path(s).",
+    )
+    parser.add_argument("--digits", type=int, default=2)
+    parser.add_argument("--operand-max", type=int, default=19)
+    parser.add_argument(
+        "--oracle",
+        action="store_true",
+        help="Treat explicit --checkpoint runs as oracle-base checkpoints.",
+    )
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--no-work-history", action="store_true")
     parser.add_argument("--move-task-doc", action="store_true")

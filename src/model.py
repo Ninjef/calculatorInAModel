@@ -36,6 +36,7 @@ class GPTConfig:
     calculator_injection_mode: str = "add"
     calculator_estimator: str = "ste"
     calculator_read_position: str = "eq"
+    calculator_bottleneck_mode: str = "none"
 
 
 class HardAddSTE(torch.autograd.Function):
@@ -68,7 +69,7 @@ class CalculatorHook(nn.Module):
         super().__init__()
         if cfg.calculator_mode not in {"off", "add"}:
             raise ValueError(f"unknown calculator mode: {cfg.calculator_mode}")
-        if cfg.calculator_estimator not in {"ste", "reinforce"}:
+        if cfg.calculator_estimator not in {"ste", "reinforce", "adaptive_interface"}:
             raise ValueError(f"unknown calculator estimator: {cfg.calculator_estimator}")
         if cfg.calculator_read_position not in {"eq", "operands"}:
             raise ValueError(
@@ -130,7 +131,7 @@ class CalculatorHook(nn.Module):
         a_logp = None
         b_logp = None
         if oracle_operands is None:
-            if self.estimator == "ste":
+            if self.estimator in {"ste", "adaptive_interface"}:
                 flat_a_logits = a_logits.reshape(-1, self.operand_vocab_size)
                 flat_b_logits = b_logits.reshape(-1, self.operand_vocab_size)
                 a_pred = a_logits.argmax(dim=-1)
@@ -444,6 +445,12 @@ class TinyGPT(nn.Module):
                 "calculator_injection_mode must be one of {'add', 'replace'}, "
                 f"got {cfg.calculator_injection_mode!r}"
             )
+        if cfg.calculator_bottleneck_mode not in {"none", "answer_decoder"}:
+            raise ValueError(
+                "calculator_bottleneck_mode must be one of "
+                "{'none', 'answer_decoder'}, "
+                f"got {cfg.calculator_bottleneck_mode!r}"
+            )
         self.cfg = cfg
         self.tok_emb = nn.Embedding(cfg.vocab_size, cfg.n_embd)
         self.pos_emb = nn.Embedding(cfg.block_size, cfg.n_embd)
@@ -451,6 +458,11 @@ class TinyGPT(nn.Module):
         self.calculator_hook: CalculatorHook | None = None
         self.ln_f = nn.LayerNorm(cfg.n_embd)
         self.lm_head = nn.Linear(cfg.n_embd, cfg.vocab_size, bias=False)
+        self.answer_offset_emb: nn.Embedding | None = None
+        self.answer_decoder: nn.Linear | None = None
+        if cfg.calculator_bottleneck_mode == "answer_decoder":
+            self.answer_offset_emb = nn.Embedding(cfg.block_size, cfg.n_embd)
+            self.answer_decoder = nn.Linear(cfg.n_embd, cfg.vocab_size, bias=False)
         self.apply(self._init_weights)
         if cfg.calculator_enabled:
             if not 0 <= cfg.calculator_hook_after_layer <= cfg.n_layer:
@@ -481,6 +493,43 @@ class TinyGPT(nn.Module):
         raise ValueError(
             f"unknown calculator injection mode: {self.cfg.calculator_injection_mode}"
         )
+
+    def _answer_bottleneck_logits(
+        self, logits: Tensor, calculator_signal: Tensor | None, tokens: Tensor
+    ) -> Tensor:
+        if self.cfg.calculator_bottleneck_mode == "none":
+            return logits
+        if self.cfg.calculator_bottleneck_mode != "answer_decoder":
+            raise ValueError(
+                f"unknown calculator bottleneck mode: {self.cfg.calculator_bottleneck_mode}"
+            )
+        assert self.answer_offset_emb is not None
+        assert self.answer_decoder is not None
+        B, T, _ = logits.shape
+        eq_mask = tokens == EQ_ID
+        if not eq_mask.any():
+            return logits
+        has_eq = eq_mask.any(dim=-1)
+        eq_pos = eq_mask.float().argmax(dim=-1).long()
+        answer_mask = (
+            torch.arange(T, device=tokens.device).unsqueeze(0) >= eq_pos.unsqueeze(-1)
+        ) & has_eq.unsqueeze(-1)
+        offsets = (
+            torch.arange(T, device=tokens.device).unsqueeze(0) - eq_pos.unsqueeze(-1)
+        ).clamp(min=0, max=self.cfg.block_size - 1)
+        if calculator_signal is None:
+            selected_signal = logits.new_zeros((B, self.cfg.n_embd))
+        else:
+            batch_idx = torch.arange(B, device=tokens.device)
+            selected_signal = calculator_signal[batch_idx, eq_pos]
+            selected_signal = torch.where(
+                has_eq.unsqueeze(-1),
+                selected_signal,
+                torch.zeros_like(selected_signal),
+            )
+        decoder_h = selected_signal.unsqueeze(1) + self.answer_offset_emb(offsets)
+        decoder_logits = self.answer_decoder(decoder_h)
+        return torch.where(answer_mask.unsqueeze(-1), decoder_logits, logits)
 
     def _calculator_read_positions(self, tokens: Tensor) -> dict[str, Tensor]:
         if self.calculator_hook is None:
@@ -550,6 +599,7 @@ class TinyGPT(nn.Module):
                 result_override=calculator_result_override,
                 forced_result_class=forced_calculator_result_class,
             )
+        diagnostics["calculator_injection"] = injection
         return self._apply_calculator_injection(h, injection, x)
 
     def forward(
@@ -567,6 +617,7 @@ class TinyGPT(nn.Module):
         pos = torch.arange(T, device=x.device)
         h = self.tok_emb(x) + self.pos_emb(pos)
         diagnostics: dict[str, Any] = {}
+        calculator_signal: Tensor | None = None
         if (
             self.calculator_hook is not None
             and self.cfg.calculator_hook_after_layer == 0
@@ -581,6 +632,7 @@ class TinyGPT(nn.Module):
                 forced_calculator_result_class=forced_calculator_result_class,
                 calculator_read_intervention=calculator_read_intervention,
             )
+            calculator_signal = diagnostics.get("calculator_injection")
         for i, block in enumerate(self.blocks, start=1):
             h = block(h)
             if return_diagnostics:
@@ -601,9 +653,12 @@ class TinyGPT(nn.Module):
                     forced_calculator_result_class=forced_calculator_result_class,
                     calculator_read_intervention=calculator_read_intervention,
                 )
+                calculator_signal = diagnostics.get("calculator_injection")
         h = self.ln_f(h)
         logits = self.lm_head(h)
+        logits = self._answer_bottleneck_logits(logits, calculator_signal, x)
         if return_diagnostics:
+            diagnostics["calculator_bottleneck_mode"] = self.cfg.calculator_bottleneck_mode
             return logits, diagnostics
         return logits
 
