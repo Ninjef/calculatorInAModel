@@ -69,7 +69,12 @@ class CalculatorHook(nn.Module):
         super().__init__()
         if cfg.calculator_mode not in {"off", "add"}:
             raise ValueError(f"unknown calculator mode: {cfg.calculator_mode}")
-        if cfg.calculator_estimator not in {"ste", "reinforce", "adaptive_interface"}:
+        if cfg.calculator_estimator not in {
+            "ste",
+            "reinforce",
+            "adaptive_interface",
+            "action_loss_weighted_interface",
+        }:
             raise ValueError(f"unknown calculator estimator: {cfg.calculator_estimator}")
         if cfg.calculator_read_position not in {"eq", "operands"}:
             raise ValueError(
@@ -131,7 +136,11 @@ class CalculatorHook(nn.Module):
         a_logp = None
         b_logp = None
         if oracle_operands is None:
-            if self.estimator in {"ste", "adaptive_interface"}:
+            if self.estimator in {
+                "ste",
+                "adaptive_interface",
+                "action_loss_weighted_interface",
+            }:
                 flat_a_logits = a_logits.reshape(-1, self.operand_vocab_size)
                 flat_b_logits = b_logits.reshape(-1, self.operand_vocab_size)
                 a_pred = a_logits.argmax(dim=-1)

@@ -266,3 +266,55 @@ Conclusion:
 - Robust positive for 1000-step lower-LR post-supervision retention: all three no-aux, no-anchor, frozen-upstream replications beat the drift control, and at least one improves on the prior C-low-lr result.
 - Not a stronger protocol result: classification remains `causally_useful_opaque_private_code`, learned-best action-loss fraction remains `0.0`, and simple mapping explains only a small part of the gap.
 - Recommendation: no-go on upstream unfreezing. Continue with input-proj-only stabilization, early-selection/stop criteria, and protocol-decoding probes before relaxing the frozen-upstream constraint.
+
+## Action-loss-aligned self-training under the retention window
+
+- Date: 2026-05-03.
+- Task: `aiAgentProjectTasks/2026-05-03-phase-2-seventh-task-Action-loss-aligned-self-training-under-retention-window.md`.
+- Work history: `aiAgentWorkHistory/phase2/2026-05-03-action-loss-aligned-self-training-retention-window.md`.
+- Code changes: added `--checkpoint-every`, added `calculator_estimator=action_loss_weighted_interface`, and added `scripts/run_action_loss_candidate_diagnostic.py`.
+- Primary constraints stayed strict: `aux_operand_loss_weight=0.0`, `input_proj_anchor_weight=0.0`, `freeze_upstream_encoder=true`, and only `calculator_hook.input_proj` trainable for dense and self-training primary runs.
+
+Dense checkpoint-selection result:
+
+| Dense run | Final eval exact | Best built-in normal snapshot | Final action gap | Action-loss-selected snapshot | Selected action gap | Selected operand/calc |
+| --- | ---: | --- | ---: | --- | ---: | ---: |
+| Seed1 (`1 -> 3`) | `0.4688` | step `550`, normal `0.5781` | `2.8325` | step `100` | `2.1383` | `0.5625 / 0.5938` |
+| Seed2 (`2 -> 4`) | `0.4707` | step `450`, normal `0.5938` | `2.8509` | step `550` | `2.2018` | `0.5469 / 0.6094` |
+| Seed3 (`3 -> 5`) | `0.4180` | step `1300`, normal `0.5547` | `3.3582` | step `1050` | `2.4347` | `0.5625 / 0.5938` |
+
+Checkpoint selection interpretation:
+
+- Dense snapshot selection beats final-step selection in all three runs by built-in normal exact and by canonical action-loss learned-minus-true gap.
+- Built-in normal-exact selection and action-loss-gap selection are only partly aligned, so future retention work should save weights densely and select by the metric needed for the claim.
+- The selected dense checkpoint diagnosed canonically still has injection-zero `0.0000`, oracle-at-eval `0.9063`, true-sum-best forced-result fraction `0.9219`, and classification `causally_useful_opaque_private_code` / `strict_bottleneck_unvalidated`.
+
+Candidate-action diagnostic:
+
+| Checkpoint | Candidate better fraction | Mean best improvement | Candidate best result acc |
+| --- | ---: | ---: | ---: |
+| Stage B handoff | `0.570` | `2.8486` | `0.914` |
+| Best prior lower-LR replication | `0.508` | `2.2891` | `0.883` |
+| Dense selected examples | `0.523` to `0.570` | `2.7905` to `3.5481` | `0.852` to `0.891` |
+
+Action-loss self-training result:
+
+| Run | Final eval exact | Action learned-true gap | Operand exact | Calc result acc | Learned best | Classification if diagnosed |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Selftrain seed1 (`1 -> 3`) | `0.4941` | `3.0137` | `0.4531` | `0.5000` | `0.0000` | n/a |
+| Selftrain seed2 (`2 -> 4`) | `0.5449` | `1.9814` | `0.6094` | `0.6406` | `0.0000` | `semantically_decodable_private_calculator_code` |
+| Selftrain seed3 (`3 -> 5`) | `0.4102` | `3.2365` | `0.4375` | `0.4844` | `0.0000` | n/a |
+
+Best self-training private-protocol result:
+
+- All-pair answer exact `0.5375`, operand exact `0.5500`, calculator-result accuracy `0.5775`.
+- Best affine mapping is still identity-like: A exact `0.9000`, B exact `0.6025`.
+- Group behavior remains uneven: no-carry operand exact `0.6364`, small-operands `0.5900`, carry `0.5362`, large-operand `0.5367`.
+- Canonical causal controls remained good: injection-zero `0.0000`, forced-random `0.0625`, oracle-at-eval `0.9063`, true-sum-best forced-result fraction `0.9219`.
+
+Decision:
+
+- Checkpoint selection is a clear positive and should be part of future Stage C retention workflows.
+- Candidate actions contain real answer-NLL signal, so this is not primarily candidate-limited at the tested pool size.
+- The first action-loss-weighted self-training objective is promising but not robust: one of three seeds clearly improved action gap and operand/result behavior, two did not, and learned-best fraction stayed `0.0`.
+- Recommendation remains no-go for upstream unfreezing. Next work should improve the action-loss objective under frozen-upstream/input-proj-only constraints, preferably using lower-variance targets, replay/selection, or continuing from action-loss-selected snapshots.

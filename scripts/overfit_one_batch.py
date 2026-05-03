@@ -59,6 +59,7 @@ class TrainConfig:
     aux_operand_loss_grad_upstream: bool
     snapshot_every: int
     snapshot_samples: int
+    checkpoint_every: int
     calculator_estimator: str
     calculator_read_position: str
     calculator_injection_mode: str
@@ -67,6 +68,10 @@ class TrainConfig:
     adaptive_interface_loss_weight: float
     adaptive_interface_target_mode: str
     adaptive_interface_entropy_weight: float
+    action_loss_candidate_random: int
+    action_loss_candidate_topk: int
+    action_loss_candidate_local_radius: int
+    action_loss_candidate_temperature: float
     input_proj_anchor_checkpoint: str | None
     input_proj_anchor_weight: float
     input_proj_anchor_decay_steps: int
@@ -471,6 +476,18 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "adaptive_learned_target_agreement",
         "adaptive_target_operand_exact_match",
         "adaptive_target_pair_mass",
+        "action_loss_interface_loss",
+        "action_loss_interface_objective",
+        "action_loss_interface_target_loss",
+        "action_loss_candidate_count",
+        "action_loss_candidate_temperature",
+        "action_loss_candidate_best_improvement",
+        "action_loss_candidate_better_fraction",
+        "action_loss_candidate_best_matches_true_operands",
+        "action_loss_candidate_best_result_accuracy",
+        "action_loss_candidate_learned_result_accuracy",
+        "action_loss_candidate_soft_target_true_a_mass",
+        "action_loss_candidate_soft_target_true_b_mass",
     ]
     fieldnames = preferred + sorted(
         {key for row in curve for key in row.keys()} - set(preferred)
@@ -715,6 +732,175 @@ def adaptive_interface_loss(
         "adaptive_target_pair_mass": float(target_pair_mass.nanmean().item()),
     }
     return objective_loss, metrics
+
+
+def action_loss_candidate_pairs(
+    a_logits: torch.Tensor,
+    b_logits: torch.Tensor,
+    *,
+    random_actions: int,
+    topk: int,
+    local_radius: int,
+    generator: torch.Generator,
+) -> torch.Tensor:
+    if a_logits.shape != b_logits.shape:
+        raise ValueError("a_logits and b_logits must have the same shape")
+    if a_logits.ndim != 2:
+        raise ValueError("action-loss candidates expect [batch, classes] logits")
+    batch_size, classes = a_logits.shape
+    learned_a = a_logits.argmax(dim=-1)
+    learned_b = b_logits.argmax(dim=-1)
+    candidate_chunks = [
+        torch.stack([learned_a, learned_b], dim=-1).unsqueeze(1)
+    ]
+    if topk > 0:
+        k = min(topk, classes)
+        top_a = a_logits.topk(k, dim=-1).indices
+        top_b = b_logits.topk(k, dim=-1).indices
+        pairs = torch.stack(
+            [
+                top_a.unsqueeze(2).expand(batch_size, k, k),
+                top_b.unsqueeze(1).expand(batch_size, k, k),
+            ],
+            dim=-1,
+        ).reshape(batch_size, k * k, 2)
+        candidate_chunks.append(pairs)
+    if local_radius > 0:
+        offsets = torch.arange(
+            -local_radius, local_radius + 1, device=a_logits.device
+        )
+        local_a = (learned_a.unsqueeze(1) + offsets.unsqueeze(0)).clamp(
+            min=0, max=classes - 1
+        )
+        local_b = (learned_b.unsqueeze(1) + offsets.unsqueeze(0)).clamp(
+            min=0, max=classes - 1
+        )
+        candidate_chunks.extend(
+            [
+                torch.stack(
+                    [local_a, learned_b.unsqueeze(1).expand_as(local_a)], dim=-1
+                ),
+                torch.stack(
+                    [learned_a.unsqueeze(1).expand_as(local_b), local_b], dim=-1
+                ),
+            ]
+        )
+    if random_actions > 0:
+        random_pairs = torch.randint(
+            low=0,
+            high=classes,
+            size=(batch_size, random_actions, 2),
+            device=a_logits.device,
+            generator=generator,
+        )
+        candidate_chunks.append(random_pairs)
+    return torch.cat(candidate_chunks, dim=1)
+
+
+def score_action_loss_candidates(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    candidates: torch.Tensor,
+) -> torch.Tensor:
+    if candidates.ndim != 3 or candidates.shape[-1] != 2:
+        raise ValueError("candidates must have shape [batch, candidates, 2]")
+    batch_size, candidate_count, _ = candidates.shape
+    expanded_x = batch.x.repeat_interleave(candidate_count, dim=0)
+    expanded_y = batch.y.repeat_interleave(candidate_count, dim=0)
+    expanded_mask = batch.loss_mask.repeat_interleave(candidate_count, dim=0)
+    forced_pairs = candidates.reshape(batch_size * candidate_count, 2)
+    oracle_operands = torch.zeros(
+        (*expanded_x.shape, 2), dtype=torch.long, device=expanded_x.device
+    )
+    oracle_operands[..., 0] = forced_pairs[:, 0].unsqueeze(-1)
+    oracle_operands[..., 1] = forced_pairs[:, 1].unsqueeze(-1)
+    logits = model(expanded_x, oracle_operands=oracle_operands)
+    return masked_cross_entropy_per_example(
+        logits, expanded_y, expanded_mask
+    ).reshape(batch_size, candidate_count)
+
+
+def action_loss_weighted_interface_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    random_actions: int,
+    topk: int,
+    local_radius: int,
+    temperature: float,
+    generator: torch.Generator,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    if temperature <= 0:
+        raise ValueError("action-loss candidate temperature must be positive")
+    a_logits, b_logits, _, _ = calculator_read_operand_logits(model, batch)
+    candidates = action_loss_candidate_pairs(
+        a_logits.detach(),
+        b_logits.detach(),
+        random_actions=random_actions,
+        topk=topk,
+        local_radius=local_radius,
+        generator=generator,
+    )
+    with torch.no_grad():
+        candidate_losses = score_action_loss_candidates(model, batch, candidates)
+        candidate_weights = torch.softmax(-candidate_losses / temperature, dim=-1)
+    classes = a_logits.shape[-1]
+    target_a = torch.zeros_like(a_logits)
+    target_b = torch.zeros_like(b_logits)
+    target_a.scatter_add_(1, candidates[..., 0], candidate_weights)
+    target_b.scatter_add_(1, candidates[..., 1], candidate_weights)
+    target_loss = (
+        -(target_a * a_logits.log_softmax(dim=-1)).sum(dim=-1).mean()
+        + -(target_b * b_logits.log_softmax(dim=-1)).sum(dim=-1).mean()
+    ) / 2
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    learned_a = a_logits.argmax(dim=-1)
+    learned_b = b_logits.argmax(dim=-1)
+    learned_idx = torch.zeros(
+        (batch.x.shape[0],), dtype=torch.long, device=batch.x.device
+    )
+    best_idx = candidate_losses.argmin(dim=-1)
+    best_pairs = candidates[torch.arange(batch.x.shape[0], device=batch.x.device), best_idx]
+    learned_losses = candidate_losses.gather(1, learned_idx.unsqueeze(-1)).squeeze(-1)
+    best_losses = candidate_losses.gather(1, best_idx.unsqueeze(-1)).squeeze(-1)
+    true_sum = true_a + true_b
+    best_sum = best_pairs[:, 0] + best_pairs[:, 1]
+    learned_sum = learned_a + learned_b
+    metrics = {
+        "action_loss_interface_target_loss": float(target_loss.item()),
+        "action_loss_candidate_count": int(candidates.shape[1]),
+        "action_loss_candidate_temperature": float(temperature),
+        "action_loss_candidate_best_improvement": float(
+            (learned_losses - best_losses).mean().item()
+        ),
+        "action_loss_candidate_better_fraction": float(
+            (best_losses < learned_losses - 1e-8).float().mean().item()
+        ),
+        "action_loss_candidate_best_matches_true_operands": float(
+            ((best_pairs[:, 0] == true_a) & (best_pairs[:, 1] == true_b))
+            .float()
+            .mean()
+            .item()
+        ),
+        "action_loss_candidate_best_result_accuracy": float(
+            (best_sum == true_sum).float().mean().item()
+        ),
+        "action_loss_candidate_learned_result_accuracy": float(
+            (learned_sum == true_sum).float().mean().item()
+        ),
+        "action_loss_candidate_soft_target_true_a_mass": float(
+            target_a.gather(1, true_a.clamp(max=classes - 1).unsqueeze(-1))
+            .mean()
+            .item()
+        ),
+        "action_loss_candidate_soft_target_true_b_mass": float(
+            target_b.gather(1, true_b.clamp(max=classes - 1).unsqueeze(-1))
+            .mean()
+            .item()
+        ),
+    }
+    return target_loss, metrics
 
 
 @torch.no_grad()
@@ -1104,6 +1290,8 @@ def run_variant(
     seed = args.seed + num_digits
     torch.manual_seed(seed)
     rng = random.Random(seed)
+    candidate_generator = torch.Generator(device=device)
+    candidate_generator.manual_seed(seed + 90_000)
 
     operand_max = args.operand_max
     if operand_max is None:
@@ -1141,12 +1329,23 @@ def run_variant(
         input_proj_anchor = load_input_proj_anchor(
             model, args.input_proj_anchor_checkpoint, device=device
         )
-    if args.calculator_estimator == "adaptive_interface" and args.freeze_semantic_decoder:
+    if (
+        args.calculator_estimator
+        in {"adaptive_interface", "action_loss_weighted_interface"}
+        and args.freeze_semantic_decoder
+    ):
         freeze_semantic_decoder_parameters(model)
-    if args.calculator_estimator == "adaptive_interface" and args.freeze_upstream_encoder:
+    if (
+        args.calculator_estimator
+        in {"adaptive_interface", "action_loss_weighted_interface"}
+        and args.freeze_upstream_encoder
+    ):
         freeze_upstream_encoder_parameters(model)
     trainable_groups = trainable_parameter_summary(model)
-    if args.calculator_estimator == "adaptive_interface":
+    if args.calculator_estimator in {
+        "adaptive_interface",
+        "action_loss_weighted_interface",
+    }:
         optim = torch.optim.AdamW(
             adaptive_optimizer_param_groups(
                 model,
@@ -1192,6 +1391,7 @@ def run_variant(
         aux_operand_loss_grad_upstream=args.aux_operand_loss_grad_upstream,
         snapshot_every=args.snapshot_every,
         snapshot_samples=args.snapshot_samples,
+        checkpoint_every=args.checkpoint_every,
         calculator_estimator=args.calculator_estimator,
         calculator_read_position=args.calculator_read_position,
         calculator_injection_mode=args.calculator_injection_mode,
@@ -1204,6 +1404,10 @@ def run_variant(
         adaptive_interface_loss_weight=args.adaptive_interface_loss_weight,
         adaptive_interface_target_mode=args.adaptive_interface_target_mode,
         adaptive_interface_entropy_weight=args.adaptive_interface_entropy_weight,
+        action_loss_candidate_random=args.action_loss_candidate_random,
+        action_loss_candidate_topk=args.action_loss_candidate_topk,
+        action_loss_candidate_local_radius=args.action_loss_candidate_local_radius,
+        action_loss_candidate_temperature=args.action_loss_candidate_temperature,
         input_proj_anchor_checkpoint=(
             str(args.input_proj_anchor_checkpoint)
             if args.input_proj_anchor_checkpoint is not None
@@ -1273,6 +1477,11 @@ def run_variant(
             and args.calculator_estimator == "adaptive_interface"
             and not args.oracle_train
         )
+        use_action_loss_weighted_interface = (
+            args.variant == "model-c"
+            and args.calculator_estimator == "action_loss_weighted_interface"
+            and not args.oracle_train
+        )
         if use_reinforce:
             logits, diagnostics = model(
                 batch.x, oracle_operands=oracle_operands, return_diagnostics=True
@@ -1293,6 +1502,9 @@ def run_variant(
         adaptive_interface_loss_value = None
         adaptive_interface_objective_value = None
         adaptive_metrics: dict[str, float] = {}
+        action_loss_interface_loss_value = None
+        action_loss_interface_objective_value = None
+        action_loss_metrics: dict[str, float] = {}
         anchor_loss_value = None
         anchor_weight = 0.0
         if use_reinforce:
@@ -1338,6 +1550,29 @@ def run_variant(
             adaptive_objective = args.adaptive_interface_loss_weight * adaptive_loss
             adaptive_interface_objective_value = float(adaptive_objective.item())
             loss = loss + adaptive_objective
+        if use_action_loss_weighted_interface:
+            action_loss_interface_loss, action_loss_metrics = (
+                action_loss_weighted_interface_loss(
+                    model,
+                    batch,
+                    num_digits=num_digits,
+                    random_actions=args.action_loss_candidate_random,
+                    topk=args.action_loss_candidate_topk,
+                    local_radius=args.action_loss_candidate_local_radius,
+                    temperature=args.action_loss_candidate_temperature,
+                    generator=candidate_generator,
+                )
+            )
+            action_loss_interface_loss_value = float(
+                action_loss_interface_loss.item()
+            )
+            action_loss_objective = (
+                args.adaptive_interface_loss_weight * action_loss_interface_loss
+            )
+            action_loss_interface_objective_value = float(
+                action_loss_objective.item()
+            )
+            loss = loss + action_loss_objective
         if input_proj_anchor is not None:
             anchor_weight = input_proj_anchor_weight(
                 initial_weight=args.input_proj_anchor_weight,
@@ -1395,6 +1630,14 @@ def run_variant(
                     args.adaptive_interface_entropy_weight
                 )
                 curve_row.update(adaptive_metrics)
+            if use_action_loss_weighted_interface:
+                curve_row["action_loss_interface_loss"] = (
+                    action_loss_interface_loss_value
+                )
+                curve_row["action_loss_interface_objective"] = (
+                    action_loss_interface_objective_value
+                )
+                curve_row.update(action_loss_metrics)
             if anchor_loss_value is not None:
                 curve_row["input_proj_anchor_loss"] = anchor_loss_value
                 curve_row["input_proj_anchor_weight"] = anchor_weight
@@ -1429,6 +1672,13 @@ def run_variant(
                     else ""
                 )
                 + (
+                    f" action_loss_interface_loss={action_loss_interface_loss_value:.4f}"
+                    f" better_frac={action_loss_metrics['action_loss_candidate_better_fraction']:.3f}"
+                    f" best_improve={action_loss_metrics['action_loss_candidate_best_improvement']:.3f}"
+                    if use_action_loss_weighted_interface
+                    else ""
+                )
+                + (
                     f" input_proj_anchor_loss={anchor_loss_value:.6f}"
                     f" anchor_weight={anchor_weight:.6f}"
                     if anchor_loss_value is not None
@@ -1451,6 +1701,18 @@ def run_variant(
                 device=device,
             )
             snapshots.append(snapshot)
+            if args.checkpoint_every > 0 and step % args.checkpoint_every == 0:
+                snapshot_dir = run_dir / "checkpoint_snapshots"
+                snapshot_dir.mkdir(parents=True, exist_ok=True)
+                torch.save(
+                    {
+                        "model_state_dict": model.state_dict(),
+                        "config": asdict(train_cfg),
+                        "snapshot": snapshot,
+                        "step": step,
+                    },
+                    snapshot_dir / f"step_{step:05d}_weights.pt",
+                )
             print(
                 f"snapshot step={step:5d} "
                 f"normal={snapshot['normal_exact_match']:.3f} "
@@ -1508,6 +1770,14 @@ def run_variant(
     metrics["adaptive_interface_loss_weight"] = args.adaptive_interface_loss_weight
     metrics["adaptive_interface_target_mode"] = args.adaptive_interface_target_mode
     metrics["adaptive_interface_entropy_weight"] = args.adaptive_interface_entropy_weight
+    metrics["action_loss_candidate_random"] = args.action_loss_candidate_random
+    metrics["action_loss_candidate_topk"] = args.action_loss_candidate_topk
+    metrics["action_loss_candidate_local_radius"] = (
+        args.action_loss_candidate_local_radius
+    )
+    metrics["action_loss_candidate_temperature"] = (
+        args.action_loss_candidate_temperature
+    )
     metrics["input_proj_anchor_checkpoint"] = (
         str(args.input_proj_anchor_checkpoint)
         if args.input_proj_anchor_checkpoint is not None
@@ -1625,7 +1895,10 @@ def run_variant(
         (run_dir / "diagnostic_summary.json").write_text(
             json.dumps(trace_summary, indent=2) + "\n"
         )
-        if args.calculator_estimator == "adaptive_interface":
+        if args.calculator_estimator in {
+            "adaptive_interface",
+            "action_loss_weighted_interface",
+        }:
             adaptive_rows = adaptive_interface_trace_rows(
                 model,
                 num_digits=num_digits,
@@ -1770,6 +2043,15 @@ def parse_args() -> argparse.Namespace:
         help="Samples per periodic diagnostic snapshot.",
     )
     parser.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=0,
+        help=(
+            "For Model C snapshots, also save model weights every N steps under "
+            "checkpoint_snapshots/. Requires --snapshot-every to trigger the step."
+        ),
+    )
+    parser.add_argument(
         "--injection-scale",
         type=float,
         default=1.0,
@@ -1777,7 +2059,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--calculator-estimator",
-        choices=["ste", "reinforce", "adaptive_interface"],
+        choices=[
+            "ste",
+            "reinforce",
+            "adaptive_interface",
+            "action_loss_weighted_interface",
+        ],
         default="ste",
         help="Estimator for the learned calculator input interface.",
     )
@@ -1807,6 +2094,30 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=0.0,
         help="Entropy bonus weight for adaptive-interface operand distributions.",
+    )
+    parser.add_argument(
+        "--action-loss-candidate-random",
+        type=int,
+        default=8,
+        help="Random action pairs per prompt for action-loss weighted interface.",
+    )
+    parser.add_argument(
+        "--action-loss-candidate-topk",
+        type=int,
+        default=2,
+        help="Per-side top-k logits used as action-loss candidate pairs.",
+    )
+    parser.add_argument(
+        "--action-loss-candidate-local-radius",
+        type=int,
+        default=1,
+        help="Local +/- radius around the learned A/B actions for candidates.",
+    )
+    parser.add_argument(
+        "--action-loss-candidate-temperature",
+        type=float,
+        default=1.0,
+        help="Softmax temperature over answer-NLL-ranked action candidates.",
     )
     parser.add_argument(
         "--input-proj-anchor-checkpoint",
@@ -1942,22 +2253,35 @@ def main() -> None:
         raise ValueError("--snapshot-every requires --variant model-c")
     if args.snapshot_samples < 1:
         raise ValueError("--snapshot-samples must be positive")
+    if args.checkpoint_every < 0:
+        raise ValueError("--checkpoint-every must be non-negative")
+    if args.checkpoint_every > 0 and args.snapshot_every <= 0:
+        raise ValueError("--checkpoint-every requires --snapshot-every")
     if args.calculator_estimator == "reinforce" and args.variant != "model-c":
         raise ValueError("--calculator-estimator reinforce requires --variant model-c")
-    if args.calculator_estimator == "adaptive_interface" and args.variant != "model-c":
+    if (
+        args.calculator_estimator
+        in {"adaptive_interface", "action_loss_weighted_interface"}
+        and args.variant != "model-c"
+    ):
         raise ValueError(
-            "--calculator-estimator adaptive_interface requires --variant model-c"
+            "--calculator-estimator adaptive/action-loss interface requires --variant model-c"
         )
-    if args.calculator_estimator == "adaptive_interface":
+    if args.calculator_estimator in {
+        "adaptive_interface",
+        "action_loss_weighted_interface",
+    }:
         if args.oracle_train:
-            raise ValueError("adaptive_interface is for learned operands, not --oracle-train")
+            raise ValueError(
+                "adaptive/action-loss interface is for learned operands, not --oracle-train"
+            )
         if args.calculator_bottleneck_mode != "answer_decoder":
             raise ValueError(
-                "adaptive_interface requires --calculator-bottleneck-mode answer_decoder"
+                "adaptive/action-loss interface requires --calculator-bottleneck-mode answer_decoder"
             )
         if args.semantic_decoder_checkpoint is None:
             raise ValueError(
-                "adaptive_interface requires --semantic-decoder-checkpoint"
+                "adaptive/action-loss interface requires --semantic-decoder-checkpoint"
             )
     if (
         args.semantic_decoder_checkpoint is not None
@@ -1968,6 +2292,14 @@ def main() -> None:
         raise ValueError("--adaptive-interface-loss-weight must be non-negative")
     if args.adaptive_interface_entropy_weight < 0:
         raise ValueError("--adaptive-interface-entropy-weight must be non-negative")
+    if args.action_loss_candidate_random < 0:
+        raise ValueError("--action-loss-candidate-random must be non-negative")
+    if args.action_loss_candidate_topk < 0:
+        raise ValueError("--action-loss-candidate-topk must be non-negative")
+    if args.action_loss_candidate_local_radius < 0:
+        raise ValueError("--action-loss-candidate-local-radius must be non-negative")
+    if args.action_loss_candidate_temperature <= 0:
+        raise ValueError("--action-loss-candidate-temperature must be positive")
     if args.input_proj_anchor_weight < 0:
         raise ValueError("--input-proj-anchor-weight must be non-negative")
     if args.input_proj_anchor_decay_steps < 0:
@@ -2015,7 +2347,10 @@ def main() -> None:
         suffix_parts.append(f"op0-{args.operand_max}")
     if args.calculator_estimator != "ste":
         suffix_parts.append(args.calculator_estimator)
-    if args.calculator_estimator == "adaptive_interface":
+    if args.calculator_estimator in {
+        "adaptive_interface",
+        "action_loss_weighted_interface",
+    }:
         if args.adaptive_interface_target_mode != "hard_pair":
             suffix_parts.append(args.adaptive_interface_target_mode)
         if args.input_proj_lr is not None:
@@ -2024,6 +2359,13 @@ def main() -> None:
             suffix_parts.append(f"uplr{args.upstream_lr:g}")
         if args.adaptive_interface_entropy_weight > 0:
             suffix_parts.append(f"ient{args.adaptive_interface_entropy_weight:g}")
+        if args.calculator_estimator == "action_loss_weighted_interface":
+            suffix_parts.append(
+                f"alrand{args.action_loss_candidate_random}"
+                f"-altop{args.action_loss_candidate_topk}"
+                f"-alloc{args.action_loss_candidate_local_radius}"
+                f"-alt{args.action_loss_candidate_temperature:g}"
+            )
         if args.input_proj_anchor_weight > 0:
             suffix_parts.append(f"inanchor{args.input_proj_anchor_weight:g}")
             if args.input_proj_anchor_decay_steps > 0:
@@ -2057,7 +2399,8 @@ def main() -> None:
     )
     print(
         "diagnostic snapshots: "
-        f"every={args.snapshot_every} samples={args.snapshot_samples}"
+        f"every={args.snapshot_every} samples={args.snapshot_samples} "
+        f"checkpoint_every={args.checkpoint_every}"
     )
     print(f"calculator estimator: {args.calculator_estimator}")
     print(
@@ -2068,6 +2411,13 @@ def main() -> None:
         f"upstream_lr={args.lr if args.upstream_lr is None else args.upstream_lr} "
         f"input_proj_anchor_weight={args.input_proj_anchor_weight} "
         f"input_proj_anchor_decay_steps={args.input_proj_anchor_decay_steps}"
+    )
+    print(
+        "action-loss candidates: "
+        f"random={args.action_loss_candidate_random} "
+        f"topk={args.action_loss_candidate_topk} "
+        f"local_radius={args.action_loss_candidate_local_radius} "
+        f"temperature={args.action_loss_candidate_temperature}"
     )
     print(
         "architecture: "
