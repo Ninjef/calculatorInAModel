@@ -35,6 +35,15 @@ def parse_args() -> argparse.Namespace:
             "'sum_left_operand' emits zero-padded sum plus left operand."
         ),
     )
+    parser.add_argument(
+        "--calculator-output-format",
+        choices=["sum", "sum_left_operand"],
+        default="sum",
+        help=(
+            "Recorded expectation for the checkpoint calculator signal. Checkpoint "
+            "configuration remains authoritative."
+        ),
+    )
     parser.add_argument("--operand-max", type=int, default=19)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -385,6 +394,8 @@ def main() -> None:
             "device": device,
             "digits": args.digits,
             "answer_format": args.answer_format,
+            "calculator_output_format": model.cfg.calculator_output_format,
+            "requested_calculator_output_format": args.calculator_output_format,
             "operand_max": args.operand_max,
             "pairs": len(normal_rows),
             "train_config_seed": train_config.get("seed"),

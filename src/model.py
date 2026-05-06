@@ -38,6 +38,7 @@ class GPTConfig:
     calculator_read_position: str = "eq"
     calculator_bottleneck_mode: str = "none"
     calculator_action_head: str = "independent_operands"
+    calculator_output_format: str = "sum"
 
 
 class HardAddSTE(torch.autograd.Function):
@@ -65,6 +66,17 @@ class HardAddSTE(torch.autograd.Function):
         return grad_a, grad_b
 
 
+class HardOneHotSTE(torch.autograd.Function):
+    @staticmethod
+    def forward(ctx, logits: Tensor) -> Tensor:
+        idx = logits.argmax(dim=-1)
+        return F.one_hot(idx, num_classes=logits.shape[-1]).to(logits.dtype)
+
+    @staticmethod
+    def backward(ctx, grad_output: Tensor) -> tuple[Tensor]:
+        return (grad_output,)
+
+
 class CalculatorHook(nn.Module):
     def __init__(self, cfg: GPTConfig) -> None:
         super().__init__()
@@ -85,6 +97,12 @@ class CalculatorHook(nn.Module):
                 "calculator_action_head must be one of "
                 "{'independent_operands', 'joint_pair'}, "
                 f"got {cfg.calculator_action_head!r}"
+            )
+        if cfg.calculator_output_format not in {"sum", "sum_left_operand"}:
+            raise ValueError(
+                "calculator_output_format must be one of "
+                "{'sum', 'sum_left_operand'}, "
+                f"got {cfg.calculator_output_format!r}"
             )
         if cfg.calculator_read_position not in {"eq", "operands"}:
             raise ValueError(
@@ -107,6 +125,7 @@ class CalculatorHook(nn.Module):
         self.injection_scale = cfg.calculator_injection_scale
         self.read_position = cfg.calculator_read_position
         self.action_head = cfg.calculator_action_head
+        self.output_format = cfg.calculator_output_format
         self.input_proj = nn.Linear(cfg.n_embd, 2 * self.operand_vocab_size)
         if self.action_head == "joint_pair":
             for param in self.input_proj.parameters():
@@ -116,7 +135,10 @@ class CalculatorHook(nn.Module):
             )
         else:
             self.pair_proj = None
-        self.output_proj = nn.Linear(self.result_vocab_size, cfg.n_embd, bias=False)
+        self.output_signal_size = self.result_vocab_size
+        if self.output_format == "sum_left_operand":
+            self.output_signal_size += self.operand_vocab_size
+        self.output_proj = nn.Linear(self.output_signal_size, cfg.n_embd, bias=False)
 
     def forward(
         self,
@@ -237,7 +259,14 @@ class CalculatorHook(nn.Module):
                     a_pred, b_pred, result_override, dtype=h.dtype
                 )
         result = flat_result.reshape(*h.shape[:2], self.result_vocab_size)
-        unscaled_injection = self.output_proj(result) * eq_mask.to(h.dtype)
+        calculator_signal = self._calculator_output_signal(
+            result=result,
+            a_pred=a_pred,
+            a_logits=a_logits,
+            oracle_used=oracle_operands is not None,
+            dtype=h.dtype,
+        )
+        unscaled_injection = self.output_proj(calculator_signal) * eq_mask.to(h.dtype)
         injection = unscaled_injection * self.injection_scale
         if return_trace:
             trace = self._build_trace(
@@ -383,6 +412,31 @@ class CalculatorHook(nn.Module):
                 f"[0, {self.result_vocab_size}), got {forced_result_class}"
             )
         return forced_result_class
+
+    def _calculator_output_signal(
+        self,
+        *,
+        result: Tensor,
+        a_pred: Tensor,
+        a_logits: Tensor,
+        oracle_used: bool,
+        dtype: torch.dtype,
+    ) -> Tensor:
+        if self.output_format == "sum":
+            return result
+        if self.output_format != "sum_left_operand":
+            raise ValueError(f"unknown calculator output format: {self.output_format}")
+        if oracle_used or self.estimator == "reinforce":
+            left_operand = F.one_hot(
+                a_pred.reshape(-1), num_classes=self.operand_vocab_size
+            ).to(dtype=dtype)
+            left_operand = left_operand.reshape(*a_pred.shape, self.operand_vocab_size)
+        else:
+            flat_a_logits = a_logits.reshape(-1, self.operand_vocab_size)
+            left_operand = HardOneHotSTE.apply(flat_a_logits).reshape(
+                *a_logits.shape
+            )
+        return torch.cat([result, left_operand], dim=-1)
 
     def _empty_trace(
         self, h: Tensor, tokens: Tensor, injection: Tensor
@@ -637,7 +691,12 @@ class TinyGPT(nn.Module):
                 selected_signal,
                 torch.zeros_like(selected_signal),
             )
-        decoder_h = selected_signal.unsqueeze(1) + self.answer_offset_emb(offsets)
+        offset_h = self.answer_offset_emb(offsets)
+        selected_signal = selected_signal.unsqueeze(1)
+        if self.cfg.calculator_output_format == "sum_left_operand":
+            decoder_h = selected_signal + offset_h + (selected_signal * offset_h)
+        else:
+            decoder_h = selected_signal + offset_h
         decoder_logits = self.answer_decoder(decoder_h)
         return torch.where(answer_mask.unsqueeze(-1), decoder_logits, logits)
 
@@ -769,6 +828,7 @@ class TinyGPT(nn.Module):
         logits = self._answer_bottleneck_logits(logits, calculator_signal, x)
         if return_diagnostics:
             diagnostics["calculator_bottleneck_mode"] = self.cfg.calculator_bottleneck_mode
+            diagnostics["calculator_output_format"] = self.cfg.calculator_output_format
             return logits, diagnostics
         return logits
 

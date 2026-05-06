@@ -24,6 +24,7 @@ def _small_calculator_cfg(
     estimator: str = "ste",
     injection_mode: str = "add",
     bottleneck_mode: str = "none",
+    output_format: str = "sum",
 ) -> GPTConfig:
     return GPTConfig(
         n_embd=32,
@@ -35,6 +36,7 @@ def _small_calculator_cfg(
         calculator_estimator=estimator,
         calculator_injection_mode=injection_mode,
         calculator_bottleneck_mode=bottleneck_mode,
+        calculator_output_format=output_format,
         calculator_hook_after_layer=1,
         calculator_operand_vocab_size=10,
         calculator_result_vocab_size=19,
@@ -292,6 +294,28 @@ def test_invalid_calculator_bottleneck_mode_raises() -> None:
         TinyGPT(cfg)
 
 
+def test_invalid_calculator_output_format_raises() -> None:
+    cfg = _small_calculator_cfg(output_format="middle")
+
+    with pytest.raises(ValueError, match="calculator_output_format"):
+        TinyGPT(cfg)
+
+
+def test_default_calculator_output_format_preserves_projection_width() -> None:
+    hook = CalculatorHook(_small_calculator_cfg())
+
+    assert hook.output_proj.in_features == hook.result_vocab_size
+    assert hook.output_format == "sum"
+
+
+def test_sum_left_operand_output_projection_width_includes_operand() -> None:
+    hook = CalculatorHook(_small_calculator_cfg(output_format="sum_left_operand"))
+
+    assert hook.output_proj.in_features == (
+        hook.result_vocab_size + hook.operand_vocab_size
+    )
+
+
 def test_add_calculator_injection_mode_adds_residual() -> None:
     model = TinyGPT(_small_calculator_cfg(injection_mode="add"))
     h = torch.arange(40, dtype=torch.float32).reshape(1, 5, 8)
@@ -373,6 +397,78 @@ def test_answer_decoder_bottleneck_uses_forced_calculator_result() -> None:
         five_logits = model(x, forced_calculator_result_class=5)
 
     assert five_logits[0, 5, 0].item() > zero_logits[0, 5, 0].item() + 1.0
+
+
+def test_sum_only_answer_decoder_same_sum_oracle_prompts_are_indistinguishable() -> None:
+    torch.manual_seed(0)
+    model = TinyGPT(
+        _small_calculator_cfg(
+            bottleneck_mode="answer_decoder",
+            output_format="sum",
+        )
+    )
+    assert model.calculator_hook is not None
+    assert model.answer_decoder is not None
+    with torch.no_grad():
+        model.calculator_hook.output_proj.weight.zero_()
+        model.calculator_hook.output_proj.weight[0, 2] = 1.0
+        model.answer_offset_emb.weight.zero_()
+        model.answer_decoder.weight.zero_()
+        model.answer_decoder.weight[0, 0] = 1.0
+
+    x = torch.tensor(
+        [
+            [0, PLUS_ID, 2, EQ_ID],
+            [1, PLUS_ID, 1, EQ_ID],
+        ]
+    )
+    oracle = torch.zeros((*x.shape, 2), dtype=torch.long)
+    oracle[0, :, 0] = 0
+    oracle[0, :, 1] = 2
+    oracle[1, :, 0] = 1
+    oracle[1, :, 1] = 1
+
+    with torch.no_grad():
+        logits = model(x, oracle_operands=oracle)
+
+    assert torch.equal(logits[0, 3], logits[1, 3])
+
+
+def test_sum_left_operand_answer_decoder_distinguishes_same_sum_oracle_prompts() -> None:
+    torch.manual_seed(0)
+    model = TinyGPT(
+        _small_calculator_cfg(
+            bottleneck_mode="answer_decoder",
+            output_format="sum_left_operand",
+        )
+    )
+    assert model.calculator_hook is not None
+    assert model.answer_decoder is not None
+    result_vocab_size = model.calculator_hook.result_vocab_size
+    with torch.no_grad():
+        model.calculator_hook.output_proj.weight.zero_()
+        model.calculator_hook.output_proj.weight[0, result_vocab_size + 0] = 1.0
+        model.calculator_hook.output_proj.weight[0, result_vocab_size + 1] = 2.0
+        model.answer_offset_emb.weight.zero_()
+        model.answer_decoder.weight.zero_()
+        model.answer_decoder.weight[0, 0] = 1.0
+
+    x = torch.tensor(
+        [
+            [0, PLUS_ID, 2, EQ_ID],
+            [1, PLUS_ID, 1, EQ_ID],
+        ]
+    )
+    oracle = torch.zeros((*x.shape, 2), dtype=torch.long)
+    oracle[0, :, 0] = 0
+    oracle[0, :, 1] = 2
+    oracle[1, :, 0] = 1
+    oracle[1, :, 1] = 1
+
+    with torch.no_grad():
+        logits = model(x, oracle_operands=oracle)
+
+    assert logits[1, 3, 0].item() > logits[0, 3, 0].item() + 0.5
 
 
 def test_hard_add_ste_forward_returns_sum_class() -> None:
@@ -1632,6 +1728,8 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
             "replace",
             "--calculator-bottleneck-mode",
             "answer_decoder",
+            "--calculator-output-format",
+            "sum_left_operand",
             "--calculator-estimator",
             "adaptive_interface",
             "--semantic-decoder-checkpoint",
@@ -1686,6 +1784,7 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
             calculator_estimator="adaptive_interface",
             calculator_read_position="operands",
             calculator_bottleneck_mode="answer_decoder",
+            calculator_output_format="sum_left_operand",
         )
     )
     torch.save({"model_state_dict": seed_model.state_dict()}, tmp_path / "seed.pt")
@@ -1704,6 +1803,7 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     assert config["calculator_read_position"] == "operands"
     assert config["calculator_injection_mode"] == "replace"
     assert config["calculator_bottleneck_mode"] == "answer_decoder"
+    assert config["calculator_output_format"] == "sum_left_operand"
     assert config["calculator_estimator"] == "adaptive_interface"
     assert config["adaptive_interface_target_mode"] == "soft_result"
     assert config["adaptive_interface_entropy_weight"] == 0.003
@@ -1717,6 +1817,7 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     assert config["model"]["calculator_read_position"] == "operands"
     assert config["model"]["calculator_injection_mode"] == "replace"
     assert config["model"]["calculator_bottleneck_mode"] == "answer_decoder"
+    assert config["model"]["calculator_output_format"] == "sum_left_operand"
     assert config["aux_operand_loss_floor"] == 0.01
     assert config["snapshot_every"] == 1
     assert config["trainable_parameter_groups"]
@@ -1725,6 +1826,7 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     assert metrics["answer_loss_weight"] == 1.0
     assert metrics["calculator_injection_mode"] == "replace"
     assert metrics["calculator_bottleneck_mode"] == "answer_decoder"
+    assert metrics["calculator_output_format"] == "sum_left_operand"
     assert metrics["adaptive_interface_target_mode"] == "soft_result"
     assert metrics["adaptive_interface_entropy_weight"] == 0.003
     assert metrics["adaptive_interface_loss_decay_steps"] == 1

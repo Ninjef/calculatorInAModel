@@ -64,6 +64,7 @@ def make_model_config(
     calculator_hook_after_layer: int | None = None,
     calculator_read_position: str = "eq",
     calculator_bottleneck_mode: str = "none",
+    calculator_output_format: str = "sum",
     answer_format: AnswerFormat = "sum",
 ) -> GPTConfig:
     operand_vocab_size = operand_vocab_size or 10**num_digits
@@ -83,6 +84,7 @@ def make_model_config(
         calculator_injection_scale=injection_scale,
         calculator_read_position=calculator_read_position,
         calculator_bottleneck_mode=calculator_bottleneck_mode,
+        calculator_output_format=calculator_output_format,
     )
 
 
@@ -165,6 +167,7 @@ def train_fresh_model(args: argparse.Namespace, device: str) -> TinyGPT:
         calculator_hook_after_layer=args.calculator_hook_after_layer,
         calculator_read_position=args.calculator_read_position,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
+        calculator_output_format=args.calculator_output_format,
         answer_format=args.answer_format,
     )
     model = TinyGPT(cfg).to(device)
@@ -1281,6 +1284,15 @@ def parse_args() -> argparse.Namespace:
             "only from calculator output plus answer-position metadata."
         ),
     )
+    parser.add_argument(
+        "--calculator-output-format",
+        choices=["sum", "sum_left_operand"],
+        default="sum",
+        help=(
+            "Calculator signal projected downstream. 'sum' preserves existing "
+            "behavior; 'sum_left_operand' concatenates one-hot sum and left operand."
+        ),
+    )
     parser.add_argument("--oracle", action="store_true")
     parser.add_argument(
         "--calculator-result-override",
@@ -1431,6 +1443,8 @@ def main() -> None:
             "injection_scale": args.injection_scale,
             "calculator_read_position": model.cfg.calculator_read_position,
             "calculator_bottleneck_mode": model.cfg.calculator_bottleneck_mode,
+            "calculator_output_format": model.cfg.calculator_output_format,
+            "requested_calculator_output_format": args.calculator_output_format,
             "checkpoint": str(args.checkpoint) if args.checkpoint else None,
             "train_config": train_config,
             "fresh_config": None if args.checkpoint else asdict(model.cfg),

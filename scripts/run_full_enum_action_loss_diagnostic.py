@@ -223,6 +223,7 @@ def full_enum_diagnostic(
         "samples": len(rows),
         "digits": digits,
         "answer_format": answer_format,
+        "calculator_output_format": model.cfg.calculator_output_format,
         "operand_max": operand_max,
         "temperature": temperature,
         "min_probability_floor": min_probability_floor,
@@ -315,6 +316,15 @@ def parse_args() -> argparse.Namespace:
             "'sum_left_operand' emits zero-padded sum plus left operand."
         ),
     )
+    parser.add_argument(
+        "--calculator-output-format",
+        choices=["sum", "sum_left_operand"],
+        default="sum",
+        help=(
+            "Recorded expectation for the checkpoint calculator signal. Checkpoint "
+            "configuration remains authoritative."
+        ),
+    )
     parser.add_argument("--operand-max", type=int, default=19)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--min-probability-floor", type=float, default=0.0)
@@ -360,6 +370,7 @@ def main() -> None:
             device=device,
             answer_format=args.answer_format,
         )
+        summary["requested_calculator_output_format"] = args.calculator_output_format
         summary["output_dir"] = str(output_dir)
         summary["device"] = device
         output_dir.mkdir(parents=True, exist_ok=True)

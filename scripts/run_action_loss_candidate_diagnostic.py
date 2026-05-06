@@ -143,6 +143,7 @@ def candidate_diagnostic(
         "samples": len(rows),
         "digits": digits,
         "answer_format": answer_format,
+        "calculator_output_format": model.cfg.calculator_output_format,
         "operand_max": operand_max,
         "random_actions": random_actions,
         "topk": topk,
@@ -184,6 +185,15 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Answer target format. 'sum' preserves existing addition behavior; "
             "'sum_left_operand' emits zero-padded sum plus left operand."
+        ),
+    )
+    parser.add_argument(
+        "--calculator-output-format",
+        choices=["sum", "sum_left_operand"],
+        default="sum",
+        help=(
+            "Recorded expectation for checkpoint calculator signal. Checkpoint "
+            "configuration remains authoritative."
         ),
     )
     parser.add_argument("--operand-max", type=int, default=19)

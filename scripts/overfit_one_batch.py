@@ -70,6 +70,7 @@ class TrainConfig:
     calculator_read_position: str
     calculator_injection_mode: str
     calculator_bottleneck_mode: str
+    calculator_output_format: str
     semantic_decoder_checkpoint: str | None
     adaptive_interface_loss_weight: float
     adaptive_interface_loss_decay_steps: int
@@ -1906,6 +1907,7 @@ def make_model_config(
     calculator_read_position: str = "eq",
     calculator_injection_mode: str = "add",
     calculator_bottleneck_mode: str = "none",
+    calculator_output_format: str = "sum",
     answer_format: AnswerFormat = "sum",
     n_layer: int = 4,
     n_head: int = 4,
@@ -1935,6 +1937,7 @@ def make_model_config(
         calculator_action_head=calculator_action_head,
         calculator_read_position=calculator_read_position,
         calculator_bottleneck_mode=calculator_bottleneck_mode,
+        calculator_output_format=calculator_output_format,
     )
 
 
@@ -1974,6 +1977,7 @@ def run_variant(
         calculator_read_position=args.calculator_read_position,
         calculator_injection_mode=args.calculator_injection_mode,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
+        calculator_output_format=args.calculator_output_format,
         answer_format=args.answer_format,
         n_layer=args.n_layer,
         n_head=args.n_head,
@@ -2073,6 +2077,7 @@ def run_variant(
         calculator_read_position=args.calculator_read_position,
         calculator_injection_mode=args.calculator_injection_mode,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
+        calculator_output_format=args.calculator_output_format,
         semantic_decoder_checkpoint=(
             str(args.semantic_decoder_checkpoint)
             if args.semantic_decoder_checkpoint is not None
@@ -2518,6 +2523,7 @@ def run_variant(
     metrics["calculator_read_position"] = args.calculator_read_position
     metrics["calculator_injection_mode"] = args.calculator_injection_mode
     metrics["calculator_bottleneck_mode"] = args.calculator_bottleneck_mode
+    metrics["calculator_output_format"] = args.calculator_output_format
     metrics["semantic_decoder_checkpoint"] = (
         str(args.semantic_decoder_checkpoint)
         if args.semantic_decoder_checkpoint is not None
@@ -3034,6 +3040,15 @@ def parse_args() -> argparse.Namespace:
             "only from calculator output plus answer-position metadata."
         ),
     )
+    parser.add_argument(
+        "--calculator-output-format",
+        choices=["sum", "sum_left_operand"],
+        default="sum",
+        help=(
+            "Calculator signal projected downstream. 'sum' preserves existing "
+            "behavior; 'sum_left_operand' concatenates one-hot sum and left operand."
+        ),
+    )
     parser.add_argument("--n-layer", type=int, default=4)
     parser.add_argument("--n-head", type=int, default=4)
     parser.add_argument("--n-embd", type=int, default=128)
@@ -3316,6 +3331,8 @@ def main() -> None:
         suffix_parts.append(args.calculator_injection_mode)
     if args.calculator_bottleneck_mode != "none":
         suffix_parts.append(args.calculator_bottleneck_mode)
+    if args.calculator_output_format != "sum":
+        suffix_parts.append(args.calculator_output_format)
     if args.aux_operand_loss_weight > 0:
         suffix_parts.append(f"aux{args.aux_operand_loss_weight:g}")
         if args.aux_operand_loss_decay_steps > 0:
@@ -3333,6 +3350,7 @@ def main() -> None:
     print(f"injection scale: {args.injection_scale}")
     print(f"calculator injection mode: {args.calculator_injection_mode}")
     print(f"calculator bottleneck mode: {args.calculator_bottleneck_mode}")
+    print(f"calculator output format: {args.calculator_output_format}")
     print(
         "aux operand loss: "
         f"weight={args.aux_operand_loss_weight} "
