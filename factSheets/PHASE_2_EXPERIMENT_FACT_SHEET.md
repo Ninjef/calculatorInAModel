@@ -318,3 +318,48 @@ Decision:
 - Candidate actions contain real answer-NLL signal, so this is not primarily candidate-limited at the tested pool size.
 - The first action-loss-weighted self-training objective is promising but not robust: one of three seeds clearly improved action gap and operand/result behavior, two did not, and learned-best fraction stayed `0.0`.
 - Recommendation remains no-go for upstream unfreezing. Next work should improve the action-loss objective under frozen-upstream/input-proj-only constraints, preferably using lower-variance targets, replay/selection, or continuing from action-loss-selected snapshots.
+
+## Low-variance action-loss continuations from selected retention checkpoints
+
+- Date: 2026-05-05.
+- Task: `aiAgentProjectTasks/2026-05-03-phase-2-eighth-task-Low-variance-action-loss-continuations-from-selected-retention-checkpoints.md`.
+- Work history: `aiAgentWorkHistory/phase2/2026-05-05-low-variance-action-loss-continuations.md`.
+- Code changes: added `calculator_estimator=action_loss_replay_interface`, per-prompt replay/cache targets, `--action-loss-candidate-refresh-every`, and `--action-loss-candidate-ema-beta`.
+- Low-variance target construction still uses learned/top-k/local/random action candidates ranked only by frozen answer-decoder NLL. It does not use true operands or true sums to build targets.
+- Primary config stayed strict: `digits=2`, `operand_max=19`, operand vocab `20`, `2L/1H/16d/mlp1`, hook after layer `1`, read position `operands`, bottleneck `answer_decoder`, `freeze_semantic_decoder=true`, `freeze_upstream_encoder=true`, `answer_loss_weight=1.0`, `aux_operand_loss_weight=0.0`, `input_proj_anchor_weight=0.0`, `input_proj_lr=0.0003`, `upstream_lr=0.0003`, `snapshot_every=50`, and `checkpoint_every=50`.
+- Run artifacts were written outside repo-local `runs/` because this sandbox could not write there: `/Users/jarnold/Documents/Codex/2026-05-03/please-work-in-this-repo-users-2/runs`.
+- All three continuation finals proved `final_aux_operand_loss_weight=0.0`, `final_input_proj_anchor_weight=0.0`, `freeze_upstream_encoder=true`, and `trainable_parameter_groups=[calculator_hook.input_proj]`.
+
+Selected-checkpoint low-variance continuation result:
+
+| Run | Start action gap | Best continuation checkpoint | Best gap | Operand exact | Calc result acc | Learned best |
+| --- | ---: | --- | ---: | ---: | ---: | ---: |
+| seed1 / run seed3 | `2.1383` | step `00000` | `2.1383` | `0.5625` | `0.5938` | `0.0000` |
+| seed2 / run seed4 | `2.2018` | step `00000` | `2.2018` | `0.5469` | `0.6094` | `0.0000` |
+| seed3 / run seed5 | `2.4347` | step `00450` | `2.3177` | `0.5781` | `0.5938` | `0.0000` |
+
+Canonical causal controls for all low-variance finals and the best transient snapshot stayed intact:
+
+- Injection-zero `0.0000`.
+- Oracle-at-eval `0.9063`.
+- Forced-zero `0.0156`.
+- Forced-random `0.0000`.
+- True-sum forced-result best `0.9219`.
+- Classification remained `causally_useful_opaque_private_code` with `strict_bottleneck_unvalidated`.
+
+Private-protocol summary:
+
+| Checkpoint | All-pair answer | Operand exact | Calc result acc | Best affine A | Best affine B |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| seed1 final | `0.4550` | `0.4300` | `0.4800` | `0.8000` | `0.5375` |
+| seed2 final | `0.4750` | `0.4650` | `0.5025` | `0.8000` | `0.5800` |
+| seed3 final | `0.4550` | `0.4150` | `0.4800` | `0.7500` | `0.5500` |
+| seed3 step 450 | `0.4900` | `0.5200` | `0.5275` | `0.9500` | `0.5450` |
+
+Decision:
+
+- Low-variance replay/EMA did not make action-loss self-training robust. The required two-of-three selected-continuation positive criterion failed, so Stage-B-started low-variance comparisons were not run.
+- Selected checkpoints remain better stopping points than continuation starts under this objective.
+- The answer-NLL candidate signal exists, but sampled-candidate replay/EMA still does not produce stable true-operand-like structure or nonzero learned-best action-loss fraction.
+- This is still no-go for upstream unfreezing.
+- Next recommended task: enumerate all `20 x 20` action pairs and train on full answer-NLL soft targets, removing candidate-sampling variance before attempting upstream distillation.

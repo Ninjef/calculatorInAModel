@@ -72,6 +72,8 @@ class TrainConfig:
     action_loss_candidate_topk: int
     action_loss_candidate_local_radius: int
     action_loss_candidate_temperature: float
+    action_loss_candidate_refresh_every: int
+    action_loss_candidate_ema_beta: float
     input_proj_anchor_checkpoint: str | None
     input_proj_anchor_weight: float
     input_proj_anchor_decay_steps: int
@@ -481,6 +483,10 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "action_loss_interface_target_loss",
         "action_loss_candidate_count",
         "action_loss_candidate_temperature",
+        "action_loss_candidate_refresh_every",
+        "action_loss_candidate_ema_beta",
+        "action_loss_replay_cache_size",
+        "action_loss_replay_refresh_fraction",
         "action_loss_candidate_best_improvement",
         "action_loss_candidate_better_fraction",
         "action_loss_candidate_best_matches_true_operands",
@@ -820,6 +826,101 @@ def score_action_loss_candidates(
     ).reshape(batch_size, candidate_count)
 
 
+def subset_arithmetic_batch(batch: ArithmeticBatch, indices: torch.Tensor) -> ArithmeticBatch:
+    return ArithmeticBatch(
+        x=batch.x.index_select(0, indices),
+        y=batch.y.index_select(0, indices),
+        loss_mask=batch.loss_mask.index_select(0, indices),
+    )
+
+
+def action_loss_soft_targets(
+    a_logits: torch.Tensor,
+    b_logits: torch.Tensor,
+    candidates: torch.Tensor,
+    candidate_weights: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    target_a = torch.zeros_like(a_logits)
+    target_b = torch.zeros_like(b_logits)
+    target_a.scatter_add_(1, candidates[..., 0], candidate_weights)
+    target_b.scatter_add_(1, candidates[..., 1], candidate_weights)
+    return target_a, target_b
+
+
+def action_loss_target_ce(
+    a_logits: torch.Tensor,
+    b_logits: torch.Tensor,
+    target_a: torch.Tensor,
+    target_b: torch.Tensor,
+) -> torch.Tensor:
+    return (
+        -(target_a * a_logits.log_softmax(dim=-1)).sum(dim=-1).mean()
+        + -(target_b * b_logits.log_softmax(dim=-1)).sum(dim=-1).mean()
+    ) / 2
+
+
+class ActionLossReplayCache:
+    def __init__(self) -> None:
+        self.entries: dict[tuple[int, ...], dict[str, object]] = {}
+
+    @staticmethod
+    def keys_from_batch(batch: ArithmeticBatch) -> list[tuple[int, ...]]:
+        return [tuple(int(token) for token in row.tolist()) for row in batch.x.detach().cpu()]
+
+    def stale_indices(
+        self,
+        keys: list[tuple[int, ...]],
+        *,
+        step: int,
+        refresh_every: int,
+    ) -> list[int]:
+        stale: list[int] = []
+        for idx, key in enumerate(keys):
+            entry = self.entries.get(key)
+            if entry is None or step - int(entry["refresh_step"]) >= refresh_every:
+                stale.append(idx)
+        return stale
+
+    def update(
+        self,
+        *,
+        keys: list[tuple[int, ...]],
+        indices: list[int],
+        target_a: torch.Tensor,
+        target_b: torch.Tensor,
+        step: int,
+        ema_beta: float,
+    ) -> None:
+        for local_idx, batch_idx in enumerate(indices):
+            key = keys[batch_idx]
+            new_a = target_a[local_idx].detach().cpu()
+            new_b = target_b[local_idx].detach().cpu()
+            old = self.entries.get(key)
+            if old is not None and ema_beta > 0:
+                new_a = (ema_beta * old["target_a"]) + ((1.0 - ema_beta) * new_a)
+                new_b = (ema_beta * old["target_b"]) + ((1.0 - ema_beta) * new_b)
+            self.entries[key] = {
+                "target_a": new_a,
+                "target_b": new_b,
+                "refresh_step": step,
+            }
+
+    def targets_for(
+        self,
+        keys: list[tuple[int, ...]],
+        *,
+        like_a: torch.Tensor,
+        like_b: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        target_a_rows = []
+        target_b_rows = []
+        for key in keys:
+            entry = self.entries[key]
+            target_a_rows.append(entry["target_a"].to(device=like_a.device, dtype=like_a.dtype))
+            target_b_rows.append(entry["target_b"].to(device=like_b.device, dtype=like_b.dtype))
+        return torch.stack(target_a_rows), torch.stack(target_b_rows)
+
+
 def action_loss_weighted_interface_loss(
     model: TinyGPT,
     batch: ArithmeticBatch,
@@ -846,14 +947,10 @@ def action_loss_weighted_interface_loss(
         candidate_losses = score_action_loss_candidates(model, batch, candidates)
         candidate_weights = torch.softmax(-candidate_losses / temperature, dim=-1)
     classes = a_logits.shape[-1]
-    target_a = torch.zeros_like(a_logits)
-    target_b = torch.zeros_like(b_logits)
-    target_a.scatter_add_(1, candidates[..., 0], candidate_weights)
-    target_b.scatter_add_(1, candidates[..., 1], candidate_weights)
-    target_loss = (
-        -(target_a * a_logits.log_softmax(dim=-1)).sum(dim=-1).mean()
-        + -(target_b * b_logits.log_softmax(dim=-1)).sum(dim=-1).mean()
-    ) / 2
+    target_a, target_b = action_loss_soft_targets(
+        a_logits, b_logits, candidates, candidate_weights
+    )
+    target_loss = action_loss_target_ce(a_logits, b_logits, target_a, target_b)
     true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
     learned_a = a_logits.argmax(dim=-1)
     learned_b = b_logits.argmax(dim=-1)
@@ -900,6 +997,143 @@ def action_loss_weighted_interface_loss(
             .item()
         ),
     }
+    return target_loss, metrics
+
+
+def action_loss_replay_interface_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    random_actions: int,
+    topk: int,
+    local_radius: int,
+    temperature: float,
+    generator: torch.Generator,
+    cache: ActionLossReplayCache,
+    step: int,
+    refresh_every: int,
+    ema_beta: float,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    if temperature <= 0:
+        raise ValueError("action-loss candidate temperature must be positive")
+    if refresh_every < 1:
+        raise ValueError("action-loss replay refresh interval must be positive")
+    if not 0 <= ema_beta < 1:
+        raise ValueError("action-loss candidate EMA beta must be in [0, 1)")
+    a_logits, b_logits, _, _ = calculator_read_operand_logits(model, batch)
+    keys = cache.keys_from_batch(batch)
+    refresh_indices = cache.stale_indices(
+        keys, step=step, refresh_every=refresh_every
+    )
+    refreshed_metrics: dict[str, float] = {}
+    if refresh_indices:
+        refresh_tensor = torch.tensor(
+            refresh_indices, dtype=torch.long, device=batch.x.device
+        )
+        refresh_batch = subset_arithmetic_batch(batch, refresh_tensor)
+        refresh_a_logits = a_logits.index_select(0, refresh_tensor)
+        refresh_b_logits = b_logits.index_select(0, refresh_tensor)
+        candidates = action_loss_candidate_pairs(
+            refresh_a_logits.detach(),
+            refresh_b_logits.detach(),
+            random_actions=random_actions,
+            topk=topk,
+            local_radius=local_radius,
+            generator=generator,
+        )
+        with torch.no_grad():
+            candidate_losses = score_action_loss_candidates(
+                model, refresh_batch, candidates
+            )
+            candidate_weights = torch.softmax(-candidate_losses / temperature, dim=-1)
+        refresh_target_a, refresh_target_b = action_loss_soft_targets(
+            refresh_a_logits, refresh_b_logits, candidates, candidate_weights
+        )
+        cache.update(
+            keys=keys,
+            indices=refresh_indices,
+            target_a=refresh_target_a,
+            target_b=refresh_target_b,
+            step=step,
+            ema_beta=ema_beta,
+        )
+        true_a, true_b = fixed_width_operands_from_batch(
+            refresh_batch.x, num_digits=num_digits
+        )
+        learned_a = refresh_a_logits.argmax(dim=-1)
+        learned_b = refresh_b_logits.argmax(dim=-1)
+        learned_idx = torch.zeros(
+            (refresh_batch.x.shape[0],), dtype=torch.long, device=batch.x.device
+        )
+        best_idx = candidate_losses.argmin(dim=-1)
+        best_pairs = candidates[
+            torch.arange(refresh_batch.x.shape[0], device=batch.x.device), best_idx
+        ]
+        learned_losses = candidate_losses.gather(
+            1, learned_idx.unsqueeze(-1)
+        ).squeeze(-1)
+        best_losses = candidate_losses.gather(1, best_idx.unsqueeze(-1)).squeeze(-1)
+        true_sum = true_a + true_b
+        best_sum = best_pairs[:, 0] + best_pairs[:, 1]
+        learned_sum = learned_a + learned_b
+        classes = a_logits.shape[-1]
+        refreshed_metrics = {
+            "action_loss_candidate_best_improvement": float(
+                (learned_losses - best_losses).mean().item()
+            ),
+            "action_loss_candidate_better_fraction": float(
+                (best_losses < learned_losses - 1e-8).float().mean().item()
+            ),
+            "action_loss_candidate_best_matches_true_operands": float(
+                ((best_pairs[:, 0] == true_a) & (best_pairs[:, 1] == true_b))
+                .float()
+                .mean()
+                .item()
+            ),
+            "action_loss_candidate_best_result_accuracy": float(
+                (best_sum == true_sum).float().mean().item()
+            ),
+            "action_loss_candidate_learned_result_accuracy": float(
+                (learned_sum == true_sum).float().mean().item()
+            ),
+            "action_loss_candidate_soft_target_true_a_mass": float(
+                refresh_target_a.gather(1, true_a.clamp(max=classes - 1).unsqueeze(-1))
+                .mean()
+                .item()
+            ),
+            "action_loss_candidate_soft_target_true_b_mass": float(
+                refresh_target_b.gather(1, true_b.clamp(max=classes - 1).unsqueeze(-1))
+                .mean()
+                .item()
+            ),
+        }
+    target_a, target_b = cache.targets_for(keys, like_a=a_logits, like_b=b_logits)
+    target_loss = action_loss_target_ce(a_logits, b_logits, target_a, target_b)
+    metrics = {
+        "action_loss_interface_target_loss": float(target_loss.item()),
+        "action_loss_candidate_count": int(
+            1
+            + (min(topk, a_logits.shape[-1]) ** 2 if topk > 0 else 0)
+            + (2 * ((2 * local_radius) + 1) if local_radius > 0 else 0)
+            + random_actions
+        ),
+        "action_loss_candidate_temperature": float(temperature),
+        "action_loss_candidate_refresh_every": int(refresh_every),
+        "action_loss_candidate_ema_beta": float(ema_beta),
+        "action_loss_replay_cache_size": int(len(cache.entries)),
+        "action_loss_replay_refresh_fraction": float(
+            len(refresh_indices) / max(1, batch.x.shape[0])
+        ),
+        "action_loss_candidate_best_improvement": float("nan"),
+        "action_loss_candidate_better_fraction": float("nan"),
+        "action_loss_candidate_best_matches_true_operands": float("nan"),
+        "action_loss_candidate_best_result_accuracy": float("nan"),
+        "action_loss_candidate_learned_result_accuracy": float("nan"),
+        "action_loss_candidate_soft_target_true_a_mass": float("nan"),
+        "action_loss_candidate_soft_target_true_b_mass": float("nan"),
+    }
+    metrics.update(refreshed_metrics)
     return target_loss, metrics
 
 
@@ -1331,13 +1565,21 @@ def run_variant(
         )
     if (
         args.calculator_estimator
-        in {"adaptive_interface", "action_loss_weighted_interface"}
+        in {
+            "adaptive_interface",
+            "action_loss_weighted_interface",
+            "action_loss_replay_interface",
+        }
         and args.freeze_semantic_decoder
     ):
         freeze_semantic_decoder_parameters(model)
     if (
         args.calculator_estimator
-        in {"adaptive_interface", "action_loss_weighted_interface"}
+        in {
+            "adaptive_interface",
+            "action_loss_weighted_interface",
+            "action_loss_replay_interface",
+        }
         and args.freeze_upstream_encoder
     ):
         freeze_upstream_encoder_parameters(model)
@@ -1345,6 +1587,7 @@ def run_variant(
     if args.calculator_estimator in {
         "adaptive_interface",
         "action_loss_weighted_interface",
+        "action_loss_replay_interface",
     }:
         optim = torch.optim.AdamW(
             adaptive_optimizer_param_groups(
@@ -1408,6 +1651,8 @@ def run_variant(
         action_loss_candidate_topk=args.action_loss_candidate_topk,
         action_loss_candidate_local_radius=args.action_loss_candidate_local_radius,
         action_loss_candidate_temperature=args.action_loss_candidate_temperature,
+        action_loss_candidate_refresh_every=args.action_loss_candidate_refresh_every,
+        action_loss_candidate_ema_beta=args.action_loss_candidate_ema_beta,
         input_proj_anchor_checkpoint=(
             str(args.input_proj_anchor_checkpoint)
             if args.input_proj_anchor_checkpoint is not None
@@ -1440,6 +1685,7 @@ def run_variant(
     snapshots: list[dict[str, object]] = []
     final_loss = float("nan")
     policy_baseline: float | None = None
+    action_loss_replay_cache = ActionLossReplayCache()
     model.train()
     for step in range(args.steps + 1):
         if args.operand_max is None:
@@ -1479,7 +1725,8 @@ def run_variant(
         )
         use_action_loss_weighted_interface = (
             args.variant == "model-c"
-            and args.calculator_estimator == "action_loss_weighted_interface"
+            and args.calculator_estimator
+            in {"action_loss_weighted_interface", "action_loss_replay_interface"}
             and not args.oracle_train
         )
         if use_reinforce:
@@ -1551,18 +1798,36 @@ def run_variant(
             adaptive_interface_objective_value = float(adaptive_objective.item())
             loss = loss + adaptive_objective
         if use_action_loss_weighted_interface:
-            action_loss_interface_loss, action_loss_metrics = (
-                action_loss_weighted_interface_loss(
-                    model,
-                    batch,
-                    num_digits=num_digits,
-                    random_actions=args.action_loss_candidate_random,
-                    topk=args.action_loss_candidate_topk,
-                    local_radius=args.action_loss_candidate_local_radius,
-                    temperature=args.action_loss_candidate_temperature,
-                    generator=candidate_generator,
+            if args.calculator_estimator == "action_loss_replay_interface":
+                action_loss_interface_loss, action_loss_metrics = (
+                    action_loss_replay_interface_loss(
+                        model,
+                        batch,
+                        num_digits=num_digits,
+                        random_actions=args.action_loss_candidate_random,
+                        topk=args.action_loss_candidate_topk,
+                        local_radius=args.action_loss_candidate_local_radius,
+                        temperature=args.action_loss_candidate_temperature,
+                        generator=candidate_generator,
+                        cache=action_loss_replay_cache,
+                        step=step,
+                        refresh_every=args.action_loss_candidate_refresh_every,
+                        ema_beta=args.action_loss_candidate_ema_beta,
+                    )
                 )
-            )
+            else:
+                action_loss_interface_loss, action_loss_metrics = (
+                    action_loss_weighted_interface_loss(
+                        model,
+                        batch,
+                        num_digits=num_digits,
+                        random_actions=args.action_loss_candidate_random,
+                        topk=args.action_loss_candidate_topk,
+                        local_radius=args.action_loss_candidate_local_radius,
+                        temperature=args.action_loss_candidate_temperature,
+                        generator=candidate_generator,
+                    )
+                )
             action_loss_interface_loss_value = float(
                 action_loss_interface_loss.item()
             )
@@ -1778,6 +2043,10 @@ def run_variant(
     metrics["action_loss_candidate_temperature"] = (
         args.action_loss_candidate_temperature
     )
+    metrics["action_loss_candidate_refresh_every"] = (
+        args.action_loss_candidate_refresh_every
+    )
+    metrics["action_loss_candidate_ema_beta"] = args.action_loss_candidate_ema_beta
     metrics["input_proj_anchor_checkpoint"] = (
         str(args.input_proj_anchor_checkpoint)
         if args.input_proj_anchor_checkpoint is not None
@@ -1898,6 +2167,7 @@ def run_variant(
         if args.calculator_estimator in {
             "adaptive_interface",
             "action_loss_weighted_interface",
+            "action_loss_replay_interface",
         }:
             adaptive_rows = adaptive_interface_trace_rows(
                 model,
@@ -2064,6 +2334,7 @@ def parse_args() -> argparse.Namespace:
             "reinforce",
             "adaptive_interface",
             "action_loss_weighted_interface",
+            "action_loss_replay_interface",
         ],
         default="ste",
         help="Estimator for the learned calculator input interface.",
@@ -2118,6 +2389,24 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=1.0,
         help="Softmax temperature over answer-NLL-ranked action candidates.",
+    )
+    parser.add_argument(
+        "--action-loss-candidate-refresh-every",
+        type=int,
+        default=1,
+        help=(
+            "For action_loss_replay_interface, refresh cached per-prompt "
+            "answer-NLL candidate targets every N steps."
+        ),
+    )
+    parser.add_argument(
+        "--action-loss-candidate-ema-beta",
+        type=float,
+        default=0.0,
+        help=(
+            "For action_loss_replay_interface, EMA coefficient for refreshed "
+            "per-prompt soft targets."
+        ),
     )
     parser.add_argument(
         "--input-proj-anchor-checkpoint",
@@ -2261,7 +2550,11 @@ def main() -> None:
         raise ValueError("--calculator-estimator reinforce requires --variant model-c")
     if (
         args.calculator_estimator
-        in {"adaptive_interface", "action_loss_weighted_interface"}
+        in {
+            "adaptive_interface",
+            "action_loss_weighted_interface",
+            "action_loss_replay_interface",
+        }
         and args.variant != "model-c"
     ):
         raise ValueError(
@@ -2270,6 +2563,7 @@ def main() -> None:
     if args.calculator_estimator in {
         "adaptive_interface",
         "action_loss_weighted_interface",
+        "action_loss_replay_interface",
     }:
         if args.oracle_train:
             raise ValueError(
@@ -2300,6 +2594,10 @@ def main() -> None:
         raise ValueError("--action-loss-candidate-local-radius must be non-negative")
     if args.action_loss_candidate_temperature <= 0:
         raise ValueError("--action-loss-candidate-temperature must be positive")
+    if args.action_loss_candidate_refresh_every < 1:
+        raise ValueError("--action-loss-candidate-refresh-every must be positive")
+    if not 0 <= args.action_loss_candidate_ema_beta < 1:
+        raise ValueError("--action-loss-candidate-ema-beta must be in [0, 1)")
     if args.input_proj_anchor_weight < 0:
         raise ValueError("--input-proj-anchor-weight must be non-negative")
     if args.input_proj_anchor_decay_steps < 0:
@@ -2350,6 +2648,7 @@ def main() -> None:
     if args.calculator_estimator in {
         "adaptive_interface",
         "action_loss_weighted_interface",
+        "action_loss_replay_interface",
     }:
         if args.adaptive_interface_target_mode != "hard_pair":
             suffix_parts.append(args.adaptive_interface_target_mode)
@@ -2359,12 +2658,20 @@ def main() -> None:
             suffix_parts.append(f"uplr{args.upstream_lr:g}")
         if args.adaptive_interface_entropy_weight > 0:
             suffix_parts.append(f"ient{args.adaptive_interface_entropy_weight:g}")
-        if args.calculator_estimator == "action_loss_weighted_interface":
+        if args.calculator_estimator in {
+            "action_loss_weighted_interface",
+            "action_loss_replay_interface",
+        }:
             suffix_parts.append(
                 f"alrand{args.action_loss_candidate_random}"
                 f"-altop{args.action_loss_candidate_topk}"
                 f"-alloc{args.action_loss_candidate_local_radius}"
                 f"-alt{args.action_loss_candidate_temperature:g}"
+            )
+        if args.calculator_estimator == "action_loss_replay_interface":
+            suffix_parts.append(
+                f"alrefresh{args.action_loss_candidate_refresh_every}"
+                f"-alema{args.action_loss_candidate_ema_beta:g}"
             )
         if args.input_proj_anchor_weight > 0:
             suffix_parts.append(f"inanchor{args.input_proj_anchor_weight:g}")
@@ -2417,7 +2724,9 @@ def main() -> None:
         f"random={args.action_loss_candidate_random} "
         f"topk={args.action_loss_candidate_topk} "
         f"local_radius={args.action_loss_candidate_local_radius} "
-        f"temperature={args.action_loss_candidate_temperature}"
+        f"temperature={args.action_loss_candidate_temperature} "
+        f"refresh_every={args.action_loss_candidate_refresh_every} "
+        f"ema_beta={args.action_loss_candidate_ema_beta}"
     )
     print(
         "architecture: "
