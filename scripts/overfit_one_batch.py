@@ -74,6 +74,9 @@ class TrainConfig:
     action_loss_candidate_temperature: float
     action_loss_candidate_refresh_every: int
     action_loss_candidate_ema_beta: float
+    action_loss_full_enum_temperature: float
+    action_loss_full_enum_min_probability_floor: float
+    action_loss_full_enum_chunk_size: int
     input_proj_anchor_checkpoint: str | None
     input_proj_anchor_weight: float
     input_proj_anchor_decay_steps: int
@@ -494,6 +497,20 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "action_loss_candidate_learned_result_accuracy",
         "action_loss_candidate_soft_target_true_a_mass",
         "action_loss_candidate_soft_target_true_b_mass",
+        "action_loss_full_enum_temperature",
+        "action_loss_full_enum_min_probability_floor",
+        "action_loss_full_enum_chunk_size",
+        "action_loss_full_enum_best_nll",
+        "action_loss_full_enum_learned_nll",
+        "action_loss_full_enum_true_nll",
+        "action_loss_full_enum_learned_minus_true_gap",
+        "action_loss_full_enum_learned_minus_best_gap",
+        "action_loss_full_enum_true_best_fraction",
+        "action_loss_full_enum_learned_best_fraction",
+        "action_loss_full_enum_soft_target_true_a_mass",
+        "action_loss_full_enum_soft_target_true_b_mass",
+        "action_loss_full_enum_entropy",
+        "action_loss_full_enum_effective_pairs",
     ]
     fieldnames = preferred + sorted(
         {key for row in curve for key in row.keys()} - set(preferred)
@@ -826,6 +843,25 @@ def score_action_loss_candidates(
     ).reshape(batch_size, candidate_count)
 
 
+def score_action_loss_candidates_chunked(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    candidates: torch.Tensor,
+    *,
+    chunk_size: int,
+) -> torch.Tensor:
+    if chunk_size < 1:
+        raise ValueError("action-loss candidate chunk size must be positive")
+    losses = []
+    for start in range(0, candidates.shape[1], chunk_size):
+        losses.append(
+            score_action_loss_candidates(
+                model, batch, candidates[:, start : start + chunk_size]
+            )
+        )
+    return torch.cat(losses, dim=-1)
+
+
 def subset_arithmetic_batch(batch: ArithmeticBatch, indices: torch.Tensor) -> ArithmeticBatch:
     return ArithmeticBatch(
         x=batch.x.index_select(0, indices),
@@ -857,6 +893,105 @@ def action_loss_target_ce(
         -(target_a * a_logits.log_softmax(dim=-1)).sum(dim=-1).mean()
         + -(target_b * b_logits.log_softmax(dim=-1)).sum(dim=-1).mean()
     ) / 2
+
+
+def full_enum_action_pairs(*, classes: int, device: str | torch.device) -> torch.Tensor:
+    values = torch.arange(classes, device=device)
+    grid_a, grid_b = torch.meshgrid(values, values, indexing="ij")
+    return torch.stack([grid_a.reshape(-1), grid_b.reshape(-1)], dim=-1)
+
+
+def action_loss_weights_from_losses(
+    losses: torch.Tensor,
+    *,
+    temperature: float,
+    min_probability_floor: float,
+) -> torch.Tensor:
+    if temperature <= 0:
+        raise ValueError("full-enum action-loss temperature must be positive")
+    if min_probability_floor < 0:
+        raise ValueError("full-enum min probability floor must be non-negative")
+    if losses.ndim != 2:
+        raise ValueError("full-enum action losses must have shape [batch, actions]")
+    action_count = losses.shape[-1]
+    if min_probability_floor * action_count >= 1.0:
+        raise ValueError(
+            "full-enum min probability floor times action count must be < 1"
+        )
+    weights = torch.softmax(-losses / temperature, dim=-1)
+    if min_probability_floor > 0:
+        weights = weights.clamp_min(min_probability_floor)
+        weights = weights / weights.sum(dim=-1, keepdim=True)
+    return weights
+
+
+def action_loss_full_enum_interface_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    temperature: float,
+    min_probability_floor: float,
+    chunk_size: int,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    a_logits, b_logits, _, _ = calculator_read_operand_logits(model, batch)
+    classes = a_logits.shape[-1]
+    pairs = full_enum_action_pairs(classes=classes, device=batch.x.device)
+    candidates = pairs.unsqueeze(0).expand(batch.x.shape[0], -1, -1)
+    with torch.no_grad():
+        full_losses = score_action_loss_candidates_chunked(
+            model, batch, candidates, chunk_size=chunk_size
+        )
+        pair_weights = action_loss_weights_from_losses(
+            full_losses,
+            temperature=temperature,
+            min_probability_floor=min_probability_floor,
+        )
+    target_a, target_b = action_loss_soft_targets(
+        a_logits, b_logits, candidates, pair_weights
+    )
+    target_loss = action_loss_target_ce(a_logits, b_logits, target_a, target_b)
+
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    learned_a = a_logits.argmax(dim=-1)
+    learned_b = b_logits.argmax(dim=-1)
+    learned_idx = learned_a * classes + learned_b
+    true_idx = true_a * classes + true_b
+    best_idx = full_losses.argmin(dim=-1)
+    batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
+    learned_losses = full_losses.gather(1, learned_idx.unsqueeze(-1)).squeeze(-1)
+    true_losses = full_losses.gather(1, true_idx.unsqueeze(-1)).squeeze(-1)
+    best_losses = full_losses.gather(1, best_idx.unsqueeze(-1)).squeeze(-1)
+    entropy = -(pair_weights * pair_weights.clamp_min(1e-12).log()).sum(dim=-1)
+    metrics = {
+        "action_loss_full_enum_temperature": float(temperature),
+        "action_loss_full_enum_min_probability_floor": float(min_probability_floor),
+        "action_loss_full_enum_chunk_size": int(chunk_size),
+        "action_loss_full_enum_best_nll": float(best_losses.mean().item()),
+        "action_loss_full_enum_learned_nll": float(learned_losses.mean().item()),
+        "action_loss_full_enum_true_nll": float(true_losses.mean().item()),
+        "action_loss_full_enum_learned_minus_true_gap": float(
+            (learned_losses - true_losses).mean().item()
+        ),
+        "action_loss_full_enum_learned_minus_best_gap": float(
+            (learned_losses - best_losses).mean().item()
+        ),
+        "action_loss_full_enum_true_best_fraction": float(
+            (best_idx == true_idx).float().mean().item()
+        ),
+        "action_loss_full_enum_learned_best_fraction": float(
+            (best_idx == learned_idx).float().mean().item()
+        ),
+        "action_loss_full_enum_soft_target_true_a_mass": float(
+            target_a.gather(1, true_a.unsqueeze(-1)).mean().item()
+        ),
+        "action_loss_full_enum_soft_target_true_b_mass": float(
+            target_b.gather(1, true_b.unsqueeze(-1)).mean().item()
+        ),
+        "action_loss_full_enum_entropy": float(entropy.mean().item()),
+        "action_loss_full_enum_effective_pairs": float(entropy.exp().mean().item()),
+    }
+    return target_loss, metrics
 
 
 class ActionLossReplayCache:
@@ -1569,6 +1704,7 @@ def run_variant(
             "adaptive_interface",
             "action_loss_weighted_interface",
             "action_loss_replay_interface",
+            "action_loss_full_enum_interface",
         }
         and args.freeze_semantic_decoder
     ):
@@ -1579,6 +1715,7 @@ def run_variant(
             "adaptive_interface",
             "action_loss_weighted_interface",
             "action_loss_replay_interface",
+            "action_loss_full_enum_interface",
         }
         and args.freeze_upstream_encoder
     ):
@@ -1588,6 +1725,7 @@ def run_variant(
         "adaptive_interface",
         "action_loss_weighted_interface",
         "action_loss_replay_interface",
+        "action_loss_full_enum_interface",
     }:
         optim = torch.optim.AdamW(
             adaptive_optimizer_param_groups(
@@ -1653,6 +1791,11 @@ def run_variant(
         action_loss_candidate_temperature=args.action_loss_candidate_temperature,
         action_loss_candidate_refresh_every=args.action_loss_candidate_refresh_every,
         action_loss_candidate_ema_beta=args.action_loss_candidate_ema_beta,
+        action_loss_full_enum_temperature=args.action_loss_full_enum_temperature,
+        action_loss_full_enum_min_probability_floor=(
+            args.action_loss_full_enum_min_probability_floor
+        ),
+        action_loss_full_enum_chunk_size=args.action_loss_full_enum_chunk_size,
         input_proj_anchor_checkpoint=(
             str(args.input_proj_anchor_checkpoint)
             if args.input_proj_anchor_checkpoint is not None
@@ -1726,7 +1869,11 @@ def run_variant(
         use_action_loss_weighted_interface = (
             args.variant == "model-c"
             and args.calculator_estimator
-            in {"action_loss_weighted_interface", "action_loss_replay_interface"}
+            in {
+                "action_loss_weighted_interface",
+                "action_loss_replay_interface",
+                "action_loss_full_enum_interface",
+            }
             and not args.oracle_train
         )
         if use_reinforce:
@@ -1813,6 +1960,19 @@ def run_variant(
                         step=step,
                         refresh_every=args.action_loss_candidate_refresh_every,
                         ema_beta=args.action_loss_candidate_ema_beta,
+                    )
+                )
+            elif args.calculator_estimator == "action_loss_full_enum_interface":
+                action_loss_interface_loss, action_loss_metrics = (
+                    action_loss_full_enum_interface_loss(
+                        model,
+                        batch,
+                        num_digits=num_digits,
+                        temperature=args.action_loss_full_enum_temperature,
+                        min_probability_floor=(
+                            args.action_loss_full_enum_min_probability_floor
+                        ),
+                        chunk_size=args.action_loss_full_enum_chunk_size,
                     )
                 )
             else:
@@ -1938,8 +2098,8 @@ def run_variant(
                 )
                 + (
                     f" action_loss_interface_loss={action_loss_interface_loss_value:.4f}"
-                    f" better_frac={action_loss_metrics['action_loss_candidate_better_fraction']:.3f}"
-                    f" best_improve={action_loss_metrics['action_loss_candidate_best_improvement']:.3f}"
+                    f" better_frac={action_loss_metrics.get('action_loss_candidate_better_fraction', action_loss_metrics.get('action_loss_full_enum_learned_best_fraction', float('nan'))):.3f}"
+                    f" best_improve={action_loss_metrics.get('action_loss_candidate_best_improvement', action_loss_metrics.get('action_loss_full_enum_learned_minus_best_gap', float('nan'))):.3f}"
                     if use_action_loss_weighted_interface
                     else ""
                 )
@@ -2047,6 +2207,15 @@ def run_variant(
         args.action_loss_candidate_refresh_every
     )
     metrics["action_loss_candidate_ema_beta"] = args.action_loss_candidate_ema_beta
+    metrics["action_loss_full_enum_temperature"] = (
+        args.action_loss_full_enum_temperature
+    )
+    metrics["action_loss_full_enum_min_probability_floor"] = (
+        args.action_loss_full_enum_min_probability_floor
+    )
+    metrics["action_loss_full_enum_chunk_size"] = (
+        args.action_loss_full_enum_chunk_size
+    )
     metrics["input_proj_anchor_checkpoint"] = (
         str(args.input_proj_anchor_checkpoint)
         if args.input_proj_anchor_checkpoint is not None
@@ -2335,6 +2504,7 @@ def parse_args() -> argparse.Namespace:
             "adaptive_interface",
             "action_loss_weighted_interface",
             "action_loss_replay_interface",
+            "action_loss_full_enum_interface",
         ],
         default="ste",
         help="Estimator for the learned calculator input interface.",
@@ -2407,6 +2577,24 @@ def parse_args() -> argparse.Namespace:
             "For action_loss_replay_interface, EMA coefficient for refreshed "
             "per-prompt soft targets."
         ),
+    )
+    parser.add_argument(
+        "--action-loss-full-enum-temperature",
+        type=float,
+        default=1.0,
+        help="Softmax temperature over all answer-NLL-ranked action pairs.",
+    )
+    parser.add_argument(
+        "--action-loss-full-enum-min-probability-floor",
+        type=float,
+        default=0.0,
+        help="Optional per-action probability floor before renormalizing full-enum targets.",
+    )
+    parser.add_argument(
+        "--action-loss-full-enum-chunk-size",
+        type=int,
+        default=64,
+        help="Number of action pairs to score per forced-decoder chunk.",
     )
     parser.add_argument(
         "--input-proj-anchor-checkpoint",
@@ -2554,6 +2742,7 @@ def main() -> None:
             "adaptive_interface",
             "action_loss_weighted_interface",
             "action_loss_replay_interface",
+            "action_loss_full_enum_interface",
         }
         and args.variant != "model-c"
     ):
@@ -2564,6 +2753,7 @@ def main() -> None:
         "adaptive_interface",
         "action_loss_weighted_interface",
         "action_loss_replay_interface",
+        "action_loss_full_enum_interface",
     }:
         if args.oracle_train:
             raise ValueError(
@@ -2598,6 +2788,14 @@ def main() -> None:
         raise ValueError("--action-loss-candidate-refresh-every must be positive")
     if not 0 <= args.action_loss_candidate_ema_beta < 1:
         raise ValueError("--action-loss-candidate-ema-beta must be in [0, 1)")
+    if args.action_loss_full_enum_temperature <= 0:
+        raise ValueError("--action-loss-full-enum-temperature must be positive")
+    if args.action_loss_full_enum_min_probability_floor < 0:
+        raise ValueError(
+            "--action-loss-full-enum-min-probability-floor must be non-negative"
+        )
+    if args.action_loss_full_enum_chunk_size < 1:
+        raise ValueError("--action-loss-full-enum-chunk-size must be positive")
     if args.input_proj_anchor_weight < 0:
         raise ValueError("--input-proj-anchor-weight must be non-negative")
     if args.input_proj_anchor_decay_steps < 0:
@@ -2649,6 +2847,7 @@ def main() -> None:
         "adaptive_interface",
         "action_loss_weighted_interface",
         "action_loss_replay_interface",
+        "action_loss_full_enum_interface",
     }:
         if args.adaptive_interface_target_mode != "hard_pair":
             suffix_parts.append(args.adaptive_interface_target_mode)
@@ -2673,6 +2872,16 @@ def main() -> None:
                 f"alrefresh{args.action_loss_candidate_refresh_every}"
                 f"-alema{args.action_loss_candidate_ema_beta:g}"
             )
+        if args.calculator_estimator == "action_loss_full_enum_interface":
+            suffix_parts.append(
+                f"fullt{args.action_loss_full_enum_temperature:g}"
+                f"-fullchunk{args.action_loss_full_enum_chunk_size}"
+            )
+            if args.action_loss_full_enum_min_probability_floor > 0:
+                suffix_parts.append(
+                    "fullfloor"
+                    f"{args.action_loss_full_enum_min_probability_floor:g}"
+                )
         if args.input_proj_anchor_weight > 0:
             suffix_parts.append(f"inanchor{args.input_proj_anchor_weight:g}")
             if args.input_proj_anchor_decay_steps > 0:

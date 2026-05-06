@@ -363,3 +363,43 @@ Decision:
 - The answer-NLL candidate signal exists, but sampled-candidate replay/EMA still does not produce stable true-operand-like structure or nonzero learned-best action-loss fraction.
 - This is still no-go for upstream unfreezing.
 - Next recommended task: enumerate all `20 x 20` action pairs and train on full answer-NLL soft targets, removing candidate-sampling variance before attempting upstream distillation.
+
+## Full-enumeration action-loss teacher under frozen upstream
+
+- Date: 2026-05-05.
+- Task: `aiAgentProjectTasks/2026-05-05-phase-2-ninth-task-Full-action-enumeration-teacher-before-upstream-unfreezing.md`.
+- Work history: `aiAgentWorkHistory/phase2/2026-05-05-full-enum-action-loss-teacher.md`.
+- Code changes: added `calculator_estimator=action_loss_full_enum_interface`, chunked full `20 x 20` action scoring, soft answer-NLL action-pair targets marginalized to A/B operands, and `scripts/run_full_enum_action_loss_diagnostic.py`.
+- Primary config stayed strict: `digits=2`, `operand_max=19`, operand vocab `20`, `2L/1H/16d/mlp1`, hook after layer `1`, read position `operands`, bottleneck `answer_decoder`, `freeze_semantic_decoder=true`, `freeze_upstream_encoder=true`, `answer_loss_weight=1.0`, `aux_operand_loss_weight=0.0`, `input_proj_anchor_weight=0.0`, `input_proj_lr=0.0003`, `upstream_lr=0.0003`.
+- All primary finals proved `final_aux_operand_loss_weight=0.0`, `final_input_proj_anchor_weight=0.0`, `freeze_upstream_encoder=true`, and `trainable_parameter_groups=[calculator_hook.input_proj]`.
+- New artifacts were written under `/Users/jarnold/Documents/Codex/2026-05-05/please-work-in-this-repo-users` because repo-local `runs/` was not writable from this sandbox.
+
+Selected-checkpoint full-enum continuation result:
+
+| Run | Start gap | Best selected checkpoint | Best gap | Operand exact | Calc result acc | Learned best |
+| --- | ---: | --- | ---: | ---: | ---: | ---: |
+| selected seed1 | `2.1383` | start / step `00000` | `2.1383` | `0.5625` | `0.5938` | `0.0000` |
+| selected seed2 | `2.2018` | step `00200` | `2.0201` | `0.6250` | `0.6406` | `0.0000` |
+| selected seed3 | `2.4347` | step `00100` | `2.0627` | `0.5625` | `0.5938` | `0.0000` |
+
+Stage-B-started comparison:
+
+| Run | Final eval exact | Best checkpoint by action gap | Start gap | Best gap | Operand exact | Calc result acc | Learned best |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: |
+| StageB seed1 | `0.4727` | step `00600` | `3.0642` | `2.3293` | `0.5469` | `0.5625` | `0.0000` |
+| StageB seed2 | `0.4707` | step `00550` | `3.0642` | `2.1961` | `0.5625` | `0.6250` | `0.0000` |
+| StageB seed3 | `0.4355` | step `00500` | `3.0642` | `2.0223` | `0.5781` | `0.5938` | `0.0000` |
+
+Full-enum landscape and diagnostics:
+
+- Final selected checkpoints had full-enum best NLL `0.0997`, true NLL `0.0997`, learned NLL in `2.6643..3.1185`, and learned-true gaps in `2.5646..3.0189`.
+- Soft teacher targets remained broad: entropy `3.2194`, effective action pairs `29.21`, true-A marginal mass `0.0756`, true-B marginal mass `0.0767`.
+- Selected finals and selected snapshots preserved injection-zero `0.0000`, forced-random `0.0000`, oracle-at-eval `0.9063`, and true-sum forced-result best `0.9219` in the canonical 64-sample causal diagnostic.
+- Best selected private-protocol snapshot was selected seed2 step `00200`: all-pair answer `0.5300`, operand exact `0.5675`, calculator result accuracy `0.5750`, best affine A exact `0.9500`, best affine B exact `0.5975`.
+- Best selected seed2 step `00200` group behavior: carry answer exact `0.5072`, no-carry `0.6727`, large-operand `0.5167`, small-operands `0.5700`, symmetric `0.7000`.
+
+Conclusion:
+
+- Full enumeration is a useful teacher-quality diagnostic and improved the selected-start canonical gap in two of three continuations.
+- It is not sufficient evidence for upstream distillation: learned-best action-loss fraction stayed `0.0` everywhere, improvements were not robust through final checkpoints, and the soft targets remained broad rather than true-operand-like.
+- Recommendation: no upstream unfreezing/distillation yet. Pivot to better interface parameterization or curriculum under the frozen-upstream regime.

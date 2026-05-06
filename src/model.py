@@ -75,6 +75,7 @@ class CalculatorHook(nn.Module):
             "adaptive_interface",
             "action_loss_weighted_interface",
             "action_loss_replay_interface",
+            "action_loss_full_enum_interface",
         }:
             raise ValueError(f"unknown calculator estimator: {cfg.calculator_estimator}")
         if cfg.calculator_read_position not in {"eq", "operands"}:
@@ -142,6 +143,7 @@ class CalculatorHook(nn.Module):
                 "adaptive_interface",
                 "action_loss_weighted_interface",
                 "action_loss_replay_interface",
+                "action_loss_full_enum_interface",
             }:
                 flat_a_logits = a_logits.reshape(-1, self.operand_vocab_size)
                 flat_b_logits = b_logits.reshape(-1, self.operand_vocab_size)
