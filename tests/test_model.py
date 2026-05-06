@@ -991,6 +991,59 @@ def test_joint_full_enum_interface_loss_updates_pair_projection_only() -> None:
     assert model.tok_emb.weight.grad is None
 
 
+def test_joint_auxiliary_operand_loss_updates_pair_projection_only() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_joint_aux_loss", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_estimator="action_loss_full_enum_joint_interface",
+        calculator_action_head="joint_pair",
+        calculator_read_position="operands",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    model = TinyGPT(cfg)
+    overfit_script.freeze_semantic_decoder_parameters(model)
+    overfit_script.freeze_upstream_encoder_parameters(model)
+    batch = overfit_script.make_range_batch(
+        batch_size=4,
+        num_digits=1,
+        operand_max=2,
+        rng=__import__("random").Random(3),
+        fixed_width=True,
+        device="cpu",
+    )
+
+    loss = overfit_script.auxiliary_operand_loss(
+        model,
+        batch,
+        num_digits=1,
+        grad_upstream=False,
+    )
+    loss.backward()
+
+    assert loss.item() > 0
+    assert model.calculator_hook is not None
+    assert model.calculator_hook.pair_proj is not None
+    assert model.calculator_hook.pair_proj.weight.grad is not None
+    assert model.calculator_hook.input_proj.weight.grad is None
+    assert model.tok_emb.weight.grad is None
+
+
 def test_training_oracle_operand_extraction_from_fixed_width_batch() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_script", script_path)

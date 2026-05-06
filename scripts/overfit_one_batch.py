@@ -1773,6 +1773,38 @@ def auxiliary_operand_loss(
         target_a = targets[batch_idx, a_pos, 0]
         target_b = targets[batch_idx, b_pos, 1]
 
+    if model.cfg.calculator_action_head == "joint_pair":
+        classes = model.cfg.calculator_operand_vocab_size
+        target_pair = target_a * classes + target_b
+        if grad_upstream:
+            pair_logits, _, _, _ = calculator_read_pair_logits(model, batch)
+        else:
+            with torch.no_grad():
+                B, T = batch.x.shape
+                assert T <= model.cfg.block_size, (
+                    f"sequence length {T} > block_size {model.cfg.block_size}"
+                )
+                pos = torch.arange(T, device=batch.x.device)
+                residual = model.tok_emb(batch.x) + model.pos_emb(pos)
+                if model.cfg.calculator_hook_after_layer > 0:
+                    for i, block in enumerate(model.blocks, start=1):
+                        residual = block(residual)
+                        if i == model.cfg.calculator_hook_after_layer:
+                            break
+                positions = model._calculator_read_positions(batch.x)
+                pair_input = torch.cat(
+                    [
+                        residual[batch_idx, positions["a"]],
+                        residual[batch_idx, positions["b"]],
+                    ],
+                    dim=-1,
+                ).detach()
+        if not grad_upstream:
+            if model.calculator_hook.pair_proj is None:
+                raise ValueError("joint auxiliary loss requires a pair projection")
+            pair_logits = model.calculator_hook.pair_proj(pair_input)
+        return torch.nn.functional.cross_entropy(pair_logits, target_pair)
+
     if grad_upstream:
         a_eq_logits, b_eq_logits, _, _ = calculator_read_operand_logits(model, batch)
     else:
