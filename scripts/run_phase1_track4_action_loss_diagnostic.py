@@ -20,7 +20,7 @@ from scripts.diagnose_calculator_protocol import (  # noqa: E402
     make_problem,
     pick_device,
 )
-from src.data import EQ_ID, tokenize  # noqa: E402
+from src.data import ANSWER_FORMATS, AnswerFormat, EQ_ID, tokenize  # noqa: E402
 from src.model import TinyGPT  # noqa: E402
 
 
@@ -250,6 +250,7 @@ def action_loss_diagnostic(
     seed: int,
     device: str | torch.device,
     oracle_base: bool,
+    answer_format: AnswerFormat = "sum",
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]], dict[str, Any]]:
     rng = random.Random(seed)
     model.eval()
@@ -267,7 +268,12 @@ def action_loss_diagnostic(
         sample = int(spec["sample"])
         true_a = int(spec["true_a"])
         true_b = int(spec["true_b"])
-        prompt_ids, target_answer = make_problem(true_a, true_b, num_digits)
+        prompt_ids, target_answer = make_problem(
+            true_a,
+            true_b,
+            num_digits,
+            answer_format=answer_format,
+        )
         learned = learned_action_for_prompt(
             model,
             prompt_ids=prompt_ids,
@@ -494,6 +500,7 @@ def run_manifest(args: argparse.Namespace) -> list[dict[str, Any]]:
             seed=args.seed + 40_000,
             device=device,
             oracle_base=item.oracle,
+            answer_format=args.answer_format,
         )
         classification = track3_classification(checkpoint)
         summary.update(
@@ -503,6 +510,7 @@ def run_manifest(args: argparse.Namespace) -> list[dict[str, Any]]:
                 "checkpoint": str(checkpoint),
                 "device": device,
                 "oracle_base": item.oracle,
+                "answer_format": args.answer_format,
                 "calculator_injection_mode": model.cfg.calculator_injection_mode,
                 "calculator_bottleneck_mode": model.cfg.calculator_bottleneck_mode,
                 "calculator_read_position": model.cfg.calculator_read_position,
@@ -626,6 +634,15 @@ def parse_args() -> argparse.Namespace:
         help="Run the action-loss diagnostic on explicit checkpoint path(s).",
     )
     parser.add_argument("--digits", type=int, default=2)
+    parser.add_argument(
+        "--answer-format",
+        choices=ANSWER_FORMATS,
+        default="sum",
+        help=(
+            "Answer target format. 'sum' preserves existing addition behavior; "
+            "'sum_left_operand' emits zero-padded sum plus left operand."
+        ),
+    )
     parser.add_argument("--operand-max", type=int, default=19)
     parser.add_argument(
         "--oracle",

@@ -13,13 +13,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import torch
 
 from src.data import (
+    ANSWER_FORMATS,
+    AnswerFormat,
     EOS_ID,
     EQ_ID,
     ID_TO_TOKEN,
     ArithmeticBatch,
+    answer_target,
     make_loss_mask,
     detokenize,
     make_batch,
+    max_answer_tokens,
     max_sequence_length,
     pad_sequence,
     tokenize,
@@ -46,6 +50,7 @@ class TrainConfig:
     eval_samples: int
     lr: float
     answer_loss_weight: float
+    answer_format: str
     weight_decay: float
     grad_clip: float
     fixed_width: bool
@@ -110,13 +115,23 @@ def decode_tokens(ids: list[int]) -> str:
 
 
 def make_problem(
-    a: int, b: int, num_digits: int, fixed_width: bool
+    a: int,
+    b: int,
+    num_digits: int,
+    fixed_width: bool,
+    answer_format: AnswerFormat = "sum",
 ) -> tuple[list[int], str]:
     if fixed_width:
         prompt = f"{a:0{num_digits}d}+{b:0{num_digits}d}="
     else:
         prompt = f"{a}+{b}="
-    return tokenize(prompt), f"{a + b}<eos>"
+    return tokenize(prompt), answer_target(
+        a,
+        b,
+        num_digits,
+        answer_format=answer_format,
+        fixed_width=fixed_width,
+    )
 
 
 @contextmanager
@@ -177,13 +192,14 @@ def evaluate(
     samples: int,
     seed: int,
     fixed_width: bool,
+    answer_format: AnswerFormat,
     device: str | torch.device,
     oracle_train: bool,
     calculator_result_override: str = "add",
     injection_scale: float | None = None,
 ) -> dict[str, object]:
     rng = random.Random(seed)
-    max_answer_tokens = num_digits + 2
+    answer_tokens = max_answer_tokens(num_digits, answer_format=answer_format)
     exact = 0
     examples: list[dict[str, str | bool]] = []
 
@@ -193,13 +209,19 @@ def evaluate(
         for i in range(samples):
             a = rng.randint(0, operand_max)
             b = rng.randint(0, operand_max)
-            prompt_ids, target = make_problem(a, b, num_digits, fixed_width=fixed_width)
+            prompt_ids, target = make_problem(
+                a,
+                b,
+                num_digits,
+                fixed_width=fixed_width,
+                answer_format=answer_format,
+            )
             oracle_operands = (a, b) if oracle_train else None
             pred_ids = trim_after_eos(
                 generate_answer(
                     model,
                     prompt_ids,
-                    max_answer_tokens,
+                    answer_tokens,
                     device,
                     oracle_operands=oracle_operands,
                     calculator_result_override=calculator_result_override,
@@ -239,20 +261,27 @@ def calculator_trace_rows(
     seed: int,
     device: str | torch.device,
     oracle_train: bool,
+    answer_format: AnswerFormat,
     calculator_result_override: str = "add",
     injection_scale: float | None = None,
 ) -> list[dict[str, object]]:
     rng = random.Random(seed)
     torch.manual_seed(seed)
     rows: list[dict[str, object]] = []
-    max_answer_tokens = num_digits + 2
+    answer_tokens = max_answer_tokens(num_digits, answer_format=answer_format)
     was_training = model.training
     model.eval()
     with temporary_calculator_injection_scale(model, injection_scale):
         for i in range(samples):
             a = rng.randint(0, operand_max)
             b = rng.randint(0, operand_max)
-            prompt_ids, target = make_problem(a, b, num_digits, fixed_width=True)
+            prompt_ids, target = make_problem(
+                a,
+                b,
+                num_digits,
+                fixed_width=True,
+                answer_format=answer_format,
+            )
             x = torch.tensor([prompt_ids], dtype=torch.long, device=device)
             oracle_operands = None
             if oracle_train:
@@ -270,7 +299,7 @@ def calculator_trace_rows(
                 generate_answer(
                     model,
                     prompt_ids,
-                    max_answer_tokens,
+                    answer_tokens,
                     device,
                     oracle_operands=(a, b) if oracle_train else None,
                     calculator_result_override=calculator_result_override,
@@ -389,6 +418,7 @@ def snapshot_row_from_model(
     samples: int,
     seed: int,
     device: str | torch.device,
+    answer_format: AnswerFormat,
 ) -> dict[str, object]:
     normal_rows = calculator_trace_rows(
         model,
@@ -398,6 +428,7 @@ def snapshot_row_from_model(
         seed=seed,
         device=device,
         oracle_train=False,
+        answer_format=answer_format,
     )
     normal = summarize_trace_rows(normal_rows)
 
@@ -408,6 +439,7 @@ def snapshot_row_from_model(
         samples=samples,
         seed=seed,
         fixed_width=True,
+        answer_format=answer_format,
         device=device,
         oracle_train=False,
         injection_scale=0.0,
@@ -419,6 +451,7 @@ def snapshot_row_from_model(
         samples=samples,
         seed=seed,
         fixed_width=True,
+        answer_format=answer_format,
         device=device,
         oracle_train=True,
     )
@@ -429,6 +462,7 @@ def snapshot_row_from_model(
         samples=samples,
         seed=seed,
         fixed_width=True,
+        answer_format=answer_format,
         device=device,
         oracle_train=False,
         calculator_result_override="zero",
@@ -440,6 +474,7 @@ def snapshot_row_from_model(
         samples=samples,
         seed=seed,
         fixed_width=True,
+        answer_format=answer_format,
         device=device,
         oracle_train=False,
         calculator_result_override="random",
@@ -1446,6 +1481,7 @@ def adaptive_interface_trace_rows(
     seed: int,
     device: str | torch.device,
     target_mode: str,
+    answer_format: AnswerFormat = "sum",
 ) -> list[dict[str, object]]:
     rng = random.Random(seed)
     batch = make_range_batch(
@@ -1455,6 +1491,7 @@ def adaptive_interface_trace_rows(
         rng=rng,
         fixed_width=True,
         device=device,
+        answer_format=answer_format,
     )
     was_training = model.training
     model.eval()
@@ -1731,17 +1768,28 @@ def make_range_batch(
     rng: random.Random,
     fixed_width: bool,
     device: str | torch.device,
+    answer_format: AnswerFormat = "sum",
 ) -> ArithmeticBatch:
-    seq_len = max_sequence_length(num_digits)
+    seq_len = max_sequence_length(num_digits, answer_format=answer_format)
     samples: list[list[int]] = []
     masks: list[list[int]] = []
     for _ in range(batch_size):
         a = rng.randint(0, operand_max)
         b = rng.randint(0, operand_max)
         if fixed_width:
-            ids = tokenize(f"{a:0{num_digits}d}+{b:0{num_digits}d}={a + b}<eos>")
+            prompt = f"{a:0{num_digits}d}+{b:0{num_digits}d}="
         else:
-            ids = tokenize(f"{a}+{b}={a + b}<eos>")
+            prompt = f"{a}+{b}="
+        ids = tokenize(
+            prompt
+            + answer_target(
+                a,
+                b,
+                num_digits,
+                answer_format=answer_format,
+                fixed_width=fixed_width,
+            )
+        )
         samples.append(pad_sequence(ids, seq_len))
         masks.append(pad_sequence(make_loss_mask(ids), seq_len, pad_id=0))
 
@@ -1858,6 +1906,7 @@ def make_model_config(
     calculator_read_position: str = "eq",
     calculator_injection_mode: str = "add",
     calculator_bottleneck_mode: str = "none",
+    answer_format: AnswerFormat = "sum",
     n_layer: int = 4,
     n_head: int = 4,
     n_embd: int = 128,
@@ -1870,7 +1919,7 @@ def make_model_config(
     if calculator_hook_after_layer is None:
         calculator_hook_after_layer = min(2, n_layer)
     return GPTConfig(
-        block_size=max_sequence_length(num_digits) - 1,
+        block_size=max_sequence_length(num_digits, answer_format=answer_format) - 1,
         n_layer=n_layer,
         n_head=n_head,
         n_embd=n_embd,
@@ -1925,6 +1974,7 @@ def run_variant(
         calculator_read_position=args.calculator_read_position,
         calculator_injection_mode=args.calculator_injection_mode,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
+        answer_format=args.answer_format,
         n_layer=args.n_layer,
         n_head=args.n_head,
         n_embd=args.n_embd,
@@ -2003,6 +2053,7 @@ def run_variant(
         eval_samples=args.eval_samples,
         lr=args.lr,
         answer_loss_weight=args.answer_loss_weight,
+        answer_format=args.answer_format,
         weight_decay=args.weight_decay,
         grad_clip=args.grad_clip,
         fixed_width=True,
@@ -2084,6 +2135,7 @@ def run_variant(
                 num_digits=num_digits,
                 rng=rng,
                 fixed_width=True,
+                answer_format=args.answer_format,
                 device=device,
             )
         else:
@@ -2094,6 +2146,7 @@ def run_variant(
                 rng=rng,
                 fixed_width=True,
                 device=device,
+                answer_format=args.answer_format,
             )
         oracle_operands = None
         use_oracle_for_step = args.oracle_train or (
@@ -2398,6 +2451,7 @@ def run_variant(
                 samples=args.snapshot_samples,
                 seed=seed + 30_000 + step,
                 device=device,
+                answer_format=args.answer_format,
             )
             snapshots.append(snapshot)
             if args.checkpoint_every > 0 and step % args.checkpoint_every == 0:
@@ -2444,6 +2498,7 @@ def run_variant(
         samples=args.eval_samples,
         seed=seed + 10_000,
         fixed_width=True,
+        answer_format=args.answer_format,
         device=device,
         oracle_train=args.oracle_train,
     )
@@ -2456,6 +2511,7 @@ def run_variant(
     metrics["oracle_train"] = args.oracle_train
     metrics["oracle_warmup_steps"] = args.oracle_warmup_steps
     metrics["answer_loss_weight"] = args.answer_loss_weight
+    metrics["answer_format"] = args.answer_format
     metrics["aux_operand_loss_floor"] = args.aux_operand_loss_floor
     metrics["calculator_estimator"] = args.calculator_estimator
     metrics["calculator_action_head"] = args.calculator_action_head
@@ -2541,6 +2597,7 @@ def run_variant(
             rng=aux_eval_rng,
             fixed_width=True,
             device=device,
+            answer_format=args.answer_format,
         )
         with torch.no_grad():
             metrics["final_aux_operand_loss"] = float(
@@ -2564,6 +2621,7 @@ def run_variant(
             seed=seed + 20_000,
             device=device,
             oracle_train=args.oracle_train,
+            answer_format=args.answer_format,
         )
         trace_summary = summarize_trace_rows(trace_rows)
         metrics["diagnostic_summary"] = trace_summary
@@ -2577,6 +2635,7 @@ def run_variant(
                 samples=counterfactual_samples,
                 seed=seed + 21_000,
                 fixed_width=True,
+                answer_format=args.answer_format,
                 device=device,
                 oracle_train=False,
                 injection_scale=0.0,
@@ -2588,6 +2647,7 @@ def run_variant(
                 samples=counterfactual_samples,
                 seed=seed + 21_000,
                 fixed_width=True,
+                answer_format=args.answer_format,
                 device=device,
                 oracle_train=True,
             )["exact_match"],
@@ -2598,6 +2658,7 @@ def run_variant(
                 samples=counterfactual_samples,
                 seed=seed + 21_000,
                 fixed_width=True,
+                answer_format=args.answer_format,
                 device=device,
                 oracle_train=False,
                 calculator_result_override="zero",
@@ -2609,6 +2670,7 @@ def run_variant(
                 samples=counterfactual_samples,
                 seed=seed + 21_000,
                 fixed_width=True,
+                answer_format=args.answer_format,
                 device=device,
                 oracle_train=False,
                 calculator_result_override="random",
@@ -2631,6 +2693,7 @@ def run_variant(
                 seed=seed + 22_000,
                 device=device,
                 target_mode=args.adaptive_interface_target_mode,
+                answer_format=args.answer_format,
             )
             adaptive_summary = summarize_adaptive_interface_rows(adaptive_rows)
             metrics["adaptive_interface_diagnostic_summary"] = adaptive_summary
@@ -2681,6 +2744,15 @@ def parse_args() -> argparse.Namespace:
         type=float,
         default=1.0,
         help="Weight on normal next-token answer loss; set to 0 for aux-only warm starts.",
+    )
+    parser.add_argument(
+        "--answer-format",
+        choices=ANSWER_FORMATS,
+        default="sum",
+        help=(
+            "Answer target format. 'sum' preserves existing addition behavior; "
+            "'sum_left_operand' emits zero-padded sum plus left operand."
+        ),
     )
     parser.add_argument(
         "--operand-max",

@@ -17,6 +17,7 @@ from scripts.diagnose_calculator_protocol import (  # noqa: E402
     summarize_rows,
     write_rows,
 )
+from src.data import ANSWER_FORMATS  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -25,6 +26,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--checkpoint", type=Path, required=True)
     parser.add_argument("--digits", type=int, default=2)
+    parser.add_argument(
+        "--answer-format",
+        choices=ANSWER_FORMATS,
+        default="sum",
+        help=(
+            "Answer target format. 'sum' preserves existing addition behavior; "
+            "'sum_left_operand' emits zero-padded sum plus left operand."
+        ),
+    )
     parser.add_argument("--operand-max", type=int, default=19)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--output-dir", type=Path, required=True)
@@ -264,6 +274,7 @@ def main() -> None:
         oracle=False,
         calculator_result_override="add",
         sample_specs=sample_specs,
+        answer_format=args.answer_format,
     )
 
     a_map = majority_mapping(normal_rows, pred_key="a_pred", true_key="true_a")
@@ -356,6 +367,7 @@ def main() -> None:
             calculator_result_override="add",
             calculator_read_intervention=intervention,
             sample_specs=sample_specs,
+            answer_format=args.answer_format,
         )
         write_rows(
             args.output_dir / f"intervention_{intervention}.csv",
@@ -372,6 +384,7 @@ def main() -> None:
             "checkpoint": str(args.checkpoint),
             "device": device,
             "digits": args.digits,
+            "answer_format": args.answer_format,
             "operand_max": args.operand_max,
             "pairs": len(normal_rows),
             "train_config_seed": train_config.get("seed"),

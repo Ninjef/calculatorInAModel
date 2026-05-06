@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from src.data import EQ_ID, PLUS_ID, VOCAB_SIZE
+from src.data import EQ_ID, PLUS_ID, VOCAB_SIZE, tokenize
 from src.model import CalculatorHook, GPTConfig, HardAddSTE, TinyGPT, masked_cross_entropy
 from scripts.summarize_matched_retention_ladder import (
     select_checkpoint,
@@ -505,6 +505,20 @@ def test_calculator_operands_read_position_reads_operand_tokens_and_injects_at_e
     assert torch.all(injection[0, :5] == 0)
     assert torch.all(injection[0, 6:] == 0)
     assert torch.all(injection[0, 5] != 0)
+
+
+def test_calculator_operand_read_positions_ignore_longer_answer_format() -> None:
+    cfg = _small_calculator_cfg(mode="add")
+    cfg.calculator_read_position = "operands"
+    hook = CalculatorHook(cfg)
+    h = torch.randn(1, 12, cfg.n_embd)
+    tokens = torch.tensor([tokenize("07+12=01907<eos>")])
+
+    _, trace = hook(h, tokens, return_trace=True)
+
+    assert trace["a_read_position"][0, 5].item() == 1
+    assert trace["b_read_position"][0, 5].item() == 4
+    assert trace["eq_read_position"][0, 5].item() == 5
 
 
 def test_calculator_operands_read_position_uses_first_equals_as_prompt_anchor() -> None:

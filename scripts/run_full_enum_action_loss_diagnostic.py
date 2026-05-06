@@ -26,7 +26,7 @@ from scripts.overfit_one_batch import (  # noqa: E402
     make_range_batch,
     score_action_loss_candidates_chunked,
 )
-from src.data import EQ_ID  # noqa: E402
+from src.data import ANSWER_FORMATS, AnswerFormat, EQ_ID  # noqa: E402
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -61,6 +61,7 @@ def full_enum_diagnostic(
     chunk_size: int,
     seed: int,
     device: str,
+    answer_format: AnswerFormat,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     model, train_config = load_checkpoint(checkpoint, device=device, injection_scale=None)
     model.eval()
@@ -76,6 +77,7 @@ def full_enum_diagnostic(
             rng=rng,
             fixed_width=True,
             device=device,
+            answer_format=answer_format,
         )
         if model.cfg.calculator_action_head == "joint_pair":
             pair_logits, _, _, _ = calculator_read_pair_logits(model, batch)
@@ -220,6 +222,7 @@ def full_enum_diagnostic(
         "checkpoint": str(checkpoint),
         "samples": len(rows),
         "digits": digits,
+        "answer_format": answer_format,
         "operand_max": operand_max,
         "temperature": temperature,
         "min_probability_floor": min_probability_floor,
@@ -303,6 +306,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--samples", type=int, default=128)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--digits", type=int, default=2)
+    parser.add_argument(
+        "--answer-format",
+        choices=ANSWER_FORMATS,
+        default="sum",
+        help=(
+            "Answer target format. 'sum' preserves existing addition behavior; "
+            "'sum_left_operand' emits zero-padded sum plus left operand."
+        ),
+    )
     parser.add_argument("--operand-max", type=int, default=19)
     parser.add_argument("--temperature", type=float, default=1.0)
     parser.add_argument("--min-probability-floor", type=float, default=0.0)
@@ -346,6 +358,7 @@ def main() -> None:
             chunk_size=args.chunk_size,
             seed=args.seed,
             device=device,
+            answer_format=args.answer_format,
         )
         summary["output_dir"] = str(output_dir)
         summary["device"] = device

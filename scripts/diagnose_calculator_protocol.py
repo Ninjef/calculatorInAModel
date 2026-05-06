@@ -17,11 +17,15 @@ import torch
 import torch.nn as nn
 
 from src.data import (
+    ANSWER_FORMATS,
+    AnswerFormat,
     EOS_ID,
     EQ_ID,
     ID_TO_TOKEN,
     ArithmeticBatch,
+    answer_target,
     make_loss_mask,
+    max_answer_tokens,
     max_sequence_length,
     pad_sequence,
     tokenize,
@@ -60,12 +64,13 @@ def make_model_config(
     calculator_hook_after_layer: int | None = None,
     calculator_read_position: str = "eq",
     calculator_bottleneck_mode: str = "none",
+    answer_format: AnswerFormat = "sum",
 ) -> GPTConfig:
     operand_vocab_size = operand_vocab_size or 10**num_digits
     if calculator_hook_after_layer is None:
         calculator_hook_after_layer = min(2, n_layer)
     return GPTConfig(
-        block_size=max_sequence_length(num_digits) - 1,
+        block_size=max_sequence_length(num_digits, answer_format=answer_format) - 1,
         n_layer=n_layer,
         n_head=n_head,
         n_embd=n_embd,
@@ -81,9 +86,20 @@ def make_model_config(
     )
 
 
-def make_problem(a: int, b: int, num_digits: int) -> tuple[list[int], str]:
+def make_problem(
+    a: int,
+    b: int,
+    num_digits: int,
+    answer_format: AnswerFormat = "sum",
+) -> tuple[list[int], str]:
     prompt = f"{a:0{num_digits}d}+{b:0{num_digits}d}="
-    return tokenize(prompt), f"{a + b}<eos>"
+    return tokenize(prompt), answer_target(
+        a,
+        b,
+        num_digits,
+        answer_format=answer_format,
+        fixed_width=True,
+    )
 
 
 def trim_after_eos(ids: list[int]) -> list[int]:
@@ -108,14 +124,24 @@ def make_range_batch(
     operand_max: int,
     rng: random.Random,
     device: str | torch.device,
+    answer_format: AnswerFormat = "sum",
 ) -> ArithmeticBatch:
-    seq_len = max_sequence_length(num_digits)
+    seq_len = max_sequence_length(num_digits, answer_format=answer_format)
     samples: list[list[int]] = []
     masks: list[list[int]] = []
     for _ in range(batch_size):
         a = rng.randint(0, operand_max)
         b = rng.randint(0, operand_max)
-        ids = tokenize(f"{a:0{num_digits}d}+{b:0{num_digits}d}={a + b}<eos>")
+        ids = tokenize(
+            f"{a:0{num_digits}d}+{b:0{num_digits}d}="
+            + answer_target(
+                a,
+                b,
+                num_digits,
+                answer_format=answer_format,
+                fixed_width=True,
+            )
+        )
         samples.append(pad_sequence(ids, seq_len))
         masks.append(pad_sequence(make_loss_mask(ids), seq_len, pad_id=0))
 
@@ -139,6 +165,7 @@ def train_fresh_model(args: argparse.Namespace, device: str) -> TinyGPT:
         calculator_hook_after_layer=args.calculator_hook_after_layer,
         calculator_read_position=args.calculator_read_position,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
+        answer_format=args.answer_format,
     )
     model = TinyGPT(cfg).to(device)
     optim = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=(0.9, 0.95))
@@ -150,6 +177,7 @@ def train_fresh_model(args: argparse.Namespace, device: str) -> TinyGPT:
             operand_max=args.operand_max,
             rng=rng,
             device=device,
+            answer_format=args.answer_format,
         )
         logits = model(batch.x)
         loss = masked_cross_entropy(logits, batch.y, batch.loss_mask)
@@ -288,11 +316,12 @@ def diagnostic_rows(
     forced_calculator_result_class: int | torch.Tensor | None = None,
     calculator_read_intervention: str | None = None,
     sample_specs: list[dict[str, Any]] | None = None,
+    answer_format: AnswerFormat = "sum",
 ) -> list[dict[str, Any]]:
     rng = random.Random(seed)
     torch.manual_seed(seed)
     rows: list[dict[str, Any]] = []
-    max_answer_tokens = num_digits + 2
+    answer_tokens = max_answer_tokens(num_digits, answer_format=answer_format)
     model.eval()
     if sample_specs is None:
         sample_specs = [
@@ -303,7 +332,12 @@ def diagnostic_rows(
         i = int(spec.get("sample", fallback_i))
         a = int(spec["true_a"])
         b = int(spec["true_b"])
-        prompt_ids, target = make_problem(a, b, num_digits)
+        prompt_ids, target = make_problem(
+            a,
+            b,
+            num_digits,
+            answer_format=answer_format,
+        )
         x = torch.tensor([prompt_ids], dtype=torch.long, device=device)
         oracle_operands = None
         if oracle:
@@ -323,7 +357,7 @@ def diagnostic_rows(
             prompt_ids=prompt_ids,
             a=a,
             b=b,
-            max_new_tokens=max_answer_tokens,
+            max_new_tokens=answer_tokens,
             device=device,
             oracle=oracle,
             calculator_result_override=calculator_result_override,
@@ -658,12 +692,13 @@ def forced_result_sweep(
     oracle: bool,
     calculator_result_override: str,
     batch_size: int = 64,
+    answer_format: AnswerFormat = "sum",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     if model.calculator_hook is None:
         raise ValueError("--forced-result-sweep requires a calculator-enabled model")
     sweep_rows: list[dict[str, Any]] = []
     result_vocab_size = model.cfg.calculator_result_vocab_size
-    max_answer_tokens = num_digits + 2
+    answer_tokens = max_answer_tokens(num_digits, answer_format=answer_format)
     for normal_row in normal_rows:
         prompt_ids = tokenize(normal_row["prompt"])
         a = int(normal_row["true_a"])
@@ -682,7 +717,7 @@ def forced_result_sweep(
                 a=a,
                 b=b,
                 forced_classes=forced_classes,
-                max_new_tokens=max_answer_tokens,
+                max_new_tokens=answer_tokens,
                 device=device,
                 oracle=oracle,
                 calculator_result_override=calculator_result_override,
@@ -843,10 +878,11 @@ def evaluate_exact_match_from_rows(
     injection_scale: float | None = None,
     force_learned_result: bool = False,
     calculator_read_intervention: str | None = None,
+    answer_format: AnswerFormat = "sum",
 ) -> dict[str, Any]:
     correct = 0
     rows: list[dict[str, Any]] = []
-    max_answer_tokens = num_digits + 2
+    answer_tokens = max_answer_tokens(num_digits, answer_format=answer_format)
     with temporary_calculator_injection_scale(model, injection_scale):
         for row in base_rows:
             a = int(row["true_a"])
@@ -863,7 +899,7 @@ def evaluate_exact_match_from_rows(
                 prompt_ids=prompt_ids,
                 a=a,
                 b=b,
-                max_new_tokens=max_answer_tokens,
+                max_new_tokens=answer_tokens,
                 device=device,
                 oracle=oracle,
                 calculator_result_override=calculator_result_override,
@@ -898,6 +934,7 @@ def counterfactual_exact_match_table(
     num_digits: int,
     device: str | torch.device,
     base_oracle: bool = False,
+    answer_format: AnswerFormat = "sum",
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     specs = [
         ("normal", {"oracle": base_oracle}),
@@ -929,6 +966,7 @@ def counterfactual_exact_match_table(
             base_rows=base_rows,
             num_digits=num_digits,
             device=device,
+            answer_format=answer_format,
             **kwargs,
         )
         table.append(
@@ -1183,6 +1221,15 @@ def parse_args() -> argparse.Namespace:
         help="Used only when training a fresh diagnostic model.",
     )
     parser.add_argument("--digits", type=int, default=1)
+    parser.add_argument(
+        "--answer-format",
+        choices=ANSWER_FORMATS,
+        default="sum",
+        help=(
+            "Answer target format. 'sum' preserves existing addition behavior; "
+            "'sum_left_operand' emits zero-padded sum plus left operand."
+        ),
+    )
     parser.add_argument("--samples", type=int, default=64)
     parser.add_argument("--operand-max", type=int, default=None)
     parser.add_argument(
@@ -1348,6 +1395,7 @@ def main() -> None:
         oracle=args.oracle,
         calculator_result_override=args.calculator_result_override,
         forced_calculator_result_class=args.forced_calculator_result_class,
+        answer_format=args.answer_format,
     )
     summary = summarize_rows(rows)
     result_codebook = write_codebook(output_dir / "result_codebook.csv", rows)
@@ -1358,6 +1406,7 @@ def main() -> None:
         num_digits=args.digits,
         device=device,
         base_oracle=args.oracle,
+        answer_format=args.answer_format,
     )
     write_rows(output_dir / "counterfactual_exact_match.csv", counterfactual_table)
     for condition, condition_rows in counterfactual_detail_rows.items():
@@ -1373,6 +1422,7 @@ def main() -> None:
         {
             "device": device,
             "digits": args.digits,
+            "answer_format": args.answer_format,
             "operand_max": operand_max,
             "oracle": args.oracle,
             "calculator_result_override": args.calculator_result_override,
@@ -1422,6 +1472,7 @@ def main() -> None:
             oracle=args.oracle,
             calculator_result_override=args.calculator_result_override,
             batch_size=args.forced_result_batch_size,
+            answer_format=args.answer_format,
         )
         write_rows(output_dir / "forced_result_sweep.csv", sweep_rows)
         (output_dir / "forced_result_summary.json").write_text(

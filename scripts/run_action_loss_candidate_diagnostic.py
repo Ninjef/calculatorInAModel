@@ -22,7 +22,7 @@ from scripts.overfit_one_batch import (  # noqa: E402
     make_range_batch,
     score_action_loss_candidates,
 )
-from src.data import EQ_ID  # noqa: E402
+from src.data import ANSWER_FORMATS, AnswerFormat, EQ_ID  # noqa: E402
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -57,6 +57,7 @@ def candidate_diagnostic(
     local_radius: int,
     seed: int,
     device: str,
+    answer_format: AnswerFormat,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     model, train_config = load_checkpoint(checkpoint, device=device, injection_scale=None)
     model.eval()
@@ -74,6 +75,7 @@ def candidate_diagnostic(
             rng=rng,
             fixed_width=True,
             device=device,
+            answer_format=answer_format,
         )
         a_logits, b_logits, _, _ = calculator_read_operand_logits(model, batch)
         candidates = action_loss_candidate_pairs(
@@ -140,6 +142,7 @@ def candidate_diagnostic(
         "checkpoint": str(checkpoint),
         "samples": len(rows),
         "digits": digits,
+        "answer_format": answer_format,
         "operand_max": operand_max,
         "random_actions": random_actions,
         "topk": topk,
@@ -174,6 +177,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--samples", type=int, default=128)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--digits", type=int, default=2)
+    parser.add_argument(
+        "--answer-format",
+        choices=ANSWER_FORMATS,
+        default="sum",
+        help=(
+            "Answer target format. 'sum' preserves existing addition behavior; "
+            "'sum_left_operand' emits zero-padded sum plus left operand."
+        ),
+    )
     parser.add_argument("--operand-max", type=int, default=19)
     parser.add_argument("--random-actions", type=int, default=8)
     parser.add_argument("--topk", type=int, default=2)
@@ -215,6 +227,7 @@ def main() -> None:
             local_radius=args.local_radius,
             seed=args.seed,
             device=device,
+            answer_format=args.answer_format,
         )
         summary["output_dir"] = str(output_dir)
         summary["device"] = device
