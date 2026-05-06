@@ -5,6 +5,36 @@
 Phase 4 tests whether a calculator-query protocol can be taught and retained
 when the downstream answer target makes operand identity useful.
 
+## Do Not Rediscover Oracle Success
+
+This is the most important interpretive rule for Phase 4:
+
+```text
+Oracle calculator success is not progress on the research question.
+```
+
+The project has known since Phase 1 that downstream answer components can emit
+the right answer when the calculator path is given correct values. Oracle
+train/eval, oracle-at-eval recovery, injection-zero controls, and forced-random
+controls are sanity checks for wiring and bottleneck dependence only. They
+should not be described as evidence that the model has learned to use a
+calculator.
+
+The only result that matters for the core thesis is learned-interface behavior:
+
+- learned operand/pair exact match;
+- learned calculator-result accuracy;
+- private all-pair protocol decoding;
+- learned-vs-true and learned-vs-best action-loss gaps;
+- retention when `aux_operand_loss_weight` or other direct teacher signals are
+  exactly `0.0`;
+- replication across checkpoints/seeds.
+
+Do not spend time rerunning oracle-only controls unless code has changed in a
+way that could invalidate the wiring. Once a wiring gate passes for a
+configuration, the next work item should move directly to upstream/interface
+teaching and retention.
+
 The first implemented identifiable target keeps the prompt shape:
 
 ```text
@@ -113,6 +143,15 @@ Stage 0B operand-aware oracle semantic decoder:
   fraction `0.0078`, mean learned-minus-true gap `9.3793`. This is expected for
   the oracle semantic decoder because the learned interface head is still
   untrained/random.
+
+Interpretation:
+
+- Stage 0B is not evidence that the model learned to use a calculator.
+- Stage 0B only says the downstream wiring is no longer blocking the actual
+  experiment.
+- The meaningful next result must train/evaluate the learned upstream
+  calculator interface and report whether it survives with direct supervision
+  exactly removed.
 
 Go recommendation:
 
