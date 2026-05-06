@@ -1115,6 +1115,34 @@ def test_training_aux_operand_weight_respects_floor() -> None:
     ) == pytest.approx(0.1)
 
 
+def test_training_adaptive_interface_weight_schedule_respects_floor() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_iface", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    assert overfit_script.adaptive_interface_weight(
+        initial_weight=1.0, decay_steps=150, floor=0.0, step=0
+    ) == pytest.approx(1.0)
+    assert overfit_script.adaptive_interface_weight(
+        initial_weight=1.0, decay_steps=150, floor=0.0, step=75
+    ) == pytest.approx(0.5)
+    assert overfit_script.adaptive_interface_weight(
+        initial_weight=1.0, decay_steps=150, floor=0.0, step=150
+    ) == pytest.approx(0.0)
+    assert overfit_script.adaptive_interface_weight(
+        initial_weight=1.0, decay_steps=150, floor=0.25, step=150
+    ) == pytest.approx(0.25)
+    assert overfit_script.adaptive_interface_weight(
+        initial_weight=1.0, decay_steps=0, floor=0.0, step=150
+    ) == pytest.approx(1.0)
+    assert overfit_script.adaptive_interface_weight(
+        initial_weight=0.0, decay_steps=150, floor=0.25, step=150
+    ) == pytest.approx(0.0)
+
+
 def test_adaptive_interface_selects_high_probability_operand_pair() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_script_adaptive_select", script_path)
@@ -1450,6 +1478,8 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
             "soft_result",
             "--adaptive-interface-entropy-weight",
             "0.003",
+            "--adaptive-interface-loss-decay-steps",
+            "1",
             "--oracle-warmup-steps",
             "1",
             "--aux-operand-loss-weight",
@@ -1462,6 +1492,8 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
             "1",
             "--snapshot-samples",
             "2",
+            "--log-every",
+            "1",
             "--run-root",
             str(tmp_path),
         ],
@@ -1503,6 +1535,8 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     assert config["calculator_estimator"] == "adaptive_interface"
     assert config["adaptive_interface_target_mode"] == "soft_result"
     assert config["adaptive_interface_entropy_weight"] == 0.003
+    assert config["adaptive_interface_loss_decay_steps"] == 1
+    assert config["adaptive_interface_loss_floor"] == 0.0
     assert config["input_proj_anchor_checkpoint"] == str(tmp_path / "seed.pt")
     assert config["input_proj_anchor_weight"] == 0.01
     assert config["input_proj_anchor_decay_steps"] == 1
@@ -1521,6 +1555,9 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     assert metrics["calculator_bottleneck_mode"] == "answer_decoder"
     assert metrics["adaptive_interface_target_mode"] == "soft_result"
     assert metrics["adaptive_interface_entropy_weight"] == 0.003
+    assert metrics["adaptive_interface_loss_decay_steps"] == 1
+    assert metrics["adaptive_interface_loss_floor"] == 0.0
+    assert metrics["final_adaptive_interface_loss_weight"] == 0.0
     assert metrics["input_proj_anchor_checkpoint"] == str(tmp_path / "seed.pt")
     assert metrics["input_proj_anchor_weight"] == 0.01
     assert metrics["final_input_proj_anchor_weight"] == 0.0
@@ -1531,3 +1568,5 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     assert metrics["final_aux_operand_loss_weight"] == 0.01
     assert metrics["final_aux_operand_loss"] >= 0.0
     assert metrics["trainable_parameter_groups"] == config["trainable_parameter_groups"]
+    curve_rows = list(csv.DictReader((run_dir / "training_curve.csv").open()))
+    assert curve_rows[-1]["adaptive_interface_loss_weight"] == "0.0"

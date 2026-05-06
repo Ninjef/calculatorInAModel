@@ -229,3 +229,54 @@ Mixed positive. The curriculum proves that the joint pair interface can retain n
 ### Recommendation
 
 Go for one follow-up Track-B/C bridge, not a broad ladder yet: repeat the upstream-open curriculum across seeds with dense checkpoint selection around the aux-zero handoff, and add a retention stabilizer or slower aux decay only if the retained checkpoint remains calculator-dependent with aux exactly `0.0`. No-go on frozen-upstream pair-head-only identity curriculum.
+
+## Track B: interface-loss decay scheduler calibration
+
+Date: 2026-05-06
+
+### Implementation
+
+- Added `--adaptive-interface-loss-decay-steps` and `--adaptive-interface-loss-floor` to `scripts/overfit_one_batch.py`.
+- The scheduled weight reuses `--adaptive-interface-loss-weight` as the initial value and mirrors aux-weight semantics: initial `<= 0` stays `0`, decay steps `<= 0` preserves old constant behavior, otherwise weight decays linearly to the floor.
+- The scheduled weight now multiplies both `adaptive_interface` and action-loss/full-enum interface objectives.
+- `training_curve.csv` logs `adaptive_interface_loss_weight`; `metrics.json` records `adaptive_interface_loss_decay_steps`, `adaptive_interface_loss_floor`, and `final_adaptive_interface_loss_weight`.
+- Verification: `python3 -m pytest tests/test_data.py tests/test_model.py -q` -> `59 passed`.
+
+### One-Seed Matched Calibration
+
+The full six-run compact ladder is not completed here; one matched seed pair was run to validate the mechanism and calibrate runtime. Each 225-step full-enum run took about five and a half minutes on MPS.
+
+Constant full-enum interface objective:
+
+```text
+runs/2026-05-06_093654_713217_model-c-op0-19-action_loss_full_enum_joint_interface-joint_pair-inlr0.001-uplr0.0003-fullt1-fullchunk64-answer_decoder-aux5-auxdecay150/model-c-2digit-seed213
+```
+
+Interface objective decayed to zero with aux at step 150:
+
+```text
+runs/2026-05-06_094254_634251_model-c-op0-19-action_loss_full_enum_joint_interface-joint_pair-inlr0.001-uplr0.0003-ifacedecay150-fullt1-fullchunk64-answer_decoder-aux5-auxdecay150/model-c-2digit-seed213
+```
+
+### Snapshot Comparison
+
+| Variant | Step | Interface weight | Aux weight | Normal | Injection-zero | Forced-random | Oracle | Pair exact | Calc result acc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Constant interface | 125 | `1.0000` | `0.8333` | `0.1953` | `0.0078` | `0.0234` | `0.9375` | `0.1406` | `0.2188` |
+| Constant interface | 150 | `1.0000` | `0.0000` | `0.1484` | `0.0000` | `0.0234` | `0.8906` | `0.1172` | `0.1719` |
+| Constant interface | 175 | `1.0000` | `0.0000` | `0.1641` | `0.0156` | `0.0078` | `0.9297` | `0.1406` | `0.1719` |
+| Constant interface | 200 | `1.0000` | `0.0000` | `0.1172` | `0.0078` | `0.0391` | `0.9609` | `0.1094` | `0.1250` |
+| Constant interface | 225 | `1.0000` | `0.0000` | `0.0547` | `0.0156` | `0.0078` | `0.9531` | `0.0156` | `0.0547` |
+| Decayed interface | 125 | `0.1667` | `0.8333` | `0.2031` | `0.0078` | `0.0234` | `0.9375` | `0.1406` | `0.2109` |
+| Decayed interface | 150 | `0.0000` | `0.0000` | `0.1250` | `0.0000` | `0.0234` | `0.8906` | `0.1172` | `0.1484` |
+| Decayed interface | 175 | `0.0000` | `0.0000` | `0.1484` | `0.0156` | `0.0078` | `0.9297` | `0.1094` | `0.1484` |
+| Decayed interface | 200 | `0.0000` | `0.0000` | `0.2344` | `0.0078` | `0.0391` | `0.9609` | `0.1797` | `0.2422` |
+| Decayed interface | 225 | `0.0000` | `0.0000` | `0.1484` | `0.0156` | `0.0078` | `0.9531` | `0.1094` | `0.1641` |
+
+### Finding
+
+The scheduler works and preserves old behavior when omitted. In the one matched seed, decaying the underidentified full-enum interface objective to zero did not improve the exact aux-zero handoff at step 150, but it did avoid the severe step-225 collapse seen in the constant-interface run and produced a better step-200 retained snapshot. This is calibration only, not a strong positive: pair entropy remained near uniform, and canonical pair exact stayed below the task threshold.
+
+### Recommendation
+
+Complete the intended three-seed Stage 1/Stage 2 ladder before deciding on the slower-aux-decay stabilizer. Use dense selection over steps 125, 150, 175, 200, and 225, and run the full canonical/private/action diagnostics only on the selected retained checkpoints.

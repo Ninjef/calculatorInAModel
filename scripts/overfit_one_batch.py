@@ -67,6 +67,8 @@ class TrainConfig:
     calculator_bottleneck_mode: str
     semantic_decoder_checkpoint: str | None
     adaptive_interface_loss_weight: float
+    adaptive_interface_loss_decay_steps: int
+    adaptive_interface_loss_floor: float
     adaptive_interface_target_mode: str
     adaptive_interface_entropy_weight: float
     action_loss_candidate_random: int
@@ -490,6 +492,7 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "operand_entropy",
         "entropy_weight",
         "adaptive_interface_loss",
+        "adaptive_interface_loss_weight",
         "adaptive_interface_target_loss",
         "adaptive_interface_objective",
         "adaptive_interface_entropy",
@@ -1833,6 +1836,17 @@ def auxiliary_operand_weight(
     return max(floor, decayed)
 
 
+def adaptive_interface_weight(
+    *, initial_weight: float, decay_steps: int, floor: float, step: int
+) -> float:
+    if initial_weight <= 0:
+        return 0.0
+    if decay_steps <= 0:
+        return initial_weight
+    decayed = initial_weight * max(0.0, 1.0 - (step / decay_steps))
+    return max(floor, decayed)
+
+
 def make_model_config(
     num_digits: int,
     variant: str,
@@ -2014,6 +2028,8 @@ def run_variant(
             else None
         ),
         adaptive_interface_loss_weight=args.adaptive_interface_loss_weight,
+        adaptive_interface_loss_decay_steps=args.adaptive_interface_loss_decay_steps,
+        adaptive_interface_loss_floor=args.adaptive_interface_loss_floor,
         adaptive_interface_target_mode=args.adaptive_interface_target_mode,
         adaptive_interface_entropy_weight=args.adaptive_interface_entropy_weight,
         action_loss_candidate_random=args.action_loss_candidate_random,
@@ -2127,6 +2143,12 @@ def run_variant(
         entropy_weight = 0.0
         adaptive_interface_loss_value = None
         adaptive_interface_objective_value = None
+        scheduled_adaptive_interface_weight = adaptive_interface_weight(
+            initial_weight=args.adaptive_interface_loss_weight,
+            decay_steps=args.adaptive_interface_loss_decay_steps,
+            floor=args.adaptive_interface_loss_floor,
+            step=step,
+        )
         adaptive_metrics: dict[str, float] = {}
         action_loss_interface_loss_value = None
         action_loss_interface_objective_value = None
@@ -2173,7 +2195,7 @@ def run_variant(
             adaptive_interface_loss_value = adaptive_metrics[
                 "adaptive_interface_target_loss"
             ]
-            adaptive_objective = args.adaptive_interface_loss_weight * adaptive_loss
+            adaptive_objective = scheduled_adaptive_interface_weight * adaptive_loss
             adaptive_interface_objective_value = float(adaptive_objective.item())
             loss = loss + adaptive_objective
         if use_action_loss_weighted_interface:
@@ -2237,7 +2259,7 @@ def run_variant(
                 action_loss_interface_loss.item()
             )
             action_loss_objective = (
-                args.adaptive_interface_loss_weight * action_loss_interface_loss
+                scheduled_adaptive_interface_weight * action_loss_interface_loss
             )
             action_loss_interface_objective_value = float(
                 action_loss_objective.item()
@@ -2279,6 +2301,7 @@ def run_variant(
                 "loss": loss_value,
                 "answer_loss": answer_loss.item(),
                 "answer_loss_weight": args.answer_loss_weight,
+                "adaptive_interface_loss_weight": scheduled_adaptive_interface_weight,
                 "oracle_operands_used": int(use_oracle_for_step),
             }
             if aux_loss_value is not None:
@@ -2336,9 +2359,15 @@ def run_variant(
                 )
                 + (
                     f" adaptive_interface_loss={adaptive_interface_loss_value:.4f}"
+                    f" iface_weight={scheduled_adaptive_interface_weight:.4f}"
                     f" target_acc={adaptive_metrics['adaptive_target_result_accuracy']:.3f}"
                     f" entropy={adaptive_metrics['adaptive_interface_entropy']:.3f}"
                     if use_adaptive_interface
+                    else ""
+                )
+                + (
+                    f" action_loss_iface_weight={scheduled_adaptive_interface_weight:.4f}"
+                    if use_action_loss_weighted_interface
                     else ""
                 )
                 + (
@@ -2439,6 +2468,16 @@ def run_variant(
         else None
     )
     metrics["adaptive_interface_loss_weight"] = args.adaptive_interface_loss_weight
+    metrics["adaptive_interface_loss_decay_steps"] = (
+        args.adaptive_interface_loss_decay_steps
+    )
+    metrics["adaptive_interface_loss_floor"] = args.adaptive_interface_loss_floor
+    metrics["final_adaptive_interface_loss_weight"] = adaptive_interface_weight(
+        initial_weight=args.adaptive_interface_loss_weight,
+        decay_steps=args.adaptive_interface_loss_decay_steps,
+        floor=args.adaptive_interface_loss_floor,
+        step=args.steps,
+    )
     metrics["adaptive_interface_target_mode"] = args.adaptive_interface_target_mode
     metrics["adaptive_interface_entropy_weight"] = args.adaptive_interface_entropy_weight
     metrics["action_loss_candidate_random"] = args.action_loss_candidate_random
@@ -2778,6 +2817,21 @@ def parse_args() -> argparse.Namespace:
         help="Weight for counterfactual adaptive-interface operand target loss.",
     )
     parser.add_argument(
+        "--adaptive-interface-loss-decay-steps",
+        type=int,
+        default=0,
+        help=(
+            "Linearly decay adaptive/action-loss interface objective weight to "
+            "floor over this many steps; 0 keeps it constant."
+        ),
+    )
+    parser.add_argument(
+        "--adaptive-interface-loss-floor",
+        type=float,
+        default=0.0,
+        help="Minimum adaptive/action-loss interface objective weight after decay.",
+    )
+    parser.add_argument(
         "--adaptive-interface-target-mode",
         choices=["hard_pair", "soft_result"],
         default="hard_pair",
@@ -3029,6 +3083,21 @@ def main() -> None:
         raise ValueError("--semantic-decoder-checkpoint does not exist")
     if args.adaptive_interface_loss_weight < 0:
         raise ValueError("--adaptive-interface-loss-weight must be non-negative")
+    if args.adaptive_interface_loss_decay_steps < 0:
+        raise ValueError("--adaptive-interface-loss-decay-steps must be non-negative")
+    if args.adaptive_interface_loss_floor < 0:
+        raise ValueError("--adaptive-interface-loss-floor must be non-negative")
+    if (
+        args.adaptive_interface_loss_floor > 0
+        and args.adaptive_interface_loss_weight <= 0
+    ):
+        raise ValueError(
+            "--adaptive-interface-loss-floor requires --adaptive-interface-loss-weight"
+        )
+    if args.adaptive_interface_loss_floor > args.adaptive_interface_loss_weight:
+        raise ValueError(
+            "--adaptive-interface-loss-floor cannot exceed adaptive interface weight"
+        )
     if args.adaptive_interface_entropy_weight < 0:
         raise ValueError("--adaptive-interface-entropy-weight must be non-negative")
     if args.action_loss_candidate_random < 0:
@@ -3131,6 +3200,14 @@ def main() -> None:
             suffix_parts.append(f"uplr{args.upstream_lr:g}")
         if args.adaptive_interface_entropy_weight > 0:
             suffix_parts.append(f"ient{args.adaptive_interface_entropy_weight:g}")
+        if args.adaptive_interface_loss_decay_steps > 0:
+            suffix_parts.append(
+                f"ifacedecay{args.adaptive_interface_loss_decay_steps}"
+            )
+            if args.adaptive_interface_loss_floor > 0:
+                suffix_parts.append(
+                    f"ifacefloor{args.adaptive_interface_loss_floor:g}"
+                )
         if args.calculator_estimator in {
             "action_loss_weighted_interface",
             "action_loss_replay_interface",
@@ -3200,6 +3277,9 @@ def main() -> None:
     print(
         "adaptive interface: "
         f"target_mode={args.adaptive_interface_target_mode} "
+        f"loss_weight={args.adaptive_interface_loss_weight} "
+        f"loss_decay_steps={args.adaptive_interface_loss_decay_steps} "
+        f"loss_floor={args.adaptive_interface_loss_floor} "
         f"entropy_weight={args.adaptive_interface_entropy_weight} "
         f"input_proj_lr={args.lr if args.input_proj_lr is None else args.input_proj_lr} "
         f"upstream_lr={args.lr if args.upstream_lr is None else args.upstream_lr} "
