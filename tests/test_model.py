@@ -896,6 +896,101 @@ def test_full_enum_interface_loss_updates_input_projection_only() -> None:
     assert model.tok_emb.weight.grad is None
 
 
+def test_joint_pair_head_traces_pair_action() -> None:
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_estimator="action_loss_full_enum_joint_interface",
+        calculator_action_head="joint_pair",
+        calculator_read_position="operands",
+    )
+    model = TinyGPT(cfg)
+    assert model.calculator_hook is not None
+    assert model.calculator_hook.pair_proj is not None
+    with torch.no_grad():
+        model.calculator_hook.pair_proj.weight.zero_()
+        model.calculator_hook.pair_proj.bias.fill_(-10.0)
+        model.calculator_hook.pair_proj.bias[1 * 3 + 2] = 10.0
+
+    x = torch.tensor([[0, 1, PLUS_ID, 0, 2, EQ_ID]])
+
+    _, diagnostics = model(x, return_diagnostics=True)
+    trace = diagnostics["calculator_trace"]
+
+    assert trace["pair_pred"][0, 5].item() == 5
+    assert trace["a_pred"][0, 5].item() == 1
+    assert trace["b_pred"][0, 5].item() == 2
+    assert trace["result_pred"][0, 5].item() == 3
+    assert torch.isfinite(trace["pair_logp"][0, 5])
+
+
+def test_joint_full_enum_interface_loss_updates_pair_projection_only() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_joint_full_enum_loss", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_estimator="action_loss_full_enum_joint_interface",
+        calculator_action_head="joint_pair",
+        calculator_read_position="operands",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    model = TinyGPT(cfg)
+    overfit_script.freeze_semantic_decoder_parameters(model)
+    overfit_script.freeze_upstream_encoder_parameters(model)
+    batch = overfit_script.make_range_batch(
+        batch_size=3,
+        num_digits=1,
+        operand_max=2,
+        rng=__import__("random").Random(2),
+        fixed_width=True,
+        device="cpu",
+    )
+
+    loss, metrics = overfit_script.action_loss_full_enum_joint_interface_loss(
+        model,
+        batch,
+        num_digits=1,
+        temperature=1.0,
+        min_probability_floor=0.0,
+        chunk_size=4,
+    )
+    loss.backward()
+
+    assert loss.item() > 0
+    assert metrics["action_loss_full_enum_joint_target_loss"] == pytest.approx(
+        loss.item()
+    )
+    assert model.calculator_hook is not None
+    assert model.calculator_hook.pair_proj is not None
+    assert model.calculator_hook.pair_proj.weight.grad is not None
+    assert model.calculator_hook.input_proj.weight.grad is None
+    assert model.tok_emb.weight.grad is None
+
+
 def test_training_oracle_operand_extraction_from_fixed_width_batch() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_script", script_path)

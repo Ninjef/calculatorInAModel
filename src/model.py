@@ -37,6 +37,7 @@ class GPTConfig:
     calculator_estimator: str = "ste"
     calculator_read_position: str = "eq"
     calculator_bottleneck_mode: str = "none"
+    calculator_action_head: str = "independent_operands"
 
 
 class HardAddSTE(torch.autograd.Function):
@@ -76,8 +77,15 @@ class CalculatorHook(nn.Module):
             "action_loss_weighted_interface",
             "action_loss_replay_interface",
             "action_loss_full_enum_interface",
+            "action_loss_full_enum_joint_interface",
         }:
             raise ValueError(f"unknown calculator estimator: {cfg.calculator_estimator}")
+        if cfg.calculator_action_head not in {"independent_operands", "joint_pair"}:
+            raise ValueError(
+                "calculator_action_head must be one of "
+                "{'independent_operands', 'joint_pair'}, "
+                f"got {cfg.calculator_action_head!r}"
+            )
         if cfg.calculator_read_position not in {"eq", "operands"}:
             raise ValueError(
                 "calculator_read_position must be one of {'eq', 'operands'}, "
@@ -98,7 +106,16 @@ class CalculatorHook(nn.Module):
         self.result_vocab_size = cfg.calculator_result_vocab_size
         self.injection_scale = cfg.calculator_injection_scale
         self.read_position = cfg.calculator_read_position
+        self.action_head = cfg.calculator_action_head
         self.input_proj = nn.Linear(cfg.n_embd, 2 * self.operand_vocab_size)
+        if self.action_head == "joint_pair":
+            for param in self.input_proj.parameters():
+                param.requires_grad = False
+            self.pair_proj: nn.Linear | None = nn.Linear(
+                2 * cfg.n_embd, self.operand_vocab_size * self.operand_vocab_size
+            )
+        else:
+            self.pair_proj = None
         self.output_proj = nn.Linear(self.result_vocab_size, cfg.n_embd, bias=False)
 
     def forward(
@@ -125,20 +142,48 @@ class CalculatorHook(nn.Module):
                 return injection, trace
             return injection
 
-        operand_logits = self.input_proj(h)
-        a_logits_all, b_logits_all = operand_logits.split(self.operand_vocab_size, dim=-1)
         if self.read_position == "eq":
             read_positions = self._eq_trace_positions(tokens)
-            a_logits = a_logits_all
-            b_logits = b_logits_all
         else:
             read_positions = self._operand_read_positions(tokens)
-            a_logits = self._select_operand_logits(a_logits_all, read_positions["a"])
-            b_logits = self._select_operand_logits(b_logits_all, read_positions["b"])
+        pair_logits = None
+        pair_logp = None
+        if self.action_head == "joint_pair":
+            pair_logits = self._joint_pair_logits(h, read_positions)
+            pair_pred = pair_logits.argmax(dim=-1)
+            a_pred = pair_pred // self.operand_vocab_size
+            b_pred = pair_pred % self.operand_vocab_size
+            a_logits = self._marginal_logits_from_pair_logits(pair_logits, dim="a")
+            b_logits = self._marginal_logits_from_pair_logits(pair_logits, dim="b")
+        else:
+            operand_logits = self.input_proj(h)
+            a_logits_all, b_logits_all = operand_logits.split(
+                self.operand_vocab_size, dim=-1
+            )
+            if self.read_position == "eq":
+                a_logits = a_logits_all
+                b_logits = b_logits_all
+            else:
+                a_logits = self._select_operand_logits(
+                    a_logits_all, read_positions["a"]
+                )
+                b_logits = self._select_operand_logits(
+                    b_logits_all, read_positions["b"]
+                )
         a_logp = None
         b_logp = None
         if oracle_operands is None:
-            if self.estimator in {
+            if self.action_head == "joint_pair":
+                assert pair_logits is not None
+                if forced_result_class is not None:
+                    flat_result = self._forced_result(
+                        a_pred, forced_result_class, dtype=h.dtype
+                    )
+                else:
+                    flat_result = self._overridden_result(
+                        a_pred, b_pred, result_override, dtype=h.dtype
+                    )
+            elif self.estimator in {
                 "ste",
                 "adaptive_interface",
                 "action_loss_weighted_interface",
@@ -198,10 +243,12 @@ class CalculatorHook(nn.Module):
             trace = self._build_trace(
                 a_logits=a_logits,
                 b_logits=b_logits,
+                pair_logits=pair_logits,
                 a_pred=a_pred,
                 b_pred=b_pred,
                 a_logp=a_logp,
                 b_logp=b_logp,
+                pair_logp=pair_logp,
                 result=result,
                 tokens=tokens,
                 read_positions=read_positions,
@@ -249,6 +296,30 @@ class CalculatorHook(nn.Module):
         batch_idx = torch.arange(B, device=logits.device)
         selected = logits[batch_idx, positions]
         return selected.unsqueeze(1).expand(B, T, C)
+
+    def _joint_pair_logits(
+        self, h: Tensor, read_positions: dict[str, Tensor]
+    ) -> Tensor:
+        B, T, _ = h.shape
+        batch_idx = torch.arange(B, device=h.device)
+        a_h = h[batch_idx, read_positions["a"]]
+        b_h = h[batch_idx, read_positions["b"]]
+        if self.pair_proj is None:
+            raise ValueError("joint pair logits require calculator_action_head=joint_pair")
+        selected_pair_logits = self.pair_proj(torch.cat([a_h, b_h], dim=-1))
+        return selected_pair_logits.unsqueeze(1).expand(B, T, -1)
+
+    def _marginal_logits_from_pair_logits(self, pair_logits: Tensor, *, dim: str) -> Tensor:
+        pair_logp = pair_logits.log_softmax(dim=-1).reshape(
+            *pair_logits.shape[:-1],
+            self.operand_vocab_size,
+            self.operand_vocab_size,
+        )
+        if dim == "a":
+            return torch.logsumexp(pair_logp, dim=-1)
+        if dim == "b":
+            return torch.logsumexp(pair_logp, dim=-2)
+        raise ValueError(f"unknown pair marginal dim: {dim}")
 
     def _overridden_result(
         self, a_pred: Tensor, b_pred: Tensor, mode: str, *, dtype: torch.dtype
@@ -323,13 +394,17 @@ class CalculatorHook(nn.Module):
             "eq_mask": tokens == EQ_ID,
             "a_pred": neg_one,
             "b_pred": neg_one,
+            "pair_pred": neg_one,
             "result_pred": neg_one,
             "a_confidence": nan_float,
             "b_confidence": nan_float,
+            "pair_confidence": nan_float,
             "a_entropy": nan_float,
             "b_entropy": nan_float,
+            "pair_entropy": nan_float,
             "a_logp": nan_float,
             "b_logp": nan_float,
+            "pair_logp": nan_float,
             "sampled_logp": nan_float,
             "injection_norm": injection.norm(dim=-1),
             "unscaled_injection_norm": injection.norm(dim=-1),
@@ -351,10 +426,12 @@ class CalculatorHook(nn.Module):
         *,
         a_logits: Tensor,
         b_logits: Tensor,
+        pair_logits: Tensor | None,
         a_pred: Tensor,
         b_pred: Tensor,
         a_logp: Tensor | None,
         b_logp: Tensor | None,
+        pair_logp: Tensor | None,
         result: Tensor,
         tokens: Tensor,
         read_positions: dict[str, Tensor],
@@ -368,19 +445,39 @@ class CalculatorHook(nn.Module):
             a_logp = a_probs.gather(-1, a_pred.unsqueeze(-1)).squeeze(-1).log()
         if b_logp is None:
             b_logp = b_probs.gather(-1, b_pred.unsqueeze(-1)).squeeze(-1).log()
+        pair_pred = a_pred * self.operand_vocab_size + b_pred
+        if pair_logits is None:
+            pair_confidence = h_nan = a_logits.new_full(a_pred.shape, float("nan"))
+            pair_entropy = h_nan
+            pair_logp = a_logits.new_full(a_pred.shape, float("nan"))
+        else:
+            pair_probs = pair_logits.softmax(dim=-1)
+            pair_confidence = pair_probs.max(dim=-1).values
+            pair_entropy = self._entropy(pair_probs)
+            if pair_logp is None:
+                pair_logp = (
+                    pair_probs.gather(-1, pair_pred.unsqueeze(-1))
+                    .squeeze(-1)
+                    .clamp_min(1e-12)
+                    .log()
+                )
         read_position_id = 0 if self.read_position == "eq" else 1
         B, T = tokens.shape
         return {
             "eq_mask": tokens == EQ_ID,
             "a_pred": a_pred,
             "b_pred": b_pred,
+            "pair_pred": pair_pred,
             "result_pred": result.argmax(dim=-1),
             "a_confidence": a_probs.max(dim=-1).values,
             "b_confidence": b_probs.max(dim=-1).values,
+            "pair_confidence": pair_confidence,
             "a_entropy": self._entropy(a_probs),
             "b_entropy": self._entropy(b_probs),
+            "pair_entropy": pair_entropy,
             "a_logp": a_logp,
             "b_logp": b_logp,
+            "pair_logp": pair_logp,
             "sampled_logp": a_logp + b_logp,
             "injection_norm": scaled_injection.norm(dim=-1),
             "unscaled_injection_norm": unscaled_injection.norm(dim=-1),

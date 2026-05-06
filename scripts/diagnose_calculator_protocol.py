@@ -359,6 +359,7 @@ def diagnostic_rows(
                 "eq_position": eq_pos,
                 "a_pred": trace_value("a_pred", -1),
                 "b_pred": trace_value("b_pred", -1),
+                "pair_pred": trace_value("pair_pred", -1),
                 "calculator_result": trace_value("result_pred", -1),
                 "forced_calculator_result_class": ""
                 if forced_calculator_result_class is None
@@ -366,8 +367,11 @@ def diagnostic_rows(
                 "calculator_read_intervention": calculator_read_intervention or "none",
                 "a_confidence": trace_value("a_confidence", float("nan")),
                 "b_confidence": trace_value("b_confidence", float("nan")),
+                "pair_confidence": trace_value("pair_confidence", float("nan")),
                 "a_entropy": trace_value("a_entropy", float("nan")),
                 "b_entropy": trace_value("b_entropy", float("nan")),
+                "pair_entropy": trace_value("pair_entropy", float("nan")),
+                "pair_logp": trace_value("pair_logp", float("nan")),
                 "injection_norm": trace_value("injection_norm", float("nan")),
                 "unscaled_injection_norm": trace_value(
                     "unscaled_injection_norm", float("nan")
@@ -393,6 +397,14 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
     )
     result_correct = sum(
         int(row["calculator_result"] == row["true_sum"]) for row in operand_rows
+    )
+    pair_rows = [row for row in operand_rows if row.get("pair_pred", -1) >= 0]
+    pair_correct = sum(
+        int(row["a_pred"] == row["true_a"] and row["b_pred"] == row["true_b"])
+        for row in pair_rows
+    )
+    result_equivalent_pair_correct = sum(
+        int(row["calculator_result"] == row["true_sum"]) for row in pair_rows
     )
     finite_operand_rows = [
         row
@@ -426,10 +438,15 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "correct": correct,
         "operand_exact_match": operand_correct / max(len(operand_rows), 1),
         "calculator_result_accuracy": result_correct / max(len(operand_rows), 1),
+        "pair_exact_match": pair_correct / max(len(pair_rows), 1),
+        "result_equivalent_pair_accuracy": result_equivalent_pair_correct
+        / max(len(pair_rows), 1),
         "mean_a_confidence": mean_field("a_confidence"),
         "mean_b_confidence": mean_field("b_confidence"),
+        "mean_pair_confidence": mean_field("pair_confidence"),
         "mean_a_entropy": mean_field("a_entropy"),
         "mean_b_entropy": mean_field("b_entropy"),
+        "mean_pair_entropy": mean_field("pair_entropy"),
         "learned_result_distribution": compact_distribution(
             [row["calculator_result"] for row in operand_rows], limit=20
         ),

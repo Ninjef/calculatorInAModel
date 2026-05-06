@@ -227,11 +227,14 @@ def learned_action_for_prompt(
     return {
         "learned_a": int(scalar("a_pred", -1)),
         "learned_b": int(scalar("b_pred", -1)),
+        "learned_pair": int(scalar("pair_pred", -1)),
         "learned_result": int(scalar("result_pred", -1)),
         "a_entropy": float(scalar("a_entropy", float("nan"))),
         "b_entropy": float(scalar("b_entropy", float("nan"))),
+        "pair_entropy": float(scalar("pair_entropy", float("nan"))),
         "a_confidence": float(scalar("a_confidence", float("nan"))),
         "b_confidence": float(scalar("b_confidence", float("nan"))),
+        "pair_confidence": float(scalar("pair_confidence", float("nan"))),
         "oracle_used": bool(scalar("oracle_used", False)),
     }
 
@@ -322,11 +325,14 @@ def action_loss_diagnostic(
                     "target_mean_nll": mean_nll,
                     "learned_a": learned_a,
                     "learned_b": learned_b,
+                    "learned_pair": learned["learned_pair"],
                     "learned_result": learned["learned_result"],
                     "a_entropy": learned["a_entropy"],
                     "b_entropy": learned["b_entropy"],
+                    "pair_entropy": learned["pair_entropy"],
                     "a_confidence": learned["a_confidence"],
                     "b_confidence": learned["b_confidence"],
+                    "pair_confidence": learned["pair_confidence"],
                     "oracle_used": learned["oracle_used"],
                 }
             )
@@ -349,6 +355,7 @@ def action_loss_diagnostic(
                 "true_sum": true_a + true_b,
                 "learned_a": learned_a,
                 "learned_b": learned_b,
+                "learned_pair": learned["learned_pair"],
                 "learned_result": learned["learned_result"],
                 "normal_mean_nll": named_losses["normal"],
                 "learned_forced_mean_nll": named_losses["learned_forced"],
@@ -372,6 +379,7 @@ def action_loss_diagnostic(
                 "best_mean_nll": best_loss,
                 "a_entropy": learned["a_entropy"],
                 "b_entropy": learned["b_entropy"],
+                "pair_entropy": learned["pair_entropy"],
             }
         )
 
@@ -406,8 +414,13 @@ def action_loss_diagnostic(
             int(row["learned_result"] == row["true_sum"]) for row in prompt_rows
         )
         / max(len(prompt_rows), 1),
+        "result_equivalent_pair_accuracy": sum(
+            int(row["learned_result"] == row["true_sum"]) for row in prompt_rows
+        )
+        / max(len(prompt_rows), 1),
         "mean_a_entropy": mean_field("a_entropy"),
         "mean_b_entropy": mean_field("b_entropy"),
+        "mean_pair_entropy": mean_field("pair_entropy"),
         "digits": num_digits,
         "operand_max": operand_max,
     }

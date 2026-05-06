@@ -61,6 +61,7 @@ class TrainConfig:
     snapshot_samples: int
     checkpoint_every: int
     calculator_estimator: str
+    calculator_action_head: str
     calculator_read_position: str
     calculator_injection_mode: str
     calculator_bottleneck_mode: str
@@ -300,13 +301,17 @@ def calculator_trace_rows(
                     "first_token_confidence": float(probs.max().item()),
                     "a_pred": trace_value("a_pred", -1),
                     "b_pred": trace_value("b_pred", -1),
+                    "pair_pred": trace_value("pair_pred", -1),
                     "calculator_result": trace_value("result_pred", -1),
                     "a_confidence": trace_value("a_confidence", float("nan")),
                     "b_confidence": trace_value("b_confidence", float("nan")),
+                    "pair_confidence": trace_value("pair_confidence", float("nan")),
                     "a_entropy": trace_value("a_entropy", float("nan")),
                     "b_entropy": trace_value("b_entropy", float("nan")),
+                    "pair_entropy": trace_value("pair_entropy", float("nan")),
                     "a_logp": trace_value("a_logp", float("nan")),
                     "b_logp": trace_value("b_logp", float("nan")),
+                    "pair_logp": trace_value("pair_logp", float("nan")),
                     "sampled_logp": trace_value("sampled_logp", float("nan")),
                     "injection_norm": trace_value("injection_norm", float("nan")),
                     "calculator_read_position_id": trace_value(
@@ -333,6 +338,12 @@ def summarize_trace_rows(rows: list[dict[str, object]]) -> dict[str, object]:
     result_correct = sum(
         int(row["calculator_result"] == row["true_sum"]) for row in operand_rows
     )
+    pair_correct = sum(
+        int(row["a_pred"] == row["true_a"] and row["b_pred"] == row["true_b"])
+        for row in operand_rows
+        if row.get("pair_pred", -1) >= 0
+    )
+    pair_rows = [row for row in operand_rows if row.get("pair_pred", -1) >= 0]
 
     def mean_field(name: str) -> float:
         finite = [
@@ -348,10 +359,13 @@ def summarize_trace_rows(rows: list[dict[str, object]]) -> dict[str, object]:
         "correct": answer_correct,
         "operand_exact_match": operand_correct / max(len(operand_rows), 1),
         "calculator_result_accuracy": result_correct / max(len(operand_rows), 1),
+        "pair_exact_match": pair_correct / max(len(pair_rows), 1),
         "mean_a_confidence": mean_field("a_confidence"),
         "mean_b_confidence": mean_field("b_confidence"),
+        "mean_pair_confidence": mean_field("pair_confidence"),
         "mean_a_entropy": mean_field("a_entropy"),
         "mean_b_entropy": mean_field("b_entropy"),
+        "mean_pair_entropy": mean_field("pair_entropy"),
         "mean_sampled_logp": mean_field("sampled_logp"),
     }
 
@@ -438,11 +452,14 @@ def snapshot_row_from_model(
         "forced_zero_exact_match": forced_zero["exact_match"],
         "forced_random_exact_match": forced_random["exact_match"],
         "operand_exact_match": normal["operand_exact_match"],
+        "pair_exact_match": normal["pair_exact_match"],
         "calculator_result_accuracy": normal["calculator_result_accuracy"],
         "mean_a_confidence": normal["mean_a_confidence"],
         "mean_b_confidence": normal["mean_b_confidence"],
+        "mean_pair_confidence": normal["mean_pair_confidence"],
         "mean_a_entropy": normal["mean_a_entropy"],
         "mean_b_entropy": normal["mean_b_entropy"],
+        "mean_pair_entropy": normal["mean_pair_entropy"],
         "learned_result_distribution": compact_distribution(
             [row["calculator_result"] for row in normal_rows]
         ),
@@ -507,6 +524,17 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "action_loss_full_enum_learned_minus_best_gap",
         "action_loss_full_enum_true_best_fraction",
         "action_loss_full_enum_learned_best_fraction",
+        "action_loss_full_enum_joint_target_loss",
+        "action_loss_full_enum_pair_entropy",
+        "action_loss_full_enum_pair_logit_entropy",
+        "action_loss_full_enum_pair_logit_effective_pairs",
+        "action_loss_full_enum_pair_exact_match",
+        "action_loss_full_enum_result_equivalent_pair_accuracy",
+        "action_loss_full_enum_true_pair_probability",
+        "action_loss_full_enum_true_pair_rank",
+        "action_loss_full_enum_learned_pair_nll",
+        "action_loss_full_enum_true_pair_nll",
+        "action_loss_full_enum_best_pair_nll",
         "action_loss_full_enum_soft_target_true_a_mass",
         "action_loss_full_enum_soft_target_true_b_mass",
         "action_loss_full_enum_entropy",
@@ -705,6 +733,43 @@ def calculator_read_operand_logits(
         b_logits_all[batch_idx, b_pos],
         a_pos,
         b_pos,
+    )
+
+
+def calculator_read_pair_logits(
+    model: TinyGPT, batch: ArithmeticBatch
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    if model.calculator_hook is None:
+        raise ValueError("calculator pair logits require a calculator hook")
+    if model.cfg.calculator_action_head != "joint_pair":
+        raise ValueError("calculator pair logits require calculator_action_head=joint_pair")
+    B, T = batch.x.shape
+    assert T <= model.cfg.block_size, (
+        f"sequence length {T} > block_size {model.cfg.block_size}"
+    )
+    pos = torch.arange(T, device=batch.x.device)
+    residual = model.tok_emb(batch.x) + model.pos_emb(pos)
+    if model.cfg.calculator_hook_after_layer > 0:
+        for i, block in enumerate(model.blocks, start=1):
+            residual = block(residual)
+            if i == model.cfg.calculator_hook_after_layer:
+                break
+    positions = model._calculator_read_positions(batch.x)
+    batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
+    pair_input = torch.cat(
+        [
+            residual[batch_idx, positions["a"]],
+            residual[batch_idx, positions["b"]],
+        ],
+        dim=-1,
+    )
+    if model.calculator_hook.pair_proj is None:
+        raise ValueError("calculator pair logits require a joint pair projection")
+    return (
+        model.calculator_hook.pair_proj(pair_input),
+        positions["a"],
+        positions["b"],
+        positions["eq"],
     )
 
 
@@ -990,6 +1055,102 @@ def action_loss_full_enum_interface_loss(
         ),
         "action_loss_full_enum_entropy": float(entropy.mean().item()),
         "action_loss_full_enum_effective_pairs": float(entropy.exp().mean().item()),
+    }
+    return target_loss, metrics
+
+
+def action_loss_full_enum_joint_interface_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    temperature: float,
+    min_probability_floor: float,
+    chunk_size: int,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    pair_logits, _, _, _ = calculator_read_pair_logits(model, batch)
+    classes = model.cfg.calculator_operand_vocab_size
+    pairs = full_enum_action_pairs(classes=classes, device=batch.x.device)
+    candidates = pairs.unsqueeze(0).expand(batch.x.shape[0], -1, -1)
+    with torch.no_grad():
+        full_losses = score_action_loss_candidates_chunked(
+            model, batch, candidates, chunk_size=chunk_size
+        )
+        pair_weights = action_loss_weights_from_losses(
+            full_losses,
+            temperature=temperature,
+            min_probability_floor=min_probability_floor,
+        )
+    logp = pair_logits.log_softmax(dim=-1)
+    target_loss = -(pair_weights * logp).sum(dim=-1).mean()
+
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    learned_idx = pair_logits.argmax(dim=-1)
+    learned_a = learned_idx // classes
+    learned_b = learned_idx % classes
+    true_idx = true_a * classes + true_b
+    best_idx = full_losses.argmin(dim=-1)
+    batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
+    learned_losses = full_losses.gather(1, learned_idx.unsqueeze(-1)).squeeze(-1)
+    true_losses = full_losses.gather(1, true_idx.unsqueeze(-1)).squeeze(-1)
+    best_losses = full_losses.gather(1, best_idx.unsqueeze(-1)).squeeze(-1)
+    target_entropy = -(pair_weights * pair_weights.clamp_min(1e-12).log()).sum(dim=-1)
+    learned_probs = pair_logits.softmax(dim=-1)
+    learned_entropy = -(
+        learned_probs * learned_probs.clamp_min(1e-12).log()
+    ).sum(dim=-1)
+    true_pair_probs = pair_weights.gather(1, true_idx.unsqueeze(-1)).squeeze(-1)
+    true_pair_ranks = (
+        (full_losses < true_losses.unsqueeze(-1)).sum(dim=-1) + 1
+    )
+    true_sum = true_a + true_b
+    learned_sum = learned_a + learned_b
+    metrics = {
+        "action_loss_full_enum_temperature": float(temperature),
+        "action_loss_full_enum_min_probability_floor": float(min_probability_floor),
+        "action_loss_full_enum_chunk_size": int(chunk_size),
+        "action_loss_full_enum_joint_target_loss": float(target_loss.item()),
+        "action_loss_full_enum_best_nll": float(best_losses.mean().item()),
+        "action_loss_full_enum_learned_nll": float(learned_losses.mean().item()),
+        "action_loss_full_enum_true_nll": float(true_losses.mean().item()),
+        "action_loss_full_enum_learned_pair_nll": float(learned_losses.mean().item()),
+        "action_loss_full_enum_true_pair_nll": float(true_losses.mean().item()),
+        "action_loss_full_enum_best_pair_nll": float(best_losses.mean().item()),
+        "action_loss_full_enum_learned_minus_true_gap": float(
+            (learned_losses - true_losses).mean().item()
+        ),
+        "action_loss_full_enum_learned_minus_best_gap": float(
+            (learned_losses - best_losses).mean().item()
+        ),
+        "action_loss_full_enum_true_best_fraction": float(
+            (best_idx == true_idx).float().mean().item()
+        ),
+        "action_loss_full_enum_learned_best_fraction": float(
+            (best_idx == learned_idx).float().mean().item()
+        ),
+        "action_loss_full_enum_pair_exact_match": float(
+            (learned_idx == true_idx).float().mean().item()
+        ),
+        "action_loss_full_enum_result_equivalent_pair_accuracy": float(
+            (learned_sum == true_sum).float().mean().item()
+        ),
+        "action_loss_full_enum_true_pair_probability": float(
+            true_pair_probs.mean().item()
+        ),
+        "action_loss_full_enum_true_pair_rank": float(
+            true_pair_ranks.float().mean().item()
+        ),
+        "action_loss_full_enum_pair_entropy": float(target_entropy.mean().item()),
+        "action_loss_full_enum_entropy": float(target_entropy.mean().item()),
+        "action_loss_full_enum_effective_pairs": float(
+            target_entropy.exp().mean().item()
+        ),
+        "action_loss_full_enum_pair_logit_entropy": float(
+            learned_entropy.mean().item()
+        ),
+        "action_loss_full_enum_pair_logit_effective_pairs": float(
+            learned_entropy.exp().mean().item()
+        ),
     }
     return target_loss, metrics
 
@@ -1387,7 +1548,18 @@ def summarize_adaptive_interface_rows(
 def load_semantic_decoder_checkpoint(model: TinyGPT, checkpoint_path: Path) -> None:
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
     state_dict = checkpoint.get("model_state_dict", checkpoint)
-    model.load_state_dict(state_dict)
+    missing, unexpected = model.load_state_dict(state_dict, strict=False)
+    allowed_missing = {
+        "calculator_hook.pair_proj.weight",
+        "calculator_hook.pair_proj.bias",
+    }
+    unexpected_nonempty = [name for name in unexpected]
+    disallowed_missing = [name for name in missing if name not in allowed_missing]
+    if disallowed_missing or unexpected_nonempty:
+        raise ValueError(
+            "semantic decoder checkpoint had incompatible keys: "
+            f"missing={disallowed_missing}, unexpected={unexpected_nonempty}"
+        )
 
 
 def load_input_proj_anchor(
@@ -1457,6 +1629,12 @@ def freeze_semantic_decoder_parameters(model: TinyGPT) -> None:
     if model.answer_decoder is not None:
         for param in model.answer_decoder.parameters():
             param.requires_grad = False
+    if (
+        model.calculator_hook is not None
+        and model.cfg.calculator_action_head == "joint_pair"
+    ):
+        for param in model.calculator_hook.input_proj.parameters():
+            param.requires_grad = False
 
 
 def freeze_upstream_encoder_parameters(model: TinyGPT) -> None:
@@ -1476,12 +1654,15 @@ def adaptive_optimizer_param_groups(
     effective_input_lr = lr if input_proj_lr is None else input_proj_lr
     effective_upstream_lr = lr if upstream_lr is None else upstream_lr
     input_params: list[torch.nn.Parameter] = []
+    pair_params: list[torch.nn.Parameter] = []
     upstream_params: list[torch.nn.Parameter] = []
     for name, param in model.named_parameters():
         if not param.requires_grad:
             continue
         if name.startswith("calculator_hook.input_proj."):
             input_params.append(param)
+        elif name.startswith("calculator_hook.pair_proj."):
+            pair_params.append(param)
         else:
             upstream_params.append(param)
 
@@ -1493,6 +1674,15 @@ def adaptive_optimizer_param_groups(
                 "lr": effective_input_lr,
                 "weight_decay": weight_decay,
                 "name": "calculator_hook.input_proj",
+            }
+        )
+    if pair_params:
+        groups.append(
+            {
+                "params": pair_params,
+                "lr": effective_input_lr,
+                "weight_decay": weight_decay,
+                "name": "calculator_hook.pair_proj",
             }
         )
     if upstream_params:
@@ -1517,6 +1707,8 @@ def trainable_parameter_summary(model: TinyGPT) -> list[dict[str, object]]:
         group_name = (
             "calculator_hook.input_proj"
             if name.startswith("calculator_hook.input_proj.")
+            else "calculator_hook.pair_proj"
+            if name.startswith("calculator_hook.pair_proj.")
             else "upstream"
         )
         group = groups.setdefault(
@@ -1616,6 +1808,7 @@ def make_model_config(
     injection_scale: float = 1.0,
     operand_vocab_size: int | None = None,
     calculator_estimator: str = "ste",
+    calculator_action_head: str = "independent_operands",
     calculator_read_position: str = "eq",
     calculator_injection_mode: str = "add",
     calculator_bottleneck_mode: str = "none",
@@ -1644,6 +1837,7 @@ def make_model_config(
         calculator_injection_scale=injection_scale,
         calculator_injection_mode=calculator_injection_mode,
         calculator_estimator=calculator_estimator,
+        calculator_action_head=calculator_action_head,
         calculator_read_position=calculator_read_position,
         calculator_bottleneck_mode=calculator_bottleneck_mode,
     )
@@ -1681,6 +1875,7 @@ def run_variant(
         injection_scale=args.injection_scale,
         operand_vocab_size=calculator_operand_vocab_size,
         calculator_estimator=args.calculator_estimator,
+        calculator_action_head=args.calculator_action_head,
         calculator_read_position=args.calculator_read_position,
         calculator_injection_mode=args.calculator_injection_mode,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
@@ -1705,6 +1900,7 @@ def run_variant(
             "action_loss_weighted_interface",
             "action_loss_replay_interface",
             "action_loss_full_enum_interface",
+            "action_loss_full_enum_joint_interface",
         }
         and args.freeze_semantic_decoder
     ):
@@ -1716,6 +1912,7 @@ def run_variant(
             "action_loss_weighted_interface",
             "action_loss_replay_interface",
             "action_loss_full_enum_interface",
+            "action_loss_full_enum_joint_interface",
         }
         and args.freeze_upstream_encoder
     ):
@@ -1726,6 +1923,7 @@ def run_variant(
         "action_loss_weighted_interface",
         "action_loss_replay_interface",
         "action_loss_full_enum_interface",
+        "action_loss_full_enum_joint_interface",
     }:
         optim = torch.optim.AdamW(
             adaptive_optimizer_param_groups(
@@ -1774,6 +1972,7 @@ def run_variant(
         snapshot_samples=args.snapshot_samples,
         checkpoint_every=args.checkpoint_every,
         calculator_estimator=args.calculator_estimator,
+        calculator_action_head=args.calculator_action_head,
         calculator_read_position=args.calculator_read_position,
         calculator_injection_mode=args.calculator_injection_mode,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
@@ -1873,6 +2072,7 @@ def run_variant(
                 "action_loss_weighted_interface",
                 "action_loss_replay_interface",
                 "action_loss_full_enum_interface",
+                "action_loss_full_enum_joint_interface",
             }
             and not args.oracle_train
         )
@@ -1965,6 +2165,19 @@ def run_variant(
             elif args.calculator_estimator == "action_loss_full_enum_interface":
                 action_loss_interface_loss, action_loss_metrics = (
                     action_loss_full_enum_interface_loss(
+                        model,
+                        batch,
+                        num_digits=num_digits,
+                        temperature=args.action_loss_full_enum_temperature,
+                        min_probability_floor=(
+                            args.action_loss_full_enum_min_probability_floor
+                        ),
+                        chunk_size=args.action_loss_full_enum_chunk_size,
+                    )
+                )
+            elif args.calculator_estimator == "action_loss_full_enum_joint_interface":
+                action_loss_interface_loss, action_loss_metrics = (
+                    action_loss_full_enum_joint_interface_loss(
                         model,
                         batch,
                         num_digits=num_digits,
@@ -2184,6 +2397,7 @@ def run_variant(
     metrics["answer_loss_weight"] = args.answer_loss_weight
     metrics["aux_operand_loss_floor"] = args.aux_operand_loss_floor
     metrics["calculator_estimator"] = args.calculator_estimator
+    metrics["calculator_action_head"] = args.calculator_action_head
     metrics["calculator_read_position"] = args.calculator_read_position
     metrics["calculator_injection_mode"] = args.calculator_injection_mode
     metrics["calculator_bottleneck_mode"] = args.calculator_bottleneck_mode
@@ -2505,9 +2719,16 @@ def parse_args() -> argparse.Namespace:
             "action_loss_weighted_interface",
             "action_loss_replay_interface",
             "action_loss_full_enum_interface",
+            "action_loss_full_enum_joint_interface",
         ],
         default="ste",
         help="Estimator for the learned calculator input interface.",
+    )
+    parser.add_argument(
+        "--calculator-action-head",
+        choices=["independent_operands", "joint_pair"],
+        default="independent_operands",
+        help="Calculator action parameterization used by the learned interface head.",
     )
     parser.add_argument(
         "--semantic-decoder-checkpoint",
@@ -2743,6 +2964,7 @@ def main() -> None:
             "action_loss_weighted_interface",
             "action_loss_replay_interface",
             "action_loss_full_enum_interface",
+            "action_loss_full_enum_joint_interface",
         }
         and args.variant != "model-c"
     ):
@@ -2754,6 +2976,7 @@ def main() -> None:
         "action_loss_weighted_interface",
         "action_loss_replay_interface",
         "action_loss_full_enum_interface",
+        "action_loss_full_enum_joint_interface",
     }:
         if args.oracle_train:
             raise ValueError(
@@ -2796,6 +3019,22 @@ def main() -> None:
         )
     if args.action_loss_full_enum_chunk_size < 1:
         raise ValueError("--action-loss-full-enum-chunk-size must be positive")
+    if (
+        args.calculator_estimator == "action_loss_full_enum_joint_interface"
+        and args.calculator_action_head != "joint_pair"
+    ):
+        raise ValueError(
+            "action_loss_full_enum_joint_interface requires "
+            "--calculator-action-head joint_pair"
+        )
+    if (
+        args.calculator_action_head == "joint_pair"
+        and args.calculator_estimator != "action_loss_full_enum_joint_interface"
+    ):
+        raise ValueError(
+            "--calculator-action-head joint_pair is currently supported only with "
+            "action_loss_full_enum_joint_interface"
+        )
     if args.input_proj_anchor_weight < 0:
         raise ValueError("--input-proj-anchor-weight must be non-negative")
     if args.input_proj_anchor_decay_steps < 0:
@@ -2848,7 +3087,10 @@ def main() -> None:
         "action_loss_weighted_interface",
         "action_loss_replay_interface",
         "action_loss_full_enum_interface",
+        "action_loss_full_enum_joint_interface",
     }:
+        if args.calculator_action_head != "independent_operands":
+            suffix_parts.append(args.calculator_action_head)
         if args.adaptive_interface_target_mode != "hard_pair":
             suffix_parts.append(args.adaptive_interface_target_mode)
         if args.input_proj_lr is not None:
@@ -2872,7 +3114,10 @@ def main() -> None:
                 f"alrefresh{args.action_loss_candidate_refresh_every}"
                 f"-alema{args.action_loss_candidate_ema_beta:g}"
             )
-        if args.calculator_estimator == "action_loss_full_enum_interface":
+        if args.calculator_estimator in {
+            "action_loss_full_enum_interface",
+            "action_loss_full_enum_joint_interface",
+        }:
             suffix_parts.append(
                 f"fullt{args.action_loss_full_enum_temperature:g}"
                 f"-fullchunk{args.action_loss_full_enum_chunk_size}"
@@ -2919,6 +3164,7 @@ def main() -> None:
         f"checkpoint_every={args.checkpoint_every}"
     )
     print(f"calculator estimator: {args.calculator_estimator}")
+    print(f"calculator action head: {args.calculator_action_head}")
     print(
         "adaptive interface: "
         f"target_mode={args.adaptive_interface_target_mode} "

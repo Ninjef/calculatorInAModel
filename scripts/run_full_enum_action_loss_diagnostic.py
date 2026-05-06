@@ -20,6 +20,7 @@ from scripts.overfit_one_batch import (  # noqa: E402
     action_loss_soft_targets,
     action_loss_weights_from_losses,
     calculator_read_operand_logits,
+    calculator_read_pair_logits,
     fixed_width_operands_from_batch,
     full_enum_action_pairs,
     make_range_batch,
@@ -76,8 +77,27 @@ def full_enum_diagnostic(
             fixed_width=True,
             device=device,
         )
-        a_logits, b_logits, _, _ = calculator_read_operand_logits(model, batch)
-        classes = a_logits.shape[-1]
+        if model.cfg.calculator_action_head == "joint_pair":
+            pair_logits, _, _, _ = calculator_read_pair_logits(model, batch)
+            classes = model.cfg.calculator_operand_vocab_size
+            a_logits = torch.logsumexp(
+                pair_logits.log_softmax(dim=-1).reshape(
+                    current_batch, classes, classes
+                ),
+                dim=-1,
+            )
+            b_logits = torch.logsumexp(
+                pair_logits.log_softmax(dim=-1).reshape(
+                    current_batch, classes, classes
+                ),
+                dim=-2,
+            )
+            learned_idx_from_head = pair_logits.argmax(dim=-1)
+        else:
+            a_logits, b_logits, _, _ = calculator_read_operand_logits(model, batch)
+            classes = a_logits.shape[-1]
+            pair_logits = None
+            learned_idx_from_head = None
         pairs = full_enum_action_pairs(classes=classes, device=device)
         candidates = pairs.unsqueeze(0).expand(current_batch, -1, -1)
         losses = score_action_loss_candidates_chunked(
@@ -94,7 +114,13 @@ def full_enum_diagnostic(
         true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=digits)
         learned_a = a_logits.argmax(dim=-1)
         learned_b = b_logits.argmax(dim=-1)
-        learned_idx = learned_a * classes + learned_b
+        learned_idx = (
+            learned_idx_from_head
+            if learned_idx_from_head is not None
+            else learned_a * classes + learned_b
+        )
+        learned_a = learned_idx // classes
+        learned_b = learned_idx % classes
         true_idx = true_a * classes + true_b
         best_idx = losses.argmin(dim=-1)
         batch_idx = torch.arange(current_batch, device=device)
@@ -103,6 +129,25 @@ def full_enum_diagnostic(
         best_losses = losses.gather(1, best_idx.unsqueeze(-1)).squeeze(-1)
         best_pairs = pairs.index_select(0, best_idx)
         entropy = -(weights * weights.clamp_min(1e-12).log()).sum(dim=-1)
+        true_pair_probs = weights.gather(1, true_idx.unsqueeze(-1)).squeeze(-1)
+        true_pair_ranks = (losses < true_losses.unsqueeze(-1)).sum(dim=-1) + 1
+        learned_tie_1e3 = learned_losses <= best_losses + 1e-3
+        learned_tie_1e2 = learned_losses <= best_losses + 1e-2
+        if pair_logits is not None:
+            pair_probs = pair_logits.softmax(dim=-1)
+            pair_logit_entropy = -(
+                pair_probs * pair_probs.clamp_min(1e-12).log()
+            ).sum(dim=-1)
+            learned_pair_probability = pair_probs.gather(
+                1, learned_idx.unsqueeze(-1)
+            ).squeeze(-1)
+            true_pair_head_probability = pair_probs.gather(
+                1, true_idx.unsqueeze(-1)
+            ).squeeze(-1)
+        else:
+            pair_logit_entropy = torch.full_like(entropy, float("nan"))
+            learned_pair_probability = torch.full_like(entropy, float("nan"))
+            true_pair_head_probability = torch.full_like(entropy, float("nan"))
         for i in range(current_batch):
             best_a = int(best_pairs[i, 0].item())
             best_b = int(best_pairs[i, 1].item())
@@ -132,6 +177,8 @@ def full_enum_diagnostic(
                     "learned_is_best": bool(
                         best_idx[i].item() == learned_idx[i].item()
                     ),
+                    "learned_within_1e-3_best": bool(learned_tie_1e3[i].item()),
+                    "learned_within_1e-2_best": bool(learned_tie_1e2[i].item()),
                     "best_matches_true_operands": bool(
                         best_a == true_a[i].item() and best_b == true_b[i].item()
                     ),
@@ -148,8 +195,22 @@ def full_enum_diagnostic(
                     "soft_target_true_b_mass": float(
                         target_b[i, true_b[i]].item()
                     ),
+                    "soft_target_true_pair_probability": float(
+                        true_pair_probs[i].item()
+                    ),
+                    "true_pair_rank": int(true_pair_ranks[i].item()),
+                    "learned_pair_head_probability": float(
+                        learned_pair_probability[i].item()
+                    ),
+                    "true_pair_head_probability": float(
+                        true_pair_head_probability[i].item()
+                    ),
                     "pair_entropy": float(entropy[i].item()),
                     "effective_pair_count": float(entropy[i].exp().item()),
+                    "pair_logit_entropy": float(pair_logit_entropy[i].item()),
+                    "pair_logit_effective_pair_count": float(
+                        pair_logit_entropy[i].exp().item()
+                    ),
                     "action_pair_count": int(candidates.shape[1]),
                 }
             )
@@ -177,6 +238,12 @@ def full_enum_diagnostic(
         ),
         "true_best_fraction": mean(int(row["true_is_best"]) for row in rows),
         "learned_best_fraction": mean(int(row["learned_is_best"]) for row in rows),
+        "learned_within_1e-3_best_fraction": mean(
+            int(row["learned_within_1e-3_best"]) for row in rows
+        ),
+        "learned_within_1e-2_best_fraction": mean(
+            int(row["learned_within_1e-2_best"]) for row in rows
+        ),
         "best_matches_true_operands_fraction": mean(
             int(row["best_matches_true_operands"]) for row in rows
         ),
@@ -192,10 +259,37 @@ def full_enum_diagnostic(
         "mean_soft_target_true_b_mass": mean(
             float(row["soft_target_true_b_mass"]) for row in rows
         ),
+        "mean_soft_target_true_pair_probability": mean(
+            float(row["soft_target_true_pair_probability"]) for row in rows
+        ),
+        "mean_true_pair_rank": mean(float(row["true_pair_rank"]) for row in rows),
         "mean_pair_entropy": mean(float(row["pair_entropy"]) for row in rows),
         "mean_effective_pair_count": mean(
             float(row["effective_pair_count"]) for row in rows
         ),
+        "mean_pair_logit_entropy": mean(
+            float(row["pair_logit_entropy"])
+            for row in rows
+            if float(row["pair_logit_entropy"]) == float(row["pair_logit_entropy"])
+        )
+        if any(
+            float(row["pair_logit_entropy"]) == float(row["pair_logit_entropy"])
+            for row in rows
+        )
+        else float("nan"),
+        "mean_pair_logit_effective_pair_count": mean(
+            float(row["pair_logit_effective_pair_count"])
+            for row in rows
+            if float(row["pair_logit_effective_pair_count"])
+            == float(row["pair_logit_effective_pair_count"])
+        )
+        if any(
+            float(row["pair_logit_effective_pair_count"])
+            == float(row["pair_logit_effective_pair_count"])
+            for row in rows
+        )
+        else float("nan"),
+        "calculator_action_head": model.cfg.calculator_action_head,
         "train_config": train_config,
     }
     return rows, summary
