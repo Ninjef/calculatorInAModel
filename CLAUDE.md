@@ -14,4 +14,5 @@ Under aiAgentProjectTasks, we have all the intended work to be done by the resea
 # After contributing
 - Whenever doing experiments and learning new information, fill out information in the associated phase's fact sheet
 - Fill out any work history in aiAgentWorkHisotry that you've accomplished
+- Move your task file to the completed folder (if it's in fact fully completed)
 - Commit and push
