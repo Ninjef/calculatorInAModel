@@ -280,3 +280,68 @@ The scheduler works and preserves old behavior when omitted. In the one matched 
 ### Recommendation
 
 Complete the intended three-seed Stage 1/Stage 2 ladder before deciding on the slower-aux-decay stabilizer. Use dense selection over steps 125, 150, 175, 200, and 225, and run the full canonical/private/action diagnostics only on the selected retained checkpoints.
+
+## Track B/C: matched retention ladder for interface decay
+
+Date: 2026-05-06
+
+### Setup
+
+- Completed the matched three-seed ladder for the joint identity curriculum under the fixed phase-3 controls.
+- Seed arguments were `211`, `221`, and `231`; `overfit_one_batch.py` stores run seeds as `seed + digits`, so run directories are `seed213`, `seed223`, and `seed233`.
+- Each seed has a constant full-enum interface run and a matched interface-decay run with `--adaptive-interface-loss-decay-steps 150 --adaptive-interface-loss-floor 0.0`.
+- Selection used steps `125, 150, 175, 200, 225`, maximizing snapshot `pair_exact_match` among aux-zero rows; decayed runs additionally required snapshot interface weight exactly `0.0`.
+- Summary artifacts: `runs/2026-05-06_phase3_matched_retention_ladder_summary/summary.json` and `summary.md`.
+- Added helper scripts:
+  - `scripts/summarize_matched_retention_ladder.py`
+  - `scripts/run_matched_retention_ladder_diagnostics.py`
+- Verification: `python3 -m pytest tests/test_data.py tests/test_model.py -q` -> `61 passed`.
+
+### Selected Snapshot Checkpoints
+
+| Seed arg | Stored seed | Condition | Step | Interface | Aux | Normal | Inj0 | Rand | Oracle | Pair | Calc |
+| ---: | ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 211 | 213 | constant | 175 | `1.0000` | `0.0000` | `0.1641` | `0.0156` | `0.0078` | `0.9297` | `0.1406` | `0.1719` |
+| 211 | 213 | decayed | 200 | `0.0000` | `0.0000` | `0.2344` | `0.0078` | `0.0391` | `0.9609` | `0.1797` | `0.2422` |
+| 221 | 223 | constant | 150 | `1.0000` | `0.0000` | `0.1562` | `0.0078` | `0.0156` | `0.9141` | `0.0938` | `0.1562` |
+| 221 | 223 | decayed | 150 | `0.0000` | `0.0000` | `0.2031` | `0.0078` | `0.0156` | `0.9141` | `0.1484` | `0.2109` |
+| 231 | 233 | constant | 150 | `1.0000` | `0.0000` | `0.1562` | `0.0000` | `0.0234` | `0.8906` | `0.1484` | `0.2109` |
+| 231 | 233 | decayed | 200 | `0.0000` | `0.0000` | `0.1562` | `0.0000` | `0.0156` | `0.9375` | `0.1406` | `0.1719` |
+
+Aggregate selected snapshots:
+
+| Condition | Runs | Mean pair exact | Mean calc result acc | Mean normal | Mean inj0 | Mean rand | Mean oracle |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| constant | 3 | `0.1276` | `0.1797` | `0.1589` | `0.0078` | `0.0156` | `0.9115` |
+| decayed | 3 | `0.1562` | `0.2083` | `0.1979` | `0.0052` | `0.0234` | `0.9375` |
+
+### Full Diagnostics
+
+All selected checkpoints received the canonical causal diagnostics, full-enum action-loss diagnostics, and private all-pair protocol diagnostics.
+
+| Seed arg | Condition | Step | Built-in | Canon normal | Canon inj0 | Canon rand | Canon oracle | Canon pair | Private pair | Private calc | Learned-true gap | Tie <=1e-3 | Logit eff pairs |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 211 | constant | 175 | `0.0625` | `0.1133` | `0.0078` | `0.0352` | `0.9336` | `0.0625` | `0.0975` | `0.1500` | `8.0278` | `0.1094` | `396.7` |
+| 211 | decayed | 200 | `0.1016` | `0.1367` | `0.0078` | `0.0234` | `0.9219` | `0.1133` | `0.1000` | `0.1525` | `7.4498` | `0.2188` | `396.4` |
+| 221 | constant | 150 | `0.0703` | `0.1914` | `0.0078` | `0.0195` | `0.9609` | `0.1055` | `0.0900` | `0.1575` | `7.1521` | `0.1484` | `397.9` |
+| 221 | decayed | 150 | `0.1250` | `0.1484` | `0.0000` | `0.0430` | `0.8789` | `0.1133` | `0.1175` | `0.1775` | `7.8160` | `0.1484` | `397.7` |
+| 231 | constant | 150 | `0.0664` | `0.1992` | `0.0117` | `0.0156` | `0.9258` | `0.1875` | `0.1425` | `0.1825` | `7.7091` | `0.1797` | `397.8` |
+| 231 | decayed | 200 | `0.1602` | `0.1289` | `0.0039` | `0.0195` | `0.9570` | `0.1172` | `0.1375` | `0.1700` | `7.7719` | `0.1484` | `397.2` |
+
+All selected runs had `final_aux_operand_loss_weight=0.0`, `final_input_proj_anchor_weight=0.0`, `freeze_semantic_decoder=true`, `freeze_upstream_encoder=false`, and trainable groups `calculator_hook.pair_proj` plus `upstream`. For decayed selections, the selected snapshot interface weight and `final_adaptive_interface_loss_weight` were both exactly `0.0`.
+
+### Finding
+
+Weak positive, not strong positive. Decay improved selected snapshot retention on seed args `211` and `221`, and the decayed aggregate beat constant on selected pair exact and calculator-result accuracy. The causal controls remain mostly healthy, with injection-zero/forced-random near chance and oracle recovery high in snapshots. However, full diagnostics are less flattering: no decayed seed approaches the strong-positive thresholds, pair-logit effective pairs remain near-uniform at roughly all `400` actions, and the `221` decayed checkpoint's 256-sample oracle recovery fell below `0.90`.
+
+### Recommendation
+
+Do not broaden this curriculum. If continuing it at all, run exactly the specified slower-decay stabilizer on the two best seed args only, `211` and `221`:
+
+```text
+--aux-operand-loss-decay-steps 300
+--adaptive-interface-loss-decay-steps 300
+--steps 375
+```
+
+If that one stabilizer does not materially improve private pair exact and private calculator-result accuracy, move to a sharper identifiability environment where the answer signal itself identifies operands.

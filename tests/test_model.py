@@ -9,6 +9,10 @@ import torch
 
 from src.data import EQ_ID, PLUS_ID, VOCAB_SIZE
 from src.model import CalculatorHook, GPTConfig, HardAddSTE, TinyGPT, masked_cross_entropy
+from scripts.summarize_matched_retention_ladder import (
+    select_checkpoint,
+    summarize_runs,
+)
 
 
 def _small_cfg() -> GPTConfig:
@@ -43,6 +47,75 @@ def _small_scaled_calculator_cfg(scale: float, mode: str = "add") -> GPTConfig:
     return cfg
 
 
+def _write_matched_ladder_run(
+    run_dir: Path,
+    *,
+    seed: int,
+    interface_decay_steps: int,
+    rows: list[dict[str, float]],
+) -> None:
+    run_dir.mkdir(parents=True)
+    (run_dir / "checkpoint_snapshots").mkdir()
+    metrics = {
+        "seed": seed,
+        "exact_match": 0.125,
+        "adaptive_interface_loss_decay_steps": interface_decay_steps,
+        "final_adaptive_interface_loss_weight": 0.0
+        if interface_decay_steps > 0
+        else 1.0,
+        "final_aux_operand_loss_weight": 0.0,
+        "final_input_proj_anchor_weight": 0.0,
+        "trainable_parameter_groups": [
+            {"name": "calculator_hook.pair_proj"},
+            {"name": "upstream"},
+        ],
+    }
+    (run_dir / "metrics.json").write_text(json.dumps(metrics) + "\n")
+    with (run_dir / "diagnostic_snapshots.csv").open("w", newline="") as handle:
+        snapshot_fieldnames = [
+            "step",
+            "normal_exact_match",
+            "injection_zero_exact_match",
+            "oracle_exact_match",
+            "forced_zero_exact_match",
+            "forced_random_exact_match",
+            "pair_exact_match",
+            "calculator_result_accuracy",
+            "mean_pair_entropy",
+        ]
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=snapshot_fieldnames,
+        )
+        writer.writeheader()
+        writer.writerows(
+            {key: row[key] for key in snapshot_fieldnames}
+            for row in rows
+        )
+    with (run_dir / "training_curve.csv").open("w", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "step",
+                "aux_operand_loss_weight",
+                "adaptive_interface_loss_weight",
+                "action_loss_full_enum_pair_logit_effective_pairs",
+            ],
+        )
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(
+                {
+                    "step": row["step"],
+                    "aux_operand_loss_weight": row["aux_operand_loss_weight"],
+                    "adaptive_interface_loss_weight": row[
+                        "adaptive_interface_loss_weight"
+                    ],
+                    "action_loss_full_enum_pair_logit_effective_pairs": 399.0,
+                }
+            )
+
+
 def test_forward_shape() -> None:
     torch.manual_seed(0)
     model = TinyGPT(_small_cfg())
@@ -52,6 +125,91 @@ def test_forward_shape() -> None:
 
     assert logits.shape == (2, 8, VOCAB_SIZE)
     assert logits.dtype == torch.float32
+
+
+def test_matched_retention_ladder_selects_aux_zero_with_tie_breakers() -> None:
+    rows = [
+        {
+            "step": 125,
+            "aux_operand_loss_weight": 0.5,
+            "condition": "constant",
+            "pair_exact_match": 0.9,
+            "injection_zero_exact_match": 0.0,
+            "forced_random_exact_match": 0.0,
+            "oracle_exact_match": 1.0,
+            "calculator_result_accuracy": 0.9,
+        },
+        {
+            "step": 150,
+            "aux_operand_loss_weight": 0.0,
+            "condition": "constant",
+            "pair_exact_match": 0.25,
+            "injection_zero_exact_match": 0.02,
+            "forced_random_exact_match": 0.0,
+            "oracle_exact_match": 0.9,
+            "calculator_result_accuracy": 0.4,
+        },
+        {
+            "step": 175,
+            "aux_operand_loss_weight": 0.0,
+            "condition": "constant",
+            "pair_exact_match": 0.25,
+            "injection_zero_exact_match": 0.0,
+            "forced_random_exact_match": 0.0,
+            "oracle_exact_match": 0.9,
+            "calculator_result_accuracy": 0.3,
+        },
+    ]
+
+    selected = select_checkpoint(rows)
+
+    assert selected["step"] == 175
+
+
+def test_matched_retention_ladder_requires_decayed_interface_zero(
+    tmp_path: Path,
+) -> None:
+    rows = [
+        {
+            "step": 150,
+            "aux_operand_loss_weight": 0.0,
+            "adaptive_interface_loss_weight": 0.2,
+            "normal_exact_match": 0.2,
+            "injection_zero_exact_match": 0.0,
+            "oracle_exact_match": 0.9,
+            "forced_zero_exact_match": 0.0,
+            "forced_random_exact_match": 0.0,
+            "pair_exact_match": 0.9,
+            "calculator_result_accuracy": 0.9,
+            "mean_pair_entropy": 5.9,
+        },
+        {
+            "step": 175,
+            "aux_operand_loss_weight": 0.0,
+            "adaptive_interface_loss_weight": 0.0,
+            "normal_exact_match": 0.1,
+            "injection_zero_exact_match": 0.0,
+            "oracle_exact_match": 0.9,
+            "forced_zero_exact_match": 0.0,
+            "forced_random_exact_match": 0.0,
+            "pair_exact_match": 0.2,
+            "calculator_result_accuracy": 0.3,
+            "mean_pair_entropy": 5.9,
+        },
+    ]
+    run_dir = tmp_path / "model-c-2digit-seed1"
+    _write_matched_ladder_run(
+        run_dir,
+        seed=1,
+        interface_decay_steps=150,
+        rows=rows,
+    )
+
+    summary = summarize_runs([run_dir])
+
+    assert summary["selected"][0]["step"] == 175
+    assert summary["selected"][0]["condition"] == "decayed"
+    assert summary["aggregate"][0]["mean_selected_pair_exact"] == 0.2
 
 
 def test_mlp_expansion_changes_parameter_count() -> None:
