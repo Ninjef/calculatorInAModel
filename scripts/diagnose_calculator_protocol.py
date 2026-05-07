@@ -63,6 +63,7 @@ def make_model_config(
     mlp_expansion: int = 4,
     calculator_hook_after_layer: int | None = None,
     calculator_read_position: str = "eq",
+    calculator_read_span_width: int = 1,
     calculator_bottleneck_mode: str = "none",
     calculator_output_format: str = "sum",
     answer_format: AnswerFormat = "sum",
@@ -83,6 +84,7 @@ def make_model_config(
         calculator_result_vocab_size=(2 * operand_vocab_size) - 1,
         calculator_injection_scale=injection_scale,
         calculator_read_position=calculator_read_position,
+        calculator_read_span_width=calculator_read_span_width,
         calculator_bottleneck_mode=calculator_bottleneck_mode,
         calculator_output_format=calculator_output_format,
     )
@@ -166,6 +168,7 @@ def train_fresh_model(args: argparse.Namespace, device: str) -> TinyGPT:
         mlp_expansion=args.mlp_expansion,
         calculator_hook_after_layer=args.calculator_hook_after_layer,
         calculator_read_position=args.calculator_read_position,
+        calculator_read_span_width=args.calculator_read_span_width,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
         calculator_output_format=args.calculator_output_format,
         answer_format=args.answer_format,
@@ -1268,12 +1271,19 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--calculator-read-position",
-        choices=["eq", "operands"],
+        choices=["eq", "operands", "operand_spans"],
         default="eq",
         help=(
             "Residual positions used for calculator operand logits. "
-            "'eq' preserves existing behavior; 'operands' reads final A/B digits."
+            "'eq' preserves existing behavior; 'operands' reads final A/B digits; "
+            "'operand_spans' reads the full fixed-width A/B digit spans."
         ),
+    )
+    parser.add_argument(
+        "--calculator-read-span-width",
+        type=int,
+        default=1,
+        help="Digit-span width used by --calculator-read-position operand_spans.",
     )
     parser.add_argument(
         "--calculator-bottleneck-mode",

@@ -68,6 +68,7 @@ class TrainConfig:
     calculator_estimator: str
     calculator_action_head: str
     calculator_read_position: str
+    calculator_read_span_width: int
     calculator_injection_mode: str
     calculator_bottleneck_mode: str
     calculator_output_format: str
@@ -759,14 +760,25 @@ def calculator_read_operand_logits(
             residual = block(residual)
             if i == model.cfg.calculator_hook_after_layer:
                 break
-    operand_logits = model.calculator_hook.input_proj(residual)
-    a_logits_all, b_logits_all = operand_logits.split(
-        model.cfg.calculator_operand_vocab_size, dim=-1
-    )
     positions = model._calculator_read_positions(batch.x)
     batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
     a_pos = positions["a"]
     b_pos = positions["b"]
+    if model.cfg.calculator_read_position == "operand_spans":
+        a_input, b_input = model.calculator_hook._operand_span_inputs(
+            residual, positions
+        )
+        a_logits, _ = model.calculator_hook.input_proj(a_input).split(
+            model.cfg.calculator_operand_vocab_size, dim=-1
+        )
+        _, b_logits = model.calculator_hook.input_proj(b_input).split(
+            model.cfg.calculator_operand_vocab_size, dim=-1
+        )
+        return a_logits, b_logits, a_pos, b_pos
+    operand_logits = model.calculator_hook.input_proj(residual)
+    a_logits_all, b_logits_all = operand_logits.split(
+        model.cfg.calculator_operand_vocab_size, dim=-1
+    )
     return (
         a_logits_all[batch_idx, a_pos],
         b_logits_all[batch_idx, b_pos],
@@ -1589,8 +1601,20 @@ def summarize_adaptive_interface_rows(
 def load_semantic_decoder_checkpoint(model: TinyGPT, checkpoint_path: Path) -> None:
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
     state_dict = checkpoint.get("model_state_dict", checkpoint)
+    model_state = model.state_dict()
+    state_dict = {
+        name: tensor
+        for name, tensor in state_dict.items()
+        if not (
+            name.startswith("calculator_hook.input_proj.")
+            and name in model_state
+            and tensor.shape != model_state[name].shape
+        )
+    }
     missing, unexpected = model.load_state_dict(state_dict, strict=False)
     allowed_missing = {
+        "calculator_hook.input_proj.weight",
+        "calculator_hook.input_proj.bias",
         "calculator_hook.pair_proj.weight",
         "calculator_hook.pair_proj.bias",
     }
@@ -1816,7 +1840,7 @@ def auxiliary_operand_loss(
         targets = make_oracle_operands_from_batch(batch.x, num_digits=num_digits)
         eq_pos = (batch.x == EQ_ID).float().argmax(dim=-1).long()
         batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
-        if model.cfg.calculator_read_position == "operands":
+        if model.cfg.calculator_read_position in {"operands", "operand_spans"}:
             a_pos = torch.full_like(eq_pos, num_digits - 1)
             b_pos = torch.full_like(eq_pos, (num_digits + 1) + (num_digits - 1))
         else:
@@ -1862,12 +1886,24 @@ def auxiliary_operand_loss(
     else:
         _, diagnostics = model(batch.x, return_diagnostics=True)
         residual = diagnostics["calculator_read_residual"]
-        operand_logits = model.calculator_hook.input_proj(residual)
-        a_logits, b_logits = operand_logits.split(
-            model.cfg.calculator_operand_vocab_size, dim=-1
-        )
-        a_eq_logits = a_logits[batch_idx, a_pos]
-        b_eq_logits = b_logits[batch_idx, b_pos]
+        if model.cfg.calculator_read_position == "operand_spans":
+            positions = model._calculator_read_positions(batch.x)
+            a_input, b_input = model.calculator_hook._operand_span_inputs(
+                residual, positions
+            )
+            a_eq_logits, _ = model.calculator_hook.input_proj(a_input).split(
+                model.cfg.calculator_operand_vocab_size, dim=-1
+            )
+            _, b_eq_logits = model.calculator_hook.input_proj(b_input).split(
+                model.cfg.calculator_operand_vocab_size, dim=-1
+            )
+        else:
+            operand_logits = model.calculator_hook.input_proj(residual)
+            a_logits, b_logits = operand_logits.split(
+                model.cfg.calculator_operand_vocab_size, dim=-1
+            )
+            a_eq_logits = a_logits[batch_idx, a_pos]
+            b_eq_logits = b_logits[batch_idx, b_pos]
     return (
         torch.nn.functional.cross_entropy(a_eq_logits, target_a)
         + torch.nn.functional.cross_entropy(b_eq_logits, target_b)
@@ -1905,6 +1941,7 @@ def make_model_config(
     calculator_estimator: str = "ste",
     calculator_action_head: str = "independent_operands",
     calculator_read_position: str = "eq",
+    calculator_read_span_width: int = 1,
     calculator_injection_mode: str = "add",
     calculator_bottleneck_mode: str = "none",
     calculator_output_format: str = "sum",
@@ -1936,6 +1973,7 @@ def make_model_config(
         calculator_estimator=calculator_estimator,
         calculator_action_head=calculator_action_head,
         calculator_read_position=calculator_read_position,
+        calculator_read_span_width=calculator_read_span_width,
         calculator_bottleneck_mode=calculator_bottleneck_mode,
         calculator_output_format=calculator_output_format,
     )
@@ -1975,6 +2013,7 @@ def run_variant(
         calculator_estimator=args.calculator_estimator,
         calculator_action_head=args.calculator_action_head,
         calculator_read_position=args.calculator_read_position,
+        calculator_read_span_width=args.calculator_read_span_width,
         calculator_injection_mode=args.calculator_injection_mode,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
         calculator_output_format=args.calculator_output_format,
@@ -2075,6 +2114,7 @@ def run_variant(
         calculator_estimator=args.calculator_estimator,
         calculator_action_head=args.calculator_action_head,
         calculator_read_position=args.calculator_read_position,
+        calculator_read_span_width=args.calculator_read_span_width,
         calculator_injection_mode=args.calculator_injection_mode,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
         calculator_output_format=args.calculator_output_format,
@@ -2521,6 +2561,7 @@ def run_variant(
     metrics["calculator_estimator"] = args.calculator_estimator
     metrics["calculator_action_head"] = args.calculator_action_head
     metrics["calculator_read_position"] = args.calculator_read_position
+    metrics["calculator_read_span_width"] = args.calculator_read_span_width
     metrics["calculator_injection_mode"] = args.calculator_injection_mode
     metrics["calculator_bottleneck_mode"] = args.calculator_bottleneck_mode
     metrics["calculator_output_format"] = args.calculator_output_format
@@ -3015,12 +3056,19 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--calculator-read-position",
-        choices=["eq", "operands"],
+        choices=["eq", "operands", "operand_spans"],
         default="eq",
         help=(
             "Residual positions used for calculator operand logits. "
-            "'eq' preserves existing behavior; 'operands' reads final A/B digits."
+            "'eq' preserves existing behavior; 'operands' reads final A/B digits; "
+            "'operand_spans' reads the full fixed-width A/B digit spans."
         ),
+    )
+    parser.add_argument(
+        "--calculator-read-span-width",
+        type=int,
+        default=1,
+        help="Digit-span width used by --calculator-read-position operand_spans.",
     )
     parser.add_argument(
         "--calculator-injection-mode",
@@ -3105,6 +3153,19 @@ def main() -> None:
         raise ValueError("--oracle-warmup-steps requires --variant model-c")
     if args.answer_loss_weight < 0:
         raise ValueError("--answer-loss-weight must be non-negative")
+    if args.calculator_read_span_width < 1:
+        raise ValueError("--calculator-read-span-width must be positive")
+    if (
+        args.calculator_read_position == "operand_spans"
+        and (
+            len(args.digits) != 1
+            or args.calculator_read_span_width != args.digits[0]
+        )
+    ):
+        raise ValueError(
+            "--calculator-read-position operand_spans requires "
+            "--calculator-read-span-width to match the requested digit count"
+        )
     if args.aux_operand_loss_weight < 0:
         raise ValueError("--aux-operand-loss-weight must be non-negative")
     if args.aux_operand_loss_decay_steps < 0:
@@ -3351,6 +3412,7 @@ def main() -> None:
     print(f"calculator injection mode: {args.calculator_injection_mode}")
     print(f"calculator bottleneck mode: {args.calculator_bottleneck_mode}")
     print(f"calculator output format: {args.calculator_output_format}")
+    print(f"calculator read span width: {args.calculator_read_span_width}")
     print(
         "aux operand loss: "
         f"weight={args.aux_operand_loss_weight} "

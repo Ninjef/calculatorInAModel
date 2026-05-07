@@ -157,3 +157,104 @@ Go recommendation:
 
 - Go to Stage 1 supervised interface warm start using the selected Stage 0B
   checkpoint above.
+
+## 2026-05-06 Learned Interface Warm Start and Teacher-Zero Retention
+
+Claim tested:
+
+```text
+A supervised interface warm start can teach the learned calculator query
+protocol for the sum_left_operand decoder, and answer loss can retain that
+protocol after direct operand supervision is set exactly to 0.0.
+```
+
+Mechanics finding:
+
+- The requested `calculator_read_position=operands` reads only the final digit
+  position for each fixed-width operand. Under the frozen Stage 0B upstream,
+  this did not expose the full two-digit operand identity well enough.
+- Original-read Stage 1 at the requested LR reached only `0.273` eval exact and
+  best snapshot operand exact `0.355`.
+- A higher-LR/final-digit continuation improved to `0.727` eval exact and
+  snapshot operand exact `0.715`, still below the warm-start gate.
+- Added opt-in `calculator_read_position=operand_spans` plus
+  `--calculator-read-span-width 2`, preserving existing `eq` and `operands`
+  behavior. The trainable group remains only `calculator_hook.input_proj`.
+
+Stage 1 selected warm start:
+
+- Run path:
+  `runs/2026-05-06_192430_233405_model-c-op0-19-adaptive_interface-inlr0.03-uplr0.003-answer_decoder-sum_left_operand-aux1/model-c-2digit-seed3`
+- Selected checkpoint:
+  `runs/2026-05-06_192430_233405_model-c-op0-19-adaptive_interface-inlr0.03-uplr0.003-answer_decoder-sum_left_operand-aux1/model-c-2digit-seed3/final_weights.pt`
+- Config: `answer_loss_weight=0.0`, `aux_operand_loss_weight=1.0`,
+  `adaptive_interface_loss_weight=0.0`, `freeze_semantic_decoder=true`,
+  `freeze_upstream_encoder=true`, `calculator_read_position=operand_spans`,
+  `calculator_read_span_width=2`.
+- Trainable parameters: `calculator_hook.input_proj` only (`1320` params).
+- Fast gate: final eval exact `1.000`; snapshots from step `200` onward had
+  normal exact `1.000`, operand exact `1.000`, and oracle exact `1.000`.
+
+Stage 2 selected teacher-zero retention:
+
+- Run path:
+  `runs/2026-05-06_195001_156276_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed3`
+- Selected checkpoint:
+  `runs/2026-05-06_195001_156276_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed3/final_weights.pt`
+- Config: `answer_loss_weight=1.0`, `aux_operand_loss_weight=0.0`,
+  `final_aux_operand_loss_weight=0.0`, `adaptive_interface_loss_weight=0.0`,
+  `final_adaptive_interface_loss_weight=0.0`,
+  `final_input_proj_anchor_weight=0.0`, `freeze_semantic_decoder=true`,
+  `freeze_upstream_encoder=true`.
+- Trainable parameters: `calculator_hook.input_proj` only (`1320` params).
+- Final eval exact: `1.000` (`512/512`), final loss `0.000198`.
+- Fast-gate snapshots stayed stable through step `1000`: normal exact `1.000`,
+  operand exact `1.000`; final snapshot injection-zero exact `0.004`.
+
+Selected Stage 2 canonical diagnostics:
+
+- Output:
+  `runs/2026-05-06_195001_156276_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed3/canonical_causal_diagnostics`
+- Samples: `256`.
+- Normal exact `1.000`; injection-zero exact `0.000`; forced-zero exact
+  `0.0039`; forced-random exact `0.0313`; oracle-at-eval exact `1.000`.
+- Operand exact `1.000`; pair exact `1.000`; calculator-result accuracy
+  `1.000`.
+- Classification: `intended_true_operand_calculator_use`.
+- Forced-result sweep: learned-class best fraction `1.000`, true-sum best
+  fraction `1.000`, learned-minus-true target-logprob gap `0.0`.
+
+Selected Stage 2 private protocol diagnostics:
+
+- Output:
+  `runs/2026-05-06_195001_156276_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed3/private_protocol_diagnostics`
+- All `20 x 20` pairs evaluated.
+- Exact match `1.000`; operand exact `1.000`; pair exact `1.000`;
+  calculator-result accuracy `1.000`.
+- Best affine mappings for learned A and B were identity: exact `1.000`,
+  offset `0`, scale `1`.
+
+Selected Stage 2 full-enum action-loss diagnostics:
+
+- Output:
+  `runs/2026-05-06_195001_156276_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed3/full_enum_action_loss/model-c-2digit-seed3`
+- Samples: `128`; action pairs: `400`.
+- Learned-best fraction `1.000`; true-best fraction `1.000`;
+  best-matches-true-operands fraction `1.000`.
+- Mean learned NLL, true NLL, and best NLL were all `0.0002419`.
+- Mean learned-minus-true gap `0.0`; mean learned-minus-best gap `0.0`.
+
+Interpretation:
+
+- This is not oracle-only success. The selected Stage 2 checkpoint has direct
+  teacher signals exactly removed and still emits the true learned calculator
+  operands.
+- The positive result depends on exposing the full fixed-width operand spans to
+  the interface head. The original final-digit-only readout is an insufficient
+  warm-start mechanic for two-digit operands under the frozen Stage 0B upstream.
+
+Go recommendation:
+
+- Go to seed replication with `calculator_read_position=operand_spans` before
+  broadening objectives. The next task should confirm whether this
+  interface-readable protocol teaching result holds across at least two seeds.

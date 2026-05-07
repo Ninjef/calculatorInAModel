@@ -60,6 +60,8 @@ def train_cmd(
     ]
     if args.calculator_read_position != "eq":
         cmd.extend(["--calculator-read-position", args.calculator_read_position])
+    if args.calculator_read_position == "operand_spans":
+        cmd.extend(["--calculator-read-span-width", str(args.calculator_read_span_width)])
     if extra:
         cmd.extend(extra)
     return cmd
@@ -172,6 +174,8 @@ def run_private_trajectory(args: argparse.Namespace) -> None:
     ]
     if args.calculator_read_position != "eq":
         cmd.extend(["--calculator-read-position", args.calculator_read_position])
+    if args.calculator_read_position == "operand_spans":
+        cmd.extend(["--calculator-read-span-width", str(args.calculator_read_span_width)])
     for seed in args.seeds:
         run_command([*cmd, "--seed", str(seed)], dry_run=args.dry_run)
 
@@ -226,9 +230,15 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--probe-operand-max", type=int, default=19)
     parser.add_argument(
         "--calculator-read-position",
-        choices=["eq", "operands"],
+        choices=["eq", "operands", "operand_spans"],
         default="eq",
         help="Forward read-position setting to training commands.",
+    )
+    parser.add_argument(
+        "--calculator-read-span-width",
+        type=int,
+        default=2,
+        help="Forward read-span width when --calculator-read-position operand_spans.",
     )
     parser.add_argument("--snapshot-every", type=int, default=100)
     parser.add_argument("--snapshot-samples", type=int, default=64)

@@ -603,6 +603,48 @@ def test_calculator_operands_read_position_reads_operand_tokens_and_injects_at_e
     assert torch.all(injection[0, 5] != 0)
 
 
+def test_calculator_operand_spans_read_full_fixed_width_operands() -> None:
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=32,
+        n_layer=1,
+        n_head=1,
+        block_size=8,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=20,
+        calculator_result_vocab_size=39,
+        calculator_read_position="operand_spans",
+        calculator_read_span_width=2,
+    )
+    hook = CalculatorHook(cfg)
+    with torch.no_grad():
+        hook.input_proj.weight.zero_()
+        hook.input_proj.bias.zero_()
+        hook.input_proj.weight[7, 32] = 1.0
+        hook.input_proj.weight[20 + 5, 32] = 1.0
+        hook.output_proj.weight.fill_(1.0)
+
+    h = torch.zeros(1, 8, 32)
+    h[0, 1, 0] = 10.0
+    h[0, 4, 0] = 10.0
+    tokens = torch.tensor([[0, 7, PLUS_ID, 0, 5, EQ_ID, 1, 2]])
+
+    injection, trace = hook(h, tokens, return_trace=True)
+
+    assert trace["a_pred"][0, 5].item() == 7
+    assert trace["b_pred"][0, 5].item() == 5
+    assert trace["result_pred"][0, 5].item() == 12
+    assert trace["calculator_read_position_id"][0, 5].item() == 2
+    assert trace["a_read_position"][0, 5].item() == 1
+    assert trace["b_read_position"][0, 5].item() == 4
+    assert trace["eq_read_position"][0, 5].item() == 5
+    assert torch.all(injection[0, :5] == 0)
+    assert torch.all(injection[0, 6:] == 0)
+    assert torch.all(injection[0, 5] != 0)
+
+
 def test_calculator_operand_read_positions_ignore_longer_answer_format() -> None:
     cfg = _small_calculator_cfg(mode="add")
     cfg.calculator_read_position = "operands"
