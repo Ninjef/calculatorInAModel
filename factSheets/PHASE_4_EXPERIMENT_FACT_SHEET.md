@@ -5,6 +5,49 @@
 Phase 4 tests whether a calculator-query protocol can be taught and retained
 when the downstream answer target makes operand identity useful.
 
+## Current Findings
+
+Phase 4 now has a seed-robust learned-interface positive, but not yet a full
+upstream-discovery result.
+
+Established positives:
+
+- The `sum_left_operand` answer target plus
+  `calculator_output_format=sum_left_operand` gives a strict answer-decoder
+  setting where true operand identity matters.
+- The frozen Stage 0B upstream representation contains enough operand
+  information for `calculator_hook.input_proj` to read out true two-digit
+  operands when the hook reads `operand_spans`.
+- With direct operand supervision, the operand-span interface learns the true
+  calculator-query protocol across effective seeds `2`, `4`, and `5`.
+- After direct operand supervision is exactly removed
+  (`final_aux_operand_loss_weight=0.0`), answer loss retains the true learned
+  protocol across all three seeds.
+- Retention works from the first gated warm-start checkpoints, not only from
+  final high-confidence Stage 1 checkpoints.
+- Selected aux-zero checkpoints show normal/oracle/operand/pair/calculator
+  result accuracy `1.000`, injection-zero near `0.0`, forced-random near
+  chance, private all-pair exact `1.000`, identity learned A/B mappings, and
+  full-enum learned-minus-true and learned-minus-best gaps `0.0`.
+
+Interpretive boundary:
+
+- This is protocol teaching and retention, not proof that the whole upstream
+  model independently discovered calculator use from answer loss. In the
+  positive runs, the semantic decoder and upstream encoder were frozen and the
+  only trainable group was `calculator_hook.input_proj`.
+
+Most important next question:
+
+```text
+Does answer loss merely preserve an already-taught calculator protocol, or can
+it complete and stabilize a partially learned protocol after the teacher signal
+is removed?
+```
+
+Next work should prioritize reduced-supervision curricula and partial-handoff
+boundaries before upstream unfreezing or new estimators.
+
 ## Do Not Rediscover Oracle Success
 
 This is the most important interpretive rule for Phase 4:
