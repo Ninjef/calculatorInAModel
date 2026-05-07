@@ -258,3 +258,100 @@ Go recommendation:
 - Go to seed replication with `calculator_read_position=operand_spans` before
   broadening objectives. The next task should confirm whether this
   interface-readable protocol teaching result holds across at least two seeds.
+
+## 2026-05-07 Operand-Span Retention Replication and Boundary
+
+Claim tested:
+
+```text
+Aux-zero retention of the operand-span calculator-query protocol is robust
+across seeds, and answer loss can preserve the protocol even from the earliest
+warm-start checkpoint that clears the Stage 1 gate.
+```
+
+Shared config:
+
+- Stage 0B checkpoint:
+  `/Users/jarnold/Documents/Codex/2026-05-06/please-work-in-this-repo-users-9/runs/2026-05-06_164330_870116_model-c-oracle-op0-19-answer_decoder-sum_left_operand/model-c-2digit-seed2/final_weights.pt`
+- `answer_format=sum_left_operand`,
+  `calculator_output_format=sum_left_operand`,
+  `calculator_read_position=operand_spans`,
+  `calculator_read_span_width=2`,
+  `calculator_bottleneck_mode=answer_decoder`.
+- `freeze_semantic_decoder=true`, `freeze_upstream_encoder=true`.
+- Trainable parameters were limited to `calculator_hook.input_proj`
+  (`1320` params) for every Stage 1 and Stage 2 run.
+
+Stage 1 aux-only warm starts:
+
+| Effective seed | CLI seed | Run path | First gated handoff | First perfect | Final exact |
+| --- | ---: | --- | --- | --- | ---: |
+| `2` | `0` | `runs/2026-05-07_070737_999460_model-c-op0-19-adaptive_interface-inlr0.03-uplr0.003-answer_decoder-sum_left_operand-aux1/model-c-2digit-seed2` | `checkpoint_snapshots/step_00100_weights.pt` | step `150` | `1.000` |
+| `4` | `2` | `runs/2026-05-07_070738_192155_model-c-op0-19-adaptive_interface-inlr0.03-uplr0.003-answer_decoder-sum_left_operand-aux1/model-c-2digit-seed4` | `checkpoint_snapshots/step_00150_weights.pt` | step `150` | `1.000` |
+| `5` | `3` | `runs/2026-05-07_070737_995829_model-c-op0-19-adaptive_interface-inlr0.03-uplr0.003-answer_decoder-sum_left_operand-aux1/model-c-2digit-seed5` | `checkpoint_snapshots/step_00100_weights.pt` | step `150` | `1.000` |
+
+Stage 1 final fast gates:
+
+| Effective seed | Normal | Injection-zero | Forced-random | Oracle | Operand | Pair | Calculator result | A/B entropy | Aux |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: |
+| `2` | `1.000` | `0.000` | `0.016` | `1.000` | `1.000` | `1.000` | `1.000` | `0.466/0.403` | `1.0` |
+| `4` | `1.000` | `0.000` | `0.043` | `1.000` | `1.000` | `1.000` | `1.000` | `0.464/0.397` | `1.0` |
+| `5` | `1.000` | `0.004` | `0.020` | `1.000` | `1.000` | `1.000` | `1.000` | `0.446/0.398` | `1.0` |
+
+Stage 2A aux-zero retention from earliest gated handoff:
+
+| Effective seed | CLI seed | Run path | Selected checkpoint | Aux | Normal | Injection-zero | Forced-random | Operand | Calculator result | A/B entropy |
+| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `2` | `0` | `runs/2026-05-07_092659_995383_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed2` | `final_weights.pt` | `0.0` | `1.000` | `0.000` | `0.016` | `1.000` | `1.000` | `2.918/2.904` |
+| `4` | `2` | `runs/2026-05-07_074429_578037_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed4` | `final_weights.pt` | `0.0` | `1.000` | `0.000` | `0.043` | `1.000` | `1.000` | `2.829/2.793` |
+| `5` | `3` | `runs/2026-05-07_092657_329340_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed5` | `final_weights.pt` | `0.0` | `1.000` | `0.004` | `0.020` | `1.000` | `1.000` | `2.914/2.900` |
+
+Stage 2B aux-zero retention from final Stage 1 handoff:
+
+| Effective seed | CLI seed | Run path | Selected checkpoint | Aux | Normal | Injection-zero | Forced-random | Operand | Calculator result | A/B entropy |
+| --- | ---: | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `2` | `0` | `runs/2026-05-07_082239_879644_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed2` | `final_weights.pt` | `0.0` | `1.000` | `0.000` | `0.016` | `1.000` | `1.000` | `0.462/0.404` |
+| `4` | `2` | `runs/2026-05-07_082241_865137_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed4` | `final_weights.pt` | `0.0` | `1.000` | `0.000` | `0.043` | `1.000` | `1.000` | `0.462/0.395` |
+| `5` | `3` | `runs/2026-05-07_082240_648656_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed5` | `final_weights.pt` | `0.0` | `1.000` | `0.004` | `0.020` | `1.000` | `1.000` | `0.446/0.395` |
+
+Selected Stage 2A diagnostics:
+
+- Canonical diagnostics on all three selected Stage 2A finals classified each
+  checkpoint as `intended_true_operand_calculator_use`.
+- Canonical metrics for all selected Stage 2A finals: normal exact `1.000`,
+  injection-zero exact `0.000`, forced-random exact `0.03125`,
+  oracle-at-eval exact `1.000`, operand exact `1.000`, pair exact `1.000`,
+  calculator-result accuracy `1.000`, forced-result learned-class best
+  fraction `1.000`, true-sum best fraction `1.000`, and learned-minus-true
+  target-logprob gap `0.0`.
+- Private all-pair diagnostics on all selected Stage 2A finals: exact
+  `1.000`, operand exact `1.000`, pair exact `1.000`, calculator-result
+  accuracy `1.000`, learned A identity mapping exact `1.000`, and learned B
+  identity mapping exact `1.000`.
+- Full-enum action-loss diagnostics on all selected Stage 2A finals:
+  learned-best fraction `1.000`, true-best fraction `1.000`,
+  learned-minus-true gap `0.0`, learned-minus-best gap `0.0`, effective
+  action pairs about `30.2`.
+
+Interpretation:
+
+- The previous one-seed positive replicated strongly: three of three seeds
+  learned the operand-span protocol under direct supervision, and three of
+  three retained it after direct operand supervision was exactly removed.
+- The boundary result is stronger than expected: final-handoff retention works,
+  but it was not required. Even the first gated handoff checkpoints retained
+  perfectly under aux-zero answer-only training.
+- Stage 2A retained despite high final A/B entropy near `2.8-2.9`, while
+  Stage 2B retained with sharper A/B entropy near `0.4`. Hard argmax protocol
+  correctness is therefore robust even when the retained distributions remain
+  relatively soft.
+
+Go recommendation:
+
+- Go to reduced-supervision curricula. Interface-only aux-zero retention is now
+  seed-robust across at least three effective seeds.
+- No-go on upstream unfreezing as the next move; keep it reserved until the
+  reduced-supervision boundary is known.
+- No-go on new estimators for the next task. The current best signal is to find
+  how little direct operand supervision is needed before aux-zero retention
+  survives.
