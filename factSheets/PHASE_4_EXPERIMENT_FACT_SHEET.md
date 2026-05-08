@@ -501,3 +501,93 @@ Go recommendation:
   range, especially to find a failed lower neighbor for seed `5`.
 - Keep upstream frozen and avoid new estimators until this completion boundary
   is sharper.
+
+## 2026-05-08 Boundary Closure Before Phase Wrap
+
+Claim tested:
+
+```text
+The partial-handoff completion boundary from 2026-05-07 can be closed without
+introducing a new estimator, unfreezing upstream, or adding a new objective.
+```
+
+Run root:
+
+```text
+runs/2026-05-08_phase4_boundary_closure
+```
+
+Implementation:
+
+- Added `scripts/run_phase4_boundary_closure.py` as a compact reproducible
+  runner for the selected Stage 2 handoffs and diagnostics.
+- Reused the existing dense Stage 1A snapshots from
+  `runs/2026-05-07_phase4_min_supervision_boundary`; Stage 1A was not rerun.
+- Shared setup stayed fixed: `answer_format=sum_left_operand`,
+  `calculator_output_format=sum_left_operand`,
+  `calculator_read_position=operand_spans`,
+  `calculator_read_span_width=2`, strict `answer_decoder` bottleneck, frozen
+  semantic decoder, frozen upstream encoder, and trainable
+  `calculator_hook.input_proj` only.
+- All closure Stage 2 continuations used `answer_loss_weight=1.0`,
+  `aux_operand_loss_weight=0.0`,
+  `adaptive_interface_loss_weight=0.0`, and
+  `input_proj_anchor_weight=0.0`.
+
+New closure fast gates:
+
+| Effective seed | CLI seed | Handoff | Stage 1 operand | Final operand/pair/calc | Injection-zero | Forced-random | Oracle | Status |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `2` | `0` | step `30` | `0.395` | `0.809` / `0.809` / `0.809` | `0.000` | `0.016` | `1.000` | failed |
+| `2` | `0` | step `55` | `0.438` | `0.844` / `0.844` / `0.844` | `0.000` | `0.016` | `1.000` | nearest failed below step `60` |
+| `5` | `3` | step `20` | `0.027` | `0.734` / `0.734` / `0.734` | `0.004` | `0.020` | `1.000` | failed |
+| `5` | `3` | step `25` | `0.078` | `0.855` / `0.855` / `0.855` | `0.004` | `0.020` | `1.000` | nearest failed below step `30` |
+
+All four closure runs ended with:
+
+- `final_aux_operand_loss_weight=0.0`;
+- `final_adaptive_interface_loss_weight=0.0`;
+- `final_input_proj_anchor_weight=0.0`;
+- `freeze_semantic_decoder=true`;
+- `freeze_upstream_encoder=true`;
+- trainable parameters limited to `calculator_hook.input_proj` (`1320`
+  params).
+
+Closure diagnostics:
+
+| Selection | Canonical operand/pair/calc | Private operand/pair/calc | Full-enum learned-best | Full-enum gaps |
+| --- | ---: | ---: | ---: | ---: |
+| seed `2`, step `30` | `0.848` / `0.848` / `0.848` | `0.828` / `0.828` / `0.828` | `0.758` | `0.839` / `0.839` |
+| seed `2`, step `55` | `0.855` / `0.855` / `0.855` | `0.845` / `0.845` / `0.845` | `0.852` | `0.705` / `0.705` |
+| seed `5`, step `20` | `0.727` / `0.727` / `0.727` | `0.723` / `0.723` / `0.723` | `0.711` | `0.995` / `0.995` |
+| seed `5`, step `25` | `0.828` / `0.828` / `0.828` | `0.848` / `0.848` / `0.850` | `0.883` | `0.349` / `0.349` |
+
+Closed boundary:
+
+| Effective seed | Nearest failed lower handoff | Lowest retained handoff | Interpretation |
+| ---: | --- | --- | --- |
+| `2` | step `55`, Stage 1 operand `0.438`, final/private/full-enum all below retention | step `60`, Stage 1 operand `0.641`, prior diagnostics exact | narrower fail/retain bracket |
+| `4` | step `30`, Stage 1 operand about `0.19`, prior failed diagnostics | step `35`, Stage 1 operand `0.363`, prior retained diagnostics | already bracketed |
+| `5` | step `25`, Stage 1 operand `0.078`, final/private/full-enum all below retention | step `30`, Stage 1 operand about `0.20`, prior retained diagnostics high | failed lower neighbor established |
+
+Interpretation:
+
+- Seed `2` no longer has a loose `0.320` failed vs `0.641` retained boundary.
+  The nearest measured failure is now Stage 1 operand `0.438`, immediately
+  below the retained step `60` handoff.
+- Seed `5` is permissive, but not unbounded. The step `25` handoff failed under
+  fast gates, private all-pair decoding, and full-enum action-loss diagnostics,
+  while the previously measured step `30` handoff remained the retained upper
+  neighbor.
+- No new retained checkpoint showed high answer exact with weak operand/pair
+  exact. The new diagnostics are failed-boundary evidence, not oracle-only or
+  answer-only progress.
+
+Recommendation:
+
+- Wrap Phase 4. The remaining boundary is seed-dependent, but it is now
+  bracketed tightly enough for the phase conclusion: answer loss can complete a
+  partially taught calculator-query protocol after direct operand supervision
+  is exactly removed, but only above a seed-dependent handoff quality.
+- Next phase should move beyond frozen-interface boundary closure and decide
+  whether to test upstream discovery, transfer, or a larger identifiable task.
