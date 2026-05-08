@@ -398,3 +398,106 @@ Go recommendation:
 - No-go on new estimators for the next task. The current best signal is to find
   how little direct operand supervision is needed before aux-zero retention
   survives.
+
+## 2026-05-07 Minimum Supervision and Partial Completion Boundary
+
+Claim tested:
+
+```text
+Answer loss can complete and stabilize a partially learned calculator-query
+protocol after direct operand supervision is removed, but the boundary is
+seed-dependent and not reached by short decayed-aux curricula.
+```
+
+Run root:
+
+```text
+runs/2026-05-07_phase4_min_supervision_boundary
+```
+
+Implementation:
+
+- Added `scripts/run_phase4_min_supervision_boundary.py` to run the Stage 1A
+  warm-start ladder, Stage 2 aux-zero continuations, lower-handoff expansion,
+  Stage 1B decayed-aux curricula, summaries, and selected diagnostics.
+- Shared config preserved the Phase 4 robust-positive setup:
+  `answer_format=sum_left_operand`,
+  `calculator_output_format=sum_left_operand`,
+  `calculator_read_position=operand_spans`,
+  `calculator_read_span_width=2`, strict `answer_decoder` bottleneck, frozen
+  semantic decoder, frozen upstream encoder, and trainable
+  `calculator_hook.input_proj` only.
+
+Stage 1A aux-only warm-start thresholds:
+
+| Effective seed | CLI seed | >=0.25 | >=0.50 | >=0.75 | >=0.90 | >=0.95 | First 1.0 |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `2` | `0` | step `25` / `0.320` | step `60` / `0.641` | step `65` / `0.820` | step `75` / `0.965` | step `75` / `0.965` | step `95` |
+| `4` | `2` | step `35` / `0.363` | step `40` / `0.520` | step `65` / `0.816` | step `80` / `0.914` | step `85` / `0.969` | step `110` |
+| `5` | `3` | step `35` / `0.422` | step `55` / `0.625` | step `65` / `0.859` | step `95` / `0.949` | step `100` / `0.969` | step `105` |
+
+Stage 2 aux-zero completion boundary:
+
+| Effective seed | Lowest retained handoff | Final operand/pair/calc | Nearest failed below | Final operand/pair/calc |
+| ---: | --- | ---: | --- | ---: |
+| `2` | step `60`, Stage 1 operand `0.641` | `1.000` | step `25`, Stage 1 operand `0.320` | `0.773` fast gate, `0.809` canonical |
+| `4` | step `35`, Stage 1 operand `0.363` | `0.980` fast gate, `0.996` canonical | step `30`, Stage 1 operand `0.188` | `0.699` fast gate, `0.730` canonical |
+| `5` | step `30`, Stage 1 operand `0.230` | `0.980` fast gate, `0.992` canonical | not established by the one-extra-lower expansion | n/a |
+
+All selected Stage 2 retention runs had:
+
+- `final_aux_operand_loss_weight=0.0`;
+- `final_adaptive_interface_loss_weight=0.0`;
+- `final_input_proj_anchor_weight=0.0`;
+- `freeze_semantic_decoder=true`;
+- `freeze_upstream_encoder=true`;
+- trainable parameters limited to `calculator_hook.input_proj`.
+
+The retained checkpoints kept injection-zero and forced-random near chance while
+oracle-at-eval stayed `1.000`, so these are not answer-decoder-only shortcuts.
+Canonical diagnostics classified the retained selections as
+`intended_true_operand_calculator_use`.
+
+Selected full diagnostics:
+
+| Selection | Canonical operand/pair/calc | Private operand/pair/calc | Full-enum learned-best | Full-enum gaps |
+| --- | ---: | ---: | ---: | ---: |
+| seed `2` lowest retained | `1.000` / `1.000` / `1.000` | `1.000` / `1.000` / `1.000` | `1.000` | `0.000` / `0.000` |
+| seed `2` failed below | `0.809` / `0.809` / `0.809` | `0.785` / `0.785` / `0.790` | `0.719` | `1.163` / `1.163` |
+| seed `4` lowest retained | `0.996` / `0.996` / `0.996` | `0.993` / `0.993` / `0.993` | `1.000` | `0.000` / `0.000` |
+| seed `4` failed below | `0.730` / `0.730` / `0.730` | `0.705` / `0.705` / `0.705` | `0.641` | `1.846` / `1.846` |
+| seed `5` lowest retained | `0.992` / `0.992` / `0.992` | `0.988` / `0.988` / `0.988` | `0.977` | `0.098` / `0.098` |
+
+Stage 1B decayed-aux curricula:
+
+| Effective seed | decay 25 | decay 50 | decay 100 |
+| ---: | ---: | ---: | ---: |
+| `2` | `0.387` | `0.230` | `0.230` |
+| `4` | `0.324` | `0.250` | `0.352` |
+| `5` | `0.355` | `0.352` | `0.445` |
+
+All Stage 1B final checkpoints had `final_aux_operand_loss_weight=0.0`, but no
+decayed-aux curriculum approached retention. The best decayed checkpoint
+(`seed5`, decay `100`) reached only `0.445` fast-gate operand exact and full
+diagnostics stayed partial: canonical operand/pair/calc `0.457` / `0.457` /
+`0.465`, private operand/pair/calc `0.445` / `0.445` / `0.450`, full-enum
+learned-best `0.438`, and learned-minus-true/best gaps `2.241`.
+
+Interpretation:
+
+- Answer loss does more than preserve a perfect protocol. It can complete a
+  partially learned protocol from materially imperfect handoffs.
+- The practical aux-zero completion boundary is seed-dependent in this compact
+  ladder: seed `2` needed the `0.64` handoff, seed `4` retained from `0.36` but
+  failed from `0.19`, and seed `5` retained from `0.23`.
+- Decaying the teacher before a useful protocol forms is not equivalent to
+  handing off after a measured partial protocol. The answer loss can complete a
+  partially learned interface, but it did not reliably bootstrap the interface
+  while aux and answer losses were mixed from the start.
+
+Go recommendation:
+
+- Go to a narrower boundary probe around the `0.20` to `0.35` Stage 1 operand
+  range, especially to find a failed lower neighbor for seed `5`.
+- Keep upstream frozen and avoid new estimators until this completion boundary
+  is sharper.
