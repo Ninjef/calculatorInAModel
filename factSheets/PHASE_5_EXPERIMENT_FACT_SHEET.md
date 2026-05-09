@@ -344,3 +344,116 @@ PYTHONUNBUFFERED=1 PYTHONPYCACHEPREFIX=/tmp/codex_pycache OMP_NUM_THREADS=1 MKL_
 PYTHONUNBUFFERED=1 PYTHONPYCACHEPREFIX=/tmp/codex_pycache OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python3 scripts/run_phase5_cross_seed_upstream_assisted_completion.py diagnostics
 PYTHONPYCACHEPREFIX=/tmp/codex_pycache OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python3 scripts/run_phase5_cross_seed_upstream_assisted_completion.py summarize
 ```
+
+## 2026-05-09 No-Handoff Upstream Discovery Smoke
+
+Claim tested:
+
+```text
+Can answer-only training discover the calculator-query protocol without any
+Stage 1 supervised interface handoff, while preserving the strict Phase 4/5
+semantic bottleneck?
+```
+
+Implementation facts:
+
+- Added `--semantic-decoder-checkpoint-load-scope full_model | semantic_decoder_only`
+  to `scripts/overfit_one_batch.py`.
+- The default remains `full_model`, preserving historical behavior.
+- The new `semantic_decoder_only` opt-in loads only `answer_offset_emb.*`,
+  `answer_decoder.*`, and `calculator_hook.output_proj.*`.
+- This smoke explicitly used `semantic_decoder_checkpoint_load_scope=full_model`.
+- Current loader behavior is recorded as
+  `semantic_decoder_checkpoint_load_scope_current_behavior=full_model_current_behavior`.
+
+Runner:
+
+```text
+scripts/run_phase5_no_handoff_upstream_discovery_smoke.py
+```
+
+Run root:
+
+```text
+runs/2026-05-09_phase5_no_handoff_upstream_discovery_smoke
+```
+
+Starting point:
+
+- Stage 0B operand-aware oracle semantic decoder checkpoint:
+  `/Users/jarnold/Documents/Codex/2026-05-06/please-work-in-this-repo-users-9/runs/2026-05-06_164330_870116_model-c-oracle-op0-19-answer_decoder-sum_left_operand/model-c-2digit-seed2/final_weights.pt`
+- The corresponding repo-local checkpoint was not present, so the absolute
+  Phase 4 fact-sheet path was used.
+- Interpretation label: `no_handoff_full_model_init`.
+- This is not strict random-upstream discovery because full-model checkpoint
+  loading starts from the Stage 0B upstream state.
+
+Shared setup:
+
+- `answer_format=sum_left_operand`
+- `calculator_output_format=sum_left_operand`
+- `calculator_read_position=operand_spans`
+- `calculator_read_span_width=2`
+- `calculator_bottleneck_mode=answer_decoder`
+- `calculator_estimator=adaptive_interface`
+- `freeze_semantic_decoder=true`
+- `answer_loss_weight=1.0`
+- `aux_operand_loss_weight=0.0`
+- `adaptive_interface_loss_weight=0.0`
+- `input_proj_anchor_weight=0.0`
+- `input_proj_lr=0.0003`
+- `upstream_lr=0.00003`
+- no oracle training and no direct operand labels
+
+Fast gates:
+
+| Condition | Final eval | Best dense step normal/operand/pair/calc | Final normal/operand/pair/calc | Injection-zero | Forced-random | Oracle |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| CLI seed `0` / effective seed `2` | `0.048828` | step `650`: `0.457031` / `0.457031` / `0.457031` / `0.457031` | `0.054688` / `0.054688` / `0.054688` / `0.070312` | `0.0` | `0.003906` | `1.0` |
+| CLI seed `3` / effective seed `5` | `0.062500` | step `350`: `0.433594` / `0.433594` / `0.433594` / `0.441406` | `0.050781` / `0.050781` / `0.050781` / `0.082031` | `0.0` | `0.007812` | `1.0` |
+
+Parameter deltas versus Stage 0B:
+
+| Condition | `calculator_hook.input_proj` L2 | upstream L2 | semantic decoder L2 |
+| --- | ---: | ---: | ---: |
+| seed `0` | `0.860573` | `1.60121` | `0.0` |
+| seed `3` | `0.808462` | `1.48781` | `0.0` |
+
+Selected diagnostics:
+
+| Selection | Canonical operand/pair/calc | Private operand/pair/calc | Full-enum learned-minus-true/best gaps | Learned-best |
+| --- | ---: | ---: | ---: | ---: |
+| seed `0` final | `0.0391` / `0.0391` / `0.0625` | `0.0375` / `0.0375` / `0.0625` | `6.1375` / `6.1375` | `0.0391` |
+| seed `0` best step `650` | `0.4297` / `0.4297` / `0.4297` | `0.4200` / `0.4200` / `0.4200` | `2.5851` / `2.5851` | `0.4062` |
+| seed `3` final | `0.0508` / `0.0508` / `0.0859` | `0.0575` / `0.0575` / `0.0925` | `5.6418` / `5.6418` | `0.0469` |
+| seed `3` best step `350` | `0.4336` / `0.4336` / `0.4336` | `0.4500` / `0.4500` / `0.4575` | `2.0637` / `2.0637` | `0.4141` |
+
+Interpretation:
+
+- This is a clean no-handoff full-model initialization smoke failure.
+- Oracle-at-eval stayed `1.0`, so the fixed semantic decoder/calculator path
+  remained mechanically viable.
+- Answer-only training did not discover the true calculator-query protocol in
+  either allowed seed. The best checkpoints were partial and still had strongly
+  positive full-enum learned-minus-true/best gaps.
+- The final checkpoints drifted close to chance learned actions despite
+  measurable upstream movement and frozen semantic decoder weights.
+- Because Stage 1 produced no real no-handoff discovery checkpoint, the
+  optional strict random-upstream branch was not run.
+
+Recommendation:
+
+Do not broaden into a seed/LR sweep. The next task should move to one minimal
+local-target/full-enum target-prop style objective or a Gumbel-Softmax estimator
+while keeping this strict identifiable setup and diagnostics.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py scripts/run_phase5_no_handoff_upstream_discovery_smoke.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q -k "semantic_decoder_checkpoint_load_scope or freeze_semantic_decoder_preserves_decoder_but_not_interface"
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python3 scripts/run_phase5_no_handoff_upstream_discovery_smoke.py summarize
+PYTHONUNBUFFERED=1 PYTHONPYCACHEPREFIX=/tmp/codex_pycache OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python3 scripts/run_phase5_no_handoff_upstream_discovery_smoke.py run --jobs 2
+PYTHONUNBUFFERED=1 PYTHONPYCACHEPREFIX=/tmp/codex_pycache OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python3 scripts/run_phase5_no_handoff_upstream_discovery_smoke.py diagnostics
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python3 scripts/run_phase5_no_handoff_upstream_discovery_smoke.py summarize
+```

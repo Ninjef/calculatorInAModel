@@ -73,6 +73,7 @@ class TrainConfig:
     calculator_bottleneck_mode: str
     calculator_output_format: str
     semantic_decoder_checkpoint: str | None
+    semantic_decoder_checkpoint_load_scope: str
     adaptive_interface_loss_weight: float
     adaptive_interface_loss_decay_steps: int
     adaptive_interface_loss_floor: float
@@ -1598,10 +1599,30 @@ def summarize_adaptive_interface_rows(
     }
 
 
-def load_semantic_decoder_checkpoint(model: TinyGPT, checkpoint_path: Path) -> None:
+SEMANTIC_DECODER_CHECKPOINT_PREFIXES = (
+    "answer_offset_emb.",
+    "answer_decoder.",
+    "calculator_hook.output_proj.",
+)
+
+
+def load_semantic_decoder_checkpoint(
+    model: TinyGPT, checkpoint_path: Path, *, load_scope: str = "full_model"
+) -> None:
+    if load_scope not in {"full_model", "semantic_decoder_only"}:
+        raise ValueError(
+            "semantic decoder checkpoint load scope must be "
+            "'full_model' or 'semantic_decoder_only'"
+        )
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
     state_dict = checkpoint.get("model_state_dict", checkpoint)
     model_state = model.state_dict()
+    if load_scope == "semantic_decoder_only":
+        state_dict = {
+            name: tensor
+            for name, tensor in state_dict.items()
+            if name.startswith(SEMANTIC_DECODER_CHECKPOINT_PREFIXES)
+        }
     state_dict = {
         name: tensor
         for name, tensor in state_dict.items()
@@ -1619,6 +1640,12 @@ def load_semantic_decoder_checkpoint(model: TinyGPT, checkpoint_path: Path) -> N
         "calculator_hook.pair_proj.bias",
     }
     unexpected_nonempty = [name for name in unexpected]
+    if load_scope == "semantic_decoder_only":
+        allowed_missing.update(
+            name
+            for name in model_state
+            if not name.startswith(SEMANTIC_DECODER_CHECKPOINT_PREFIXES)
+        )
     disallowed_missing = [name for name in missing if name not in allowed_missing]
     if disallowed_missing or unexpected_nonempty:
         raise ValueError(
@@ -2026,7 +2053,11 @@ def run_variant(
     )
     model = TinyGPT(cfg).to(device)
     if args.semantic_decoder_checkpoint is not None:
-        load_semantic_decoder_checkpoint(model, args.semantic_decoder_checkpoint)
+        load_semantic_decoder_checkpoint(
+            model,
+            args.semantic_decoder_checkpoint,
+            load_scope=args.semantic_decoder_checkpoint_load_scope,
+        )
     input_proj_anchor = None
     if args.input_proj_anchor_checkpoint is not None:
         input_proj_anchor = load_input_proj_anchor(
@@ -2123,6 +2154,7 @@ def run_variant(
             if args.semantic_decoder_checkpoint is not None
             else None
         ),
+        semantic_decoder_checkpoint_load_scope=args.semantic_decoder_checkpoint_load_scope,
         adaptive_interface_loss_weight=args.adaptive_interface_loss_weight,
         adaptive_interface_loss_decay_steps=args.adaptive_interface_loss_decay_steps,
         adaptive_interface_loss_floor=args.adaptive_interface_loss_floor,
@@ -2570,6 +2602,9 @@ def run_variant(
         if args.semantic_decoder_checkpoint is not None
         else None
     )
+    metrics["semantic_decoder_checkpoint_load_scope"] = (
+        args.semantic_decoder_checkpoint_load_scope
+    )
     metrics["adaptive_interface_loss_weight"] = args.adaptive_interface_loss_weight
     metrics["adaptive_interface_loss_decay_steps"] = (
         args.adaptive_interface_loss_decay_steps
@@ -2927,6 +2962,15 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Checkpoint whose oracle-trained strict decoder/output interface should "
             "seed adaptive-interface training."
+        ),
+    )
+    parser.add_argument(
+        "--semantic-decoder-checkpoint-load-scope",
+        choices=["full_model", "semantic_decoder_only"],
+        default="full_model",
+        help=(
+            "Load the full checkpoint for backward compatibility, or only frozen "
+            "answer-decoder/calculator-output semantic tensors."
         ),
     )
     parser.add_argument(

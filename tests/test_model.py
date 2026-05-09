@@ -1681,6 +1681,71 @@ def test_freeze_semantic_decoder_preserves_decoder_but_not_interface() -> None:
     assert not model.answer_decoder.weight.requires_grad
 
 
+def test_semantic_decoder_checkpoint_load_scope_is_opt_in(tmp_path: Path) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_load_scope", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_estimator="adaptive_interface",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    source = TinyGPT(cfg)
+    target = TinyGPT(cfg)
+    original_target = {
+        name: tensor.detach().clone()
+        for name, tensor in target.state_dict().items()
+    }
+    checkpoint_state = {
+        name: torch.full_like(tensor, fill_value=(idx + 1) / 100.0)
+        for idx, (name, tensor) in enumerate(source.state_dict().items())
+    }
+    checkpoint_path = tmp_path / "semantic_seed.pt"
+    torch.save({"model_state_dict": checkpoint_state}, checkpoint_path)
+
+    overfit_script.load_semantic_decoder_checkpoint(
+        target, checkpoint_path, load_scope="semantic_decoder_only"
+    )
+    loaded_state = target.state_dict()
+    assert torch.equal(
+        loaded_state["answer_decoder.weight"],
+        checkpoint_state["answer_decoder.weight"],
+    )
+    assert torch.equal(
+        loaded_state["calculator_hook.output_proj.weight"],
+        checkpoint_state["calculator_hook.output_proj.weight"],
+    )
+    assert torch.equal(
+        loaded_state["calculator_hook.input_proj.weight"],
+        original_target["calculator_hook.input_proj.weight"],
+    )
+    assert torch.equal(loaded_state["tok_emb.weight"], original_target["tok_emb.weight"])
+
+    full_target = TinyGPT(cfg)
+    overfit_script.load_semantic_decoder_checkpoint(
+        full_target, checkpoint_path, load_scope="full_model"
+    )
+    full_state = full_target.state_dict()
+    assert torch.equal(
+        full_state["calculator_hook.input_proj.weight"],
+        checkpoint_state["calculator_hook.input_proj.weight"],
+    )
+    assert torch.equal(full_state["tok_emb.weight"], checkpoint_state["tok_emb.weight"])
+
+
 def test_input_proj_anchor_loss_and_decay() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_script_anchor", script_path)
