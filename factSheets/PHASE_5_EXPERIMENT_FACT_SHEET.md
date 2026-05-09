@@ -120,3 +120,117 @@ PYTHONUNBUFFERED=1 PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 scripts/run_ph
 PYTHONUNBUFFERED=1 PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 scripts/run_phase5_upstream_unfreeze_stability_smoke.py diagnostics
 PYTHONUNBUFFERED=1 PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 scripts/run_phase5_upstream_unfreeze_stability_smoke.py summarize
 ```
+
+## 2026-05-08 Upstream-Assisted Partial-Handoff Completion
+
+Claim tested:
+
+```text
+Can upstream trainable parameters help a below-boundary partially taught
+calculator protocol recover after direct operand supervision is removed?
+```
+
+Starting point:
+
+- Source Stage 1 seed `2`, step `55` checkpoint:
+  `runs/2026-05-07_phase4_min_supervision_boundary/stage1a/seed2/2026-05-07_103539_395099_model-c-op0-19-adaptive_interface-inlr0.03-uplr0.003-answer_decoder-sum_left_operand-aux1/model-c-2digit-seed2/checkpoint_snapshots/step_00055_weights.pt`
+- Effective seed `2`, CLI seed `0`
+- Source Stage 1 operand exact `0.4375`
+- Existing frozen-upstream failed continuation:
+  `runs/2026-05-08_phase4_boundary_closure/stage2/seed2/step55/2026-05-08_072232_382505_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed2`
+- Retained upper-neighbor reference:
+  `runs/2026-05-07_phase4_min_supervision_boundary/stage2/seed2/step60/2026-05-07_112933_781608_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed2`
+
+Runner:
+
+```text
+scripts/run_phase5_upstream_assisted_partial_handoff_completion.py
+```
+
+Run root:
+
+```text
+runs/2026-05-08_phase5_upstream_assisted_partial_handoff_completion
+```
+
+Shared setup:
+
+- `answer_format=sum_left_operand`
+- `calculator_output_format=sum_left_operand`
+- `calculator_read_position=operand_spans`
+- `calculator_read_span_width=2`
+- `calculator_bottleneck_mode=answer_decoder`
+- `calculator_estimator=adaptive_interface`
+- `freeze_semantic_decoder=true`
+- `answer_loss_weight=1.0`
+- `aux_operand_loss_weight=0.0`
+- `adaptive_interface_loss_weight=0.0`
+- `input_proj_anchor_weight=0.0`
+- no oracle training
+- `input_proj_lr=0.0003`
+- `upstream_lr=0.00003`
+
+Primary continuation:
+
+| Condition | Upstream frozen | Trainable groups |
+| --- | ---: | --- |
+| upstream open from step `55` | no | `calculator_hook.input_proj` (`1320`), `upstream` (`4048`) |
+
+Fast gates:
+
+| Condition | Final eval | Dense step 1000 normal/operand/pair/calc | Injection-zero | Forced-random | Oracle |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| existing frozen step `55` failure | `0.847656` | `0.84375` / `0.84375` / `0.84375` / `0.84375` | `0.000` | `0.015625` | `1.000` |
+| retained step `60` reference | `1.000` | `1.000` / `1.000` / `1.000` / `1.000` | `0.000` | `0.015625` | `1.000` |
+| upstream-open step `55` | `0.998047` (`511/512`) | `1.000` / `1.000` / `1.000` / `1.000` | `0.000` | `0.015625` | `1.000` |
+
+Parameter deltas versus the source step `55` handoff:
+
+| Condition | `calculator_hook.input_proj` L2 / max | upstream L2 / max | upstream tensors changed | semantic decoder L2 |
+| --- | ---: | ---: | ---: | ---: |
+| upstream-open step `55` | `1.5496` / `0.1702` | `0.2829` / `0.01586` | `14/29` | `0.0` |
+
+Final diagnostics:
+
+| Condition | Canonical operand/pair/calc | Private operand/pair/calc | Full-enum learned-minus-true/best gaps | Learned-best |
+| --- | ---: | ---: | ---: | ---: |
+| existing frozen step `55` failure | `0.8555` / `0.8555` / `0.8555` | `0.8450` / `0.8450` / `0.8450` | `0.7051` / `0.7051` | `0.8516` |
+| upstream-open step `55` final | `0.9961` / `0.9961` / `0.9961` | `0.9975` / `0.9975` / `0.9975` | `0.0` / `0.0` | `1.000` |
+
+Transient drift diagnostic:
+
+| Selection | Fast gate normal/operand/pair/calc | Canonical operand/pair/calc | Private operand/pair/calc | Full-enum learned-minus-true/best gaps | Learned-best |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| upstream-open step `350` | `0.9609` / `0.9609` / `0.9609` / `0.9609` | `0.9688` / `0.9688` / `0.9688` | `0.9500` / `0.9500` / `0.9500` | `0.3348` / `0.3348` | `0.9531` |
+
+Interpretation:
+
+- This is a strong upstream-assisted completion positive from the known failed
+  seed `2`, step `55` handoff. The matched frozen-upstream continuation stayed
+  partial, while the upstream-open continuation recovered to retained-protocol
+  quality by the final checkpoint.
+- The result is not pure discovery from scratch: it starts from a partially
+  taught Stage 1 protocol and removes the direct teacher only for the
+  continuation.
+- The result is not a no-op: upstream parameters moved measurably while the
+  semantic decoder stayed unchanged.
+- The run still had transient protocol degradation after reaching exact fast
+  gates. Step `350` had positive full-enum gaps and private/canonical protocol
+  degradation before recovering by the final checkpoint.
+- No optional lower-LR or anchor repeat was run because the primary run was
+  informative and reached final retained-protocol quality.
+
+Recommendation:
+
+Replicate upstream-assisted completion on another known failed handoff, likely
+seed `5`, Stage 1 step `25` (`0.078125` operand exact), before broadening into
+new unfreeze controls or new estimators.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/run_phase5_upstream_assisted_partial_handoff_completion.py
+PYTHONUNBUFFERED=1 PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 scripts/run_phase5_upstream_assisted_partial_handoff_completion.py run --jobs 1
+PYTHONUNBUFFERED=1 PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 scripts/run_phase5_upstream_assisted_partial_handoff_completion.py diagnostics
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 scripts/run_phase5_upstream_assisted_partial_handoff_completion.py summarize
+```
