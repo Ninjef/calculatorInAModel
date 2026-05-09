@@ -7,6 +7,45 @@ protocol can survive, transfer, or improve once upstream/model-side parameters
 are allowed to move. Stability and transfer-readiness claims are not pure
 upstream-discovery claims.
 
+## Phase 5 Closure
+
+Phase 5 is complete.
+
+Final Phase 5 conclusion:
+
+```text
+Upstream movement can preserve and complete an already partially taught
+calculator-query protocol, but current answer-only training does not discover
+the protocol without a supervised handoff or local teaching signal.
+```
+
+Supported claims:
+
+- Upstream-open continuations can preserve a previously learned true
+  calculator-query protocol.
+- Upstream-open answer-only continuations can complete failed partial handoffs
+  after direct operand supervision is exactly removed.
+- The completion result replicated across seed `2` step `55` and seed `5` step
+  `25` failed handoffs.
+- Dense checkpoint selection is mandatory because successful selected
+  checkpoints can drift by final.
+
+Unsupported claims:
+
+- No-handoff answer-only discovery from the Stage 0B full-model initialization.
+- Strict random-upstream discovery.
+- All-snapshot stability under upstream-open continuations.
+- Oracle-at-eval success as research progress; it remains only a wiring gate.
+
+Next recommendation:
+
+```text
+Do not continue Phase 5 with broad seed/LR sweeps. Move to a new phase that
+adds one explicit interface-discovery training signal, such as a minimal
+full-enum/local-target objective or a Gumbel-Softmax/Concrete relaxation, while
+keeping the strict Phase 4/5 identifiable setup and diagnostics fixed.
+```
+
 ## 2026-05-08 Upstream-Unfreeze Stability Smoke
 
 Claim tested:
