@@ -133,6 +133,12 @@ def full_enum_diagnostic(
         entropy = -(weights * weights.clamp_min(1e-12).log()).sum(dim=-1)
         true_pair_probs = weights.gather(1, true_idx.unsqueeze(-1)).squeeze(-1)
         true_pair_ranks = (losses < true_losses.unsqueeze(-1)).sum(dim=-1) + 1
+        best_tie_tolerance = 1e-6
+        true_within_best_tie = true_losses <= best_losses + best_tie_tolerance
+        sorted_weights = weights.sort(dim=-1, descending=True).values
+        top1_mass = sorted_weights[:, :1].sum(dim=-1)
+        top3_mass = sorted_weights[:, :3].sum(dim=-1)
+        top5_mass = sorted_weights[:, :5].sum(dim=-1)
         learned_tie_1e3 = learned_losses <= best_losses + 1e-3
         learned_tie_1e2 = learned_losses <= best_losses + 1e-2
         if pair_logits is not None:
@@ -176,6 +182,7 @@ def full_enum_diagnostic(
                         (learned_losses[i] - best_losses[i]).item()
                     ),
                     "true_is_best": bool(best_idx[i].item() == true_idx[i].item()),
+                    "true_within_best_tie": bool(true_within_best_tie[i].item()),
                     "learned_is_best": bool(
                         best_idx[i].item() == learned_idx[i].item()
                     ),
@@ -186,6 +193,9 @@ def full_enum_diagnostic(
                     ),
                     "best_result_matches_true_sum": bool(
                         best_a + best_b == (true_a[i] + true_b[i]).item()
+                    ),
+                    "best_left_operand_matches_true": bool(
+                        best_a == true_a[i].item()
                     ),
                     "learned_result_matches_true_sum": bool(
                         (learned_a[i] + learned_b[i]).item()
@@ -201,6 +211,9 @@ def full_enum_diagnostic(
                         true_pair_probs[i].item()
                     ),
                     "true_pair_rank": int(true_pair_ranks[i].item()),
+                    "top1_target_mass": float(top1_mass[i].item()),
+                    "top3_target_mass": float(top3_mass[i].item()),
+                    "top5_target_mass": float(top5_mass[i].item()),
                     "learned_pair_head_probability": float(
                         learned_pair_probability[i].item()
                     ),
@@ -241,6 +254,9 @@ def full_enum_diagnostic(
             float(row["learned_minus_best_gap"]) for row in rows
         ),
         "true_best_fraction": mean(int(row["true_is_best"]) for row in rows),
+        "tie_aware_true_best_fraction": mean(
+            int(row["true_within_best_tie"]) for row in rows
+        ),
         "learned_best_fraction": mean(int(row["learned_is_best"]) for row in rows),
         "learned_within_1e-3_best_fraction": mean(
             int(row["learned_within_1e-3_best"]) for row in rows
@@ -253,6 +269,9 @@ def full_enum_diagnostic(
         ),
         "best_result_matches_true_sum_fraction": mean(
             int(row["best_result_matches_true_sum"]) for row in rows
+        ),
+        "best_left_operand_matches_true_fraction": mean(
+            int(row["best_left_operand_matches_true"]) for row in rows
         ),
         "learned_result_matches_true_sum_fraction": mean(
             int(row["learned_result_matches_true_sum"]) for row in rows
@@ -267,6 +286,9 @@ def full_enum_diagnostic(
             float(row["soft_target_true_pair_probability"]) for row in rows
         ),
         "mean_true_pair_rank": mean(float(row["true_pair_rank"]) for row in rows),
+        "mean_top1_target_mass": mean(float(row["top1_target_mass"]) for row in rows),
+        "mean_top3_target_mass": mean(float(row["top3_target_mass"]) for row in rows),
+        "mean_top5_target_mass": mean(float(row["top5_target_mass"]) for row in rows),
         "mean_pair_entropy": mean(float(row["pair_entropy"]) for row in rows),
         "mean_effective_pair_count": mean(
             float(row["effective_pair_count"]) for row in rows

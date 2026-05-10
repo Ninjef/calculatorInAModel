@@ -88,6 +88,7 @@ class TrainConfig:
     action_loss_full_enum_temperature: float
     action_loss_full_enum_min_probability_floor: float
     action_loss_full_enum_chunk_size: int
+    action_loss_full_enum_target_mode: str
     input_proj_anchor_checkpoint: str | None
     input_proj_anchor_weight: float
     input_proj_anchor_decay_steps: int
@@ -558,6 +559,7 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "action_loss_full_enum_temperature",
         "action_loss_full_enum_min_probability_floor",
         "action_loss_full_enum_chunk_size",
+        "action_loss_full_enum_target_mode",
         "action_loss_full_enum_best_nll",
         "action_loss_full_enum_learned_nll",
         "action_loss_full_enum_true_nll",
@@ -580,6 +582,12 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "action_loss_full_enum_soft_target_true_b_mass",
         "action_loss_full_enum_entropy",
         "action_loss_full_enum_effective_pairs",
+        "action_loss_full_enum_true_pair_probability",
+        "action_loss_full_enum_true_pair_rank",
+        "action_loss_full_enum_best_left_operand_accuracy",
+        "action_loss_full_enum_top1_mass",
+        "action_loss_full_enum_top3_mass",
+        "action_loss_full_enum_top5_mass",
     ]
     fieldnames = preferred + sorted(
         {key for row in curve for key in row.keys()} - set(preferred)
@@ -1050,7 +1058,12 @@ def action_loss_full_enum_interface_loss(
     temperature: float,
     min_probability_floor: float,
     chunk_size: int,
+    target_mode: str = "soft_pair",
 ) -> tuple[torch.Tensor, dict[str, float]]:
+    if target_mode not in {"soft_pair", "hard_best_pair"}:
+        raise ValueError(
+            "full-enum local target mode must be 'soft_pair' or 'hard_best_pair'"
+        )
     a_logits, b_logits, _, _ = calculator_read_operand_logits(model, batch)
     classes = a_logits.shape[-1]
     pairs = full_enum_action_pairs(classes=classes, device=batch.x.device)
@@ -1064,11 +1077,6 @@ def action_loss_full_enum_interface_loss(
             temperature=temperature,
             min_probability_floor=min_probability_floor,
         )
-    target_a, target_b = action_loss_soft_targets(
-        a_logits, b_logits, candidates, pair_weights
-    )
-    target_loss = action_loss_target_ce(a_logits, b_logits, target_a, target_b)
-
     true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
     learned_a = a_logits.argmax(dim=-1)
     learned_b = b_logits.argmax(dim=-1)
@@ -1076,14 +1084,37 @@ def action_loss_full_enum_interface_loss(
     true_idx = true_a * classes + true_b
     best_idx = full_losses.argmin(dim=-1)
     batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
+    best_pairs = pairs.index_select(0, best_idx)
+    if target_mode == "hard_best_pair":
+        target_loss = (
+            torch.nn.functional.cross_entropy(a_logits, best_pairs[:, 0])
+            + torch.nn.functional.cross_entropy(b_logits, best_pairs[:, 1])
+        ) / 2
+        target_a = torch.nn.functional.one_hot(
+            best_pairs[:, 0], num_classes=classes
+        ).to(a_logits.dtype)
+        target_b = torch.nn.functional.one_hot(
+            best_pairs[:, 1], num_classes=classes
+        ).to(b_logits.dtype)
+    else:
+        target_a, target_b = action_loss_soft_targets(
+            a_logits, b_logits, candidates, pair_weights
+        )
+        target_loss = action_loss_target_ce(a_logits, b_logits, target_a, target_b)
+
     learned_losses = full_losses.gather(1, learned_idx.unsqueeze(-1)).squeeze(-1)
     true_losses = full_losses.gather(1, true_idx.unsqueeze(-1)).squeeze(-1)
     best_losses = full_losses.gather(1, best_idx.unsqueeze(-1)).squeeze(-1)
     entropy = -(pair_weights * pair_weights.clamp_min(1e-12).log()).sum(dim=-1)
+    true_pair_probs = pair_weights.gather(1, true_idx.unsqueeze(-1)).squeeze(-1)
+    true_pair_ranks = (full_losses < true_losses.unsqueeze(-1)).sum(dim=-1) + 1
+    sorted_weights = pair_weights.sort(dim=-1, descending=True).values
+    best_left_matches_true = best_pairs[:, 0] == true_a
     metrics = {
         "action_loss_full_enum_temperature": float(temperature),
         "action_loss_full_enum_min_probability_floor": float(min_probability_floor),
         "action_loss_full_enum_chunk_size": int(chunk_size),
+        "action_loss_full_enum_target_mode": target_mode,
         "action_loss_full_enum_best_nll": float(best_losses.mean().item()),
         "action_loss_full_enum_learned_nll": float(learned_losses.mean().item()),
         "action_loss_full_enum_true_nll": float(true_losses.mean().item()),
@@ -1107,6 +1138,24 @@ def action_loss_full_enum_interface_loss(
         ),
         "action_loss_full_enum_entropy": float(entropy.mean().item()),
         "action_loss_full_enum_effective_pairs": float(entropy.exp().mean().item()),
+        "action_loss_full_enum_true_pair_probability": float(
+            true_pair_probs.mean().item()
+        ),
+        "action_loss_full_enum_true_pair_rank": float(
+            true_pair_ranks.float().mean().item()
+        ),
+        "action_loss_full_enum_best_left_operand_accuracy": float(
+            best_left_matches_true.float().mean().item()
+        ),
+        "action_loss_full_enum_top1_mass": float(
+            sorted_weights[:, :1].sum(dim=-1).mean().item()
+        ),
+        "action_loss_full_enum_top3_mass": float(
+            sorted_weights[:, :3].sum(dim=-1).mean().item()
+        ),
+        "action_loss_full_enum_top5_mass": float(
+            sorted_weights[:, :5].sum(dim=-1).mean().item()
+        ),
     }
     return target_loss, metrics
 
@@ -2071,6 +2120,7 @@ def run_variant(
             "action_loss_replay_interface",
             "action_loss_full_enum_interface",
             "action_loss_full_enum_joint_interface",
+            "identifiable_full_enum_local_target",
         }
         and args.freeze_semantic_decoder
     ):
@@ -2083,6 +2133,7 @@ def run_variant(
             "action_loss_replay_interface",
             "action_loss_full_enum_interface",
             "action_loss_full_enum_joint_interface",
+            "identifiable_full_enum_local_target",
         }
         and args.freeze_upstream_encoder
     ):
@@ -2094,6 +2145,7 @@ def run_variant(
         "action_loss_replay_interface",
         "action_loss_full_enum_interface",
         "action_loss_full_enum_joint_interface",
+        "identifiable_full_enum_local_target",
     }:
         optim = torch.optim.AdamW(
             adaptive_optimizer_param_groups(
@@ -2171,6 +2223,7 @@ def run_variant(
             args.action_loss_full_enum_min_probability_floor
         ),
         action_loss_full_enum_chunk_size=args.action_loss_full_enum_chunk_size,
+        action_loss_full_enum_target_mode=args.action_loss_full_enum_target_mode,
         input_proj_anchor_checkpoint=(
             str(args.input_proj_anchor_checkpoint)
             if args.input_proj_anchor_checkpoint is not None
@@ -2251,6 +2304,7 @@ def run_variant(
                 "action_loss_replay_interface",
                 "action_loss_full_enum_interface",
                 "action_loss_full_enum_joint_interface",
+                "identifiable_full_enum_local_target",
             }
             and not args.oracle_train
         )
@@ -2346,7 +2400,10 @@ def run_variant(
                         ema_beta=args.action_loss_candidate_ema_beta,
                     )
                 )
-            elif args.calculator_estimator == "action_loss_full_enum_interface":
+            elif args.calculator_estimator in {
+                "action_loss_full_enum_interface",
+                "identifiable_full_enum_local_target",
+            }:
                 action_loss_interface_loss, action_loss_metrics = (
                     action_loss_full_enum_interface_loss(
                         model,
@@ -2357,6 +2414,7 @@ def run_variant(
                             args.action_loss_full_enum_min_probability_floor
                         ),
                         chunk_size=args.action_loss_full_enum_chunk_size,
+                        target_mode=args.action_loss_full_enum_target_mode,
                     )
                 )
             elif args.calculator_estimator == "action_loss_full_enum_joint_interface":
@@ -2638,6 +2696,19 @@ def run_variant(
     )
     metrics["action_loss_full_enum_chunk_size"] = (
         args.action_loss_full_enum_chunk_size
+    )
+    metrics["action_loss_full_enum_target_mode"] = (
+        args.action_loss_full_enum_target_mode
+    )
+    metrics["local_target_loss_weight"] = args.adaptive_interface_loss_weight
+    metrics["local_target_loss_decay_steps"] = args.adaptive_interface_loss_decay_steps
+    metrics["local_target_loss_floor"] = args.adaptive_interface_loss_floor
+    metrics["local_target_mode"] = args.action_loss_full_enum_target_mode
+    metrics["final_local_target_loss_weight"] = adaptive_interface_weight(
+        initial_weight=args.adaptive_interface_loss_weight,
+        decay_steps=args.adaptive_interface_loss_decay_steps,
+        floor=args.adaptive_interface_loss_floor,
+        step=args.steps,
     )
     metrics["input_proj_anchor_checkpoint"] = (
         str(args.input_proj_anchor_checkpoint)
@@ -2945,6 +3016,7 @@ def parse_args() -> argparse.Namespace:
             "action_loss_replay_interface",
             "action_loss_full_enum_interface",
             "action_loss_full_enum_joint_interface",
+            "identifiable_full_enum_local_target",
         ],
         default="ste",
         help="Estimator for the learned calculator input interface.",
@@ -3065,6 +3137,15 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=64,
         help="Number of action pairs to score per forced-decoder chunk.",
+    )
+    parser.add_argument(
+        "--action-loss-full-enum-target-mode",
+        choices=["soft_pair", "hard_best_pair"],
+        default="soft_pair",
+        help=(
+            "Target for independent full-enum local training: soft answer-NLL "
+            "marginals or CE to the single best answer-NLL pair."
+        ),
     )
     parser.add_argument(
         "--input-proj-anchor-checkpoint",
@@ -3243,6 +3324,7 @@ def main() -> None:
             "action_loss_replay_interface",
             "action_loss_full_enum_interface",
             "action_loss_full_enum_joint_interface",
+            "identifiable_full_enum_local_target",
         }
         and args.variant != "model-c"
     ):
@@ -3255,6 +3337,7 @@ def main() -> None:
         "action_loss_replay_interface",
         "action_loss_full_enum_interface",
         "action_loss_full_enum_joint_interface",
+        "identifiable_full_enum_local_target",
     }:
         if args.oracle_train:
             raise ValueError(
@@ -3312,6 +3395,14 @@ def main() -> None:
         )
     if args.action_loss_full_enum_chunk_size < 1:
         raise ValueError("--action-loss-full-enum-chunk-size must be positive")
+    if (
+        args.action_loss_full_enum_target_mode == "hard_best_pair"
+        and args.calculator_action_head != "independent_operands"
+    ):
+        raise ValueError(
+            "--action-loss-full-enum-target-mode hard_best_pair currently "
+            "requires independent operand heads"
+        )
     if (
         args.calculator_estimator == "action_loss_full_enum_joint_interface"
         and args.calculator_action_head != "joint_pair"
@@ -3381,6 +3472,7 @@ def main() -> None:
         "action_loss_replay_interface",
         "action_loss_full_enum_interface",
         "action_loss_full_enum_joint_interface",
+        "identifiable_full_enum_local_target",
     }:
         if args.calculator_action_head != "independent_operands":
             suffix_parts.append(args.calculator_action_head)
@@ -3418,11 +3510,14 @@ def main() -> None:
         if args.calculator_estimator in {
             "action_loss_full_enum_interface",
             "action_loss_full_enum_joint_interface",
+            "identifiable_full_enum_local_target",
         }:
             suffix_parts.append(
                 f"fullt{args.action_loss_full_enum_temperature:g}"
                 f"-fullchunk{args.action_loss_full_enum_chunk_size}"
             )
+            if args.action_loss_full_enum_target_mode != "soft_pair":
+                suffix_parts.append(args.action_loss_full_enum_target_mode)
             if args.action_loss_full_enum_min_probability_floor > 0:
                 suffix_parts.append(
                     "fullfloor"

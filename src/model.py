@@ -91,6 +91,7 @@ class CalculatorHook(nn.Module):
             "action_loss_replay_interface",
             "action_loss_full_enum_interface",
             "action_loss_full_enum_joint_interface",
+            "identifiable_full_enum_local_target",
         }:
             raise ValueError(f"unknown calculator estimator: {cfg.calculator_estimator}")
         if cfg.calculator_action_head not in {"independent_operands", "joint_pair"}:
@@ -240,6 +241,7 @@ class CalculatorHook(nn.Module):
                 "action_loss_weighted_interface",
                 "action_loss_replay_interface",
                 "action_loss_full_enum_interface",
+                "identifiable_full_enum_local_target",
             }:
                 flat_a_logits = a_logits.reshape(-1, self.operand_vocab_size)
                 flat_b_logits = b_logits.reshape(-1, self.operand_vocab_size)
