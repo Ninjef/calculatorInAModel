@@ -559,3 +559,133 @@ rather than rerunning oracle controls: for example hold the local target until
 the fast protocol gate is near `0.9`, use a two-phase schedule with automatic
 gate-triggered local-target removal, or test a smoother relaxation while
 keeping the same strict diagnostics.
+
+## 2026-05-11 Exact Expected Answer-Loss Interface Discovery
+
+Task:
+
+```text
+aiAgentProjectTasks/2026-05-11-phase-6-fifth-task-Exact-expected-answer-loss-interface-discovery.md
+```
+
+Implementation:
+
+- Added `calculator_estimator=full_enum_expected_answer_loss`.
+- The objective enumerates all `20 x 20` action pairs, computes detached
+  answer NLL costs, forms the independent model policy
+  `p(a,b)=softmax(a_logits/T)*softmax(b_logits/T)`, and minimizes expected
+  cost directly.
+- Added knobs:
+  `--expected-answer-loss-weight`,
+  `--expected-answer-loss-policy-temperature`,
+  `--expected-answer-loss-cost-normalization none|center|zscore`,
+  `--expected-answer-loss-entropy-weight`,
+  `--expected-answer-loss-entropy-decay-steps`, and
+  `--expected-answer-loss-chunk-size`.
+- This is not a local target: it does not construct hard-best or soft CE
+  targets from answer losses. True operands are used only for diagnostics.
+
+Run root:
+
+```text
+runs/2026-05-11_phase6_expected_answer_loss_interface_discovery
+```
+
+### Stage 0 Gradient And Objective Gate
+
+Strict `semantic_decoder_only` gate passed on a fixed 128-sample batch:
+
+| Metric | Value |
+| --- | ---: |
+| oracle-at-eval exact after one step | `1.000` |
+| injection-zero / forced-random exact | `0.000 / 0.000` |
+| initial expected answer loss | `8.2412` |
+| best / true / learned NLL | `0.0003 / 0.0003 / 8.2883` |
+| initial entropy / effective pairs | `5.9915 / 399.998` |
+| initial true-pair probability | `0.0025` |
+| initial hard learned pair exact | `0.000` |
+| one-step input-proj delta L2 | `1.0895` |
+| one-step upstream delta L2 | `0.0` |
+| semantic decoder grad / delta L2 | `0.0 / 0.0` |
+
+The gate proves the expected-loss objective reaches
+`calculator_hook.input_proj` while semantic decoder and upstream parameters
+stay fixed. No aux, anchor, oracle, or hard-best local-target construction was
+active.
+
+### Stage 1 Frozen-Upstream Ladder
+
+All branches used:
+
+```text
+semantic_decoder_checkpoint_load_scope=semantic_decoder_only
+freeze_semantic_decoder=true
+freeze_upstream_encoder=true
+trainable=calculator_hook.input_proj only
+answer_loss_weight=0.0
+expected_answer_loss_weight=1.0
+adaptive/local target weight=0.0
+aux_operand_loss_weight=0.0
+input_proj_anchor_weight=0.0
+input_proj_lr=0.03
+steps=300
+```
+
+| Branch | Policy temp | Entropy | Final expected NLL | Final entropy / effective pairs | Best lightweight operand/pair/calc | Final eval |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| A | `1.0` | `0.0` | `4.3363` | `0.366 / 1.448` | `0.0156 / 0.0156 / 0.0313` | `0.0059` |
+| B | `1.0` | `0.03` decayed | `4.3350` | `0.365 / 1.446` | `0.0156 / 0.0156 / 0.0313` | `0.0059` |
+| C | `0.5` | `0.0` | `4.1432` | `0.105 / 1.112` | `0.0156 / 0.0156 / 0.0313` | `0.0059` |
+
+Stage 1 conclusion:
+
+- Expected answer loss decreased substantially and the policy distribution
+  collapsed.
+- The collapse was to wrong hard actions, not to the true calculator-query
+  protocol.
+- No branch reached the `>=0.90` fast-gate threshold, so Stage 2 retention was
+  correctly skipped.
+
+### Selected Checkpoint Diagnostics
+
+Selected checkpoint:
+
+```text
+runs/2026-05-11_phase6_expected_answer_loss_interface_discovery/stage1_branch_c_temp05/2026-05-11_151203_589696_model-c-op0-19-full_enum_expected_answer_loss-inlr0.03-uplr0.0003-expanspolt0.5-expanschunk64-answer_decoder-sum_left_operand/model-c-2digit-seed2/final_weights.pt
+```
+
+| Diagnostic | Key result |
+| --- | ---: |
+| canonical normal / oracle / injection-zero / forced-random | `0.0039 / 1.000 / 0.0156 / 0.0039` |
+| canonical operand / pair / calc | `0.0039 / 0.0039 / 0.0430` |
+| private answer / operand / pair / calc | `0.005 / 0.005 / 0.005 / 0.050` |
+| full-enum learned / true / best NLL | `4.3075 / 0.0003 / 0.0003` |
+| full-enum learned-minus-true / best gap | `4.3072 / 4.3072` |
+| full-enum learned-best / true-best | `0.000 / 1.000` |
+
+Parameter deltas versus branch step `0`:
+
+| Branch | input-proj L2 | upstream L2 | semantic decoder L2 |
+| --- | ---: | ---: | ---: |
+| A | `118.197` | `0.0` | `0.0` |
+| B | `118.359` | `0.0` | `0.0` |
+| C | `71.452` | `0.0` | `0.0` |
+
+Decision:
+
+- Negative for direct expected answer-loss discovery in the strict frozen
+  upstream setup.
+- The answer-loss landscape remains sharp (`true_best=1.000`), and the new
+  expected-loss objective is wired correctly, but optimizing expected cost over
+  the policy can place almost all mass on a wrong hard action.
+- This differs from the hard-best local target, which reaches exact protocol
+  metrics because it explicitly converts the landscape argmin into CE targets.
+
+Recommendation:
+
+Do not run Stage 2 or broad repeats of this exact independent-head expected
+loss. The next best step is a hard-forward/soft-backward Gumbel/Concrete bridge
+or an upstream-open expected-loss branch only if the goal is to test whether the
+frozen random readout is the blocker. The current failure mode most directly
+supports trying a relaxation that aligns training-time mass movement with the
+hard argmax protocol.

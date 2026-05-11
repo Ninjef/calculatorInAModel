@@ -89,6 +89,12 @@ class TrainConfig:
     action_loss_full_enum_min_probability_floor: float
     action_loss_full_enum_chunk_size: int
     action_loss_full_enum_target_mode: str
+    expected_answer_loss_weight: float
+    expected_answer_loss_policy_temperature: float
+    expected_answer_loss_cost_normalization: str
+    expected_answer_loss_entropy_weight: float
+    expected_answer_loss_entropy_decay_steps: int
+    expected_answer_loss_chunk_size: int
     input_proj_anchor_checkpoint: str | None
     input_proj_anchor_weight: float
     input_proj_anchor_decay_steps: int
@@ -588,6 +594,26 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "action_loss_full_enum_top1_mass",
         "action_loss_full_enum_top3_mass",
         "action_loss_full_enum_top5_mass",
+        "expected_answer_loss",
+        "expected_answer_loss_objective",
+        "expected_answer_loss_weight",
+        "expected_answer_loss_policy_temperature",
+        "expected_answer_loss_cost_normalization",
+        "expected_answer_loss_entropy_weight",
+        "expected_answer_loss_entropy",
+        "expected_answer_loss_effective_pairs",
+        "expected_answer_loss_best_nll",
+        "expected_answer_loss_true_nll",
+        "expected_answer_loss_learned_nll",
+        "expected_answer_loss_expected_minus_best_gap",
+        "expected_answer_loss_learned_minus_best_gap",
+        "expected_answer_loss_learned_minus_true_gap",
+        "expected_answer_loss_best_pair_probability",
+        "expected_answer_loss_true_pair_probability",
+        "expected_answer_loss_learned_pair_probability",
+        "expected_answer_loss_hard_learned_best_fraction",
+        "expected_answer_loss_hard_learned_pair_exact",
+        "expected_answer_loss_hard_learned_calc_accuracy",
     ]
     fieldnames = preferred + sorted(
         {key for row in curve for key in row.keys()} - set(preferred)
@@ -1254,6 +1280,109 @@ def action_loss_full_enum_joint_interface_loss(
         ),
     }
     return target_loss, metrics
+
+
+def normalize_expected_answer_costs(
+    costs: torch.Tensor, *, mode: str
+) -> torch.Tensor:
+    if mode == "none":
+        return costs
+    if mode == "center":
+        return costs - costs.mean(dim=-1, keepdim=True)
+    if mode == "zscore":
+        centered = costs - costs.mean(dim=-1, keepdim=True)
+        scale = costs.std(dim=-1, keepdim=True, unbiased=False).clamp_min(1e-6)
+        return centered / scale
+    raise ValueError(
+        "expected answer-loss cost normalization must be one of "
+        "{'none', 'center', 'zscore'}"
+    )
+
+
+def full_enum_expected_answer_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    policy_temperature: float,
+    cost_normalization: str,
+    entropy_weight: float,
+    chunk_size: int,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    if policy_temperature <= 0:
+        raise ValueError("expected answer-loss policy temperature must be positive")
+    a_logits, b_logits, _, _ = calculator_read_operand_logits(model, batch)
+    classes = a_logits.shape[-1]
+    pairs = full_enum_action_pairs(classes=classes, device=batch.x.device)
+    candidates = pairs.unsqueeze(0).expand(batch.x.shape[0], -1, -1)
+    with torch.no_grad():
+        full_costs = score_action_loss_candidates_chunked(
+            model, batch, candidates, chunk_size=chunk_size
+        )
+        objective_costs = normalize_expected_answer_costs(
+            full_costs, mode=cost_normalization
+        )
+
+    a_probs = torch.softmax(a_logits / policy_temperature, dim=-1)
+    b_probs = torch.softmax(b_logits / policy_temperature, dim=-1)
+    pair_probs = (a_probs.unsqueeze(-1) * b_probs.unsqueeze(-2)).reshape(
+        batch.x.shape[0], classes * classes
+    )
+    expected_loss = (pair_probs * objective_costs.detach()).sum(dim=-1).mean()
+    entropy = -(pair_probs * pair_probs.clamp_min(1e-12).log()).sum(dim=-1)
+    objective = expected_loss - (entropy_weight * entropy.mean())
+
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    learned_a = a_logits.argmax(dim=-1)
+    learned_b = b_logits.argmax(dim=-1)
+    learned_idx = learned_a * classes + learned_b
+    true_idx = true_a * classes + true_b
+    best_idx = full_costs.argmin(dim=-1)
+    learned_costs = full_costs.gather(1, learned_idx.unsqueeze(-1)).squeeze(-1)
+    true_costs = full_costs.gather(1, true_idx.unsqueeze(-1)).squeeze(-1)
+    best_costs = full_costs.gather(1, best_idx.unsqueeze(-1)).squeeze(-1)
+    expected_raw = (pair_probs.detach() * full_costs).sum(dim=-1)
+    best_probs = pair_probs.gather(1, best_idx.unsqueeze(-1)).squeeze(-1)
+    true_probs = pair_probs.gather(1, true_idx.unsqueeze(-1)).squeeze(-1)
+    learned_probs = pair_probs.gather(1, learned_idx.unsqueeze(-1)).squeeze(-1)
+    true_sum = true_a + true_b
+    learned_sum = learned_a + learned_b
+    metrics = {
+        "expected_answer_loss": float(expected_loss.item()),
+        "expected_answer_loss_policy_temperature": float(policy_temperature),
+        "expected_answer_loss_cost_normalization": cost_normalization,
+        "expected_answer_loss_entropy_weight": float(entropy_weight),
+        "expected_answer_loss_entropy": float(entropy.mean().item()),
+        "expected_answer_loss_effective_pairs": float(entropy.exp().mean().item()),
+        "expected_answer_loss_best_nll": float(best_costs.mean().item()),
+        "expected_answer_loss_true_nll": float(true_costs.mean().item()),
+        "expected_answer_loss_learned_nll": float(learned_costs.mean().item()),
+        "expected_answer_loss_raw_expected_nll": float(expected_raw.mean().item()),
+        "expected_answer_loss_expected_minus_best_gap": float(
+            (expected_raw - best_costs).mean().item()
+        ),
+        "expected_answer_loss_learned_minus_best_gap": float(
+            (learned_costs - best_costs).mean().item()
+        ),
+        "expected_answer_loss_learned_minus_true_gap": float(
+            (learned_costs - true_costs).mean().item()
+        ),
+        "expected_answer_loss_best_pair_probability": float(best_probs.mean().item()),
+        "expected_answer_loss_true_pair_probability": float(true_probs.mean().item()),
+        "expected_answer_loss_learned_pair_probability": float(
+            learned_probs.mean().item()
+        ),
+        "expected_answer_loss_hard_learned_best_fraction": float(
+            (learned_idx == best_idx).float().mean().item()
+        ),
+        "expected_answer_loss_hard_learned_pair_exact": float(
+            (learned_idx == true_idx).float().mean().item()
+        ),
+        "expected_answer_loss_hard_learned_calc_accuracy": float(
+            (learned_sum == true_sum).float().mean().item()
+        ),
+    }
+    return objective, metrics
 
 
 class ActionLossReplayCache:
@@ -2121,6 +2250,7 @@ def run_variant(
             "action_loss_full_enum_interface",
             "action_loss_full_enum_joint_interface",
             "identifiable_full_enum_local_target",
+            "full_enum_expected_answer_loss",
         }
         and args.freeze_semantic_decoder
     ):
@@ -2134,6 +2264,7 @@ def run_variant(
             "action_loss_full_enum_interface",
             "action_loss_full_enum_joint_interface",
             "identifiable_full_enum_local_target",
+            "full_enum_expected_answer_loss",
         }
         and args.freeze_upstream_encoder
     ):
@@ -2146,6 +2277,7 @@ def run_variant(
         "action_loss_full_enum_interface",
         "action_loss_full_enum_joint_interface",
         "identifiable_full_enum_local_target",
+        "full_enum_expected_answer_loss",
     }:
         optim = torch.optim.AdamW(
             adaptive_optimizer_param_groups(
@@ -2224,6 +2356,18 @@ def run_variant(
         ),
         action_loss_full_enum_chunk_size=args.action_loss_full_enum_chunk_size,
         action_loss_full_enum_target_mode=args.action_loss_full_enum_target_mode,
+        expected_answer_loss_weight=args.expected_answer_loss_weight,
+        expected_answer_loss_policy_temperature=(
+            args.expected_answer_loss_policy_temperature
+        ),
+        expected_answer_loss_cost_normalization=(
+            args.expected_answer_loss_cost_normalization
+        ),
+        expected_answer_loss_entropy_weight=args.expected_answer_loss_entropy_weight,
+        expected_answer_loss_entropy_decay_steps=(
+            args.expected_answer_loss_entropy_decay_steps
+        ),
+        expected_answer_loss_chunk_size=args.expected_answer_loss_chunk_size,
         input_proj_anchor_checkpoint=(
             str(args.input_proj_anchor_checkpoint)
             if args.input_proj_anchor_checkpoint is not None
@@ -2308,6 +2452,11 @@ def run_variant(
             }
             and not args.oracle_train
         )
+        use_expected_answer_loss = (
+            args.variant == "model-c"
+            and args.calculator_estimator == "full_enum_expected_answer_loss"
+            and not args.oracle_train
+        )
         if use_reinforce:
             logits, diagnostics = model(
                 batch.x, oracle_operands=oracle_operands, return_diagnostics=True
@@ -2337,6 +2486,10 @@ def run_variant(
         action_loss_interface_loss_value = None
         action_loss_interface_objective_value = None
         action_loss_metrics: dict[str, float] = {}
+        expected_answer_loss_value = None
+        expected_answer_loss_objective_value = None
+        expected_answer_loss_entropy_weight = 0.0
+        expected_answer_loss_metrics: dict[str, float] = {}
         anchor_loss_value = None
         anchor_weight = 0.0
         if use_reinforce:
@@ -2453,6 +2606,45 @@ def run_variant(
                 action_loss_objective.item()
             )
             loss = loss + action_loss_objective
+        if use_expected_answer_loss:
+            if args.expected_answer_loss_entropy_decay_steps > 0:
+                expected_answer_loss_entropy_weight = (
+                    args.expected_answer_loss_entropy_weight
+                    * max(
+                        0.0,
+                        1.0
+                        - (step / args.expected_answer_loss_entropy_decay_steps),
+                    )
+                )
+            else:
+                expected_answer_loss_entropy_weight = (
+                    args.expected_answer_loss_entropy_weight
+                )
+            expected_answer_loss, expected_answer_loss_metrics = (
+                full_enum_expected_answer_loss(
+                    model,
+                    batch,
+                    num_digits=num_digits,
+                    policy_temperature=(
+                        args.expected_answer_loss_policy_temperature
+                    ),
+                    cost_normalization=(
+                        args.expected_answer_loss_cost_normalization
+                    ),
+                    entropy_weight=expected_answer_loss_entropy_weight,
+                    chunk_size=args.expected_answer_loss_chunk_size,
+                )
+            )
+            expected_answer_loss_value = expected_answer_loss_metrics[
+                "expected_answer_loss"
+            ]
+            expected_answer_loss_objective = (
+                args.expected_answer_loss_weight * expected_answer_loss
+            )
+            expected_answer_loss_objective_value = float(
+                expected_answer_loss_objective.item()
+            )
+            loss = loss + expected_answer_loss_objective
         if input_proj_anchor is not None:
             anchor_weight = input_proj_anchor_weight(
                 initial_weight=args.input_proj_anchor_weight,
@@ -2519,6 +2711,14 @@ def run_variant(
                     action_loss_interface_objective_value
                 )
                 curve_row.update(action_loss_metrics)
+            if use_expected_answer_loss:
+                curve_row["expected_answer_loss_weight"] = (
+                    args.expected_answer_loss_weight
+                )
+                curve_row["expected_answer_loss_objective"] = (
+                    expected_answer_loss_objective_value
+                )
+                curve_row.update(expected_answer_loss_metrics)
             if anchor_loss_value is not None:
                 curve_row["input_proj_anchor_loss"] = anchor_loss_value
                 curve_row["input_proj_anchor_weight"] = anchor_weight
@@ -2563,6 +2763,14 @@ def run_variant(
                     f" better_frac={action_loss_metrics.get('action_loss_candidate_better_fraction', action_loss_metrics.get('action_loss_full_enum_learned_best_fraction', float('nan'))):.3f}"
                     f" best_improve={action_loss_metrics.get('action_loss_candidate_best_improvement', action_loss_metrics.get('action_loss_full_enum_learned_minus_best_gap', float('nan'))):.3f}"
                     if use_action_loss_weighted_interface
+                    else ""
+                )
+                + (
+                    f" expected_answer_loss={expected_answer_loss_value:.4f}"
+                    f" expected_weight={args.expected_answer_loss_weight:.4f}"
+                    f" entropy={expected_answer_loss_metrics['expected_answer_loss_entropy']:.3f}"
+                    f" learned_best={expected_answer_loss_metrics['expected_answer_loss_hard_learned_best_fraction']:.3f}"
+                    if use_expected_answer_loss
                     else ""
                 )
                 + (
@@ -2710,6 +2918,30 @@ def run_variant(
         floor=args.adaptive_interface_loss_floor,
         step=args.steps,
     )
+    metrics["expected_answer_loss_weight"] = args.expected_answer_loss_weight
+    metrics["final_expected_answer_loss_weight"] = args.expected_answer_loss_weight
+    metrics["expected_answer_loss_policy_temperature"] = (
+        args.expected_answer_loss_policy_temperature
+    )
+    metrics["expected_answer_loss_cost_normalization"] = (
+        args.expected_answer_loss_cost_normalization
+    )
+    metrics["expected_answer_loss_entropy_weight"] = (
+        args.expected_answer_loss_entropy_weight
+    )
+    metrics["expected_answer_loss_entropy_decay_steps"] = (
+        args.expected_answer_loss_entropy_decay_steps
+    )
+    metrics["final_expected_answer_loss_entropy_weight"] = (
+        args.expected_answer_loss_entropy_weight
+        * max(
+            0.0,
+            1.0 - (args.steps / args.expected_answer_loss_entropy_decay_steps),
+        )
+        if args.expected_answer_loss_entropy_decay_steps > 0
+        else args.expected_answer_loss_entropy_weight
+    )
+    metrics["expected_answer_loss_chunk_size"] = args.expected_answer_loss_chunk_size
     metrics["input_proj_anchor_checkpoint"] = (
         str(args.input_proj_anchor_checkpoint)
         if args.input_proj_anchor_checkpoint is not None
@@ -3017,6 +3249,7 @@ def parse_args() -> argparse.Namespace:
             "action_loss_full_enum_interface",
             "action_loss_full_enum_joint_interface",
             "identifiable_full_enum_local_target",
+            "full_enum_expected_answer_loss",
         ],
         default="ste",
         help="Estimator for the learned calculator input interface.",
@@ -3146,6 +3379,46 @@ def parse_args() -> argparse.Namespace:
             "Target for independent full-enum local training: soft answer-NLL "
             "marginals or CE to the single best answer-NLL pair."
         ),
+    )
+    parser.add_argument(
+        "--expected-answer-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Weight for the exact full-enum expected answer-loss interface "
+            "objective. This objective uses model policy probabilities over "
+            "all action pairs and detached answer NLL costs."
+        ),
+    )
+    parser.add_argument(
+        "--expected-answer-loss-policy-temperature",
+        type=float,
+        default=1.0,
+        help="Softmax temperature for expected answer-loss operand policies.",
+    )
+    parser.add_argument(
+        "--expected-answer-loss-cost-normalization",
+        choices=["none", "center", "zscore"],
+        default="none",
+        help="Optional detached per-example cost normalization for expected answer loss.",
+    )
+    parser.add_argument(
+        "--expected-answer-loss-entropy-weight",
+        type=float,
+        default=0.0,
+        help="Entropy bonus weight for expected answer-loss action distributions.",
+    )
+    parser.add_argument(
+        "--expected-answer-loss-entropy-decay-steps",
+        type=int,
+        default=0,
+        help="Linearly decay expected answer-loss entropy weight to zero.",
+    )
+    parser.add_argument(
+        "--expected-answer-loss-chunk-size",
+        type=int,
+        default=64,
+        help="Number of action pairs to score per forced-decoder chunk.",
     )
     parser.add_argument(
         "--input-proj-anchor-checkpoint",
@@ -3325,6 +3598,7 @@ def main() -> None:
             "action_loss_full_enum_interface",
             "action_loss_full_enum_joint_interface",
             "identifiable_full_enum_local_target",
+            "full_enum_expected_answer_loss",
         }
         and args.variant != "model-c"
     ):
@@ -3338,6 +3612,7 @@ def main() -> None:
         "action_loss_full_enum_interface",
         "action_loss_full_enum_joint_interface",
         "identifiable_full_enum_local_target",
+        "full_enum_expected_answer_loss",
     }:
         if args.oracle_train:
             raise ValueError(
@@ -3395,6 +3670,29 @@ def main() -> None:
         )
     if args.action_loss_full_enum_chunk_size < 1:
         raise ValueError("--action-loss-full-enum-chunk-size must be positive")
+    if args.expected_answer_loss_weight < 0:
+        raise ValueError("--expected-answer-loss-weight must be non-negative")
+    if args.expected_answer_loss_policy_temperature <= 0:
+        raise ValueError(
+            "--expected-answer-loss-policy-temperature must be positive"
+        )
+    if args.expected_answer_loss_entropy_weight < 0:
+        raise ValueError(
+            "--expected-answer-loss-entropy-weight must be non-negative"
+        )
+    if args.expected_answer_loss_entropy_decay_steps < 0:
+        raise ValueError(
+            "--expected-answer-loss-entropy-decay-steps must be non-negative"
+        )
+    if args.expected_answer_loss_chunk_size < 1:
+        raise ValueError("--expected-answer-loss-chunk-size must be positive")
+    if (
+        args.calculator_estimator == "full_enum_expected_answer_loss"
+        and args.calculator_action_head != "independent_operands"
+    ):
+        raise ValueError(
+            "full_enum_expected_answer_loss requires independent operand heads"
+        )
     if (
         args.action_loss_full_enum_target_mode == "hard_best_pair"
         and args.calculator_action_head != "independent_operands"
@@ -3473,6 +3771,7 @@ def main() -> None:
         "action_loss_full_enum_interface",
         "action_loss_full_enum_joint_interface",
         "identifiable_full_enum_local_target",
+        "full_enum_expected_answer_loss",
     }:
         if args.calculator_action_head != "independent_operands":
             suffix_parts.append(args.calculator_action_head)
@@ -3522,6 +3821,17 @@ def main() -> None:
                 suffix_parts.append(
                     "fullfloor"
                     f"{args.action_loss_full_enum_min_probability_floor:g}"
+                )
+        if args.calculator_estimator == "full_enum_expected_answer_loss":
+            suffix_parts.append(
+                f"expanspolt{args.expected_answer_loss_policy_temperature:g}"
+                f"-expanschunk{args.expected_answer_loss_chunk_size}"
+            )
+            if args.expected_answer_loss_cost_normalization != "none":
+                suffix_parts.append(args.expected_answer_loss_cost_normalization)
+            if args.expected_answer_loss_entropy_weight > 0:
+                suffix_parts.append(
+                    f"expansent{args.expected_answer_loss_entropy_weight:g}"
                 )
         if args.input_proj_anchor_weight > 0:
             suffix_parts.append(f"inanchor{args.input_proj_anchor_weight:g}")
@@ -3585,6 +3895,15 @@ def main() -> None:
         f"temperature={args.action_loss_candidate_temperature} "
         f"refresh_every={args.action_loss_candidate_refresh_every} "
         f"ema_beta={args.action_loss_candidate_ema_beta}"
+    )
+    print(
+        "expected answer loss: "
+        f"weight={args.expected_answer_loss_weight} "
+        f"policy_temperature={args.expected_answer_loss_policy_temperature} "
+        f"cost_normalization={args.expected_answer_loss_cost_normalization} "
+        f"entropy_weight={args.expected_answer_loss_entropy_weight} "
+        f"entropy_decay_steps={args.expected_answer_loss_entropy_decay_steps} "
+        f"chunk_size={args.expected_answer_loss_chunk_size}"
     )
     print(
         "architecture: "
