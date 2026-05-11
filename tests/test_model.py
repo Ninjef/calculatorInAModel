@@ -1775,6 +1775,41 @@ def test_strict_phase6_runner_threads_semantic_decoder_only_scope(tmp_path: Path
     assert command[scope_flag + 1] == "semantic_decoder_only"
 
 
+def test_phase6_decay_runner_threads_scope_and_decay_flags(tmp_path: Path) -> None:
+    script_path = Path("scripts/run_phase6_strict_local_target_decay_boundary.py")
+    spec = importlib.util.spec_from_file_location("phase6_decay_runner", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+
+    command = runner.phase6_train_command(
+        checkpoint=tmp_path / "seed.pt",
+        run_root=tmp_path / "runs",
+        estimator="identifiable_full_enum_local_target",
+        answer_loss_weight=1.0,
+        local_target_loss_weight=1.0,
+        local_target_decay_steps=75,
+        local_target_floor=0.0,
+        input_proj_lr=0.03,
+        upstream_lr=0.003,
+        steps=300,
+        snapshot_every=25,
+        checkpoint_every=25,
+        target_mode="hard_best_pair",
+        freeze_upstream=True,
+        seed=0,
+        load_scope="semantic_decoder_only",
+    )
+
+    scope_flag = command.index("--semantic-decoder-checkpoint-load-scope")
+    decay_flag = command.index("--adaptive-interface-loss-decay-steps")
+    floor_flag = command.index("--adaptive-interface-loss-floor")
+    assert command[scope_flag + 1] == "semantic_decoder_only"
+    assert command[decay_flag + 1] == "75"
+    assert command[floor_flag + 1] == "0.0"
+
+
 def test_input_proj_anchor_loss_and_decay() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_script_anchor", script_path)

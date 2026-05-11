@@ -426,3 +426,136 @@ Proceed to a targeted follow-up rather than rerunning this branch: either an
 upstream-open strict variant if the research question requires upstream
 movement, or a smaller step toward less local teaching such as decay/handoff
 sensitivity from the semantic-decoder-only branch.
+
+## 2026-05-11 Strict Local-Target Decay Boundary
+
+Task:
+
+```text
+aiAgentProjectTasks/2026-05-11-phase-6-fourth-task-Strict-local-target-decay-and-minimum-teaching-boundary.md
+```
+
+Runner:
+
+```text
+scripts/run_phase6_strict_local_target_decay_boundary.py
+```
+
+Run root:
+
+```text
+runs/2026-05-11_phase6_strict_local_target_decay_boundary
+```
+
+### Gates
+
+The new boundary runner reran the strict gates once because the runner path and
+command construction changed. Both gates passed under
+`semantic_decoder_checkpoint_load_scope=semantic_decoder_only`:
+
+| Gate | Key result |
+| --- | --- |
+| Oracle wiring | oracle-at-eval `1.000`, injection-zero `0.000`, forced-random `0.000`, semantic decoder delta `0.0` |
+| Local-target parity | hard-best pair equals true `1.000`, local CE equals aux CE exactly (`2.995489` / `2.995489`), semantic grad/delta `0.0` |
+
+These remain wiring/parity gates only.
+
+### Single-Stage Decay Ladder
+
+All branches used:
+
+```text
+calculator_estimator=identifiable_full_enum_local_target
+semantic_decoder_checkpoint_load_scope=semantic_decoder_only
+answer_loss_weight=1.0
+initial_local_target_loss_weight=1.0
+local_target_loss_floor=0.0
+aux_operand_loss_weight=0.0
+input_proj_anchor_weight=0.0
+freeze_upstream_encoder=true
+trainable=calculator_hook.input_proj only
+input_proj_lr=0.03
+steps=300
+```
+
+All branches decayed the local target to exactly `0.0` by the final checkpoint,
+but none reached retained-protocol quality.
+
+| Decay steps | Final eval | Best fast normal/operand/pair/calc | Canonical operand/pair/calc final | Private operand/pair/calc final | Full-enum learned-true gap | Learned-best |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `50` | `0.234` | `0.414 / 0.414 / 0.414 / 0.422` | `0.234 / 0.234 / 0.242` | `0.2225 / 0.2225 / 0.2325` | `3.349` | `0.180` |
+| `75` | `0.271` | `0.492 / 0.492 / 0.492 / 0.500` | `0.309 / 0.309 / 0.320` | `0.2675 / 0.2675 / 0.2725` | `3.419` | `0.289` |
+| `100` | `0.215` | `0.461 / 0.461 / 0.461 / 0.469` | `0.238 / 0.238 / 0.258` | `0.2225 / 0.2225 / 0.2375` | `3.790` | `0.234` |
+| `150` | `0.592` | `0.594 / 0.594 / 0.594 / 0.594` | `0.543 / 0.543 / 0.543` | `0.585 / 0.585 / 0.585` | `2.814` | `0.516` |
+
+Parameter deltas versus each Stage 1 step `0` checkpoint:
+
+| Decay steps | input-proj L2 | upstream L2 | semantic decoder L2 |
+| ---: | ---: | ---: | ---: |
+| `50` | `72.128` | `0.0` | `0.0` |
+| `75` | `67.461` | `0.0` | `0.0` |
+| `100` | `73.023` | `0.0` | `0.0` |
+| `150` | `64.050` | `0.0` | `0.0` |
+
+Interpretation:
+
+- The full-enum hard-best target remains sharp and parity-matched, but the
+  combined answer/local objective with linear decay did not hand off cleanly.
+- The best single-stage decay branch was `150`, but it remained a partial
+  protocol, not a retained exact calculator-query protocol.
+- This is a schedule/handoff-dynamics negative, not a target-identifiability
+  negative.
+
+### Minimum Two-Stage Handoff
+
+Two new answer-only continuations were run from earlier prior strict Stage 1
+snapshots. The prior strict task had already shown exact retention from
+Stage 1 step `75`.
+
+All new continuations used:
+
+```text
+calculator_estimator=adaptive_interface
+semantic_decoder_checkpoint_load_scope=full_model
+answer_loss_weight=1.0
+local_target_loss_weight=0.0
+adaptive_interface_loss_weight=0.0
+aux_operand_loss_weight=0.0
+input_proj_anchor_weight=0.0
+freeze_upstream_encoder=true
+input_proj_lr=0.0003
+steps=1000
+```
+
+| Prior Stage 1 start | Source fast operand/pair/calc | Final eval | Best fast normal/operand/pair/calc | Canonical operand/pair/calc selected | Private operand/pair/calc selected | Full-enum learned-true gap | Learned-best |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| step `25` | `0.289 / 0.289 / 0.289` | `0.809` | `0.875 / 0.875 / 0.875 / 0.883` | `0.812 / 0.812 / 0.812` | `0.805 / 0.805 / 0.805` | `1.151` | `0.727` |
+| step `50` | `0.398 / 0.398 / 0.398` | `0.848` | `0.922 / 0.922 / 0.922 / 0.922` | `0.863 / 0.863 / 0.863` | `0.845 / 0.845 / 0.845` | `0.702` | `0.844` |
+| step `75` | `0.977 / 0.977 / 0.977` | prior exact pass | prior exact pass | `1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000` | `0.0` | `1.000` |
+
+Parameter deltas for the new handoffs:
+
+| Start | input-proj L2 | upstream L2 | semantic decoder L2 |
+| ---: | ---: | ---: | ---: |
+| step `25` | `4.222` | `0.0` | `0.0` |
+| step `50` | `4.227` | `0.0` | `0.0` |
+
+Decision:
+
+- Single-stage strict local-target decay to exactly `0.0` failed for all tested
+  decay windows up to `150` steps.
+- Answer-only continuation can improve much earlier partial local-target
+  checkpoints, but step `25` and step `50` did not become exact retained
+  protocols.
+- The shortest reliable boundary remains the prior strict Stage 1 step `75`
+  handoff: roughly the first fast-gate checkpoint, not the earlier partial
+  checkpoints.
+
+Recommendation:
+
+Treat this as a negative for simple linear single-stage decay and a useful
+minimum-handoff boundary. Next work should redesign the handoff schedule
+rather than rerunning oracle controls: for example hold the local target until
+the fast protocol gate is near `0.9`, use a two-phase schedule with automatic
+gate-triggered local-target removal, or test a smoother relaxation while
+keeping the same strict diagnostics.
