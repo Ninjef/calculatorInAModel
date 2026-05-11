@@ -95,6 +95,13 @@ class TrainConfig:
     expected_answer_loss_entropy_weight: float
     expected_answer_loss_entropy_decay_steps: int
     expected_answer_loss_chunk_size: int
+    relaxed_calculator_temperature: float
+    relaxed_calculator_final_temperature: float
+    relaxed_calculator_temperature_decay_steps: int
+    relaxed_calculator_mode: str
+    relaxed_calculator_hard_forward: bool
+    relaxed_calculator_entropy_weight: float
+    relaxed_calculator_entropy_decay_steps: int
     input_proj_anchor_checkpoint: str | None
     input_proj_anchor_weight: float
     input_proj_anchor_decay_steps: int
@@ -614,6 +621,15 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "expected_answer_loss_hard_learned_best_fraction",
         "expected_answer_loss_hard_learned_pair_exact",
         "expected_answer_loss_hard_learned_calc_accuracy",
+        "relaxed_calculator_temperature",
+        "relaxed_calculator_final_temperature",
+        "relaxed_calculator_mode",
+        "relaxed_calculator_hard_forward",
+        "relaxed_calculator_entropy_weight",
+        "relaxed_calculator_entropy",
+        "relaxed_calculator_effective_pairs",
+        "relaxed_calculator_hard_learned_pair_exact",
+        "relaxed_calculator_hard_learned_calc_accuracy",
     ]
     fieldnames = preferred + sorted(
         {key for row in curve for key in row.keys()} - set(preferred)
@@ -777,6 +793,67 @@ def operand_distribution_entropy(
     a_entropy = -(a_probs * a_probs.clamp_min(1e-12).log()).sum(dim=-1)
     b_entropy = -(b_probs * b_probs.clamp_min(1e-12).log()).sum(dim=-1)
     return a_entropy + b_entropy
+
+
+def relaxed_calculator_temperature(
+    *,
+    initial_temperature: float,
+    final_temperature: float,
+    decay_steps: int,
+    step: int,
+) -> float:
+    if decay_steps <= 0:
+        return initial_temperature
+    progress = min(max(step / decay_steps, 0.0), 1.0)
+    return initial_temperature + progress * (final_temperature - initial_temperature)
+
+
+def relaxed_calculator_entropy_weight(
+    *, initial_weight: float, decay_steps: int, step: int
+) -> float:
+    if initial_weight <= 0:
+        return 0.0
+    if decay_steps <= 0:
+        return initial_weight
+    return initial_weight * max(0.0, 1.0 - (step / decay_steps))
+
+
+def relaxed_calculator_policy_metrics(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    temperature: float,
+    entropy_weight: float,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    if temperature <= 0:
+        raise ValueError("relaxed calculator temperature must be positive")
+    a_logits, b_logits, _, _ = calculator_read_operand_logits(model, batch)
+    a_probs = torch.softmax(a_logits / temperature, dim=-1)
+    b_probs = torch.softmax(b_logits / temperature, dim=-1)
+    a_entropy = -(a_probs * a_probs.clamp_min(1e-12).log()).sum(dim=-1)
+    b_entropy = -(b_probs * b_probs.clamp_min(1e-12).log()).sum(dim=-1)
+    entropy = a_entropy + b_entropy
+    entropy_objective = -entropy_weight * entropy.mean()
+
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    learned_a = a_logits.argmax(dim=-1)
+    learned_b = b_logits.argmax(dim=-1)
+    true_sum = true_a + true_b
+    learned_sum = learned_a + learned_b
+    metrics = {
+        "relaxed_calculator_temperature": float(temperature),
+        "relaxed_calculator_entropy_weight": float(entropy_weight),
+        "relaxed_calculator_entropy": float(entropy.mean().item()),
+        "relaxed_calculator_effective_pairs": float(entropy.exp().mean().item()),
+        "relaxed_calculator_hard_learned_pair_exact": float(
+            ((learned_a == true_a) & (learned_b == true_b)).float().mean().item()
+        ),
+        "relaxed_calculator_hard_learned_calc_accuracy": float(
+            (learned_sum == true_sum).float().mean().item()
+        ),
+    }
+    return entropy_objective, metrics
 
 
 def calculator_read_operand_logits(
@@ -2150,6 +2227,9 @@ def make_model_config(
     calculator_injection_mode: str = "add",
     calculator_bottleneck_mode: str = "none",
     calculator_output_format: str = "sum",
+    relaxed_calculator_temperature: float = 1.0,
+    relaxed_calculator_mode: str = "deterministic",
+    relaxed_calculator_hard_forward: bool = True,
     answer_format: AnswerFormat = "sum",
     n_layer: int = 4,
     n_head: int = 4,
@@ -2181,6 +2261,9 @@ def make_model_config(
         calculator_read_span_width=calculator_read_span_width,
         calculator_bottleneck_mode=calculator_bottleneck_mode,
         calculator_output_format=calculator_output_format,
+        relaxed_calculator_temperature=relaxed_calculator_temperature,
+        relaxed_calculator_mode=relaxed_calculator_mode,
+        relaxed_calculator_hard_forward=relaxed_calculator_hard_forward,
     )
 
 
@@ -2222,6 +2305,9 @@ def run_variant(
         calculator_injection_mode=args.calculator_injection_mode,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
         calculator_output_format=args.calculator_output_format,
+        relaxed_calculator_temperature=args.relaxed_calculator_temperature,
+        relaxed_calculator_mode=args.relaxed_calculator_mode,
+        relaxed_calculator_hard_forward=args.relaxed_calculator_hard_forward,
         answer_format=args.answer_format,
         n_layer=args.n_layer,
         n_head=args.n_head,
@@ -2251,6 +2337,7 @@ def run_variant(
             "action_loss_full_enum_joint_interface",
             "identifiable_full_enum_local_target",
             "full_enum_expected_answer_loss",
+            "gumbel_concrete_interface",
         }
         and args.freeze_semantic_decoder
     ):
@@ -2265,6 +2352,7 @@ def run_variant(
             "action_loss_full_enum_joint_interface",
             "identifiable_full_enum_local_target",
             "full_enum_expected_answer_loss",
+            "gumbel_concrete_interface",
         }
         and args.freeze_upstream_encoder
     ):
@@ -2278,6 +2366,7 @@ def run_variant(
         "action_loss_full_enum_joint_interface",
         "identifiable_full_enum_local_target",
         "full_enum_expected_answer_loss",
+        "gumbel_concrete_interface",
     }:
         optim = torch.optim.AdamW(
             adaptive_optimizer_param_groups(
@@ -2368,6 +2457,19 @@ def run_variant(
             args.expected_answer_loss_entropy_decay_steps
         ),
         expected_answer_loss_chunk_size=args.expected_answer_loss_chunk_size,
+        relaxed_calculator_temperature=args.relaxed_calculator_temperature,
+        relaxed_calculator_final_temperature=(
+            args.relaxed_calculator_final_temperature
+        ),
+        relaxed_calculator_temperature_decay_steps=(
+            args.relaxed_calculator_temperature_decay_steps
+        ),
+        relaxed_calculator_mode=args.relaxed_calculator_mode,
+        relaxed_calculator_hard_forward=args.relaxed_calculator_hard_forward,
+        relaxed_calculator_entropy_weight=args.relaxed_calculator_entropy_weight,
+        relaxed_calculator_entropy_decay_steps=(
+            args.relaxed_calculator_entropy_decay_steps
+        ),
         input_proj_anchor_checkpoint=(
             str(args.input_proj_anchor_checkpoint)
             if args.input_proj_anchor_checkpoint is not None
@@ -2457,6 +2559,23 @@ def run_variant(
             and args.calculator_estimator == "full_enum_expected_answer_loss"
             and not args.oracle_train
         )
+        use_relaxed_calculator = (
+            args.variant == "model-c"
+            and args.calculator_estimator == "gumbel_concrete_interface"
+            and not args.oracle_train
+        )
+        current_relaxed_temperature = relaxed_calculator_temperature(
+            initial_temperature=args.relaxed_calculator_temperature,
+            final_temperature=args.relaxed_calculator_final_temperature,
+            decay_steps=args.relaxed_calculator_temperature_decay_steps,
+            step=step,
+        )
+        if model.calculator_hook is not None:
+            model.calculator_hook.relaxed_temperature = current_relaxed_temperature
+            model.calculator_hook.relaxed_mode = args.relaxed_calculator_mode
+            model.calculator_hook.relaxed_hard_forward = (
+                args.relaxed_calculator_hard_forward
+            )
         if use_reinforce:
             logits, diagnostics = model(
                 batch.x, oracle_operands=oracle_operands, return_diagnostics=True
@@ -2490,6 +2609,9 @@ def run_variant(
         expected_answer_loss_objective_value = None
         expected_answer_loss_entropy_weight = 0.0
         expected_answer_loss_metrics: dict[str, float] = {}
+        relaxed_calculator_entropy_objective_value = None
+        current_relaxed_entropy_weight = 0.0
+        relaxed_calculator_metrics: dict[str, float] = {}
         anchor_loss_value = None
         anchor_weight = 0.0
         if use_reinforce:
@@ -2645,6 +2767,25 @@ def run_variant(
                 expected_answer_loss_objective.item()
             )
             loss = loss + expected_answer_loss_objective
+        if use_relaxed_calculator:
+            current_relaxed_entropy_weight = relaxed_calculator_entropy_weight(
+                initial_weight=args.relaxed_calculator_entropy_weight,
+                decay_steps=args.relaxed_calculator_entropy_decay_steps,
+                step=step,
+            )
+            entropy_objective, relaxed_calculator_metrics = (
+                relaxed_calculator_policy_metrics(
+                    model,
+                    batch,
+                    num_digits=num_digits,
+                    temperature=current_relaxed_temperature,
+                    entropy_weight=current_relaxed_entropy_weight,
+                )
+            )
+            relaxed_calculator_entropy_objective_value = float(
+                entropy_objective.item()
+            )
+            loss = loss + entropy_objective
         if input_proj_anchor is not None:
             anchor_weight = input_proj_anchor_weight(
                 initial_weight=args.input_proj_anchor_weight,
@@ -2719,6 +2860,17 @@ def run_variant(
                     expected_answer_loss_objective_value
                 )
                 curve_row.update(expected_answer_loss_metrics)
+            if use_relaxed_calculator:
+                curve_row["relaxed_calculator_entropy_objective"] = (
+                    relaxed_calculator_entropy_objective_value
+                )
+                curve_row["relaxed_calculator_final_temperature"] = (
+                    args.relaxed_calculator_final_temperature
+                )
+                curve_row["relaxed_calculator_hard_forward"] = int(
+                    args.relaxed_calculator_hard_forward
+                )
+                curve_row.update(relaxed_calculator_metrics)
             if anchor_loss_value is not None:
                 curve_row["input_proj_anchor_loss"] = anchor_loss_value
                 curve_row["input_proj_anchor_weight"] = anchor_weight
@@ -2771,6 +2923,14 @@ def run_variant(
                     f" entropy={expected_answer_loss_metrics['expected_answer_loss_entropy']:.3f}"
                     f" learned_best={expected_answer_loss_metrics['expected_answer_loss_hard_learned_best_fraction']:.3f}"
                     if use_expected_answer_loss
+                    else ""
+                )
+                + (
+                    f" relaxed_temp={current_relaxed_temperature:.4f}"
+                    f" relaxed_entropy={relaxed_calculator_metrics['relaxed_calculator_entropy']:.3f}"
+                    f" relaxed_pair={relaxed_calculator_metrics['relaxed_calculator_hard_learned_pair_exact']:.3f}"
+                    f" relaxed_calc={relaxed_calculator_metrics['relaxed_calculator_hard_learned_calc_accuracy']:.3f}"
+                    if use_relaxed_calculator
                     else ""
                 )
                 + (
@@ -2942,6 +3102,38 @@ def run_variant(
         else args.expected_answer_loss_entropy_weight
     )
     metrics["expected_answer_loss_chunk_size"] = args.expected_answer_loss_chunk_size
+    metrics["relaxed_calculator_temperature"] = args.relaxed_calculator_temperature
+    metrics["relaxed_calculator_final_temperature"] = (
+        args.relaxed_calculator_final_temperature
+    )
+    metrics["relaxed_calculator_temperature_decay_steps"] = (
+        args.relaxed_calculator_temperature_decay_steps
+    )
+    metrics["final_relaxed_calculator_temperature"] = (
+        relaxed_calculator_temperature(
+            initial_temperature=args.relaxed_calculator_temperature,
+            final_temperature=args.relaxed_calculator_final_temperature,
+            decay_steps=args.relaxed_calculator_temperature_decay_steps,
+            step=args.steps,
+        )
+    )
+    metrics["relaxed_calculator_mode"] = args.relaxed_calculator_mode
+    metrics["relaxed_calculator_hard_forward"] = (
+        args.relaxed_calculator_hard_forward
+    )
+    metrics["relaxed_calculator_entropy_weight"] = (
+        args.relaxed_calculator_entropy_weight
+    )
+    metrics["relaxed_calculator_entropy_decay_steps"] = (
+        args.relaxed_calculator_entropy_decay_steps
+    )
+    metrics["final_relaxed_calculator_entropy_weight"] = (
+        relaxed_calculator_entropy_weight(
+            initial_weight=args.relaxed_calculator_entropy_weight,
+            decay_steps=args.relaxed_calculator_entropy_decay_steps,
+            step=args.steps,
+        )
+    )
     metrics["input_proj_anchor_checkpoint"] = (
         str(args.input_proj_anchor_checkpoint)
         if args.input_proj_anchor_checkpoint is not None
@@ -3250,6 +3442,7 @@ def parse_args() -> argparse.Namespace:
             "action_loss_full_enum_joint_interface",
             "identifiable_full_enum_local_target",
             "full_enum_expected_answer_loss",
+            "gumbel_concrete_interface",
         ],
         default="ste",
         help="Estimator for the learned calculator input interface.",
@@ -3419,6 +3612,48 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=64,
         help="Number of action pairs to score per forced-decoder chunk.",
+    )
+    parser.add_argument(
+        "--relaxed-calculator-temperature",
+        type=float,
+        default=1.0,
+        help="Initial Concrete/softmax temperature for the relaxed calculator interface.",
+    )
+    parser.add_argument(
+        "--relaxed-calculator-final-temperature",
+        type=float,
+        default=1.0,
+        help="Final relaxed calculator temperature after linear decay.",
+    )
+    parser.add_argument(
+        "--relaxed-calculator-temperature-decay-steps",
+        type=int,
+        default=0,
+        help="Linearly decay relaxed calculator temperature over this many steps.",
+    )
+    parser.add_argument(
+        "--relaxed-calculator-mode",
+        choices=["deterministic", "gumbel"],
+        default="deterministic",
+        help="Use deterministic softmax or sampled Gumbel-Concrete relaxation.",
+    )
+    parser.add_argument(
+        "--relaxed-calculator-hard-forward",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Use a hard calculator signal in the forward pass with soft backward gradients.",
+    )
+    parser.add_argument(
+        "--relaxed-calculator-entropy-weight",
+        type=float,
+        default=0.0,
+        help="Entropy bonus weight for relaxed operand distributions.",
+    )
+    parser.add_argument(
+        "--relaxed-calculator-entropy-decay-steps",
+        type=int,
+        default=0,
+        help="Linearly decay relaxed calculator entropy bonus to zero.",
     )
     parser.add_argument(
         "--input-proj-anchor-checkpoint",
@@ -3599,6 +3834,7 @@ def main() -> None:
             "action_loss_full_enum_joint_interface",
             "identifiable_full_enum_local_target",
             "full_enum_expected_answer_loss",
+            "gumbel_concrete_interface",
         }
         and args.variant != "model-c"
     ):
@@ -3613,6 +3849,7 @@ def main() -> None:
         "action_loss_full_enum_joint_interface",
         "identifiable_full_enum_local_target",
         "full_enum_expected_answer_loss",
+        "gumbel_concrete_interface",
     }:
         if args.oracle_train:
             raise ValueError(
@@ -3694,6 +3931,25 @@ def main() -> None:
             "full_enum_expected_answer_loss requires independent operand heads"
         )
     if (
+        args.calculator_estimator == "gumbel_concrete_interface"
+        and args.calculator_action_head != "independent_operands"
+    ):
+        raise ValueError("gumbel_concrete_interface requires independent operand heads")
+    if args.relaxed_calculator_temperature <= 0:
+        raise ValueError("--relaxed-calculator-temperature must be positive")
+    if args.relaxed_calculator_final_temperature <= 0:
+        raise ValueError("--relaxed-calculator-final-temperature must be positive")
+    if args.relaxed_calculator_temperature_decay_steps < 0:
+        raise ValueError(
+            "--relaxed-calculator-temperature-decay-steps must be non-negative"
+        )
+    if args.relaxed_calculator_entropy_weight < 0:
+        raise ValueError("--relaxed-calculator-entropy-weight must be non-negative")
+    if args.relaxed_calculator_entropy_decay_steps < 0:
+        raise ValueError(
+            "--relaxed-calculator-entropy-decay-steps must be non-negative"
+        )
+    if (
         args.action_loss_full_enum_target_mode == "hard_best_pair"
         and args.calculator_action_head != "independent_operands"
     ):
@@ -3772,6 +4028,7 @@ def main() -> None:
         "action_loss_full_enum_joint_interface",
         "identifiable_full_enum_local_target",
         "full_enum_expected_answer_loss",
+        "gumbel_concrete_interface",
     }:
         if args.calculator_action_head != "independent_operands":
             suffix_parts.append(args.calculator_action_head)
@@ -3832,6 +4089,23 @@ def main() -> None:
             if args.expected_answer_loss_entropy_weight > 0:
                 suffix_parts.append(
                     f"expansent{args.expected_answer_loss_entropy_weight:g}"
+                )
+        if args.calculator_estimator == "gumbel_concrete_interface":
+            suffix_parts.append(
+                f"rtemp{args.relaxed_calculator_temperature:g}"
+                f"-rfinal{args.relaxed_calculator_final_temperature:g}"
+            )
+            if args.relaxed_calculator_temperature_decay_steps > 0:
+                suffix_parts.append(
+                    f"rdecay{args.relaxed_calculator_temperature_decay_steps}"
+                )
+            if args.relaxed_calculator_mode != "deterministic":
+                suffix_parts.append(args.relaxed_calculator_mode)
+            if not args.relaxed_calculator_hard_forward:
+                suffix_parts.append("softforward")
+            if args.relaxed_calculator_entropy_weight > 0:
+                suffix_parts.append(
+                    f"rent{args.relaxed_calculator_entropy_weight:g}"
                 )
         if args.input_proj_anchor_weight > 0:
             suffix_parts.append(f"inanchor{args.input_proj_anchor_weight:g}")
@@ -3904,6 +4178,16 @@ def main() -> None:
         f"entropy_weight={args.expected_answer_loss_entropy_weight} "
         f"entropy_decay_steps={args.expected_answer_loss_entropy_decay_steps} "
         f"chunk_size={args.expected_answer_loss_chunk_size}"
+    )
+    print(
+        "relaxed calculator: "
+        f"temperature={args.relaxed_calculator_temperature} "
+        f"final_temperature={args.relaxed_calculator_final_temperature} "
+        f"temperature_decay_steps={args.relaxed_calculator_temperature_decay_steps} "
+        f"mode={args.relaxed_calculator_mode} "
+        f"hard_forward={args.relaxed_calculator_hard_forward} "
+        f"entropy_weight={args.relaxed_calculator_entropy_weight} "
+        f"entropy_decay_steps={args.relaxed_calculator_entropy_decay_steps}"
     )
     print(
         "architecture: "

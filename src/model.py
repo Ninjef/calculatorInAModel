@@ -40,6 +40,9 @@ class GPTConfig:
     calculator_bottleneck_mode: str = "none"
     calculator_action_head: str = "independent_operands"
     calculator_output_format: str = "sum"
+    relaxed_calculator_temperature: float = 1.0
+    relaxed_calculator_mode: str = "deterministic"
+    relaxed_calculator_hard_forward: bool = True
 
 
 class HardAddSTE(torch.autograd.Function):
@@ -93,8 +96,17 @@ class CalculatorHook(nn.Module):
             "action_loss_full_enum_joint_interface",
             "identifiable_full_enum_local_target",
             "full_enum_expected_answer_loss",
+            "gumbel_concrete_interface",
         }:
             raise ValueError(f"unknown calculator estimator: {cfg.calculator_estimator}")
+        if cfg.relaxed_calculator_temperature <= 0:
+            raise ValueError("relaxed calculator temperature must be positive")
+        if cfg.relaxed_calculator_mode not in {"deterministic", "gumbel"}:
+            raise ValueError(
+                "relaxed calculator mode must be one of "
+                "{'deterministic', 'gumbel'}, "
+                f"got {cfg.relaxed_calculator_mode!r}"
+            )
         if cfg.calculator_action_head not in {"independent_operands", "joint_pair"}:
             raise ValueError(
                 "calculator_action_head must be one of "
@@ -141,6 +153,9 @@ class CalculatorHook(nn.Module):
         self.read_span_width = cfg.calculator_read_span_width
         self.action_head = cfg.calculator_action_head
         self.output_format = cfg.calculator_output_format
+        self.relaxed_temperature = cfg.relaxed_calculator_temperature
+        self.relaxed_mode = cfg.relaxed_calculator_mode
+        self.relaxed_hard_forward = cfg.relaxed_calculator_hard_forward
         input_width = cfg.n_embd
         if self.read_position == "operand_spans":
             input_width *= self.read_span_width
@@ -225,6 +240,7 @@ class CalculatorHook(nn.Module):
 
         a_logp = None
         b_logp = None
+        relaxed_calculator_signal = None
         if oracle_operands is None:
             if self.action_head == "joint_pair":
                 assert pair_logits is not None
@@ -244,6 +260,7 @@ class CalculatorHook(nn.Module):
                 "action_loss_full_enum_interface",
                 "identifiable_full_enum_local_target",
                 "full_enum_expected_answer_loss",
+                "gumbel_concrete_interface",
             }:
                 flat_a_logits = a_logits.reshape(-1, self.operand_vocab_size)
                 flat_b_logits = b_logits.reshape(-1, self.operand_vocab_size)
@@ -254,7 +271,19 @@ class CalculatorHook(nn.Module):
                         a_pred, forced_result_class, dtype=h.dtype
                     )
                 elif result_override == "add":
-                    flat_result = HardAddSTE.apply(flat_a_logits, flat_b_logits)
+                    if self.estimator == "gumbel_concrete_interface":
+                        (
+                            flat_result,
+                            a_pred,
+                            b_pred,
+                            relaxed_calculator_signal,
+                        ) = self._relaxed_calculator_output_signal(
+                            a_logits=a_logits,
+                            b_logits=b_logits,
+                            dtype=h.dtype,
+                        )
+                    else:
+                        flat_result = HardAddSTE.apply(flat_a_logits, flat_b_logits)
                 else:
                     flat_result = self._overridden_result(
                         a_pred, b_pred, result_override, dtype=h.dtype
@@ -292,13 +321,16 @@ class CalculatorHook(nn.Module):
                     a_pred, b_pred, result_override, dtype=h.dtype
                 )
         result = flat_result.reshape(*h.shape[:2], self.result_vocab_size)
-        calculator_signal = self._calculator_output_signal(
-            result=result,
-            a_pred=a_pred,
-            a_logits=a_logits,
-            oracle_used=oracle_operands is not None,
-            dtype=h.dtype,
-        )
+        if relaxed_calculator_signal is None:
+            calculator_signal = self._calculator_output_signal(
+                result=result,
+                a_pred=a_pred,
+                a_logits=a_logits,
+                oracle_used=oracle_operands is not None,
+                dtype=h.dtype,
+            )
+        else:
+            calculator_signal = relaxed_calculator_signal
         unscaled_injection = self.output_proj(calculator_signal) * eq_mask.to(h.dtype)
         injection = unscaled_injection * self.injection_scale
         if return_trace:
@@ -499,6 +531,74 @@ class CalculatorHook(nn.Module):
                 *a_logits.shape
             )
         return torch.cat([result, left_operand], dim=-1)
+
+    def _relaxed_operand_distributions(
+        self, a_logits: Tensor, b_logits: Tensor
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        temperature = float(self.relaxed_temperature)
+        if temperature <= 0:
+            raise ValueError("relaxed calculator temperature must be positive")
+        if self.relaxed_mode == "deterministic":
+            a_soft = torch.softmax(a_logits / temperature, dim=-1)
+            b_soft = torch.softmax(b_logits / temperature, dim=-1)
+            a_idx = a_logits.argmax(dim=-1)
+            b_idx = b_logits.argmax(dim=-1)
+        elif self.relaxed_mode == "gumbel":
+            a_gumbel = -torch.empty_like(a_logits).exponential_().log()
+            b_gumbel = -torch.empty_like(b_logits).exponential_().log()
+            a_soft = torch.softmax((a_logits + a_gumbel) / temperature, dim=-1)
+            b_soft = torch.softmax((b_logits + b_gumbel) / temperature, dim=-1)
+            a_idx = a_soft.argmax(dim=-1)
+            b_idx = b_soft.argmax(dim=-1)
+        else:
+            raise ValueError(f"unknown relaxed calculator mode: {self.relaxed_mode}")
+        a_hard = F.one_hot(a_idx, num_classes=self.operand_vocab_size).to(a_logits.dtype)
+        b_hard = F.one_hot(b_idx, num_classes=self.operand_vocab_size).to(b_logits.dtype)
+        return a_soft, b_soft, a_hard, b_hard
+
+    def _sum_distribution_from_operands(self, a_dist: Tensor, b_dist: Tensor) -> Tensor:
+        if a_dist.shape != b_dist.shape:
+            raise ValueError("relaxed calculator operand distributions must match")
+        if a_dist.shape[-1] != self.operand_vocab_size:
+            raise ValueError("relaxed calculator operand distribution width mismatch")
+        pair_probs = a_dist.unsqueeze(-1) * b_dist.unsqueeze(-2)
+        flat_pair = pair_probs.reshape(-1, self.operand_vocab_size * self.operand_vocab_size)
+        values = torch.arange(self.operand_vocab_size, device=a_dist.device)
+        sum_idx = (values.view(-1, 1) + values.view(1, -1)).reshape(1, -1)
+        sum_idx = sum_idx.expand(flat_pair.shape[0], -1)
+        flat_sum = a_dist.new_zeros((flat_pair.shape[0], self.result_vocab_size))
+        flat_sum.scatter_add_(1, sum_idx, flat_pair)
+        return flat_sum.reshape(*a_dist.shape[:-1], self.result_vocab_size)
+
+    def _relaxed_calculator_output_signal(
+        self,
+        *,
+        a_logits: Tensor,
+        b_logits: Tensor,
+        dtype: torch.dtype,
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        a_soft, b_soft, a_hard, b_hard = self._relaxed_operand_distributions(
+            a_logits, b_logits
+        )
+        hard_result = self._sum_distribution_from_operands(a_hard, b_hard)
+        soft_result = self._sum_distribution_from_operands(a_soft, b_soft)
+        if self.output_format == "sum":
+            hard_signal = hard_result
+            soft_signal = soft_result
+        elif self.output_format == "sum_left_operand":
+            hard_signal = torch.cat([hard_result, a_hard], dim=-1)
+            soft_signal = torch.cat([soft_result, a_soft], dim=-1)
+        else:
+            raise ValueError(f"unknown calculator output format: {self.output_format}")
+        signal = (
+            hard_signal.detach() + soft_signal - soft_signal.detach()
+            if self.relaxed_hard_forward
+            else soft_signal
+        )
+        a_pred = a_hard.argmax(dim=-1)
+        b_pred = b_hard.argmax(dim=-1)
+        flat_result = hard_result.reshape(-1, self.result_vocab_size).to(dtype=dtype)
+        return flat_result, a_pred, b_pred, signal.to(dtype=dtype)
 
     def _empty_trace(
         self, h: Tensor, tokens: Tensor, injection: Tensor

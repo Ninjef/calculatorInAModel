@@ -218,6 +218,175 @@ Branch B was not run because Branch A passed the Stage 1 protocol gate.
 | --- | ---: | ---: | ---: | ---: | ---: |
 | first gate, step `75` | `0.977 / 0.977 / 0.977 / 0.977` | not run | not run | not run | not run |
 | first exact, step `125` | `1.000 / 1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000 / 1.000` | `0.0 / 0.0` | `1.000` |
+
+## 2026-05-11 Gumbel/Concrete Hard-Forward Interface Bridge
+
+Task:
+
+```text
+aiAgentProjectTasks/2026-05-11-phase-6-sixth-task-Gumbel-Concrete-hard-forward-interface-bridge.md
+```
+
+Run root:
+
+```text
+runs/2026-05-11_phase6_gumbel_concrete_interface_bridge
+```
+
+Code changes:
+
+- Added `calculator_estimator=gumbel_concrete_interface`.
+- Added deterministic and sampled Gumbel relaxed operand distributions, with
+  hard-forward / soft-backward calculator signals:
+  `hard_signal.detach() + soft_signal - soft_signal.detach()`.
+- For `calculator_output_format=sum_left_operand`, the soft signal is
+  `concat(p_sum, p_a)`, where `p_sum` is the convolution of independent
+  operand distributions.
+- Added CLI knobs for relaxed temperature schedule, mode, hard-forward switch,
+  and entropy bonus.
+- Added a Stage 0 gradient-gate helper:
+  `scripts/run_phase6_gumbel_concrete_interface_bridge.py`.
+
+### Stage 0 Gradient Gate
+
+Command output:
+
+```text
+runs/2026-05-11_phase6_gumbel_concrete_interface_bridge/stage0/gradient_gate_temp2.json
+```
+
+Strict `semantic_decoder_only`, frozen-upstream, fixed 128-sample batch,
+deterministic hard-forward relaxation at temperature `2.0`.
+
+| Metric | Value |
+| --- | ---: |
+| oracle / injection-zero / forced-random | `1.000 / 0.000 / 0.000` |
+| initial answer loss | `10.8585` |
+| initial hard pair / calc | `0.000 / 0.0078` |
+| initial entropy / effective pairs | `5.9915 / 399.999` |
+| full-enum best=true | `1.000` |
+| best-pair probability before / after one step | `0.002499 / 0.002520` |
+| best-pair probability delta | `+0.0000209` |
+| gradient cosine, relaxed answer vs hard-best CE | `+0.2345` |
+| one-step input-proj delta L2 | `1.0896` |
+| upstream delta L2 | `0.0` |
+| semantic decoder grad / delta L2 | `0.0 / 0.0` |
+
+Decision: gate passed. The relaxed answer-loss gradient moved probability
+toward the full-enum best pair and was positively aligned with the diagnostic
+hard-best CE gradient, while only `calculator_hook.input_proj` moved.
+
+### Stage 1 Frozen-Upstream Relaxed Training
+
+Branch A was run first and reached the fast-gate threshold, so Branches B-D
+were skipped per the task's early-stop rule.
+
+Shared setup:
+
+```text
+semantic_decoder_checkpoint_load_scope=semantic_decoder_only
+freeze_semantic_decoder=true
+freeze_upstream_encoder=true
+answer_loss_weight=1.0
+aux_operand_loss_weight=0.0
+adaptive_interface_loss_weight=0.0
+expected_answer_loss_weight=0.0
+input_proj_anchor_weight=0.0
+input_proj_lr=0.03
+steps=300
+```
+
+| Branch | Mode | Temperature | Entropy | Best snapshot normal/operand/pair/calc | Final snapshot | Final eval |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| A | deterministic | `2.0 -> 0.5` | `0.0` | step `200`: `1.000 / 1.000 / 1.000 / 1.000` | step `300`: `0.789 / 0.789 / 0.789 / 0.789` | `0.873` |
+| B | skipped | `1.0 -> 0.25` | `0.0` | skipped after A gated | skipped | skipped |
+| C | skipped | `1.0 -> 0.25` | decayed | skipped after A gated | skipped | skipped |
+| D | skipped | gumbel | decayed | skipped after A gated | skipped | skipped |
+
+Stage 1 selected checkpoint:
+
+```text
+runs/2026-05-11_phase6_gumbel_concrete_interface_bridge/stage1_branch_a_temp2_to_05/2026-05-11_154207_114387_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00200_weights.pt
+```
+
+Parameter movement from Stage 1 step `0` to step `200`:
+
+| Group | L2 | Max abs |
+| --- | ---: | ---: |
+| `calculator_hook.input_proj` | `26.7822` | `2.4764` |
+| upstream encoder | `0.0` | `0.0` |
+| semantic decoder | `0.0` | `0.0` |
+
+### Stage 2 Relaxation-Off Retention
+
+Both continuations used:
+
+```text
+calculator_estimator=adaptive_interface
+semantic_decoder_checkpoint_load_scope=full_model
+freeze_semantic_decoder=true
+freeze_upstream_encoder=true
+answer_loss_weight=1.0
+aux_operand_loss_weight=0.0
+adaptive_interface_loss_weight=0.0
+expected_answer_loss_weight=0.0
+input_proj_anchor_weight=0.0
+input_proj_lr=0.0003
+steps=1000
+```
+
+| Source | Step 0 snapshot | Best snapshot | Final snapshot normal/operand/pair/calc | Final eval |
+| --- | ---: | ---: | ---: | ---: |
+| first qualifying Stage 1 step `175` | `0.883 / 0.883 / 0.883 / 0.883` | step `50`: `1.000 / 1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000 / 1.000` | `1.000` |
+| best Stage 1 step `200` | `0.992 / 0.992 / 0.992 / 0.992` | step `50`: `1.000 / 1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000 / 1.000` | `1.000` |
+
+Selected retained checkpoint:
+
+```text
+runs/2026-05-11_phase6_gumbel_concrete_interface_bridge/stage2_retention_best_step200/2026-05-11_154745_323390_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed2/final_weights.pt
+```
+
+Selected retained diagnostics:
+
+| Diagnostic | Result |
+| --- | ---: |
+| canonical normal / oracle / injection-zero / forced-random | `1.000 / 1.000 / 0.0039 / 0.0313` |
+| canonical operand / pair / calc | `1.000 / 1.000 / 1.000` |
+| private answer / operand / pair / calc | `1.000 / 1.000 / 1.000 / 1.000` |
+| full-enum learned / true / best NLL | `0.0002 / 0.0002 / 0.0002` |
+| full-enum learned-minus-true / best gap | `0.0 / 0.0` |
+| full-enum learned-best / true-best | `1.000 / 1.000` |
+
+Parameter movement from retained step `0` to final, best-step continuation:
+
+| Group | L2 | Max abs |
+| --- | ---: | ---: |
+| `calculator_hook.input_proj` | `0.8357` | `0.0820` |
+| upstream encoder | `0.0` | `0.0` |
+| semantic decoder | `0.0` | `0.0` |
+
+Final objective weights for the retained selected checkpoint:
+
+```text
+aux_operand_loss_weight=0.0
+adaptive/local target weight=0.0
+expected_answer_loss_weight=0.0
+relaxed objective inactive via calculator_estimator=adaptive_interface
+relaxed entropy weight=0.0
+input_proj_anchor_weight=0.0
+```
+
+Interpretation:
+
+This is a strong Phase 6 positive for the hard-forward / soft-backward
+relaxed bridge. Unlike the exact expected answer-loss branch, which reduced
+expected cost but collapsed to wrong hard actions, the deterministic relaxed
+answer-loss path trained hard learned actions to an exact protocol checkpoint
+without true-operand labels, oracle operands during training, or hard-best CE.
+The learned protocol then retained with the relaxation fully off.
+
+## 2026-05-10 Matched Local-Target Teaching And Retention, Continued
+
 | final, step `300` | `1.000 / 1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000 / 1.000` | `0.0 / 0.0` | `1.000` |
 
 Stage 1 parameter movement versus its step `0` checkpoint:

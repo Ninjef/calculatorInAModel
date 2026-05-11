@@ -499,6 +499,49 @@ def test_hard_add_ste_backward_routes_sum_gradients_to_operand_logits() -> None:
     assert torch.equal(b_logits.grad[0], torch.arange(3, 13, dtype=result.dtype))
 
 
+def test_gumbel_concrete_interface_uses_hard_forward_soft_backward_signal() -> None:
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="gumbel_concrete_interface",
+        calculator_output_format="sum_left_operand",
+        relaxed_calculator_temperature=2.0,
+    )
+    hook = CalculatorHook(cfg)
+    a_logits = torch.tensor([[[0.0, 3.0, 1.0, -2.0]]], requires_grad=True)
+    b_logits = torch.tensor([[[0.0, -1.0, 4.0, 2.0]]], requires_grad=True)
+
+    flat_result, a_pred, b_pred, signal = hook._relaxed_calculator_output_signal(
+        a_logits=a_logits,
+        b_logits=b_logits,
+        dtype=torch.float32,
+    )
+
+    assert a_pred.item() == 1
+    assert b_pred.item() == 2
+    assert flat_result.argmax(dim=-1).item() == 3
+    assert torch.equal(
+        signal.detach()[0, 0],
+        torch.tensor([0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]),
+    )
+
+    loss = (signal * torch.arange(signal.shape[-1], dtype=signal.dtype)).sum()
+    loss.backward()
+
+    assert a_logits.grad is not None
+    assert b_logits.grad is not None
+    assert a_logits.grad.abs().sum().item() > 0
+    assert b_logits.grad.abs().sum().item() > 0
+
+
 def test_calculator_injection_is_localized_to_equals_positions() -> None:
     torch.manual_seed(0)
     hook = CalculatorHook(_small_calculator_cfg(mode="add"))
