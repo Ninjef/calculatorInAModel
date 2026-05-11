@@ -1746,6 +1746,35 @@ def test_semantic_decoder_checkpoint_load_scope_is_opt_in(tmp_path: Path) -> Non
     assert torch.equal(full_state["tok_emb.weight"], checkpoint_state["tok_emb.weight"])
 
 
+def test_strict_phase6_runner_threads_semantic_decoder_only_scope(tmp_path: Path) -> None:
+    script_path = Path("scripts/run_phase6_strict_random_upstream_local_target.py")
+    spec = importlib.util.spec_from_file_location("strict_phase6_runner", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+
+    command = runner.phase6_train_command(
+        checkpoint=tmp_path / "seed.pt",
+        run_root=tmp_path / "runs",
+        estimator="identifiable_full_enum_local_target",
+        answer_loss_weight=0.0,
+        local_target_loss_weight=1.0,
+        input_proj_lr=0.03,
+        upstream_lr=0.003,
+        steps=300,
+        snapshot_every=25,
+        checkpoint_every=25,
+        target_mode="hard_best_pair",
+        freeze_upstream=True,
+        seed=0,
+        load_scope="semantic_decoder_only",
+    )
+
+    scope_flag = command.index("--semantic-decoder-checkpoint-load-scope")
+    assert command[scope_flag + 1] == "semantic_decoder_only"
+
+
 def test_input_proj_anchor_loss_and_decay() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_script_anchor", script_path)

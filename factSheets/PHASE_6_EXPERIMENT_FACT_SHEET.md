@@ -277,3 +277,152 @@ Proceed to the next Phase 6 branch: either optional upstream-open retention from
 the retained local-target-off checkpoint, or the stricter
 `semantic_decoder_only` random-upstream local-target teaching branch with the
 same parity gate and dense diagnostics. Do not rerun oracle-only controls.
+
+## 2026-05-11 Strict Random-Upstream Local Target
+
+Task:
+
+```text
+aiAgentProjectTasks/2026-05-11-phase-6-third-task-Strict-random-upstream-local-target-discovery.md
+```
+
+Runner:
+
+```text
+scripts/run_phase6_strict_random_upstream_local_target.py
+```
+
+Run root:
+
+```text
+runs/2026-05-11_phase6_strict_random_upstream_local_target
+```
+
+### Gates
+
+The strict branch used:
+
+```text
+semantic_decoder_checkpoint_load_scope=semantic_decoder_only
+freeze_semantic_decoder=true
+freeze_upstream_encoder=true
+aux_operand_loss_weight=0.0
+input_proj_anchor_weight=0.0
+```
+
+Gate A passed on the semantic-decoder-only baseline:
+
+| Metric | Value |
+| --- | ---: |
+| built-in eval exact | `0.000` |
+| oracle-at-eval exact | `1.000` |
+| injection-zero exact | `0.000` |
+| forced-zero exact | `0.000` gate / `0.0078` canonical |
+| forced-random exact | `0.000` gate / `0.0039` canonical |
+| learned operand/pair/calc | `0.000 / 0.000 / 0.0234` |
+| semantic decoder delta | `0.0` |
+
+Gate B passed on a fixed 128-sample batch under the same
+`semantic_decoder_only` initialization:
+
+| Metric | Value |
+| --- | ---: |
+| hard-best pair equals true pair | `1.000` |
+| hard-best A/B targets equal true A/B | `1.000 / 1.000` |
+| hard-best local CE | `2.995489` |
+| direct aux CE on same logits | `2.995489` |
+| local-minus-aux CE | `0.0` |
+| effective pairs | `1.078` |
+| true-pair probability | `0.988` |
+| semantic decoder grad/delta | `0.0 / 0.0` |
+| one local step input-proj/upstream delta L2 | `0.000058 / 0.0` |
+
+The local target was selected from full-enum answer NLL, not true operand
+labels. True operands were used only for parity reporting and aux-CE comparison.
+
+### Strict Stage 1 Teaching
+
+Branch A used:
+
+```text
+calculator_estimator=identifiable_full_enum_local_target
+semantic_decoder_checkpoint_load_scope=semantic_decoder_only
+freeze_upstream_encoder=true
+answer_loss_weight=0.0
+local_target_loss_weight=1.0
+aux_operand_loss_weight=0.0
+input_proj_lr=0.03
+steps=300
+target_mode=hard_best_pair
+```
+
+Branch B was not run because Branch A passed the Stage 1 protocol gate.
+
+| Stage 1 checkpoint | Fast-gate normal/operand/pair/calc | Canonical operand/pair/calc | Private answer/operand/pair/calc | Full-enum learned-true/best gap | Learned-best |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| first gate step `75` | `0.977 / 0.977 / 0.977 / 0.977` | not run | not run | not run | not run |
+| first exact/best step `125` | `1.000 / 1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000 / 1.000` | `0.0 / 0.0` | `1.000` |
+| final step `300` | `1.000 / 1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000 / 1.000` | `0.0 / 0.0` | `1.000` |
+
+Stage 1 parameter movement versus its step `0` checkpoint:
+
+| Checkpoint | input-proj L2 / max | upstream L2 / max | semantic decoder L2 / max |
+| --- | ---: | ---: | ---: |
+| final step `300` | `209.383 / 8.844` | `0.0 / 0.0` | `0.0 / 0.0` |
+
+### Strict Local-Target-Off Retention
+
+Two frozen-upstream retentions were run from the first qualifying and best
+qualifying Stage 1 snapshots:
+
+```text
+calculator_estimator=adaptive_interface
+semantic_decoder_checkpoint_load_scope=full_model
+answer_loss_weight=1.0
+local_target_loss_weight=0.0
+adaptive_interface_loss_weight=0.0
+aux_operand_loss_weight=0.0
+input_proj_anchor_weight=0.0
+freeze_semantic_decoder=true
+freeze_upstream_encoder=true
+input_proj_lr=0.0003
+steps=1000
+```
+
+| Stage 2 start | Final fast-gate normal/operand/pair/calc | Canonical operand/pair/calc | Private answer/operand/pair/calc | Full-enum learned-true/best gap | Learned-best |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Stage 1 first gate step `75` | `1.000 / 1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000 / 1.000` | `0.0 / 0.0` | `1.000` |
+| Stage 1 best step `125` | `1.000 / 1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000 / 1.000` | `0.0 / 0.0` | `1.000` |
+
+The first-gate retention branch had a useful intermediate nuance: its selected
+step `150` snapshot was canonical-exact, but private was `0.9975` and full-enum
+learned-best was `0.984` with learned-minus-true/best gap `0.1065`. Its final
+checkpoint closed those gaps to exact.
+
+Retention parameter movement versus each Stage 2 source checkpoint:
+
+| Stage 2 start | input-proj L2 / max | upstream L2 / max | semantic decoder L2 / max |
+| --- | ---: | ---: | ---: |
+| Stage 1 first gate step `75` | `2.694 / 0.177` | `0.0 / 0.0` | `0.0 / 0.0` |
+| Stage 1 best step `125` | `3.277 / 0.220` | `0.0 / 0.0` | `0.0 / 0.0` |
+
+Decision:
+
+- Strong strict-branch positive: the answer-derived hard-best local target
+  taught and retained the true calculator-query protocol with only the frozen
+  semantic decoder loaded from Stage 0B. The upstream encoder and input
+  projection started new/random for Stage 1.
+- This is local-target-assisted discovery, not pure answer-only discovery:
+  Stage 1 used `local_target_loss_weight=1.0`.
+- The retention claim is clean: final local/adaptive target weight `0.0`, aux
+  operand supervision `0.0`, input-proj anchor `0.0`, and semantic decoder
+  movement `0.0`.
+- Compared with the Phase 6 full-model positive, the same matched recipe now
+  succeeds without inheriting the oracle-trained upstream representation.
+
+Recommendation:
+
+Proceed to a targeted follow-up rather than rerunning this branch: either an
+upstream-open strict variant if the research question requires upstream
+movement, or a smaller step toward less local teaching such as decay/handoff
+sensitivity from the semantic-decoder-only branch.
