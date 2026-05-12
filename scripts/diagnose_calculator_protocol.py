@@ -66,11 +66,16 @@ def make_model_config(
     calculator_read_span_width: int = 1,
     calculator_bottleneck_mode: str = "none",
     calculator_output_format: str = "sum",
+    answer_decoder_interaction: str | None = None,
     answer_format: AnswerFormat = "sum",
 ) -> GPTConfig:
     operand_vocab_size = operand_vocab_size or 10**num_digits
     if calculator_hook_after_layer is None:
         calculator_hook_after_layer = min(2, n_layer)
+    if answer_decoder_interaction is None:
+        answer_decoder_interaction = (
+            "product" if calculator_output_format == "sum_left_operand" else "none"
+        )
     return GPTConfig(
         block_size=max_sequence_length(num_digits, answer_format=answer_format) - 1,
         n_layer=n_layer,
@@ -87,6 +92,7 @@ def make_model_config(
         calculator_read_span_width=calculator_read_span_width,
         calculator_bottleneck_mode=calculator_bottleneck_mode,
         calculator_output_format=calculator_output_format,
+        answer_decoder_interaction=answer_decoder_interaction,
     )
 
 
@@ -171,6 +177,7 @@ def train_fresh_model(args: argparse.Namespace, device: str) -> TinyGPT:
         calculator_read_span_width=args.calculator_read_span_width,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
         calculator_output_format=args.calculator_output_format,
+        answer_decoder_interaction=args.answer_decoder_interaction,
         answer_format=args.answer_format,
     )
     model = TinyGPT(cfg).to(device)
@@ -1303,6 +1310,15 @@ def parse_args() -> argparse.Namespace:
             "behavior; 'sum_left_operand' concatenates one-hot sum and left operand."
         ),
     )
+    parser.add_argument(
+        "--answer-decoder-interaction",
+        choices=["none", "product"],
+        default=None,
+        help=(
+            "Interaction used by the strict answer decoder for fresh diagnostic "
+            "models. Defaults by calculator output format."
+        ),
+    )
     parser.add_argument("--oracle", action="store_true")
     parser.add_argument(
         "--calculator-result-override",
@@ -1454,7 +1470,11 @@ def main() -> None:
             "calculator_read_position": model.cfg.calculator_read_position,
             "calculator_bottleneck_mode": model.cfg.calculator_bottleneck_mode,
             "calculator_output_format": model.cfg.calculator_output_format,
+            "answer_decoder_interaction": model.cfg.answer_decoder_interaction,
             "requested_calculator_output_format": args.calculator_output_format,
+            "requested_answer_decoder_interaction": (
+                args.answer_decoder_interaction
+            ),
             "checkpoint": str(args.checkpoint) if args.checkpoint else None,
             "train_config": train_config,
             "fresh_config": None if args.checkpoint else asdict(model.cfg),

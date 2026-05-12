@@ -40,6 +40,7 @@ class GPTConfig:
     calculator_bottleneck_mode: str = "none"
     calculator_action_head: str = "independent_operands"
     calculator_output_format: str = "sum"
+    answer_decoder_interaction: str = "none"
     relaxed_calculator_temperature: float = 1.0
     relaxed_calculator_mode: str = "deterministic"
     relaxed_calculator_hard_forward: bool = True
@@ -118,6 +119,12 @@ class CalculatorHook(nn.Module):
                 "calculator_output_format must be one of "
                 "{'sum', 'sum_left_operand'}, "
                 f"got {cfg.calculator_output_format!r}"
+            )
+        if cfg.answer_decoder_interaction not in {"none", "product"}:
+            raise ValueError(
+                "answer_decoder_interaction must be one of "
+                "{'none', 'product'}, "
+                f"got {cfg.answer_decoder_interaction!r}"
             )
         if cfg.calculator_read_position not in {"eq", "operands", "operand_spans"}:
             raise ValueError(
@@ -788,6 +795,12 @@ class TinyGPT(nn.Module):
                 "{'none', 'answer_decoder'}, "
                 f"got {cfg.calculator_bottleneck_mode!r}"
             )
+        if cfg.answer_decoder_interaction not in {"none", "product"}:
+            raise ValueError(
+                "answer_decoder_interaction must be one of "
+                "{'none', 'product'}, "
+                f"got {cfg.answer_decoder_interaction!r}"
+            )
         self.cfg = cfg
         self.tok_emb = nn.Embedding(cfg.vocab_size, cfg.n_embd)
         self.pos_emb = nn.Embedding(cfg.block_size, cfg.n_embd)
@@ -866,7 +879,11 @@ class TinyGPT(nn.Module):
             )
         offset_h = self.answer_offset_emb(offsets)
         selected_signal = selected_signal.unsqueeze(1)
-        if self.cfg.calculator_output_format == "sum_left_operand":
+        uses_product_interaction = (
+            self.cfg.answer_decoder_interaction == "product"
+            or self.cfg.calculator_output_format == "sum_left_operand"
+        )
+        if uses_product_interaction:
             decoder_h = selected_signal + offset_h + (selected_signal * offset_h)
         else:
             decoder_h = selected_signal + offset_h
@@ -1002,6 +1019,7 @@ class TinyGPT(nn.Module):
         if return_diagnostics:
             diagnostics["calculator_bottleneck_mode"] = self.cfg.calculator_bottleneck_mode
             diagnostics["calculator_output_format"] = self.cfg.calculator_output_format
+            diagnostics["answer_decoder_interaction"] = self.cfg.answer_decoder_interaction
             return logits, diagnostics
         return logits
 

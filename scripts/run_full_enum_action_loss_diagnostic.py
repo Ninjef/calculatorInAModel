@@ -371,6 +371,7 @@ def full_enum_diagnostic(
         "digits": digits,
         "answer_format": answer_format,
         "calculator_output_format": model.cfg.calculator_output_format,
+        "answer_decoder_interaction": model.cfg.answer_decoder_interaction,
         "operand_max": operand_max,
         "temperature": temperature,
         "min_probability_floor": min_probability_floor,

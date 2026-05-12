@@ -72,6 +72,7 @@ class TrainConfig:
     calculator_injection_mode: str
     calculator_bottleneck_mode: str
     calculator_output_format: str
+    answer_decoder_interaction: str
     semantic_decoder_checkpoint: str | None
     semantic_decoder_checkpoint_load_scope: str
     adaptive_interface_loss_weight: float
@@ -2227,6 +2228,7 @@ def make_model_config(
     calculator_injection_mode: str = "add",
     calculator_bottleneck_mode: str = "none",
     calculator_output_format: str = "sum",
+    answer_decoder_interaction: str | None = None,
     relaxed_calculator_temperature: float = 1.0,
     relaxed_calculator_mode: str = "deterministic",
     relaxed_calculator_hard_forward: bool = True,
@@ -2242,6 +2244,10 @@ def make_model_config(
     calculator_mode = "add" if variant == "model-c" else "off"
     if calculator_hook_after_layer is None:
         calculator_hook_after_layer = min(2, n_layer)
+    if answer_decoder_interaction is None:
+        answer_decoder_interaction = (
+            "product" if calculator_output_format == "sum_left_operand" else "none"
+        )
     return GPTConfig(
         block_size=max_sequence_length(num_digits, answer_format=answer_format) - 1,
         n_layer=n_layer,
@@ -2261,6 +2267,7 @@ def make_model_config(
         calculator_read_span_width=calculator_read_span_width,
         calculator_bottleneck_mode=calculator_bottleneck_mode,
         calculator_output_format=calculator_output_format,
+        answer_decoder_interaction=answer_decoder_interaction,
         relaxed_calculator_temperature=relaxed_calculator_temperature,
         relaxed_calculator_mode=relaxed_calculator_mode,
         relaxed_calculator_hard_forward=relaxed_calculator_hard_forward,
@@ -2305,6 +2312,7 @@ def run_variant(
         calculator_injection_mode=args.calculator_injection_mode,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
         calculator_output_format=args.calculator_output_format,
+        answer_decoder_interaction=args.answer_decoder_interaction,
         relaxed_calculator_temperature=args.relaxed_calculator_temperature,
         relaxed_calculator_mode=args.relaxed_calculator_mode,
         relaxed_calculator_hard_forward=args.relaxed_calculator_hard_forward,
@@ -2422,6 +2430,7 @@ def run_variant(
         calculator_injection_mode=args.calculator_injection_mode,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
         calculator_output_format=args.calculator_output_format,
+        answer_decoder_interaction=cfg.answer_decoder_interaction,
         semantic_decoder_checkpoint=(
             str(args.semantic_decoder_checkpoint)
             if args.semantic_decoder_checkpoint is not None
@@ -3023,6 +3032,7 @@ def run_variant(
     metrics["calculator_injection_mode"] = args.calculator_injection_mode
     metrics["calculator_bottleneck_mode"] = args.calculator_bottleneck_mode
     metrics["calculator_output_format"] = args.calculator_output_format
+    metrics["answer_decoder_interaction"] = cfg.answer_decoder_interaction
     metrics["semantic_decoder_checkpoint"] = (
         str(args.semantic_decoder_checkpoint)
         if args.semantic_decoder_checkpoint is not None
@@ -3730,6 +3740,15 @@ def parse_args() -> argparse.Namespace:
             "behavior; 'sum_left_operand' concatenates one-hot sum and left operand."
         ),
     )
+    parser.add_argument(
+        "--answer-decoder-interaction",
+        choices=["none", "product"],
+        default=None,
+        help=(
+            "Interaction used by the strict answer decoder. Default is 'none' for "
+            "sum output and 'product' for new sum_left_operand configs."
+        ),
+    )
     parser.add_argument("--n-layer", type=int, default=4)
     parser.add_argument("--n-head", type=int, default=4)
     parser.add_argument("--n-embd", type=int, default=128)
@@ -4117,6 +4136,17 @@ def main() -> None:
         suffix_parts.append(args.calculator_bottleneck_mode)
     if args.calculator_output_format != "sum":
         suffix_parts.append(args.calculator_output_format)
+    effective_answer_decoder_interaction = (
+        args.answer_decoder_interaction
+        if args.answer_decoder_interaction is not None
+        else (
+            "product"
+            if args.calculator_output_format == "sum_left_operand"
+            else "none"
+        )
+    )
+    if effective_answer_decoder_interaction != "none":
+        suffix_parts.append(f"adec-{effective_answer_decoder_interaction}")
     if args.aux_operand_loss_weight > 0:
         suffix_parts.append(f"aux{args.aux_operand_loss_weight:g}")
         if args.aux_operand_loss_decay_steps > 0:
@@ -4135,6 +4165,7 @@ def main() -> None:
     print(f"calculator injection mode: {args.calculator_injection_mode}")
     print(f"calculator bottleneck mode: {args.calculator_bottleneck_mode}")
     print(f"calculator output format: {args.calculator_output_format}")
+    print(f"answer decoder interaction: {effective_answer_decoder_interaction}")
     print(f"calculator read span width: {args.calculator_read_span_width}")
     print(
         "aux operand loss: "

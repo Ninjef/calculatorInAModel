@@ -15,7 +15,7 @@ import torch
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT))
-RUN_ROOT = REPO_ROOT / "runs/2026-05-12_phase6_sum_only_semantic_decoder_gate"
+RUN_ROOT = REPO_ROOT / "runs/2026-05-12_phase6_sum_only_interaction_decoder_gate"
 EXISTING_SUM_CHECKPOINT = (
     REPO_ROOT
     / "runs/2026-04-30_175805_513968_model-c-oracle-op0-19-answer_decoder/"
@@ -166,6 +166,7 @@ def common_natural_args(
     n_head: int = 1,
     n_embd: int = 16,
     mlp_expansion: int = 1,
+    answer_decoder_interaction: str = "none",
 ) -> list[str]:
     args = [
         sys.executable,
@@ -212,6 +213,8 @@ def common_natural_args(
         "answer_decoder",
         "--calculator-output-format",
         "sum",
+        "--answer-decoder-interaction",
+        answer_decoder_interaction,
         "--answer-format",
         "sum",
         "--n-layer",
@@ -266,6 +269,7 @@ def zero_step_semantic_gate_run(
     n_head: int,
     n_embd: int,
     mlp_expansion: int,
+    answer_decoder_interaction: str = "none",
 ) -> Path:
     if not sorted(root.glob("*/summary_metrics.json")):
         run_command(
@@ -281,6 +285,7 @@ def zero_step_semantic_gate_run(
                 n_head=n_head,
                 n_embd=n_embd,
                 mlp_expansion=mlp_expansion,
+                answer_decoder_interaction=answer_decoder_interaction,
                 snapshot_every=1,
                 checkpoint_every=1,
                 snapshot_samples=400,
@@ -748,6 +753,7 @@ def train_oracle_candidate(
     n_head: int,
     n_embd: int,
     mlp_expansion: int,
+    answer_decoder_interaction: str,
 ) -> Path:
     root = RUN_ROOT / "stage0_candidates" / name / "oracle_train"
     if not sorted(root.glob("*/summary_metrics.json")):
@@ -770,8 +776,9 @@ def train_oracle_candidate(
                 n_head=n_head,
                 n_embd=n_embd,
                 mlp_expansion=mlp_expansion,
-                snapshot_every=max(steps // 4, 1),
-                checkpoint_every=max(steps // 4, 1),
+                answer_decoder_interaction=answer_decoder_interaction,
+                snapshot_every=250,
+                checkpoint_every=250,
                 snapshot_samples=128,
                 eval_samples=512,
             ),
@@ -801,6 +808,7 @@ def evaluate_candidate(
     n_head: int,
     n_embd: int,
     mlp_expansion: int,
+    answer_decoder_interaction: str,
 ) -> dict[str, Any]:
     root = RUN_ROOT / "stage0_candidates" / name / source_checkpoint.stem
     run_dir = zero_step_semantic_gate_run(
@@ -813,6 +821,7 @@ def evaluate_candidate(
         n_head=n_head,
         n_embd=n_embd,
         mlp_expansion=mlp_expansion,
+        answer_decoder_interaction=answer_decoder_interaction,
     )
     checkpoint = run_dir / "final_weights.pt"
     snapshot = summarize_snapshot(run_dir)
@@ -838,6 +847,7 @@ def evaluate_candidate(
         "n_head": n_head,
         "n_embd": n_embd,
         "mlp_expansion": mlp_expansion,
+        "answer_decoder_interaction": answer_decoder_interaction,
         "passes_gate": gate_passes(snapshot, full_enum, sem_delta),
     }
 
@@ -857,23 +867,11 @@ def stage0_candidates() -> dict[str, Any]:
             "n_head": 1,
             "n_embd": 16,
             "mlp_expansion": 1,
-        },
-        {
-            "name": "tiny_operands_dense",
-            "seed": 1,
-            "steps": 1000,
-            "batch_size": 400,
-            "lr": 0.003,
-            "read_position": "operands",
-            "read_span_width": 1,
-            "n_layer": 2,
-            "n_head": 1,
-            "n_embd": 16,
-            "mlp_expansion": 1,
+            "answer_decoder_interaction": "product",
         },
         {
             "name": "embd32_heads2_operand_spans",
-            "seed": 2,
+            "seed": 1,
             "steps": 2000,
             "batch_size": 400,
             "lr": 0.003,
@@ -883,19 +881,7 @@ def stage0_candidates() -> dict[str, Any]:
             "n_head": 2,
             "n_embd": 32,
             "mlp_expansion": 1,
-        },
-        {
-            "name": "layer3_embd32_heads2_operand_spans",
-            "seed": 3,
-            "steps": 2000,
-            "batch_size": 400,
-            "lr": 0.003,
-            "read_position": "operand_spans",
-            "read_span_width": 2,
-            "n_layer": 3,
-            "n_head": 2,
-            "n_embd": 32,
-            "mlp_expansion": 1,
+            "answer_decoder_interaction": "product",
         },
     ]
     rows: list[dict[str, Any]] = []
@@ -914,6 +900,7 @@ def stage0_candidates() -> dict[str, Any]:
                 n_head=spec["n_head"],
                 n_embd=spec["n_embd"],
                 mlp_expansion=spec["mlp_expansion"],
+                answer_decoder_interaction=spec["answer_decoder_interaction"],
             )
             evaluated.append(row)
             rows.append(row)
@@ -962,6 +949,7 @@ def relaxed_args(candidate: dict[str, Any], *, run_root: Path, seed: int) -> lis
         n_head=int(candidate["n_head"]),
         n_embd=int(candidate["n_embd"]),
         mlp_expansion=int(candidate["mlp_expansion"]),
+        answer_decoder_interaction=str(candidate["answer_decoder_interaction"]),
         snapshot_every=25,
         checkpoint_every=25,
         snapshot_samples=400,
@@ -1003,6 +991,7 @@ def retention_args(candidate: dict[str, Any], *, run_root: Path, checkpoint: Pat
         n_head=int(candidate["n_head"]),
         n_embd=int(candidate["n_embd"]),
         mlp_expansion=int(candidate["mlp_expansion"]),
+        answer_decoder_interaction=str(candidate["answer_decoder_interaction"]),
         snapshot_every=50,
         checkpoint_every=50,
         snapshot_samples=400,
@@ -1126,7 +1115,8 @@ def diagnostic_items() -> list[dict[str, Any]]:
 
 
 def diagnostics() -> None:
-    for item in diagnostic_items():
+    items = diagnostic_items()
+    for item in items:
         label = item["label"]
         checkpoint = Path(item["checkpoint"])
         canonical = run_canonical(checkpoint, RUN_ROOT / "diagnostics" / f"{label}_canonical")
@@ -1161,7 +1151,7 @@ def diagnostics() -> None:
         }
         item["full_enum"] = compact_full_enum(full_enum)
         item["private"] = load_json(private_dir / "private_protocol_summary.json")
-    write_json(RUN_ROOT / "diagnostic_summary.json", diagnostic_items())
+    write_json(RUN_ROOT / "diagnostic_summary.json", items)
     write_summary()
 
 
@@ -1187,15 +1177,17 @@ def write_summary() -> None:
     labels = []
     selected = summary.get("stage0_candidates", {}).get("selected_passing_candidate")
     if selected:
-        labels.append("sum_only_decoder_gate_positive")
+        labels.append("sum_only_interaction_gate_positive")
     elif summary.get("stage0_candidates"):
-        labels.append("sum_only_decoder_capacity_blocker")
+        labels.append("sum_only_interaction_gate_negative")
     if summary.get("stage1", {}).get("passes_gate"):
-        labels.append("natural_sum_only_bridge_positive")
+        labels.append("natural_deterministic_concrete_result_positive")
     elif summary.get("stage1"):
-        labels.append("natural_sum_only_bridge_negative")
+        labels.append("natural_deterministic_concrete_result_negative")
     if summary.get("stage2", {}).get("passes_gate"):
-        labels.append("natural_result_retention_positive")
+        labels.append("natural_retention_positive")
+    elif summary.get("stage2"):
+        labels.append("natural_retention_negative")
     summary["interpretation_labels"] = labels
     write_json(RUN_ROOT / "summary.json", summary)
     write_summary_md(summary)
@@ -1203,7 +1195,7 @@ def write_summary() -> None:
 
 def write_summary_md(summary: dict[str, Any]) -> None:
     lines = [
-        "# Phase 6 Sum-Only Semantic Decoder Gate",
+        "# Phase 6 Sum-Only Interaction Decoder Gate",
         "",
         f"Run root: `{RUN_ROOT}`",
         "",
@@ -1239,8 +1231,8 @@ def write_summary_md(summary: dict[str, Any]) -> None:
         [
             "## Stage 0B Candidates",
             "",
-            "| candidate | checkpoint | oracle | best result=true | inj-zero | forced-random | semantic delta | pass |",
-            "| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |",
+            "| candidate | interaction | checkpoint | oracle | best result=true | inj-zero | forced-random | semantic delta | pass |",
+            "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |",
         ]
     )
     for row in summary.get("stage0_candidates", {}).get("candidates", []):
@@ -1251,6 +1243,7 @@ def write_summary_md(summary: dict[str, Any]) -> None:
             + " | ".join(
                 [
                     row["name"],
+                    row.get("answer_decoder_interaction", ""),
                     f"`{row['source_checkpoint']}`",
                     fmt(snap.get("oracle_exact_match")),
                     fmt(fe.get("best_result_group_matches_true_sum_fraction")),
@@ -1286,6 +1279,36 @@ def write_summary_md(summary: dict[str, Any]) -> None:
                     )
                     + " |",
                 ]
+            )
+    diagnostics = summary.get("diagnostics", [])
+    if diagnostics:
+        lines.extend(
+            [
+                "",
+                "## Diagnostics",
+                "",
+                "| label | normal | result acc | learned-result best | learned-result gap | oracle | inj-zero | forced-random |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+            ]
+        )
+        for item in diagnostics:
+            canonical = item.get("canonical", {})
+            full_enum = item.get("full_enum", {})
+            lines.append(
+                "| "
+                + " | ".join(
+                    [
+                        item.get("label", ""),
+                        fmt(canonical.get("normal_exact_match")),
+                        fmt(canonical.get("calculator_result_accuracy")),
+                        fmt(full_enum.get("learned_result_best_fraction")),
+                        fmt(full_enum.get("mean_learned_result_minus_best_result_gap")),
+                        fmt(canonical.get("oracle_at_eval_exact_match")),
+                        fmt(canonical.get("injection_zero_exact_match")),
+                        fmt(canonical.get("forced_random_exact_match")),
+                    ]
+                )
+                + " |"
             )
     lines.append("")
     (RUN_ROOT / "summary.md").write_text("\n".join(lines))

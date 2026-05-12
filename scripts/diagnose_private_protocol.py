@@ -395,6 +395,7 @@ def main() -> None:
             "digits": args.digits,
             "answer_format": args.answer_format,
             "calculator_output_format": model.cfg.calculator_output_format,
+            "answer_decoder_interaction": model.cfg.answer_decoder_interaction,
             "requested_calculator_output_format": args.calculator_output_format,
             "operand_max": args.operand_max,
             "pairs": len(normal_rows),

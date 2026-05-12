@@ -1200,3 +1200,154 @@ Recommendation:
 Do not proceed to `operand_max=99`. The next axis should be a sum-only
 decoder/readout redesign or a more direct result-class decoder health fix, not
 more bridge training from a sub-0.98 natural gate.
+
+## 2026-05-12 Sum-Only Interaction Decoder Gate And Natural Bridge
+
+Task:
+
+```text
+aiAgentProjectTasks/2026-05-12-phase-6-tenth-task-Sum-only-answer-decoder-interaction-and-natural-bridge.md
+```
+
+Runner:
+
+```text
+scripts/run_phase6_sum_only_semantic_decoder_gate.py
+```
+
+Run root:
+
+```text
+runs/2026-05-12_phase6_sum_only_interaction_decoder_gate
+```
+
+Code changes:
+
+- Added `answer_decoder_interaction=none|product` to `GPTConfig`, checkpoint
+  configs, run metrics, diagnostics, and CLI training.
+- Default sum-only behavior remains additive (`none`).
+- New sum-only product mode uses:
+
+```text
+decoder_h = selected_signal + offset_h + selected_signal * offset_h
+```
+
+- Existing and new `sum_left_operand` behavior remains product-compatible.
+- Added regression tests for additive default, product interaction, invalid
+  option handling, and loading old checkpoints without the new config field.
+
+### Stage 0 Product Decoder Gate
+
+The previous additive-only existing decoder remained blocked:
+
+| Metric | Value |
+| --- | ---: |
+| Oracle-at-eval exact | `0.9300` |
+| Full-enum best-result group matches true sum | `0.9075` |
+| Injection-zero exact | `0.0050` |
+| Forced-random exact | `0.0325` |
+| Semantic decoder delta | `0.0` |
+
+The fresh tiny product decoder passed the all-400 natural gate without needing
+the `n_embd=32,n_head=2` fallback.
+
+Selected checkpoint:
+
+```text
+runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage0_candidates/tiny_operand_spans_dense/oracle_train/2026-05-12_113346_842566_model-c-oracle-op0-19-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00500_weights.pt
+```
+
+| Metric | Value |
+| --- | ---: |
+| Oracle-at-eval exact | `1.0000` |
+| Forced true result / full-enum best-result group true sum | `1.0000` |
+| Injection-zero exact | `0.0425` |
+| Forced-zero exact | `0.0050` |
+| Forced-random exact | `0.0175` |
+| Semantic decoder delta | `0.0` |
+
+Interpretation label:
+
+```text
+sum_only_interaction_gate_positive
+```
+
+This is a readout health positive only, not learned calculator use.
+
+### Stage 1 Natural Deterministic Concrete Bridge
+
+The deterministic Concrete bridge was run for effective seed `2` only, because
+the first seed failed far below the result-level replication gate.
+
+Setup highlights:
+
+```text
+semantic_decoder_checkpoint_load_scope=semantic_decoder_only
+freeze_semantic_decoder=true
+freeze_upstream_encoder=true
+oracle_train=false
+oracle_warmup_steps=0
+calculator_estimator=gumbel_concrete_interface
+relaxed_calculator_mode=deterministic
+relaxed_calculator_hard_forward=true
+relaxed_calculator_temperature=2.0
+relaxed_calculator_final_temperature=0.5
+relaxed_calculator_temperature_decay_steps=300
+answer_loss_weight=1.0
+aux_operand_loss_weight=0.0
+adaptive_interface_loss_weight=0.0
+local_target_loss_weight=0.0
+expected_answer_loss_weight=0.0
+input_proj_anchor_weight=0.0
+answer_decoder_interaction=product
+```
+
+Best selected Stage 1 snapshot:
+
+| Metric | Value |
+| --- | ---: |
+| Step | `225` |
+| Fast normal answer exact | `0.1350` |
+| Fast learned calculator-result accuracy | `0.1350` |
+| Final eval exact | `0.126953` |
+| Canonical normal / result accuracy | `0.1175 / 0.1175` |
+| Full-enum learned-result best fraction | `0.1100` |
+| Mean learned-result minus best-result NLL gap | `5.5657` |
+| Full-enum best-result group true sum | `1.0000` |
+| Oracle-at-eval / injection-zero / forced-random | `1.0000 / 0.0550 / 0.0225` |
+| Private result accuracy | `0.1100` |
+| Semantic decoder delta | `0.0` |
+
+Final objective weights were clean for the bridge claim:
+
+```text
+answer_loss_weight=1.0
+final_aux_operand_loss_weight=0.0
+final_adaptive_interface_loss_weight=0.0
+final_local_target_loss_weight=0.0
+final_expected_answer_loss_weight=0.0
+final_relaxed_calculator_entropy_weight=0.0
+final_input_proj_anchor_weight=0.0
+```
+
+Decision:
+
+- Stage 2/3 retention was not run because the seed `2` bridge checkpoint did
+  not near-pass the result-level gate.
+- Seeds `4` and `5` were not replicated because the task called for replication
+  only if seed `2` passed result-level gates.
+
+Interpretation label:
+
+```text
+natural_deterministic_concrete_result_negative
+```
+
+Recommendation:
+
+The product interaction removes the decoder/readout blocker for natural
+sum-only `0..19`, but deterministic Concrete answer-loss training did not
+discover a correct calculator-result protocol in the natural underidentified
+task. Next work should compare whether the identifiable success relied on the
+sharper `sum_left_operand` action landscape or whether natural sum-only needs a
+different optimizer/objective for result-level discovery.

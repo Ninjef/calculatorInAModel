@@ -25,6 +25,7 @@ def _small_calculator_cfg(
     injection_mode: str = "add",
     bottleneck_mode: str = "none",
     output_format: str = "sum",
+    answer_decoder_interaction: str = "none",
 ) -> GPTConfig:
     return GPTConfig(
         n_embd=32,
@@ -37,6 +38,7 @@ def _small_calculator_cfg(
         calculator_injection_mode=injection_mode,
         calculator_bottleneck_mode=bottleneck_mode,
         calculator_output_format=output_format,
+        answer_decoder_interaction=answer_decoder_interaction,
         calculator_hook_after_layer=1,
         calculator_operand_vocab_size=10,
         calculator_result_vocab_size=19,
@@ -301,6 +303,13 @@ def test_invalid_calculator_output_format_raises() -> None:
         TinyGPT(cfg)
 
 
+def test_invalid_answer_decoder_interaction_raises() -> None:
+    cfg = _small_calculator_cfg(answer_decoder_interaction="middle")
+
+    with pytest.raises(ValueError, match="answer_decoder_interaction"):
+        TinyGPT(cfg)
+
+
 def test_default_calculator_output_format_preserves_projection_width() -> None:
     hook = CalculatorHook(_small_calculator_cfg())
 
@@ -434,6 +443,57 @@ def test_sum_only_answer_decoder_same_sum_oracle_prompts_are_indistinguishable()
     assert torch.equal(logits[0, 3], logits[1, 3])
 
 
+def test_default_sum_only_answer_decoder_interaction_is_additive() -> None:
+    torch.manual_seed(0)
+    model = TinyGPT(
+        _small_calculator_cfg(
+            bottleneck_mode="answer_decoder",
+            output_format="sum",
+        )
+    )
+    assert model.answer_offset_emb is not None
+    assert model.answer_decoder is not None
+    with torch.no_grad():
+        model.answer_offset_emb.weight.zero_()
+        model.answer_offset_emb.weight[0, 0] = 2.0
+        model.answer_decoder.weight.zero_()
+        model.answer_decoder.weight[0, 0] = 1.0
+    base_logits = torch.zeros((1, 4, VOCAB_SIZE))
+    calculator_signal = torch.zeros((1, 4, model.cfg.n_embd))
+    calculator_signal[0, 3, 0] = 3.0
+    tokens = torch.tensor([[0, PLUS_ID, 1, EQ_ID]])
+
+    logits = model._answer_bottleneck_logits(base_logits, calculator_signal, tokens)
+
+    assert logits[0, 3, 0].item() == pytest.approx(5.0)
+
+
+def test_sum_only_product_interaction_changes_answer_decoder_hidden_state() -> None:
+    torch.manual_seed(0)
+    model = TinyGPT(
+        _small_calculator_cfg(
+            bottleneck_mode="answer_decoder",
+            output_format="sum",
+            answer_decoder_interaction="product",
+        )
+    )
+    assert model.answer_offset_emb is not None
+    assert model.answer_decoder is not None
+    with torch.no_grad():
+        model.answer_offset_emb.weight.zero_()
+        model.answer_offset_emb.weight[0, 0] = 2.0
+        model.answer_decoder.weight.zero_()
+        model.answer_decoder.weight[0, 0] = 1.0
+    base_logits = torch.zeros((1, 4, VOCAB_SIZE))
+    calculator_signal = torch.zeros((1, 4, model.cfg.n_embd))
+    calculator_signal[0, 3, 0] = 3.0
+    tokens = torch.tensor([[0, PLUS_ID, 1, EQ_ID]])
+
+    logits = model._answer_bottleneck_logits(base_logits, calculator_signal, tokens)
+
+    assert logits[0, 3, 0].item() == pytest.approx(11.0)
+
+
 def test_sum_left_operand_answer_decoder_distinguishes_same_sum_oracle_prompts() -> None:
     torch.manual_seed(0)
     model = TinyGPT(
@@ -469,6 +529,36 @@ def test_sum_left_operand_answer_decoder_distinguishes_same_sum_oracle_prompts()
         logits = model(x, oracle_operands=oracle)
 
     assert logits[1, 3, 0].item() > logits[0, 3, 0].item() + 0.5
+
+
+def test_checkpoint_without_answer_decoder_interaction_loads_with_old_default(
+    tmp_path: Path,
+) -> None:
+    script_path = Path("scripts/diagnose_calculator_protocol.py")
+    spec = importlib.util.spec_from_file_location("diagnose_load_checkpoint", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    diagnose_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(diagnose_script)
+
+    cfg = _small_calculator_cfg(
+        bottleneck_mode="answer_decoder",
+        output_format="sum",
+    )
+    source = TinyGPT(cfg)
+    model_config = vars(cfg).copy()
+    model_config.pop("answer_decoder_interaction")
+    checkpoint_path = tmp_path / "old_checkpoint.pt"
+    torch.save(
+        {"config": {"model": model_config}, "model_state_dict": source.state_dict()},
+        checkpoint_path,
+    )
+
+    loaded, _ = diagnose_script.load_checkpoint(
+        checkpoint_path, device="cpu", injection_scale=None
+    )
+
+    assert loaded.cfg.answer_decoder_interaction == "none"
 
 
 def test_hard_add_ste_forward_returns_sum_class() -> None:
