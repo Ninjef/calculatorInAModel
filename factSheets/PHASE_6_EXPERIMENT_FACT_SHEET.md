@@ -1351,3 +1351,153 @@ discover a correct calculator-result protocol in the natural underidentified
 task. Next work should compare whether the identifiable success relied on the
 sharper `sum_left_operand` action landscape or whether natural sum-only needs a
 different optimizer/objective for result-level discovery.
+
+## 2026-05-12 Phase 6 Closure Landscape Diagnostic
+
+Task:
+
+```text
+aiAgentProjectTasks/2026-05-12-phase-6-eleventh-task-Phase-6-closure-landscape-diagnostic-and-next-phase-decision.md
+```
+
+Runner and run root:
+
+```text
+scripts/run_phase6_closure_landscape_diagnostic.py
+runs/2026-05-12_phase6_closure_landscape_diagnostic
+```
+
+No completed training branch was rerun. The closure runner compacted existing
+Phase 6 evidence, reran cheap all-400 landscape probes, and ran paired one-step
+deterministic hard-forward / soft-backward Concrete gradient checks from strict
+`semantic_decoder_only` initializations.
+
+### Existing Evidence Preserved
+
+Identifiable deterministic Concrete:
+
+- Stage 1 selected effective seeds `2`, `4`, and `5` reached fast protocol
+  gates of `1.000`, `0.961`, and `0.977` respectively.
+- Relaxation-off Stage 2 retention completed all three to final fast
+  normal/operand/pair/calculator metrics `1.000 / 1.000 / 1.000 / 1.000`.
+- Final retained objective weights were clean:
+  `answer_loss_weight=1.0`, aux/adaptive/local/expected/relaxed-entropy/anchor
+  weights all `0.0`.
+- Semantic decoder delta stayed `0.0`.
+- Upstream-open stress selected at `0.961` fast protocol metrics and retained
+  to exact protocol metrics with upstream frozen and open.
+
+Natural product-decoder bridge:
+
+- Product decoder gate passed: oracle-at-eval `1.000`, full-enum best-result
+  group true sum `1.000`, injection-zero `0.0425`, forced-random `0.0175`,
+  semantic decoder delta `0.0`.
+- Natural deterministic Concrete selected step `225` reached only `0.135`
+  fast result accuracy; canonical result accuracy was `0.1175`.
+- Full-enum learned-result best fraction was `0.1100`; learned-result minus
+  best-result gap was `5.5657`.
+- Final objective weights were clean: no aux operand CE, no hard-best local CE,
+  no expected-loss objective, no anchor, and no oracle operands during bridge
+  training.
+
+### Paired All-400 Full-Enum Landscape
+
+The closure diagnostic used the Phase 6 local-target temperature `0.25`.
+
+| Setting | Best pair=true | Tie-aware true best | Best result=true | Mean true pair rank | Effective pairs | Effective results | Same-true-sum near-best pairs | True pair soft prob | True result soft prob | Top1/top3/top5 mass |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Identifiable `sum_left_operand` | `1.0000` | `1.0000` | `1.0000` | `1.0000` | `1.0839` | `1.0462` | `1.0000` | `0.9879` | `0.9931` | `0.9879 / 0.9962 / 0.9984` |
+| Natural sum-only product | `0.0975` | `1.0000` | `1.0000` | `1.0000` | `13.3573` | `1.0011` | `13.3500` | `0.0975` | `0.9999` | `0.0975 / 0.2775 / 0.4375` |
+
+Interpretation:
+
+- The identifiable setting is genuinely pair-identifiable: nearly all soft
+  target mass is on the true pair.
+- The natural setting is result-identifiable but pair-underidentified: the true
+  result group gets essentially all mass, but it is spread across a same-sum
+  diagonal with about `13.35` near-best pairs. Independent operand heads then
+  have no unique pair target to discover.
+
+### Paired One-Step Relaxed-Gradient Diagnostic
+
+Three strict random-upstream seeds were run for each setting
+(`6201`, `6202`, `6203`) with:
+
+```text
+calculator_estimator=gumbel_concrete_interface
+relaxed_calculator_mode=deterministic
+relaxed_calculator_hard_forward=true
+relaxed_calculator_temperature=2.0
+freeze_semantic_decoder=true
+freeze_upstream_encoder=true
+answer_loss_weight=1.0
+aux_operand_loss_weight=0.0
+adaptive_interface_loss_weight=0.0
+local_target_loss_weight=0.0
+expected_answer_loss_weight=0.0
+input_proj_anchor_weight=0.0
+```
+
+Mean one-step deltas:
+
+| Setting | True pair prob delta | True result prob delta | Best result prob delta | Hard pair exact delta | Hard calc/result delta | Grad cosine vs pair CE | Grad cosine vs result group | Input/upstream/semantic delta |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Identifiable `sum_left_operand` | `+8.54e-06` | `+2.88e-05` | `+2.88e-05` | `+0.0033` | `+0.0033` | `0.0513` | `0.0567` | `1.0893 / 0.0 / 0.0` |
+| Natural sum-only product | `+1.31e-05` | `+7.72e-06` | `+7.72e-06` | `+0.0075` | `+0.0142` | `0.1317` | `0.2188` | `1.0892 / 0.0 / 0.0` |
+
+The one-step natural result-group signal is positive but tiny from the strict
+random-upstream initialization. Combined with the many-pair result landscape
+and the existing failed 300-step natural bridge, this points to an
+underidentification/action-parameterization boundary rather than a decoder
+health failure or a broken relaxation implementation.
+
+### Phase 6 Closure Decision
+
+Supported:
+
+- Answer-derived local targets can teach strict calculator protocols in the
+  identifiable task.
+- Deterministic hard-forward / soft-backward Concrete answer-loss training can
+  discover and retain the identifiable hard protocol without direct operand
+  labels, hard-best CE, oracle operands during bridge training, or semantic
+  decoder movement.
+- The deterministic Concrete positive replicates across effective seeds `2`,
+  `4`, and `5`, and tolerates modest upstream movement.
+
+Not supported:
+
+- Natural sum-only result-level discovery with the current independent operand
+  heads and deterministic Concrete schedule.
+- Literal stochastic Gumbel training under tested settings.
+- Direct expected answer-loss optimization over independent heads.
+- Scaling to larger natural arithmetic before resolving the natural
+  underidentification/action-parameterization boundary.
+
+Branches that are now controls rather than live directions:
+
+- Oracle-only decoder/readout gates after they pass.
+- Constant-weight hard-best local-target teaching in `sum_left_operand`.
+- Simple linear local-target decay/handoff schedules.
+- Independent-head exact expected answer-loss sweeps.
+- Natural deterministic Concrete repeats with only small schedule tweaks before
+  changing the objective or action parameterization.
+
+Final Phase 6 conclusion:
+
+```text
+Phase 6 established a real answer-derived interface-discovery positive in the
+identifiable `sum_left_operand` setting, culminating in deterministic Concrete
+answer-loss discovery and relaxation-off retention. The natural sum-only
+failure after the product decoder gate is best explained by result-level
+underidentification and independent-head action parameterization, not by oracle
+decoder health or broken relaxation wiring.
+```
+
+Recommended Phase 7 first task:
+
+```text
+Start Phase 7 with a natural `0..19` result-space interface parameterization
+or structured joint-pair objective that can place mass on a result group or
+canonical query representation, then map to valid calculator calls. Do not
+start with `operand_max=99` scaling.
+```

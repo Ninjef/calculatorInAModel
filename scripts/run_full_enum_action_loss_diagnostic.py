@@ -232,6 +232,15 @@ def full_enum_diagnostic(
         ).sum(dim=-1)
         entropy = -(weights * weights.clamp_min(1e-12).log()).sum(dim=-1)
         true_pair_probs = weights.gather(1, true_idx.unsqueeze(-1)).squeeze(-1)
+        true_result_group_probs = (
+            weights * (pair_sums.unsqueeze(0) == true_sums.unsqueeze(-1)).to(weights.dtype)
+        ).sum(dim=-1)
+        best_result_group_probs = (
+            weights
+            * (pair_sums.unsqueeze(0) == best_result_idx.unsqueeze(-1)).to(
+                weights.dtype
+            )
+        ).sum(dim=-1)
         true_pair_ranks = (losses < true_losses.unsqueeze(-1)).sum(dim=-1) + 1
         best_tie_tolerance = 1e-6
         true_within_best_tie = true_losses <= best_losses + best_tie_tolerance
@@ -336,6 +345,12 @@ def full_enum_diagnostic(
                     "soft_target_true_pair_probability": float(
                         true_pair_probs[i].item()
                     ),
+                    "soft_target_true_result_group_probability": float(
+                        true_result_group_probs[i].item()
+                    ),
+                    "soft_target_best_result_group_probability": float(
+                        best_result_group_probs[i].item()
+                    ),
                     "true_pair_rank": int(true_pair_ranks[i].item()),
                     "top1_target_mass": float(top1_mass[i].item()),
                     "top3_target_mass": float(top3_mass[i].item()),
@@ -435,6 +450,12 @@ def full_enum_diagnostic(
         ),
         "mean_soft_target_true_pair_probability": mean(
             float(row["soft_target_true_pair_probability"]) for row in rows
+        ),
+        "mean_soft_target_true_result_group_probability": mean(
+            float(row["soft_target_true_result_group_probability"]) for row in rows
+        ),
+        "mean_soft_target_best_result_group_probability": mean(
+            float(row["soft_target_best_result_group_probability"]) for row in rows
         ),
         "mean_true_pair_rank": mean(float(row["true_pair_rank"]) for row in rows),
         "mean_top1_target_mass": mean(float(row["top1_target_mass"]) for row in rows),

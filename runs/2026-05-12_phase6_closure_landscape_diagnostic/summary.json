@@ -1,0 +1,2496 @@
+{
+  "decision": {
+    "key_evidence": {
+      "identifiable_effective_pairs": 1.083938175737858,
+      "identifiable_true_pair_probability_delta": 8.540538450082288e-06,
+      "natural_best_result_group_probability_delta": 7.721285025276414e-06,
+      "natural_effective_pairs": 13.35731301188469,
+      "natural_true_result_group_probability_delta": 7.721285025276414e-06
+    },
+    "label": "phase6_close_start_phase7",
+    "recommended_phase7_first_task": "Start Phase 7 with a result-space or structured joint-pair interface objective for natural 0..19 addition, not operand_max=99 scaling.",
+    "supported": [
+      "Phase 6 success is strongest in identifiable action landscapes.",
+      "The natural product-decoder bridge is not blocked by oracle/readout health, but by a diffuse underidentified result-level landscape for independent operand heads.",
+      "One-step deterministic Concrete gradients move natural result-group mass only weakly from the strict random-upstream initialization, while the landscape itself remains many-pair underidentified."
+    ]
+  },
+  "device": "cpu",
+  "full_enum": {
+    "identifiable_sum_left_operand_stage0b": {
+      "action_pair_count": 400,
+      "answer_decoder_interaction": "none",
+      "answer_format": "sum_left_operand",
+      "best_left_operand_matches_true_fraction": 1,
+      "best_matches_true_operands_fraction": 1,
+      "best_result_group_matches_true_sum_fraction": 1,
+      "best_result_matches_true_sum_fraction": 1,
+      "calculator_action_head": "independent_operands",
+      "calculator_output_format": "sum_left_operand",
+      "checkpoint": "/Users/jarnold/Documents/Codex/2026-05-06/please-work-in-this-repo-users-9/runs/2026-05-06_164330_870116_model-c-oracle-op0-19-answer_decoder-sum_left_operand/model-c-2digit-seed2/final_weights.pt",
+      "chunk_size": 64,
+      "device": "cpu",
+      "digits": 2,
+      "exhaustive_grid": true,
+      "label": "identifiable_sum_left_operand_stage0b",
+      "learned_best_fraction": 0.0125,
+      "learned_result_best_fraction": 0.0325,
+      "learned_result_matches_true_sum_fraction": 0.0325,
+      "learned_within_1e-2_best_fraction": 0.0125,
+      "learned_within_1e-3_best_fraction": 0.0125,
+      "mean_best_full_enum_nll": 0.0002381721631601863,
+      "mean_effective_pair_count": 1.083938175737858,
+      "mean_effective_result_count": 1.04621085613966,
+      "mean_learned_minus_best_gap": 9.405669031739235,
+      "mean_learned_minus_true_gap": 9.405669031739235,
+      "mean_learned_nll": 9.405907178241444,
+      "mean_learned_result_minus_best_result_gap": 7.370963433980942,
+      "mean_pair_entropy": 0.07656774544612745,
+      "mean_pair_logit_effective_pair_count": NaN,
+      "mean_pair_logit_entropy": NaN,
+      "mean_result_entropy": 0.04359748221200789,
+      "mean_same_best_sum_near_best_pair_count": 1.0,
+      "mean_same_true_sum_near_best_pair_count": 1.0,
+      "mean_soft_target_best_result_group_probability": 0.9930868248641491,
+      "mean_soft_target_true_a_mass": 0.9946896494925022,
+      "mean_soft_target_true_b_mass": 0.9878945098817349,
+      "mean_soft_target_true_pair_probability": 0.9878844705224037,
+      "mean_soft_target_true_result_group_probability": 0.9930868248641491,
+      "mean_top1_target_mass": 0.9878844705224037,
+      "mean_top3_target_mass": 0.9961659272015094,
+      "mean_top5_target_mass": 0.9983563949167729,
+      "mean_true_nll": 0.0002381721631601863,
+      "mean_true_pair_rank": 1.0,
+      "mean_true_result_minus_best_result_gap": 0.0,
+      "min_probability_floor": 0.0,
+      "near_best_tolerance": 0.001,
+      "operand_max": 19,
+      "output_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_closure_landscape_diagnostic/full_enum/identifiable_sum_left_operand_stage0b",
+      "requested_calculator_output_format": "sum_left_operand",
+      "samples": 400,
+      "temperature": 0.25,
+      "tie_aware_true_best_fraction": 1,
+      "train_config": {
+        "action_loss_candidate_ema_beta": 0.0,
+        "action_loss_candidate_local_radius": 1,
+        "action_loss_candidate_random": 8,
+        "action_loss_candidate_refresh_every": 1,
+        "action_loss_candidate_temperature": 1.0,
+        "action_loss_candidate_topk": 2,
+        "action_loss_full_enum_chunk_size": 64,
+        "action_loss_full_enum_min_probability_floor": 0.0,
+        "action_loss_full_enum_temperature": 1.0,
+        "adaptive_interface_entropy_weight": 0.0,
+        "adaptive_interface_loss_decay_steps": 0,
+        "adaptive_interface_loss_floor": 0.0,
+        "adaptive_interface_loss_weight": 1.0,
+        "adaptive_interface_target_mode": "hard_pair",
+        "answer_format": "sum_left_operand",
+        "answer_loss_weight": 1.0,
+        "aux_operand_loss_decay_steps": 0,
+        "aux_operand_loss_floor": 0.0,
+        "aux_operand_loss_grad_upstream": false,
+        "aux_operand_loss_weight": 0.0,
+        "batch_size": 64,
+        "calculator_action_head": "independent_operands",
+        "calculator_bottleneck_mode": "answer_decoder",
+        "calculator_estimator": "ste",
+        "calculator_hook_after_layer": 1,
+        "calculator_injection_mode": "add",
+        "calculator_operand_vocab_size": 20,
+        "calculator_output_format": "sum_left_operand",
+        "calculator_read_position": "operands",
+        "checkpoint_every": 0,
+        "eval_samples": 512,
+        "fixed_width": true,
+        "freeze_semantic_decoder": true,
+        "freeze_upstream_encoder": false,
+        "grad_clip": 1.0,
+        "input_proj_anchor_checkpoint": null,
+        "input_proj_anchor_decay_steps": 0,
+        "input_proj_anchor_weight": 0.0,
+        "input_proj_lr": 0.003,
+        "lr": 0.003,
+        "mlp_expansion": 1,
+        "model": {
+          "block_size": 11,
+          "calculator_action_head": "independent_operands",
+          "calculator_bottleneck_mode": "answer_decoder",
+          "calculator_enabled": true,
+          "calculator_estimator": "ste",
+          "calculator_hook_after_layer": 1,
+          "calculator_injection_mode": "add",
+          "calculator_injection_scale": 1.0,
+          "calculator_mode": "add",
+          "calculator_operand_vocab_size": 20,
+          "calculator_output_format": "sum_left_operand",
+          "calculator_read_position": "operands",
+          "calculator_result_vocab_size": 39,
+          "dropout": 0.0,
+          "mlp_expansion": 1,
+          "n_embd": 16,
+          "n_head": 1,
+          "n_layer": 2,
+          "vocab_size": 14
+        },
+        "n_embd": 16,
+        "n_head": 1,
+        "n_layer": 2,
+        "num_digits": 2,
+        "operand_max": 19,
+        "oracle_train": true,
+        "oracle_warmup_steps": 0,
+        "reinforce_baseline_beta": 0.95,
+        "reinforce_entropy_decay_steps": 0,
+        "reinforce_entropy_weight": 0.01,
+        "run_name": "model-c-2digit-seed2",
+        "seed": 2,
+        "semantic_decoder_checkpoint": null,
+        "snapshot_every": 0,
+        "snapshot_samples": 64,
+        "steps": 1000,
+        "trainable_parameter_groups": [
+          {
+            "name": "calculator_hook.input_proj",
+            "parameter_count": 680,
+            "parameters": [
+              "calculator_hook.input_proj.weight",
+              "calculator_hook.input_proj.bias"
+            ]
+          },
+          {
+            "name": "upstream",
+            "parameter_count": 5392,
+            "parameters": [
+              "tok_emb.weight",
+              "pos_emb.weight",
+              "blocks.0.ln1.weight",
+              "blocks.0.ln1.bias",
+              "blocks.0.attn.qkv.weight",
+              "blocks.0.attn.qkv.bias",
+              "blocks.0.attn.proj.weight",
+              "blocks.0.attn.proj.bias",
+              "blocks.0.ln2.weight",
+              "blocks.0.ln2.bias",
+              "blocks.0.mlp.fc.weight",
+              "blocks.0.mlp.fc.bias",
+              "blocks.0.mlp.proj.weight",
+              "blocks.0.mlp.proj.bias",
+              "blocks.1.ln1.weight",
+              "blocks.1.ln1.bias",
+              "blocks.1.attn.qkv.weight",
+              "blocks.1.attn.qkv.bias",
+              "blocks.1.attn.proj.weight",
+              "blocks.1.attn.proj.bias",
+              "blocks.1.ln2.weight",
+              "blocks.1.ln2.bias",
+              "blocks.1.mlp.fc.weight",
+              "blocks.1.mlp.fc.bias",
+              "blocks.1.mlp.proj.weight",
+              "blocks.1.mlp.proj.bias",
+              "ln_f.weight",
+              "ln_f.bias",
+              "lm_head.weight",
+              "answer_offset_emb.weight",
+              "answer_decoder.weight",
+              "calculator_hook.output_proj.weight"
+            ]
+          }
+        ],
+        "upstream_lr": 0.003,
+        "variant": "model-c",
+        "weight_decay": 0.0
+      },
+      "true_best_fraction": 1,
+      "true_result_best_fraction": 1
+    },
+    "natural_sum_only_product_stage0": {
+      "action_pair_count": 400,
+      "answer_decoder_interaction": "product",
+      "answer_format": "sum",
+      "best_left_operand_matches_true_fraction": 0.0975,
+      "best_matches_true_operands_fraction": 0.0975,
+      "best_result_group_matches_true_sum_fraction": 1,
+      "best_result_matches_true_sum_fraction": 1,
+      "calculator_action_head": "independent_operands",
+      "calculator_output_format": "sum",
+      "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage0_candidates/tiny_operand_spans_dense/oracle_train/2026-05-12_113346_842566_model-c-oracle-op0-19-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00500_weights.pt",
+      "chunk_size": 64,
+      "device": "cpu",
+      "digits": 2,
+      "exhaustive_grid": true,
+      "label": "natural_sum_only_product_stage0",
+      "learned_best_fraction": 0,
+      "learned_result_best_fraction": 0.03,
+      "learned_result_matches_true_sum_fraction": 0.03,
+      "learned_within_1e-2_best_fraction": 0.03,
+      "learned_within_1e-3_best_fraction": 0.03,
+      "mean_best_full_enum_nll": 0.0003986459580892188,
+      "mean_effective_pair_count": 13.35731301188469,
+      "mean_effective_result_count": 1.0010538783669471,
+      "mean_learned_minus_best_gap": 7.577589977383614,
+      "mean_learned_minus_true_gap": 7.577589977383614,
+      "mean_learned_nll": 7.5779886116108175,
+      "mean_learned_result_minus_best_result_gap": 7.577589977383614,
+      "mean_pair_entropy": 2.4988520394169518,
+      "mean_pair_logit_effective_pair_count": NaN,
+      "mean_pair_logit_entropy": NaN,
+      "mean_result_entropy": 0.0010516206413193174,
+      "mean_same_best_sum_near_best_pair_count": 13.35,
+      "mean_same_true_sum_near_best_pair_count": 13.35,
+      "mean_soft_target_best_result_group_probability": 0.999939983189106,
+      "mean_soft_target_true_a_mass": 0.0974976209923625,
+      "mean_soft_target_true_b_mass": 0.0974976209923625,
+      "mean_soft_target_true_pair_probability": 0.09749361698515713,
+      "mean_soft_target_true_result_group_probability": 0.999939983189106,
+      "mean_top1_target_mass": 0.09749361698515713,
+      "mean_top3_target_mass": 0.2774809518456459,
+      "mean_top5_target_mass": 0.43746881909668445,
+      "mean_true_nll": 0.0003986459580892188,
+      "mean_true_pair_rank": 1.0,
+      "mean_true_result_minus_best_result_gap": 0.0,
+      "min_probability_floor": 0.0,
+      "near_best_tolerance": 0.001,
+      "operand_max": 19,
+      "output_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_closure_landscape_diagnostic/full_enum/natural_sum_only_product_stage0",
+      "requested_calculator_output_format": "sum",
+      "samples": 400,
+      "temperature": 0.25,
+      "tie_aware_true_best_fraction": 1,
+      "train_config": {
+        "action_loss_candidate_ema_beta": 0.0,
+        "action_loss_candidate_local_radius": 1,
+        "action_loss_candidate_random": 8,
+        "action_loss_candidate_refresh_every": 1,
+        "action_loss_candidate_temperature": 1.0,
+        "action_loss_candidate_topk": 2,
+        "action_loss_full_enum_chunk_size": 64,
+        "action_loss_full_enum_min_probability_floor": 0.0,
+        "action_loss_full_enum_target_mode": "soft_pair",
+        "action_loss_full_enum_temperature": 1.0,
+        "adaptive_interface_entropy_weight": 0.0,
+        "adaptive_interface_loss_decay_steps": 0,
+        "adaptive_interface_loss_floor": 0.0,
+        "adaptive_interface_loss_weight": 0.0,
+        "adaptive_interface_target_mode": "hard_pair",
+        "answer_decoder_interaction": "product",
+        "answer_format": "sum",
+        "answer_loss_weight": 1.0,
+        "aux_operand_loss_decay_steps": 0,
+        "aux_operand_loss_floor": 0.0,
+        "aux_operand_loss_grad_upstream": false,
+        "aux_operand_loss_weight": 0.0,
+        "batch_size": 400,
+        "calculator_action_head": "independent_operands",
+        "calculator_bottleneck_mode": "answer_decoder",
+        "calculator_estimator": "ste",
+        "calculator_hook_after_layer": 1,
+        "calculator_injection_mode": "add",
+        "calculator_operand_vocab_size": 20,
+        "calculator_output_format": "sum",
+        "calculator_read_position": "operand_spans",
+        "calculator_read_span_width": 2,
+        "checkpoint_every": 250,
+        "eval_samples": 512,
+        "expected_answer_loss_chunk_size": 64,
+        "expected_answer_loss_cost_normalization": "none",
+        "expected_answer_loss_entropy_decay_steps": 0,
+        "expected_answer_loss_entropy_weight": 0.0,
+        "expected_answer_loss_policy_temperature": 1.0,
+        "expected_answer_loss_weight": 0.0,
+        "fixed_width": true,
+        "freeze_semantic_decoder": true,
+        "freeze_upstream_encoder": false,
+        "grad_clip": 1.0,
+        "input_proj_anchor_checkpoint": null,
+        "input_proj_anchor_decay_steps": 0,
+        "input_proj_anchor_weight": 0.0,
+        "input_proj_lr": 0.003,
+        "lr": 0.003,
+        "mlp_expansion": 1,
+        "model": {
+          "answer_decoder_interaction": "product",
+          "block_size": 9,
+          "calculator_action_head": "independent_operands",
+          "calculator_bottleneck_mode": "answer_decoder",
+          "calculator_enabled": true,
+          "calculator_estimator": "ste",
+          "calculator_hook_after_layer": 1,
+          "calculator_injection_mode": "add",
+          "calculator_injection_scale": 1.0,
+          "calculator_mode": "add",
+          "calculator_operand_vocab_size": 20,
+          "calculator_output_format": "sum",
+          "calculator_read_position": "operand_spans",
+          "calculator_read_span_width": 2,
+          "calculator_result_vocab_size": 39,
+          "dropout": 0.0,
+          "mlp_expansion": 1,
+          "n_embd": 16,
+          "n_head": 1,
+          "n_layer": 2,
+          "relaxed_calculator_hard_forward": true,
+          "relaxed_calculator_mode": "deterministic",
+          "relaxed_calculator_temperature": 1.0,
+          "vocab_size": 14
+        },
+        "n_embd": 16,
+        "n_head": 1,
+        "n_layer": 2,
+        "num_digits": 2,
+        "operand_max": 19,
+        "oracle_train": true,
+        "oracle_warmup_steps": 0,
+        "reinforce_baseline_beta": 0.95,
+        "reinforce_entropy_decay_steps": 0,
+        "reinforce_entropy_weight": 0.01,
+        "relaxed_calculator_entropy_decay_steps": 0,
+        "relaxed_calculator_entropy_weight": 0.0,
+        "relaxed_calculator_final_temperature": 1.0,
+        "relaxed_calculator_hard_forward": true,
+        "relaxed_calculator_mode": "deterministic",
+        "relaxed_calculator_temperature": 1.0,
+        "relaxed_calculator_temperature_decay_steps": 0,
+        "run_name": "model-c-2digit-seed2",
+        "seed": 2,
+        "semantic_decoder_checkpoint": null,
+        "semantic_decoder_checkpoint_load_scope": "full_model",
+        "snapshot_every": 250,
+        "snapshot_samples": 128,
+        "steps": 1000,
+        "trainable_parameter_groups": [
+          {
+            "name": "calculator_hook.input_proj",
+            "parameter_count": 1320,
+            "parameters": [
+              "calculator_hook.input_proj.weight",
+              "calculator_hook.input_proj.bias"
+            ]
+          },
+          {
+            "name": "upstream",
+            "parameter_count": 5008,
+            "parameters": [
+              "tok_emb.weight",
+              "pos_emb.weight",
+              "blocks.0.ln1.weight",
+              "blocks.0.ln1.bias",
+              "blocks.0.attn.qkv.weight",
+              "blocks.0.attn.qkv.bias",
+              "blocks.0.attn.proj.weight",
+              "blocks.0.attn.proj.bias",
+              "blocks.0.ln2.weight",
+              "blocks.0.ln2.bias",
+              "blocks.0.mlp.fc.weight",
+              "blocks.0.mlp.fc.bias",
+              "blocks.0.mlp.proj.weight",
+              "blocks.0.mlp.proj.bias",
+              "blocks.1.ln1.weight",
+              "blocks.1.ln1.bias",
+              "blocks.1.attn.qkv.weight",
+              "blocks.1.attn.qkv.bias",
+              "blocks.1.attn.proj.weight",
+              "blocks.1.attn.proj.bias",
+              "blocks.1.ln2.weight",
+              "blocks.1.ln2.bias",
+              "blocks.1.mlp.fc.weight",
+              "blocks.1.mlp.fc.bias",
+              "blocks.1.mlp.proj.weight",
+              "blocks.1.mlp.proj.bias",
+              "ln_f.weight",
+              "ln_f.bias",
+              "lm_head.weight",
+              "answer_offset_emb.weight",
+              "answer_decoder.weight",
+              "calculator_hook.output_proj.weight"
+            ]
+          }
+        ],
+        "upstream_lr": 0.003,
+        "variant": "model-c",
+        "weight_decay": 0.0
+      },
+      "true_best_fraction": 0.0975,
+      "true_result_best_fraction": 1
+    }
+  },
+  "one_step": {
+    "identifiable_sum_left_operand": {
+      "mean_deltas": {
+        "best_pair_probability": 8.540538450082288e-06,
+        "best_result_group_probability": 2.8815120458602905e-05,
+        "hard_learned_calculator_result_accuracy": 0.0033333338797092438,
+        "hard_learned_pair_exact": 0.0033333332588275275,
+        "true_pair_probability": 8.540538450082288e-06,
+        "true_result_group_probability": 2.8815120458602905e-05
+      },
+      "mean_gradient_cosines": {
+        "best_result_group_grad_norm": 0.0039898736868053675,
+        "hard_best_pair_ce_grad_norm": 0.015224381039539972,
+        "relaxed_answer_grad_norm": 0.16353794932365417,
+        "relaxed_answer_vs_best_result_group_nll": 0.05671037485202154,
+        "relaxed_answer_vs_hard_best_pair_ce": 0.05125093460083008
+      },
+      "mean_initial": {
+        "best_pair_probability": 0.0024997262905041375,
+        "best_result_group_probability": 0.033375112960735955,
+        "hard_learned_calculator_result_accuracy": 0.025833333532015484,
+        "hard_learned_pair_exact": 0.0008333333147068819,
+        "true_pair_probability": 0.0024997262905041375,
+        "true_result_group_probability": 0.033375112960735955
+      },
+      "mean_parameter_delta": {
+        "calculator_hook.input_proj": {
+          "l2": 1.0892934192853785,
+          "max_abs": 0.029999998087684315
+        },
+        "semantic_decoder": {
+          "l2": 0.0,
+          "max_abs": 0.0
+        },
+        "upstream_encoder": {
+          "l2": 0.0,
+          "max_abs": 0.0
+        }
+      },
+      "mean_post_one_step": {
+        "best_pair_probability": 0.00250826682895422,
+        "best_result_group_probability": 0.03340392808119456,
+        "hard_learned_calculator_result_accuracy": 0.029166667411724728,
+        "hard_learned_pair_exact": 0.0041666665735344095,
+        "true_pair_probability": 0.00250826682895422,
+        "true_result_group_probability": 0.03340392808119456
+      },
+      "runs": [
+        {
+          "answer_decoder_interaction": "product",
+          "answer_format": "sum_left_operand",
+          "calculator_output_format": "sum_left_operand",
+          "checkpoint": "/Users/jarnold/Documents/Codex/2026-05-06/please-work-in-this-repo-users-9/runs/2026-05-06_164330_870116_model-c-oracle-op0-19-answer_decoder-sum_left_operand/model-c-2digit-seed2/final_weights.pt",
+          "deltas": {
+            "best_pair_equals_true_pair_fraction": 0.0,
+            "best_pair_probability": 7.165363058447838e-06,
+            "best_result_group_equals_true_sum_fraction": 0.0,
+            "best_result_group_probability": 1.2610107660293579e-05,
+            "hard_learned_best_pair_fraction": 0.0024999999441206455,
+            "hard_learned_best_result_group_fraction": 0.01250000111758709,
+            "hard_learned_calculator_result_accuracy": 0.01250000111758709,
+            "hard_learned_pair_exact": 0.0024999999441206455,
+            "mean_pair_policy_effective_count": -0.228302001953125,
+            "mean_pair_policy_entropy": -0.0005717277526855469,
+            "top1_policy_mass": 0.00011734431609511375,
+            "top3_policy_mass": 0.00035273004323244095,
+            "top5_policy_mass": 0.0005883015692234039,
+            "true_pair_probability": 7.165363058447838e-06,
+            "true_result_group_probability": 1.2610107660293579e-05
+          },
+          "gradient_cosines": {
+            "best_result_group_grad_norm": 0.003689244156703353,
+            "hard_best_pair_ce_grad_norm": 0.01456870324909687,
+            "relaxed_answer_grad_norm": 0.26424843072891235,
+            "relaxed_answer_vs_best_result_group_nll": 0.052109263837337494,
+            "relaxed_answer_vs_hard_best_pair_ce": 0.04306095093488693
+          },
+          "initial": {
+            "best_pair_equals_true_pair_fraction": 1.0,
+            "best_pair_probability": 0.002499114256352186,
+            "best_result_group_equals_true_sum_fraction": 1.0,
+            "best_result_group_probability": 0.03337458521127701,
+            "hard_learned_best_pair_fraction": 0.0,
+            "hard_learned_best_result_group_fraction": 0.009999999776482582,
+            "hard_learned_calculator_result_accuracy": 0.009999999776482582,
+            "hard_learned_pair_exact": 0.0,
+            "mean_pair_policy_effective_count": 399.99884033203125,
+            "mean_pair_policy_entropy": 5.991462230682373,
+            "top1_policy_mass": 0.002516962820664048,
+            "top3_policy_mass": 0.007547846995294094,
+            "top5_policy_mass": 0.01257603894919157,
+            "true_pair_probability": 0.002499114256352186,
+            "true_result_group_probability": 0.03337458521127701
+          },
+          "initial_answer_loss": 10.602216720581055,
+          "label": "identifiable_sum_left_operand",
+          "parameter_delta_after_one_step": {
+            "calculator_hook.input_proj": {
+              "changed_tensor_count": 2,
+              "l2": 1.0891928403922315,
+              "max_abs": 0.030000001192092896,
+              "tensor_count": 2
+            },
+            "semantic_decoder": {
+              "changed_tensor_count": 0,
+              "l2": 0.0,
+              "max_abs": 0.0,
+              "tensor_count": 3
+            },
+            "upstream_encoder": {
+              "changed_tensor_count": 0,
+              "l2": 0.0,
+              "max_abs": 0.0,
+              "tensor_count": 29
+            }
+          },
+          "post_one_step": {
+            "best_pair_equals_true_pair_fraction": 1.0,
+            "best_pair_probability": 0.002506279619410634,
+            "best_result_group_equals_true_sum_fraction": 1.0,
+            "best_result_group_probability": 0.0333871953189373,
+            "hard_learned_best_pair_fraction": 0.0024999999441206455,
+            "hard_learned_best_result_group_fraction": 0.02250000089406967,
+            "hard_learned_calculator_result_accuracy": 0.02250000089406967,
+            "hard_learned_pair_exact": 0.0024999999441206455,
+            "mean_pair_policy_effective_count": 399.7705383300781,
+            "mean_pair_policy_entropy": 5.9908905029296875,
+            "top1_policy_mass": 0.002634307136759162,
+            "top3_policy_mass": 0.007900577038526535,
+            "top5_policy_mass": 0.013164340518414974,
+            "true_pair_probability": 0.002506279619410634,
+            "true_result_group_probability": 0.0333871953189373
+          },
+          "samples": 400,
+          "seed": 6201,
+          "semantic_decoder_grad": {
+            "semantic_decoder_grad_l2": 0.0,
+            "semantic_decoder_grad_max_abs": 0.0,
+            "semantic_decoder_tensors_with_grad": 0
+          }
+        },
+        {
+          "answer_decoder_interaction": "product",
+          "answer_format": "sum_left_operand",
+          "calculator_output_format": "sum_left_operand",
+          "checkpoint": "/Users/jarnold/Documents/Codex/2026-05-06/please-work-in-this-repo-users-9/runs/2026-05-06_164330_870116_model-c-oracle-op0-19-answer_decoder-sum_left_operand/model-c-2digit-seed2/final_weights.pt",
+          "deltas": {
+            "best_pair_equals_true_pair_fraction": 0.0,
+            "best_pair_probability": 7.022637873888016e-06,
+            "best_result_group_equals_true_sum_fraction": 0.0,
+            "best_result_group_probability": 3.654882311820984e-05,
+            "hard_learned_best_pair_fraction": 0.007499999832361937,
+            "hard_learned_best_result_group_fraction": -0.010000001639127731,
+            "hard_learned_calculator_result_accuracy": -0.010000001639127731,
+            "hard_learned_pair_exact": 0.007499999832361937,
+            "mean_pair_policy_effective_count": -0.224945068359375,
+            "mean_pair_policy_entropy": -0.0005626678466796875,
+            "top1_policy_mass": 0.00010597379878163338,
+            "top3_policy_mass": 0.0003178166225552559,
+            "top5_policy_mass": 0.0005292836576700211,
+            "true_pair_probability": 7.022637873888016e-06,
+            "true_result_group_probability": 3.654882311820984e-05
+          },
+          "gradient_cosines": {
+            "best_result_group_grad_norm": 0.00436015147715807,
+            "hard_best_pair_ce_grad_norm": 0.015950756147503853,
+            "relaxed_answer_grad_norm": 0.1417744755744934,
+            "relaxed_answer_vs_best_result_group_nll": 0.046338409185409546,
+            "relaxed_answer_vs_hard_best_pair_ce": 0.03830501437187195
+          },
+          "initial": {
+            "best_pair_equals_true_pair_fraction": 1.0,
+            "best_pair_probability": 0.0025001573376357555,
+            "best_result_group_equals_true_sum_fraction": 1.0,
+            "best_result_group_probability": 0.0333748497068882,
+            "hard_learned_best_pair_fraction": 0.0024999999441206455,
+            "hard_learned_best_result_group_fraction": 0.03750000149011612,
+            "hard_learned_calculator_result_accuracy": 0.03750000149011612,
+            "hard_learned_pair_exact": 0.0024999999441206455,
+            "mean_pair_policy_effective_count": 399.9989318847656,
+            "mean_pair_policy_entropy": 5.991462230682373,
+            "top1_policy_mass": 0.0025161923840641975,
+            "top3_policy_mass": 0.007545356638729572,
+            "top5_policy_mass": 0.012572190724313259,
+            "true_pair_probability": 0.0025001573376357555,
+            "true_result_group_probability": 0.0333748497068882
+          },
+          "initial_answer_loss": 6.890417098999023,
+          "label": "identifiable_sum_left_operand",
+          "parameter_delta_after_one_step": {
+            "calculator_hook.input_proj": {
+              "changed_tensor_count": 2,
+              "l2": 1.0894348580684714,
+              "max_abs": 0.029999997466802597,
+              "tensor_count": 2
+            },
+            "semantic_decoder": {
+              "changed_tensor_count": 0,
+              "l2": 0.0,
+              "max_abs": 0.0,
+              "tensor_count": 3
+            },
+            "upstream_encoder": {
+              "changed_tensor_count": 0,
+              "l2": 0.0,
+              "max_abs": 0.0,
+              "tensor_count": 29
+            }
+          },
+          "post_one_step": {
+            "best_pair_equals_true_pair_fraction": 1.0,
+            "best_pair_probability": 0.0025071799755096436,
+            "best_result_group_equals_true_sum_fraction": 1.0,
+            "best_result_group_probability": 0.03341139853000641,
+            "hard_learned_best_pair_fraction": 0.009999999776482582,
+            "hard_learned_best_result_group_fraction": 0.027499999850988388,
+            "hard_learned_calculator_result_accuracy": 0.027499999850988388,
+            "hard_learned_pair_exact": 0.009999999776482582,
+            "mean_pair_policy_effective_count": 399.77398681640625,
+            "mean_pair_policy_entropy": 5.990899562835693,
+            "top1_policy_mass": 0.002622166182845831,
+            "top3_policy_mass": 0.007863173261284828,
+            "top5_policy_mass": 0.01310147438198328,
+            "true_pair_probability": 0.0025071799755096436,
+            "true_result_group_probability": 0.03341139853000641
+          },
+          "samples": 400,
+          "seed": 6202,
+          "semantic_decoder_grad": {
+            "semantic_decoder_grad_l2": 0.0,
+            "semantic_decoder_grad_max_abs": 0.0,
+            "semantic_decoder_tensors_with_grad": 0
+          }
+        },
+        {
+          "answer_decoder_interaction": "product",
+          "answer_format": "sum_left_operand",
+          "calculator_output_format": "sum_left_operand",
+          "checkpoint": "/Users/jarnold/Documents/Codex/2026-05-06/please-work-in-this-repo-users-9/runs/2026-05-06_164330_870116_model-c-oracle-op0-19-answer_decoder-sum_left_operand/model-c-2digit-seed2/final_weights.pt",
+          "deltas": {
+            "best_pair_equals_true_pair_fraction": 0.0,
+            "best_pair_probability": 1.1433614417910576e-05,
+            "best_result_group_equals_true_sum_fraction": 0.0,
+            "best_result_group_probability": 3.72864305973053e-05,
+            "hard_learned_best_pair_fraction": 0.0,
+            "hard_learned_best_result_group_fraction": 0.007500002160668373,
+            "hard_learned_calculator_result_accuracy": 0.007500002160668373,
+            "hard_learned_pair_exact": 0.0,
+            "mean_pair_policy_effective_count": -0.165008544921875,
+            "mean_pair_policy_entropy": -0.0004124641418457031,
+            "top1_policy_mass": 9.8417978733778e-05,
+            "top3_policy_mass": 0.0002935766242444515,
+            "top5_policy_mass": 0.0004875157028436661,
+            "true_pair_probability": 1.1433614417910576e-05,
+            "true_result_group_probability": 3.72864305973053e-05
+          },
+          "gradient_cosines": {
+            "best_result_group_grad_norm": 0.00392022542655468,
+            "hard_best_pair_ce_grad_norm": 0.015153683722019196,
+            "relaxed_answer_grad_norm": 0.08459094166755676,
+            "relaxed_answer_vs_best_result_group_nll": 0.07168345153331757,
+            "relaxed_answer_vs_hard_best_pair_ce": 0.07238683849573135
+          },
+          "initial": {
+            "best_pair_equals_true_pair_fraction": 1.0,
+            "best_pair_probability": 0.0024999072775244713,
+            "best_result_group_equals_true_sum_fraction": 1.0,
+            "best_result_group_probability": 0.033375903964042664,
+            "hard_learned_best_pair_fraction": 0.0,
+            "hard_learned_best_result_group_fraction": 0.029999999329447746,
+            "hard_learned_calculator_result_accuracy": 0.029999999329447746,
+            "hard_learned_pair_exact": 0.0,
+            "mean_pair_policy_effective_count": 399.9991455078125,
+            "mean_pair_policy_entropy": 5.991462230682373,
+            "top1_policy_mass": 0.002513456391170621,
+            "top3_policy_mass": 0.007538191508501768,
+            "top5_policy_mass": 0.012560919858515263,
+            "true_pair_probability": 0.0024999072775244713,
+            "true_result_group_probability": 0.033375903964042664
+          },
+          "initial_answer_loss": 8.149266242980957,
+          "label": "identifiable_sum_left_operand",
+          "parameter_delta_after_one_step": {
+            "calculator_hook.input_proj": {
+              "changed_tensor_count": 2,
+              "l2": 1.0892525593954323,
+              "max_abs": 0.029999995604157448,
+              "tensor_count": 2
+            },
+            "semantic_decoder": {
+              "changed_tensor_count": 0,
+              "l2": 0.0,
+              "max_abs": 0.0,
+              "tensor_count": 3
+            },
+            "upstream_encoder": {
+              "changed_tensor_count": 0,
+              "l2": 0.0,
+              "max_abs": 0.0,
+              "tensor_count": 29
+            }
+          },
+          "post_one_step": {
+            "best_pair_equals_true_pair_fraction": 1.0,
+            "best_pair_probability": 0.002511340891942382,
+            "best_result_group_equals_true_sum_fraction": 1.0,
+            "best_result_group_probability": 0.03341319039463997,
+            "hard_learned_best_pair_fraction": 0.0,
+            "hard_learned_best_result_group_fraction": 0.03750000149011612,
+            "hard_learned_calculator_result_accuracy": 0.03750000149011612,
+            "hard_learned_pair_exact": 0.0,
+            "mean_pair_policy_effective_count": 399.8341369628906,
+            "mean_pair_policy_entropy": 5.991049766540527,
+            "top1_policy_mass": 0.002611874369904399,
+            "top3_policy_mass": 0.00783176813274622,
+            "top5_policy_mass": 0.013048435561358929,
+            "true_pair_probability": 0.002511340891942382,
+            "true_result_group_probability": 0.03341319039463997
+          },
+          "samples": 400,
+          "seed": 6203,
+          "semantic_decoder_grad": {
+            "semantic_decoder_grad_l2": 0.0,
+            "semantic_decoder_grad_max_abs": 0.0,
+            "semantic_decoder_tensors_with_grad": 0
+          }
+        }
+      ]
+    },
+    "natural_sum_only_product": {
+      "mean_deltas": {
+        "best_pair_probability": 2.251099795103073e-05,
+        "best_result_group_probability": 7.721285025276414e-06,
+        "hard_learned_calculator_result_accuracy": 0.014166666815678276,
+        "hard_learned_pair_exact": 0.007499999832361936,
+        "true_pair_probability": 1.310805479685451e-05,
+        "true_result_group_probability": 7.721285025276414e-06
+      },
+      "mean_gradient_cosines": {
+        "best_result_group_grad_norm": 0.0047085305365423364,
+        "hard_best_pair_ce_grad_norm": 0.35015300909678143,
+        "relaxed_answer_grad_norm": 0.030489110698302586,
+        "relaxed_answer_vs_best_result_group_nll": 0.21877002716064453,
+        "relaxed_answer_vs_hard_best_pair_ce": 0.1317233070731163
+      },
+      "mean_initial": {
+        "best_pair_probability": 0.0025009040255099535,
+        "best_result_group_probability": 0.03337481990456581,
+        "hard_learned_calculator_result_accuracy": 0.027499999850988388,
+        "hard_learned_pair_exact": 0.0041666665735344095,
+        "true_pair_probability": 0.0025006787230571112,
+        "true_result_group_probability": 0.03337481990456581
+      },
+      "mean_parameter_delta": {
+        "calculator_hook.input_proj": {
+          "l2": 1.0892390771295504,
+          "max_abs": 0.02999996766448021
+        },
+        "semantic_decoder": {
+          "l2": 0.0,
+          "max_abs": 0.0
+        },
+        "upstream_encoder": {
+          "l2": 0.0,
+          "max_abs": 0.0
+        }
+      },
+      "mean_post_one_step": {
+        "best_pair_probability": 0.0025234150234609842,
+        "best_result_group_probability": 0.03338254118959109,
+        "hard_learned_calculator_result_accuracy": 0.041666666666666664,
+        "hard_learned_pair_exact": 0.011666666405896345,
+        "true_pair_probability": 0.0025137867778539658,
+        "true_result_group_probability": 0.03338254118959109
+      },
+      "runs": [
+        {
+          "answer_decoder_interaction": "product",
+          "answer_format": "sum",
+          "calculator_output_format": "sum",
+          "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage0_candidates/tiny_operand_spans_dense/oracle_train/2026-05-12_113346_842566_model-c-oracle-op0-19-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00500_weights.pt",
+          "deltas": {
+            "best_pair_equals_true_pair_fraction": 0.0,
+            "best_pair_probability": 2.720579504966736e-05,
+            "best_result_group_equals_true_sum_fraction": 0.0,
+            "best_result_group_probability": -4.350021481513977e-05,
+            "hard_learned_best_pair_fraction": 0.0,
+            "hard_learned_best_result_group_fraction": -0.015000000596046448,
+            "hard_learned_calculator_result_accuracy": -0.015000000596046448,
+            "hard_learned_pair_exact": 0.004999999888241291,
+            "mean_pair_policy_effective_count": -0.19775390625,
+            "mean_pair_policy_entropy": -0.0004949569702148438,
+            "top1_policy_mass": 0.00014806212857365608,
+            "top3_policy_mass": 0.0004435577429831028,
+            "top5_policy_mass": 0.0007382510229945183,
+            "true_pair_probability": 6.562564522027969e-06,
+            "true_result_group_probability": -4.350021481513977e-05
+          },
+          "gradient_cosines": {
+            "best_result_group_grad_norm": 0.003559188451617956,
+            "hard_best_pair_ce_grad_norm": 0.3509185314178467,
+            "relaxed_answer_grad_norm": 0.0439651682972908,
+            "relaxed_answer_vs_best_result_group_nll": 0.06382143497467041,
+            "relaxed_answer_vs_hard_best_pair_ce": 0.22400641441345215
+          },
+          "initial": {
+            "best_pair_equals_true_pair_fraction": 0.09749999642372131,
+            "best_pair_probability": 0.002500271424651146,
+            "best_result_group_equals_true_sum_fraction": 1.0,
+            "best_result_group_probability": 0.03337979316711426,
+            "hard_learned_best_pair_fraction": 0.0,
+            "hard_learned_best_result_group_fraction": 0.03500000014901161,
+            "hard_learned_calculator_result_accuracy": 0.03500000014901161,
+            "hard_learned_pair_exact": 0.004999999888241291,
+            "mean_pair_policy_effective_count": 399.9989929199219,
+            "mean_pair_policy_entropy": 5.991462230682373,
+            "top1_policy_mass": 0.0025154787581413984,
+            "top3_policy_mass": 0.007543576415628195,
+            "top5_policy_mass": 0.012569401413202286,
+            "true_pair_probability": 0.0025004995986819267,
+            "true_result_group_probability": 0.03337979316711426
+          },
+          "initial_answer_loss": 7.289658069610596,
+          "label": "natural_sum_only_product",
+          "parameter_delta_after_one_step": {
+            "calculator_hook.input_proj": {
+              "changed_tensor_count": 2,
+              "l2": 1.0893383426593883,
+              "max_abs": 0.029999982565641403,
+              "tensor_count": 2
+            },
+            "semantic_decoder": {
+              "changed_tensor_count": 0,
+              "l2": 0.0,
+              "max_abs": 0.0,
+              "tensor_count": 3
+            },
+            "upstream_encoder": {
+              "changed_tensor_count": 0,
+              "l2": 0.0,
+              "max_abs": 0.0,
+              "tensor_count": 29
+            }
+          },
+          "post_one_step": {
+            "best_pair_equals_true_pair_fraction": 0.09749999642372131,
+            "best_pair_probability": 0.0025274772197008133,
+            "best_result_group_equals_true_sum_fraction": 1.0,
+            "best_result_group_probability": 0.03333629295229912,
+            "hard_learned_best_pair_fraction": 0.0,
+            "hard_learned_best_result_group_fraction": 0.019999999552965164,
+            "hard_learned_calculator_result_accuracy": 0.019999999552965164,
+            "hard_learned_pair_exact": 0.009999999776482582,
+            "mean_pair_policy_effective_count": 399.8012390136719,
+            "mean_pair_policy_entropy": 5.990967273712158,
+            "top1_policy_mass": 0.0026635408867150545,
+            "top3_policy_mass": 0.007987134158611298,
+            "top5_policy_mass": 0.013307652436196804,
+            "true_pair_probability": 0.0025070621632039547,
+            "true_result_group_probability": 0.03333629295229912
+          },
+          "samples": 400,
+          "seed": 6201,
+          "semantic_decoder_grad": {
+            "semantic_decoder_grad_l2": 0.0,
+            "semantic_decoder_grad_max_abs": 0.0,
+            "semantic_decoder_tensors_with_grad": 0
+          }
+        },
+        {
+          "answer_decoder_interaction": "product",
+          "answer_format": "sum",
+          "calculator_output_format": "sum",
+          "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage0_candidates/tiny_operand_spans_dense/oracle_train/2026-05-12_113346_842566_model-c-oracle-op0-19-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00500_weights.pt",
+          "deltas": {
+            "best_pair_equals_true_pair_fraction": 0.0,
+            "best_pair_probability": 5.407724529504776e-05,
+            "best_result_group_equals_true_sum_fraction": 0.0,
+            "best_result_group_probability": -3.825873136520386e-05,
+            "hard_learned_best_pair_fraction": 0.02000000001862645,
+            "hard_learned_best_result_group_fraction": 0.03999999910593033,
+            "hard_learned_calculator_result_accuracy": 0.03999999910593033,
+            "hard_learned_pair_exact": 0.007499999832361937,
+            "mean_pair_policy_effective_count": -0.126068115234375,
+            "mean_pair_policy_entropy": -0.0003147125244140625,
+            "top1_policy_mass": 0.00010730326175689697,
+            "top3_policy_mass": 0.0003191111609339714,
+            "top5_policy_mass": 0.0005280151963233948,
+            "true_pair_probability": 1.3620825484395027e-05,
+            "true_result_group_probability": -3.825873136520386e-05
+          },
+          "gradient_cosines": {
+            "best_result_group_grad_norm": 0.00402109744027257,
+            "hard_best_pair_ce_grad_norm": 0.34990283846855164,
+            "relaxed_answer_grad_norm": 0.018908465281128883,
+            "relaxed_answer_vs_best_result_group_nll": 0.2844146490097046,
+            "relaxed_answer_vs_hard_best_pair_ce": 0.24354004859924316
+          },
+          "initial": {
+            "best_pair_equals_true_pair_fraction": 0.09749999642372131,
+            "best_pair_probability": 0.002501209732145071,
+            "best_result_group_equals_true_sum_fraction": 1.0,
+            "best_result_group_probability": 0.033373281359672546,
+            "hard_learned_best_pair_fraction": 0.007499999832361937,
+            "hard_learned_best_result_group_fraction": 0.019999999552965164,
+            "hard_learned_calculator_result_accuracy": 0.019999999552965164,
+            "hard_learned_pair_exact": 0.0024999999441206455,
+            "mean_pair_policy_effective_count": 399.9992980957031,
+            "mean_pair_policy_entropy": 5.991462230682373,
+            "top1_policy_mass": 0.00251232017762959,
+            "top3_policy_mass": 0.007535216398537159,
+            "top5_policy_mass": 0.012556415051221848,
+            "true_pair_probability": 0.002500233007594943,
+            "true_result_group_probability": 0.033373281359672546
+          },
+          "initial_answer_loss": 8.03403091430664,
+          "label": "natural_sum_only_product",
+          "parameter_delta_after_one_step": {
+            "calculator_hook.input_proj": {
+              "changed_tensor_count": 2,
+              "l2": 1.089349121731846,
+              "max_abs": 0.029999954625964165,
+              "tensor_count": 2
+            },
+            "semantic_decoder": {
+              "changed_tensor_count": 0,
+              "l2": 0.0,
+              "max_abs": 0.0,
+              "tensor_count": 3
+            },
+            "upstream_encoder": {
+              "changed_tensor_count": 0,
+              "l2": 0.0,
+              "max_abs": 0.0,
+              "tensor_count": 29
+            }
+          },
+          "post_one_step": {
+            "best_pair_equals_true_pair_fraction": 0.09749999642372131,
+            "best_pair_probability": 0.002555286977440119,
+            "best_result_group_equals_true_sum_fraction": 1.0,
+            "best_result_group_probability": 0.03333502262830734,
+            "hard_learned_best_pair_fraction": 0.027499999850988388,
+            "hard_learned_best_result_group_fraction": 0.05999999865889549,
+            "hard_learned_calculator_result_accuracy": 0.05999999865889549,
+            "hard_learned_pair_exact": 0.009999999776482582,
+            "mean_pair_policy_effective_count": 399.87322998046875,
+            "mean_pair_policy_entropy": 5.991147518157959,
+            "top1_policy_mass": 0.002619623439386487,
+            "top3_policy_mass": 0.00785432755947113,
+            "top5_policy_mass": 0.013084430247545242,
+            "true_pair_probability": 0.002513853833079338,
+            "true_result_group_probability": 0.03333502262830734
+          },
+          "samples": 400,
+          "seed": 6202,
+          "semantic_decoder_grad": {
+            "semantic_decoder_grad_l2": 0.0,
+            "semantic_decoder_grad_max_abs": 0.0,
+            "semantic_decoder_tensors_with_grad": 0
+          }
+        },
+        {
+          "answer_decoder_interaction": "product",
+          "answer_format": "sum",
+          "calculator_output_format": "sum",
+          "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage0_candidates/tiny_operand_spans_dense/oracle_train/2026-05-12_113346_842566_model-c-oracle-op0-19-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00500_weights.pt",
+          "deltas": {
+            "best_pair_equals_true_pair_fraction": 0.0,
+            "best_pair_probability": -1.3750046491622925e-05,
+            "best_result_group_equals_true_sum_fraction": 0.0,
+            "best_result_group_probability": 0.00010492280125617981,
+            "hard_learned_best_pair_fraction": 0.0024999999441206455,
+            "hard_learned_best_result_group_fraction": 0.017500001937150955,
+            "hard_learned_calculator_result_accuracy": 0.017500001937150955,
+            "hard_learned_pair_exact": 0.009999999776482582,
+            "mean_pair_policy_effective_count": -0.156524658203125,
+            "mean_pair_policy_entropy": -0.0003914833068847656,
+            "top1_policy_mass": 8.980860002338886e-05,
+            "top3_policy_mass": 0.0002689366228878498,
+            "top5_policy_mass": 0.00044665299355983734,
+            "true_pair_probability": 1.914077438414097e-05,
+            "true_result_group_probability": 0.00010492280125617981
+          },
+          "gradient_cosines": {
+            "best_result_group_grad_norm": 0.006545305717736483,
+            "hard_best_pair_ce_grad_norm": 0.3496376574039459,
+            "relaxed_answer_grad_norm": 0.028593698516488075,
+            "relaxed_answer_vs_best_result_group_nll": 0.3080739974975586,
+            "relaxed_answer_vs_hard_best_pair_ce": -0.0723765417933464
+          },
+          "initial": {
+            "best_pair_equals_true_pair_fraction": 0.09749999642372131,
+            "best_pair_probability": 0.0025012309197336435,
+            "best_result_group_equals_true_sum_fraction": 1.0,
+            "best_result_group_probability": 0.03337138518691063,
+            "hard_learned_best_pair_fraction": 0.004999999888241291,
+            "hard_learned_best_result_group_fraction": 0.027499999850988388,
+            "hard_learned_calculator_result_accuracy": 0.027499999850988388,
+            "hard_learned_pair_exact": 0.004999999888241291,
+            "mean_pair_policy_effective_count": 399.9989318847656,
+            "mean_pair_policy_entropy": 5.991462230682373,
+            "top1_policy_mass": 0.0025166645646095276,
+            "top3_policy_mass": 0.007546284701675177,
+            "top5_policy_mass": 0.012573403306305408,
+            "true_pair_probability": 0.0025013035628944635,
+            "true_result_group_probability": 0.03337138518691063
+          },
+          "initial_answer_loss": 7.810040473937988,
+          "label": "natural_sum_only_product",
+          "parameter_delta_after_one_step": {
+            "calculator_hook.input_proj": {
+              "changed_tensor_count": 2,
+              "l2": 1.089029766997417,
+              "max_abs": 0.02999996580183506,
+              "tensor_count": 2
+            },
+            "semantic_decoder": {
+              "changed_tensor_count": 0,
+              "l2": 0.0,
+              "max_abs": 0.0,
+              "tensor_count": 3
+            },
+            "upstream_encoder": {
+              "changed_tensor_count": 0,
+              "l2": 0.0,
+              "max_abs": 0.0,
+              "tensor_count": 29
+            }
+          },
+          "post_one_step": {
+            "best_pair_equals_true_pair_fraction": 0.09749999642372131,
+            "best_pair_probability": 0.0024874808732420206,
+            "best_result_group_equals_true_sum_fraction": 1.0,
+            "best_result_group_probability": 0.03347630798816681,
+            "hard_learned_best_pair_fraction": 0.007499999832361937,
+            "hard_learned_best_result_group_fraction": 0.04500000178813934,
+            "hard_learned_calculator_result_accuracy": 0.04500000178813934,
+            "hard_learned_pair_exact": 0.014999999664723873,
+            "mean_pair_policy_effective_count": 399.8424072265625,
+            "mean_pair_policy_entropy": 5.991070747375488,
+            "top1_policy_mass": 0.0026064731646329165,
+            "top3_policy_mass": 0.007815221324563026,
+            "top5_policy_mass": 0.013020056299865246,
+            "true_pair_probability": 0.0025204443372786045,
+            "true_result_group_probability": 0.03347630798816681
+          },
+          "samples": 400,
+          "seed": 6203,
+          "semantic_decoder_grad": {
+            "semantic_decoder_grad_l2": 0.0,
+            "semantic_decoder_grad_max_abs": 0.0,
+            "semantic_decoder_tensors_with_grad": 0
+          }
+        }
+      ]
+    }
+  },
+  "run_root": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_closure_landscape_diagnostic",
+  "stage0_existing_evidence": {
+    "identifiable_deterministic_concrete": {
+      "diagnostics": [
+        {
+          "canonical": {
+            "calculator_result_accuracy": 0.99609375,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0,
+            "normal_exact_match": 0.99609375,
+            "operand_exact_match": 0.99609375,
+            "oracle_at_eval_exact_match": 1.0,
+            "pair_exact_match": 0.99609375
+          },
+          "canonical_dir_name": "stage1_deterministic_selected_2026-05-11_162533_510046_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand_canonical",
+          "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed0/2026-05-11_162533_510046_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00200_weights.pt",
+          "complete": true,
+          "full_enum": {
+            "best_matches_true_operands_fraction": 1,
+            "learned_best_fraction": 1,
+            "mean_learned_minus_best_gap": 0.0,
+            "mean_learned_minus_true_gap": 0.0,
+            "true_best_fraction": 1
+          },
+          "full_enum_dir_name": "stage1_deterministic_selected_2026-05-11_162533_510046_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand_full_enum",
+          "kind": "stage1_deterministic_selected_2026-05-11_162533_510046_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand",
+          "private": {
+            "answer_exact_match": null,
+            "calculator_result_accuracy": 0.9975,
+            "mapped_operand_exact_match": 0.9975,
+            "operand_exact_match": 0.9975,
+            "pair_exact_match": 0.9975
+          },
+          "private_dir_name": "stage1_deterministic_selected_2026-05-11_162533_510046_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand_private",
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed0/2026-05-11_162533_510046_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2"
+        },
+        {
+          "canonical": {
+            "calculator_result_accuracy": 0.96484375,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0,
+            "normal_exact_match": 0.96484375,
+            "operand_exact_match": 0.96484375,
+            "oracle_at_eval_exact_match": 1.0,
+            "pair_exact_match": 0.96484375
+          },
+          "canonical_dir_name": "stage1_deterministic_selected_2026-05-11_164228_952790_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand_canonical",
+          "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed2/2026-05-11_164228_952790_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed4/checkpoint_snapshots/step_00250_weights.pt",
+          "complete": true,
+          "full_enum": {
+            "best_matches_true_operands_fraction": 1,
+            "learned_best_fraction": 0.9296875,
+            "mean_learned_minus_best_gap": 0.3548059780150652,
+            "mean_learned_minus_true_gap": 0.3548059780150652,
+            "true_best_fraction": 1
+          },
+          "full_enum_dir_name": "stage1_deterministic_selected_2026-05-11_164228_952790_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand_full_enum",
+          "kind": "stage1_deterministic_selected_2026-05-11_164228_952790_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand",
+          "private": {
+            "answer_exact_match": null,
+            "calculator_result_accuracy": 0.95,
+            "mapped_operand_exact_match": 0.95,
+            "operand_exact_match": 0.95,
+            "pair_exact_match": 0.95
+          },
+          "private_dir_name": "stage1_deterministic_selected_2026-05-11_164228_952790_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand_private",
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed2/2026-05-11_164228_952790_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed4"
+        },
+        {
+          "canonical": {
+            "calculator_result_accuracy": 0.97265625,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0,
+            "normal_exact_match": 0.97265625,
+            "operand_exact_match": 0.97265625,
+            "oracle_at_eval_exact_match": 1.0,
+            "pair_exact_match": 0.97265625
+          },
+          "canonical_dir_name": "stage1_deterministic_selected_2026-05-11_165937_120012_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand_canonical",
+          "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed3/2026-05-11_165937_120012_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed5/checkpoint_snapshots/step_00275_weights.pt",
+          "complete": true,
+          "full_enum": {
+            "best_matches_true_operands_fraction": 1,
+            "learned_best_fraction": 0.96875,
+            "mean_learned_minus_best_gap": 0.15572315454483032,
+            "mean_learned_minus_true_gap": 0.15572315454483032,
+            "true_best_fraction": 1
+          },
+          "full_enum_dir_name": "stage1_deterministic_selected_2026-05-11_165937_120012_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand_full_enum",
+          "kind": "stage1_deterministic_selected_2026-05-11_165937_120012_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand",
+          "private": {
+            "answer_exact_match": null,
+            "calculator_result_accuracy": 0.9675,
+            "mapped_operand_exact_match": 0.9675,
+            "operand_exact_match": 0.9675,
+            "pair_exact_match": 0.9675
+          },
+          "private_dir_name": "stage1_deterministic_selected_2026-05-11_165937_120012_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand_private",
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed3/2026-05-11_165937_120012_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed5"
+        },
+        {
+          "canonical": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_at_eval_exact_match": 1.0,
+            "pair_exact_match": 1.0
+          },
+          "canonical_dir_name": "stage2_retention_selected_2026-05-11_171356_752123_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand_canonical",
+          "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage2_retention/seed2_first_step00200/2026-05-11_171356_752123_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed2/final_weights.pt",
+          "complete": true,
+          "full_enum": {
+            "best_matches_true_operands_fraction": 1,
+            "learned_best_fraction": 1,
+            "mean_learned_minus_best_gap": 0.0,
+            "mean_learned_minus_true_gap": 0.0,
+            "true_best_fraction": 1
+          },
+          "full_enum_dir_name": "stage2_retention_selected_2026-05-11_171356_752123_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand_full_enum",
+          "kind": "stage2_retention_selected_2026-05-11_171356_752123_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand",
+          "private": {
+            "answer_exact_match": null,
+            "calculator_result_accuracy": 1.0,
+            "mapped_operand_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "pair_exact_match": 1.0
+          },
+          "private_dir_name": "stage2_retention_selected_2026-05-11_171356_752123_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand_private",
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage2_retention/seed2_first_step00200/2026-05-11_171356_752123_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed2"
+        },
+        {
+          "canonical": {
+            "calculator_result_accuracy": 0.99609375,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0,
+            "normal_exact_match": 0.99609375,
+            "operand_exact_match": 0.99609375,
+            "oracle_at_eval_exact_match": 1.0,
+            "pair_exact_match": 0.99609375
+          },
+          "canonical_dir_name": "stage2_retention_selected_2026-05-11_201402_470798_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand_canonical",
+          "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage2_retention/seed4_first_step00250/2026-05-11_201402_470798_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed4/final_weights.pt",
+          "complete": true,
+          "full_enum": {
+            "best_matches_true_operands_fraction": 1,
+            "learned_best_fraction": 0.9921875,
+            "mean_learned_minus_best_gap": 0.015327229164540768,
+            "mean_learned_minus_true_gap": 0.015327229164540768,
+            "true_best_fraction": 1
+          },
+          "full_enum_dir_name": "stage2_retention_selected_2026-05-11_201402_470798_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand_full_enum",
+          "kind": "stage2_retention_selected_2026-05-11_201402_470798_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand",
+          "private": {
+            "answer_exact_match": null,
+            "calculator_result_accuracy": 0.9975,
+            "mapped_operand_exact_match": 0.9975,
+            "operand_exact_match": 0.9975,
+            "pair_exact_match": 0.9975
+          },
+          "private_dir_name": "stage2_retention_selected_2026-05-11_201402_470798_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand_private",
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage2_retention/seed4_first_step00250/2026-05-11_201402_470798_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed4"
+        },
+        {
+          "canonical": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_at_eval_exact_match": 1.0,
+            "pair_exact_match": 1.0
+          },
+          "canonical_dir_name": "stage2_retention_selected_2026-05-11_203509_143640_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand_canonical",
+          "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage2_retention/seed5_first_step00275/2026-05-11_203509_143640_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed5/final_weights.pt",
+          "complete": true,
+          "full_enum": {
+            "best_matches_true_operands_fraction": 1,
+            "learned_best_fraction": 1,
+            "mean_learned_minus_best_gap": 0.0,
+            "mean_learned_minus_true_gap": 0.0,
+            "true_best_fraction": 1
+          },
+          "full_enum_dir_name": "stage2_retention_selected_2026-05-11_203509_143640_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand_full_enum",
+          "kind": "stage2_retention_selected_2026-05-11_203509_143640_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand",
+          "private": {
+            "answer_exact_match": null,
+            "calculator_result_accuracy": 1.0,
+            "mapped_operand_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "pair_exact_match": 1.0
+          },
+          "private_dir_name": "stage2_retention_selected_2026-05-11_203509_143640_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand_private",
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage2_retention/seed5_first_step00275/2026-05-11_203509_143640_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed5"
+        },
+        {
+          "canonical": {
+            "calculator_result_accuracy": 0.0546875,
+            "forced_random_exact_match": 0.00390625,
+            "injection_zero_exact_match": 0.0,
+            "normal_exact_match": 0.00390625,
+            "operand_exact_match": 0.0078125,
+            "oracle_at_eval_exact_match": 1.0,
+            "pair_exact_match": 0.0078125
+          },
+          "canonical_dir_name": "stage3_primary_cli_seed0_best_2026-05-11_223759_424538_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-gumbel-answer_decoder-sum_left_operand_canonical",
+          "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage3_stochastic/primary_cli_seed0/2026-05-11_223759_424538_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-gumbel-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00200_weights.pt",
+          "complete": true,
+          "full_enum": {
+            "best_matches_true_operands_fraction": 1,
+            "learned_best_fraction": 0.0859375,
+            "mean_learned_minus_best_gap": 4.461150110699236,
+            "mean_learned_minus_true_gap": 4.461150110699236,
+            "true_best_fraction": 1
+          },
+          "full_enum_dir_name": "stage3_primary_cli_seed0_best_2026-05-11_223759_424538_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-gumbel-answer_decoder-sum_left_operand_full_enum",
+          "kind": "stage3_primary_cli_seed0_best_2026-05-11_223759_424538_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-gumbel-answer_decoder-sum_left_operand",
+          "private": {
+            "answer_exact_match": null,
+            "calculator_result_accuracy": 0.0375,
+            "mapped_operand_exact_match": 0.03,
+            "operand_exact_match": 0.0025,
+            "pair_exact_match": 0.0025
+          },
+          "private_dir_name": "stage3_primary_cli_seed0_best_2026-05-11_223759_424538_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-gumbel-answer_decoder-sum_left_operand_private",
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage3_stochastic/primary_cli_seed0/2026-05-11_223759_424538_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-gumbel-answer_decoder-sum_left_operand/model-c-2digit-seed2"
+        },
+        {
+          "canonical": {
+            "calculator_result_accuracy": 0.0546875,
+            "forced_random_exact_match": 0.00390625,
+            "injection_zero_exact_match": 0.0,
+            "normal_exact_match": 0.0078125,
+            "operand_exact_match": 0.0078125,
+            "oracle_at_eval_exact_match": 1.0,
+            "pair_exact_match": 0.0078125
+          },
+          "canonical_dir_name": "stage3_stabilized_cli_seed0_best_2026-05-11_235043_599468_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp1.5-rfinal0.5-rdecay300-gumbel-rent0.01-answer_decoder-sum_left_operand_canonical",
+          "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage3_stochastic/stabilized_cli_seed0/2026-05-11_235043_599468_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp1.5-rfinal0.5-rdecay300-gumbel-rent0.01-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00200_weights.pt",
+          "complete": true,
+          "full_enum": {
+            "best_matches_true_operands_fraction": 1,
+            "learned_best_fraction": 0.0234375,
+            "mean_learned_minus_best_gap": 4.8026184644550085,
+            "mean_learned_minus_true_gap": 4.8026184644550085,
+            "true_best_fraction": 1
+          },
+          "full_enum_dir_name": "stage3_stabilized_cli_seed0_best_2026-05-11_235043_599468_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp1.5-rfinal0.5-rdecay300-gumbel-rent0.01-answer_decoder-sum_left_operand_full_enum",
+          "kind": "stage3_stabilized_cli_seed0_best_2026-05-11_235043_599468_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp1.5-rfinal0.5-rdecay300-gumbel-rent0.01-answer_decoder-sum_left_operand",
+          "private": {
+            "answer_exact_match": null,
+            "calculator_result_accuracy": 0.0375,
+            "mapped_operand_exact_match": 0.0275,
+            "operand_exact_match": 0.0,
+            "pair_exact_match": 0.0
+          },
+          "private_dir_name": "stage3_stabilized_cli_seed0_best_2026-05-11_235043_599468_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp1.5-rfinal0.5-rdecay300-gumbel-rent0.01-answer_decoder-sum_left_operand_private",
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage3_stochastic/stabilized_cli_seed0/2026-05-11_235043_599468_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp1.5-rfinal0.5-rdecay300-gumbel-rent0.01-answer_decoder-sum_left_operand/model-c-2digit-seed2"
+        },
+        {
+          "canonical": {
+            "calculator_result_accuracy": 0.97265625,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0,
+            "normal_exact_match": 0.97265625,
+            "operand_exact_match": 0.97265625,
+            "oracle_at_eval_exact_match": 1.0,
+            "pair_exact_match": 0.97265625
+          },
+          "canonical_dir_name": "stage4_upstream_open_selected_2026-05-12_000016_670407_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr3e-05-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand_canonical",
+          "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/stage1_cli_seed0/2026-05-12_000016_670407_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr3e-05-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00225_weights.pt",
+          "complete": true,
+          "full_enum": {
+            "best_matches_true_operands_fraction": 1,
+            "learned_best_fraction": 0.984375,
+            "mean_learned_minus_best_gap": 0.04547745641320944,
+            "mean_learned_minus_true_gap": 0.04547745641320944,
+            "true_best_fraction": 1
+          },
+          "full_enum_dir_name": "stage4_upstream_open_selected_2026-05-12_000016_670407_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr3e-05-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand_full_enum",
+          "kind": "stage4_upstream_open_selected_2026-05-12_000016_670407_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr3e-05-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand",
+          "private": {
+            "answer_exact_match": null,
+            "calculator_result_accuracy": 0.9825,
+            "mapped_operand_exact_match": 0.9825,
+            "operand_exact_match": 0.9825,
+            "pair_exact_match": 0.9825
+          },
+          "private_dir_name": "stage4_upstream_open_selected_2026-05-12_000016_670407_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr3e-05-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand_private",
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/stage1_cli_seed0/2026-05-12_000016_670407_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr3e-05-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2"
+        },
+        {
+          "canonical": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_at_eval_exact_match": 1.0,
+            "pair_exact_match": 1.0
+          },
+          "canonical_dir_name": "stage4_retention_first_frozen_retention_selected_2026-05-12_000941_793086_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand_canonical",
+          "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/retention_first_frozen_retention/2026-05-12_000941_793086_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand/model-c-2digit-seed2/final_weights.pt",
+          "complete": true,
+          "full_enum": {
+            "best_matches_true_operands_fraction": 1,
+            "learned_best_fraction": 1,
+            "mean_learned_minus_best_gap": 0.0,
+            "mean_learned_minus_true_gap": 0.0,
+            "true_best_fraction": 1
+          },
+          "full_enum_dir_name": "stage4_retention_first_frozen_retention_selected_2026-05-12_000941_793086_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand_full_enum",
+          "kind": "stage4_retention_first_frozen_retention_selected_2026-05-12_000941_793086_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand",
+          "private": {
+            "answer_exact_match": null,
+            "calculator_result_accuracy": 1.0,
+            "mapped_operand_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "pair_exact_match": 1.0
+          },
+          "private_dir_name": "stage4_retention_first_frozen_retention_selected_2026-05-12_000941_793086_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand_private",
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/retention_first_frozen_retention/2026-05-12_000941_793086_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand/model-c-2digit-seed2"
+        },
+        {
+          "canonical": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_at_eval_exact_match": 1.0,
+            "pair_exact_match": 1.0
+          },
+          "canonical_dir_name": "stage4_retention_first_open_retention_selected_2026-05-12_002351_046091_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand_canonical",
+          "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/retention_first_open_retention/2026-05-12_002351_046091_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand/model-c-2digit-seed2/final_weights.pt",
+          "complete": true,
+          "full_enum": {
+            "best_matches_true_operands_fraction": 1,
+            "learned_best_fraction": 1,
+            "mean_learned_minus_best_gap": 0.0,
+            "mean_learned_minus_true_gap": 0.0,
+            "true_best_fraction": 1
+          },
+          "full_enum_dir_name": "stage4_retention_first_open_retention_selected_2026-05-12_002351_046091_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand_full_enum",
+          "kind": "stage4_retention_first_open_retention_selected_2026-05-12_002351_046091_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand",
+          "private": {
+            "answer_exact_match": null,
+            "calculator_result_accuracy": 1.0,
+            "mapped_operand_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "pair_exact_match": 1.0
+          },
+          "private_dir_name": "stage4_retention_first_open_retention_selected_2026-05-12_002351_046091_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand_private",
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/retention_first_open_retention/2026-05-12_002351_046091_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand/model-c-2digit-seed2"
+        }
+      ],
+      "stage1_selected": [
+        {
+          "best_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed0/2026-05-11_162533_510046_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00200_weights.pt",
+          "best_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.0078125,
+            "injection_zero_exact_match": 0.0078125,
+            "mean_a_confidence": 0.06350292597198859,
+            "mean_a_entropy": 2.986292941495776,
+            "mean_b_confidence": 0.05857977454434149,
+            "mean_b_entropy": 2.985763804987073,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 200
+          },
+          "cli_seed": 0,
+          "effective_seed": 2,
+          "final_eval_exact_match": 0.919921875,
+          "final_objective_weights": {
+            "answer_loss_weight": 1.0,
+            "final_adaptive_interface_loss_weight": 0.0,
+            "final_aux_operand_loss_weight": 0.0,
+            "final_expected_answer_loss_weight": 0.0,
+            "final_input_proj_anchor_weight": 0.0,
+            "final_local_target_loss_weight": 0.0,
+            "final_relaxed_calculator_entropy_weight": 0.0
+          },
+          "final_snapshot": {
+            "calculator_result_accuracy": 0.859375,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0078125,
+            "mean_a_confidence": 0.06657064863247797,
+            "mean_a_entropy": 2.982419738546014,
+            "mean_b_confidence": 0.06059055804507807,
+            "mean_b_entropy": 2.983750792220235,
+            "normal_exact_match": 0.859375,
+            "operand_exact_match": 0.859375,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 0.859375,
+            "step": 300
+          },
+          "first_gate": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.0078125,
+            "injection_zero_exact_match": 0.0078125,
+            "mean_a_confidence": 0.06350292597198859,
+            "mean_a_entropy": 2.986292941495776,
+            "mean_b_confidence": 0.05857977454434149,
+            "mean_b_entropy": 2.985763804987073,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 200
+          },
+          "first_gate_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed0/2026-05-11_162533_510046_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00200_weights.pt",
+          "freeze_semantic_decoder": true,
+          "freeze_upstream_encoder": true,
+          "parameter_delta_step0_to_best": {
+            "after_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed0/2026-05-11_162533_510046_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00200_weights.pt",
+            "before_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed0/2026-05-11_162533_510046_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00000_weights.pt",
+            "groups": {
+              "calculator_hook.input_proj": {
+                "changed_tensor_count": 2,
+                "l2": 26.782239500892874,
+                "max_abs": 2.4764404296875,
+                "tensor_count": 2
+              },
+              "semantic_decoder": {
+                "changed_tensor_count": 0,
+                "l2": 0.0,
+                "max_abs": 0.0,
+                "tensor_count": 3
+              },
+              "upstream_encoder": {
+                "changed_tensor_count": 0,
+                "l2": 0.0,
+                "max_abs": 0.0,
+                "tensor_count": 29
+              }
+            }
+          },
+          "passes_fast_gate": true,
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed0/2026-05-11_162533_510046_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2",
+          "trainable_parameter_groups": [
+            {
+              "name": "calculator_hook.input_proj",
+              "parameter_count": 1320,
+              "parameters": [
+                "calculator_hook.input_proj.weight",
+                "calculator_hook.input_proj.bias"
+              ]
+            }
+          ]
+        },
+        {
+          "best_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed2/2026-05-11_164228_952790_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed4/checkpoint_snapshots/step_00250_weights.pt",
+          "best_snapshot": {
+            "calculator_result_accuracy": 0.9609375,
+            "forced_random_exact_match": 0.015625,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06685345619916916,
+            "mean_a_entropy": 2.9813431520015,
+            "mean_b_confidence": 0.057387563632801175,
+            "mean_b_entropy": 2.989607561379671,
+            "normal_exact_match": 0.9609375,
+            "operand_exact_match": 0.9609375,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 0.9609375,
+            "step": 250
+          },
+          "cli_seed": 2,
+          "effective_seed": 4,
+          "final_eval_exact_match": 0.765625,
+          "final_objective_weights": {
+            "answer_loss_weight": 1.0,
+            "final_adaptive_interface_loss_weight": 0.0,
+            "final_aux_operand_loss_weight": 0.0,
+            "final_expected_answer_loss_weight": 0.0,
+            "final_input_proj_anchor_weight": 0.0,
+            "final_local_target_loss_weight": 0.0,
+            "final_relaxed_calculator_entropy_weight": 0.0
+          },
+          "final_snapshot": {
+            "calculator_result_accuracy": 0.84375,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0078125,
+            "mean_a_confidence": 0.06799640890676528,
+            "mean_a_entropy": 2.979400685057044,
+            "mean_b_confidence": 0.05886804813053459,
+            "mean_b_entropy": 2.9864266850054264,
+            "normal_exact_match": 0.84375,
+            "operand_exact_match": 0.84375,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 0.84375,
+            "step": 300
+          },
+          "first_gate": {
+            "calculator_result_accuracy": 0.9609375,
+            "forced_random_exact_match": 0.015625,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06685345619916916,
+            "mean_a_entropy": 2.9813431520015,
+            "mean_b_confidence": 0.057387563632801175,
+            "mean_b_entropy": 2.989607561379671,
+            "normal_exact_match": 0.9609375,
+            "operand_exact_match": 0.9609375,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 0.9609375,
+            "step": 250
+          },
+          "first_gate_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed2/2026-05-11_164228_952790_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed4/checkpoint_snapshots/step_00250_weights.pt",
+          "freeze_semantic_decoder": true,
+          "freeze_upstream_encoder": true,
+          "parameter_delta_step0_to_best": {
+            "after_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed2/2026-05-11_164228_952790_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed4/checkpoint_snapshots/step_00250_weights.pt",
+            "before_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed2/2026-05-11_164228_952790_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed4/checkpoint_snapshots/step_00000_weights.pt",
+            "groups": {
+              "calculator_hook.input_proj": {
+                "changed_tensor_count": 2,
+                "l2": 25.99321022463846,
+                "max_abs": 3.1652863025665283,
+                "tensor_count": 2
+              },
+              "semantic_decoder": {
+                "changed_tensor_count": 0,
+                "l2": 0.0,
+                "max_abs": 0.0,
+                "tensor_count": 3
+              },
+              "upstream_encoder": {
+                "changed_tensor_count": 0,
+                "l2": 0.0,
+                "max_abs": 0.0,
+                "tensor_count": 29
+              }
+            }
+          },
+          "passes_fast_gate": true,
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed2/2026-05-11_164228_952790_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed4",
+          "trainable_parameter_groups": [
+            {
+              "name": "calculator_hook.input_proj",
+              "parameter_count": 1320,
+              "parameters": [
+                "calculator_hook.input_proj.weight",
+                "calculator_hook.input_proj.bias"
+              ]
+            }
+          ]
+        },
+        {
+          "best_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed3/2026-05-11_165937_120012_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed5/checkpoint_snapshots/step_00275_weights.pt",
+          "best_snapshot": {
+            "calculator_result_accuracy": 0.9765625,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06495313427876681,
+            "mean_a_entropy": 2.9857937209308147,
+            "mean_b_confidence": 0.05791145423427224,
+            "mean_b_entropy": 2.9894212801009417,
+            "normal_exact_match": 0.9765625,
+            "operand_exact_match": 0.9765625,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 0.9765625,
+            "step": 275
+          },
+          "cli_seed": 3,
+          "effective_seed": 5,
+          "final_eval_exact_match": 0.935546875,
+          "final_objective_weights": {
+            "answer_loss_weight": 1.0,
+            "final_adaptive_interface_loss_weight": 0.0,
+            "final_aux_operand_loss_weight": 0.0,
+            "final_expected_answer_loss_weight": 0.0,
+            "final_input_proj_anchor_weight": 0.0,
+            "final_local_target_loss_weight": 0.0,
+            "final_relaxed_calculator_entropy_weight": 0.0
+          },
+          "final_snapshot": {
+            "calculator_result_accuracy": 0.921875,
+            "forced_random_exact_match": 0.046875,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06526201355154626,
+            "mean_a_entropy": 2.986793739721179,
+            "mean_b_confidence": 0.058198663289658725,
+            "mean_b_entropy": 2.9887202605605125,
+            "normal_exact_match": 0.921875,
+            "operand_exact_match": 0.921875,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 0.921875,
+            "step": 300
+          },
+          "first_gate": {
+            "calculator_result_accuracy": 0.9765625,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06495313427876681,
+            "mean_a_entropy": 2.9857937209308147,
+            "mean_b_confidence": 0.05791145423427224,
+            "mean_b_entropy": 2.9894212801009417,
+            "normal_exact_match": 0.9765625,
+            "operand_exact_match": 0.9765625,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 0.9765625,
+            "step": 275
+          },
+          "first_gate_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed3/2026-05-11_165937_120012_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed5/checkpoint_snapshots/step_00275_weights.pt",
+          "freeze_semantic_decoder": true,
+          "freeze_upstream_encoder": true,
+          "parameter_delta_step0_to_best": {
+            "after_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed3/2026-05-11_165937_120012_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed5/checkpoint_snapshots/step_00275_weights.pt",
+            "before_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed3/2026-05-11_165937_120012_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed5/checkpoint_snapshots/step_00000_weights.pt",
+            "groups": {
+              "calculator_hook.input_proj": {
+                "changed_tensor_count": 2,
+                "l2": 24.81139971349821,
+                "max_abs": 2.440274953842163,
+                "tensor_count": 2
+              },
+              "semantic_decoder": {
+                "changed_tensor_count": 0,
+                "l2": 0.0,
+                "max_abs": 0.0,
+                "tensor_count": 3
+              },
+              "upstream_encoder": {
+                "changed_tensor_count": 0,
+                "l2": 0.0,
+                "max_abs": 0.0,
+                "tensor_count": 29
+              }
+            }
+          },
+          "passes_fast_gate": true,
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed3/2026-05-11_165937_120012_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed5",
+          "trainable_parameter_groups": [
+            {
+              "name": "calculator_hook.input_proj",
+              "parameter_count": 1320,
+              "parameters": [
+                "calculator_hook.input_proj.weight",
+                "calculator_hook.input_proj.bias"
+              ]
+            }
+          ]
+        }
+      ],
+      "stage2_retention": [
+        {
+          "best_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.0078125,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06411558433319442,
+            "mean_a_entropy": 2.9857151489704847,
+            "mean_b_confidence": 0.05917939287610352,
+            "mean_b_entropy": 2.9847829919308424,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 1000
+          },
+          "effective_seed": 2,
+          "final_eval_exact_match": 1.0,
+          "final_objective_weights": {
+            "answer_loss_weight": 1.0,
+            "final_adaptive_interface_loss_weight": 0.0,
+            "final_aux_operand_loss_weight": 0.0,
+            "final_expected_answer_loss_weight": 0.0,
+            "final_input_proj_anchor_weight": 0.0,
+            "final_local_target_loss_weight": 0.0,
+            "final_relaxed_calculator_entropy_weight": 0.0
+          },
+          "final_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.0078125,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06411558433319442,
+            "mean_a_entropy": 2.9857151489704847,
+            "mean_b_confidence": 0.05917939287610352,
+            "mean_b_entropy": 2.9847829919308424,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 1000
+          },
+          "freeze_upstream_encoder": true,
+          "passes_fast_retention": true,
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage2_retention/seed2_first_step00200/2026-05-11_171356_752123_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed2",
+          "selected_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage2_retention/seed2_first_step00200/2026-05-11_171356_752123_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed2/final_weights.pt",
+          "selected_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.0078125,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06411558433319442,
+            "mean_a_entropy": 2.9857151489704847,
+            "mean_b_confidence": 0.05917939287610352,
+            "mean_b_entropy": 2.9847829919308424,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 1000
+          },
+          "source_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed0/2026-05-11_162533_510046_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00200_weights.pt",
+          "trainable_parameter_groups": [
+            {
+              "name": "calculator_hook.input_proj",
+              "parameter_count": 1320,
+              "parameters": [
+                "calculator_hook.input_proj.weight",
+                "calculator_hook.input_proj.bias"
+              ]
+            }
+          ]
+        },
+        {
+          "best_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06625200342386961,
+            "mean_a_entropy": 2.9818401280790567,
+            "mean_b_confidence": 0.05767539740190841,
+            "mean_b_entropy": 2.989185880869627,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 1000
+          },
+          "effective_seed": 4,
+          "final_eval_exact_match": 1.0,
+          "final_objective_weights": {
+            "answer_loss_weight": 1.0,
+            "final_adaptive_interface_loss_weight": 0.0,
+            "final_aux_operand_loss_weight": 0.0,
+            "final_expected_answer_loss_weight": 0.0,
+            "final_input_proj_anchor_weight": 0.0,
+            "final_local_target_loss_weight": 0.0,
+            "final_relaxed_calculator_entropy_weight": 0.0
+          },
+          "final_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06625200342386961,
+            "mean_a_entropy": 2.9818401280790567,
+            "mean_b_confidence": 0.05767539740190841,
+            "mean_b_entropy": 2.989185880869627,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 1000
+          },
+          "freeze_upstream_encoder": true,
+          "passes_fast_retention": true,
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage2_retention/seed4_first_step00250/2026-05-11_201402_470798_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed4",
+          "selected_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage2_retention/seed4_first_step00250/2026-05-11_201402_470798_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed4/final_weights.pt",
+          "selected_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06625200342386961,
+            "mean_a_entropy": 2.9818401280790567,
+            "mean_b_confidence": 0.05767539740190841,
+            "mean_b_entropy": 2.989185880869627,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 1000
+          },
+          "source_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed2/2026-05-11_164228_952790_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed4/checkpoint_snapshots/step_00250_weights.pt",
+          "trainable_parameter_groups": [
+            {
+              "name": "calculator_hook.input_proj",
+              "parameter_count": 1320,
+              "parameters": [
+                "calculator_hook.input_proj.weight",
+                "calculator_hook.input_proj.bias"
+              ]
+            }
+          ]
+        },
+        {
+          "best_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.0234375,
+            "injection_zero_exact_match": 0.0078125,
+            "mean_a_confidence": 0.0647136008774396,
+            "mean_a_entropy": 2.9864790830761194,
+            "mean_b_confidence": 0.0582199270138517,
+            "mean_b_entropy": 2.989278508350253,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 1000
+          },
+          "effective_seed": 5,
+          "final_eval_exact_match": 1.0,
+          "final_objective_weights": {
+            "answer_loss_weight": 1.0,
+            "final_adaptive_interface_loss_weight": 0.0,
+            "final_aux_operand_loss_weight": 0.0,
+            "final_expected_answer_loss_weight": 0.0,
+            "final_input_proj_anchor_weight": 0.0,
+            "final_local_target_loss_weight": 0.0,
+            "final_relaxed_calculator_entropy_weight": 0.0
+          },
+          "final_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.0234375,
+            "injection_zero_exact_match": 0.0078125,
+            "mean_a_confidence": 0.0647136008774396,
+            "mean_a_entropy": 2.9864790830761194,
+            "mean_b_confidence": 0.0582199270138517,
+            "mean_b_entropy": 2.989278508350253,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 1000
+          },
+          "freeze_upstream_encoder": true,
+          "passes_fast_retention": true,
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage2_retention/seed5_first_step00275/2026-05-11_203509_143640_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed5",
+          "selected_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage2_retention/seed5_first_step00275/2026-05-11_203509_143640_model-c-op0-19-adaptive_interface-inlr0.0003-uplr0.0003-answer_decoder-sum_left_operand/model-c-2digit-seed5/final_weights.pt",
+          "selected_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.0234375,
+            "injection_zero_exact_match": 0.0078125,
+            "mean_a_confidence": 0.0647136008774396,
+            "mean_a_entropy": 2.9864790830761194,
+            "mean_b_confidence": 0.0582199270138517,
+            "mean_b_entropy": 2.989278508350253,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 1000
+          },
+          "source_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage1_deterministic/cli_seed3/2026-05-11_165937_120012_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed5/checkpoint_snapshots/step_00275_weights.pt",
+          "trainable_parameter_groups": [
+            {
+              "name": "calculator_hook.input_proj",
+              "parameter_count": 1320,
+              "parameters": [
+                "calculator_hook.input_proj.weight",
+                "calculator_hook.input_proj.bias"
+              ]
+            }
+          ]
+        }
+      ],
+      "upstream_open_retention": [
+        {
+          "best_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.0078125,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06402102095307782,
+            "mean_a_entropy": 2.985610568895936,
+            "mean_b_confidence": 0.059830567945027724,
+            "mean_b_entropy": 2.9835064318031073,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 1000
+          },
+          "branch": "retention_first_frozen_retention",
+          "effective_seed": 2,
+          "final_eval_exact_match": 1.0,
+          "final_objective_weights": {
+            "answer_loss_weight": 1.0,
+            "final_adaptive_interface_loss_weight": 0.0,
+            "final_aux_operand_loss_weight": 0.0,
+            "final_expected_answer_loss_weight": 0.0,
+            "final_input_proj_anchor_weight": 0.0,
+            "final_local_target_loss_weight": 0.0,
+            "final_relaxed_calculator_entropy_weight": 0.0
+          },
+          "final_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.0078125,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06402102095307782,
+            "mean_a_entropy": 2.985610568895936,
+            "mean_b_confidence": 0.059830567945027724,
+            "mean_b_entropy": 2.9835064318031073,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 1000
+          },
+          "freeze_upstream_encoder": true,
+          "passes_fast_retention": true,
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/retention_first_frozen_retention/2026-05-12_000941_793086_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand/model-c-2digit-seed2",
+          "selected_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/retention_first_frozen_retention/2026-05-12_000941_793086_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand/model-c-2digit-seed2/final_weights.pt",
+          "selected_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.0078125,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06402102095307782,
+            "mean_a_entropy": 2.985610568895936,
+            "mean_b_confidence": 0.059830567945027724,
+            "mean_b_entropy": 2.9835064318031073,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 1000
+          },
+          "source_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/stage1_cli_seed0/2026-05-12_000016_670407_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr3e-05-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00225_weights.pt",
+          "trainable_parameter_groups": [
+            {
+              "name": "calculator_hook.input_proj",
+              "parameter_count": 1320,
+              "parameters": [
+                "calculator_hook.input_proj.weight",
+                "calculator_hook.input_proj.bias"
+              ]
+            }
+          ]
+        },
+        {
+          "best_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.0078125,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.07771506818244234,
+            "mean_a_entropy": 2.9590650591999292,
+            "mean_b_confidence": 0.06696866394486278,
+            "mean_b_entropy": 2.9590321760624647,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 1000
+          },
+          "branch": "retention_first_open_retention",
+          "effective_seed": 2,
+          "final_eval_exact_match": 1.0,
+          "final_objective_weights": {
+            "answer_loss_weight": 1.0,
+            "final_adaptive_interface_loss_weight": 0.0,
+            "final_aux_operand_loss_weight": 0.0,
+            "final_expected_answer_loss_weight": 0.0,
+            "final_input_proj_anchor_weight": 0.0,
+            "final_local_target_loss_weight": 0.0,
+            "final_relaxed_calculator_entropy_weight": 0.0
+          },
+          "final_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.0078125,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.07771506818244234,
+            "mean_a_entropy": 2.9590650591999292,
+            "mean_b_confidence": 0.06696866394486278,
+            "mean_b_entropy": 2.9590321760624647,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 1000
+          },
+          "freeze_upstream_encoder": false,
+          "passes_fast_retention": true,
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/retention_first_open_retention/2026-05-12_002351_046091_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand/model-c-2digit-seed2",
+          "selected_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/retention_first_open_retention/2026-05-12_002351_046091_model-c-op0-19-adaptive_interface-inlr0.0003-uplr3e-05-answer_decoder-sum_left_operand/model-c-2digit-seed2/final_weights.pt",
+          "selected_snapshot": {
+            "calculator_result_accuracy": 1.0,
+            "forced_random_exact_match": 0.0078125,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.07771506818244234,
+            "mean_a_entropy": 2.9590650591999292,
+            "mean_b_confidence": 0.06696866394486278,
+            "mean_b_entropy": 2.9590321760624647,
+            "normal_exact_match": 1.0,
+            "operand_exact_match": 1.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 1.0,
+            "step": 1000
+          },
+          "source_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/stage1_cli_seed0/2026-05-12_000016_670407_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr3e-05-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00225_weights.pt",
+          "trainable_parameter_groups": [
+            {
+              "name": "calculator_hook.input_proj",
+              "parameter_count": 1320,
+              "parameters": [
+                "calculator_hook.input_proj.weight",
+                "calculator_hook.input_proj.bias"
+              ]
+            },
+            {
+              "name": "upstream",
+              "parameter_count": 4048,
+              "parameters": [
+                "tok_emb.weight",
+                "pos_emb.weight",
+                "blocks.0.ln1.weight",
+                "blocks.0.ln1.bias",
+                "blocks.0.attn.qkv.weight",
+                "blocks.0.attn.qkv.bias",
+                "blocks.0.attn.proj.weight",
+                "blocks.0.attn.proj.bias",
+                "blocks.0.ln2.weight",
+                "blocks.0.ln2.bias",
+                "blocks.0.mlp.fc.weight",
+                "blocks.0.mlp.fc.bias",
+                "blocks.0.mlp.proj.weight",
+                "blocks.0.mlp.proj.bias",
+                "blocks.1.ln1.weight",
+                "blocks.1.ln1.bias",
+                "blocks.1.attn.qkv.weight",
+                "blocks.1.attn.qkv.bias",
+                "blocks.1.attn.proj.weight",
+                "blocks.1.attn.proj.bias",
+                "blocks.1.ln2.weight",
+                "blocks.1.ln2.bias",
+                "blocks.1.mlp.fc.weight",
+                "blocks.1.mlp.fc.bias",
+                "blocks.1.mlp.proj.weight",
+                "blocks.1.mlp.proj.bias",
+                "ln_f.weight",
+                "ln_f.bias",
+                "lm_head.weight"
+              ]
+            }
+          ]
+        }
+      ],
+      "upstream_open_stage1": [
+        {
+          "best_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/stage1_cli_seed0/2026-05-12_000016_670407_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr3e-05-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00225_weights.pt",
+          "best_snapshot": {
+            "calculator_result_accuracy": 0.9609375,
+            "forced_random_exact_match": 0.0234375,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06353708659298718,
+            "mean_a_entropy": 2.986039463430643,
+            "mean_b_confidence": 0.059509726328542456,
+            "mean_b_entropy": 2.9842712059617043,
+            "normal_exact_match": 0.9609375,
+            "operand_exact_match": 0.9609375,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 0.9609375,
+            "step": 225
+          },
+          "cli_seed": 0,
+          "effective_seed": 2,
+          "final_eval_exact_match": 0.689453125,
+          "final_objective_weights": {
+            "answer_loss_weight": 1.0,
+            "final_adaptive_interface_loss_weight": 0.0,
+            "final_aux_operand_loss_weight": 0.0,
+            "final_expected_answer_loss_weight": 0.0,
+            "final_input_proj_anchor_weight": 0.0,
+            "final_local_target_loss_weight": 0.0,
+            "final_relaxed_calculator_entropy_weight": 0.0
+          },
+          "final_snapshot": {
+            "calculator_result_accuracy": 0.6640625,
+            "forced_random_exact_match": 0.03125,
+            "injection_zero_exact_match": 0.0078125,
+            "mean_a_confidence": 0.06670163944363594,
+            "mean_a_entropy": 2.9822805412113667,
+            "mean_b_confidence": 0.061672603886108845,
+            "mean_b_entropy": 2.9822246953845024,
+            "normal_exact_match": 0.6640625,
+            "operand_exact_match": 0.6640625,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 0.6640625,
+            "step": 300
+          },
+          "first_gate": {
+            "calculator_result_accuracy": 0.9609375,
+            "forced_random_exact_match": 0.0234375,
+            "injection_zero_exact_match": 0.0,
+            "mean_a_confidence": 0.06353708659298718,
+            "mean_a_entropy": 2.986039463430643,
+            "mean_b_confidence": 0.059509726328542456,
+            "mean_b_entropy": 2.9842712059617043,
+            "normal_exact_match": 0.9609375,
+            "operand_exact_match": 0.9609375,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 0.9609375,
+            "step": 225
+          },
+          "first_gate_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/stage1_cli_seed0/2026-05-12_000016_670407_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr3e-05-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00225_weights.pt",
+          "freeze_semantic_decoder": true,
+          "freeze_upstream_encoder": false,
+          "parameter_delta_step0_to_best": {
+            "after_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/stage1_cli_seed0/2026-05-12_000016_670407_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr3e-05-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00225_weights.pt",
+            "before_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/stage1_cli_seed0/2026-05-12_000016_670407_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr3e-05-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2/checkpoint_snapshots/step_00000_weights.pt",
+            "groups": {
+              "calculator_hook.input_proj": {
+                "changed_tensor_count": 2,
+                "l2": 24.60439712549958,
+                "max_abs": 2.5673668384552,
+                "tensor_count": 2
+              },
+              "semantic_decoder": {
+                "changed_tensor_count": 0,
+                "l2": 0.0,
+                "max_abs": 0.0,
+                "tensor_count": 3
+              },
+              "upstream_encoder": {
+                "changed_tensor_count": 14,
+                "l2": 0.040013133351151656,
+                "max_abs": 0.00295913964509964,
+                "tensor_count": 29
+              }
+            }
+          },
+          "passes_fast_gate": true,
+          "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/stage4_upstream_open/stage1_cli_seed0/2026-05-12_000016_670407_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr3e-05-rtemp2-rfinal0.5-rdecay300-answer_decoder-sum_left_operand/model-c-2digit-seed2",
+          "trainable_parameter_groups": [
+            {
+              "name": "calculator_hook.input_proj",
+              "parameter_count": 1320,
+              "parameters": [
+                "calculator_hook.input_proj.weight",
+                "calculator_hook.input_proj.bias"
+              ]
+            },
+            {
+              "name": "upstream",
+              "parameter_count": 4048,
+              "parameters": [
+                "tok_emb.weight",
+                "pos_emb.weight",
+                "blocks.0.ln1.weight",
+                "blocks.0.ln1.bias",
+                "blocks.0.attn.qkv.weight",
+                "blocks.0.attn.qkv.bias",
+                "blocks.0.attn.proj.weight",
+                "blocks.0.attn.proj.bias",
+                "blocks.0.ln2.weight",
+                "blocks.0.ln2.bias",
+                "blocks.0.mlp.fc.weight",
+                "blocks.0.mlp.fc.bias",
+                "blocks.0.mlp.proj.weight",
+                "blocks.0.mlp.proj.bias",
+                "blocks.1.ln1.weight",
+                "blocks.1.ln1.bias",
+                "blocks.1.attn.qkv.weight",
+                "blocks.1.attn.qkv.bias",
+                "blocks.1.attn.proj.weight",
+                "blocks.1.attn.proj.bias",
+                "blocks.1.ln2.weight",
+                "blocks.1.ln2.bias",
+                "blocks.1.mlp.fc.weight",
+                "blocks.1.mlp.fc.bias",
+                "blocks.1.mlp.proj.weight",
+                "blocks.1.mlp.proj.bias",
+                "ln_f.weight",
+                "ln_f.bias",
+                "lm_head.weight"
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    "natural_product_decoder": {
+      "diagnostics": [
+        {
+          "canonical": {
+            "calculator_result_accuracy": 0.1175,
+            "forced_random_exact_match": 0.0225,
+            "injection_zero_exact_match": 0.055,
+            "normal_exact_match": 0.1175,
+            "oracle_at_eval_exact_match": 1.0
+          },
+          "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage1_natural_bridge/2026-05-12_113630_782057_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00225_weights.pt",
+          "full_enum": {
+            "best_matches_true_operands_fraction": 0.0975,
+            "best_result_group_matches_true_sum_fraction": 1,
+            "best_result_matches_true_sum_fraction": 1,
+            "learned_result_best_fraction": 0.11,
+            "mean_effective_pair_count": 30.923316123485566,
+            "mean_effective_result_count": 2.721994184553623,
+            "mean_learned_result_minus_best_result_gap": 5.565743306875229,
+            "mean_same_best_sum_near_best_pair_count": 13.35,
+            "mean_same_true_sum_near_best_pair_count": 13.35,
+            "mean_true_result_minus_best_result_gap": 0.0,
+            "true_best_fraction": 0.0975,
+            "true_result_best_fraction": 1
+          },
+          "label": "stage1_selected",
+          "private": {
+            "a_best_affine_mod_mapping": {
+              "exact": 0.25,
+              "offset": 0,
+              "scale": 1
+            },
+            "answer_decoder_interaction": "product",
+            "answer_format": "sum",
+            "b_best_affine_mod_mapping": {
+              "exact": 0.2,
+              "offset": 0,
+              "scale": 1
+            },
+            "calculator_output_format": "sum",
+            "calculator_result_accuracy": 0.11,
+            "checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage1_natural_bridge/2026-05-12_113630_782057_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00225_weights.pt",
+            "correct": 44,
+            "device": "cpu",
+            "digits": 2,
+            "exact_match": 0.11,
+            "learned_result_distribution": "{\"2\": 30, \"4\": 6, \"7\": 20, \"8\": 18, \"9\": 4, \"10\": 16, \"13\": 12, \"15\": 14, \"16\": 6, \"17\": 33, \"18\": 7, \"19\": 60, \"21\": 6, \"23\": 23, \"24\": 36, \"25\": 6, \"27\": 18, \"32\": 18, \"33\": 6, \"34\": 54}",
+            "mapped_calculator_result_accuracy": 0.075,
+            "mapped_operand_exact_match": 0.075,
+            "mean_a_confidence": 0.057913012243807314,
+            "mean_a_entropy": 2.98860650062561,
+            "mean_b_confidence": 0.05824566820636392,
+            "mean_b_entropy": 2.9892518591880797,
+            "mean_pair_confidence": NaN,
+            "mean_pair_entropy": NaN,
+            "mutual_information_bits": {
+              "learned_a_true_a": 2.170950594454669,
+              "learned_b_true_b": 2.0772354454083075,
+              "learned_result_answer_length": 0.3953559356999559,
+              "learned_result_carry": 0.3953559356999559,
+              "learned_result_first_answer_token": 0.9292776306523306,
+              "learned_result_true_sum": 1.565866344374216
+            },
+            "operand_exact_match": 0.05,
+            "operand_max": 19,
+            "pair_exact_match": 0.05,
+            "pairs": 400,
+            "requested_calculator_output_format": "sum",
+            "result_equivalent_pair_accuracy": 0.11,
+            "result_majority_mapped_accuracy": 0.1425,
+            "right_operands_wrong_answer_count": 0,
+            "samples": 400,
+            "train_config_run_name": "model-c-2digit-seed2",
+            "train_config_seed": 2,
+            "wrong_operands_right_answer_count": 24
+          }
+        }
+      ],
+      "stage0_selected_candidate": {
+        "answer_decoder_interaction": "product",
+        "full_enum": {
+          "best_matches_true_operands_fraction": 0.0975,
+          "best_result_group_matches_true_sum_fraction": 1,
+          "best_result_matches_true_sum_fraction": 1,
+          "learned_result_best_fraction": 0.03,
+          "mean_effective_pair_count": 30.923316123485566,
+          "mean_effective_result_count": 2.721994184553623,
+          "mean_learned_result_minus_best_result_gap": 7.577589977383614,
+          "mean_same_best_sum_near_best_pair_count": 13.35,
+          "mean_same_true_sum_near_best_pair_count": 13.35,
+          "mean_true_result_minus_best_result_gap": 0.0,
+          "true_best_fraction": 0.0975,
+          "true_result_best_fraction": 1
+        },
+        "mlp_expansion": 1,
+        "n_embd": 16,
+        "n_head": 1,
+        "n_layer": 2,
+        "name": "tiny_operand_spans_dense",
+        "oracle_train_eval_exact": null,
+        "passes_gate": true,
+        "read_position": "operand_spans",
+        "read_span_width": 2,
+        "semantic_decoder_delta": {
+          "changed_tensor_count": 0,
+          "l2": 0.0,
+          "max_abs": 0.0,
+          "tensor_count": 3
+        },
+        "semantic_only_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage0_candidates/tiny_operand_spans_dense/step_00500_weights/semantic_only_gate/2026-05-12_113518_416072_model-c-op0-19-adaptive_interface-inlr0.03-uplr0.0003-answer_decoder-adec-product/model-c-2digit-seed2/final_weights.pt",
+        "semantic_only_run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage0_candidates/tiny_operand_spans_dense/step_00500_weights/semantic_only_gate/2026-05-12_113518_416072_model-c-op0-19-adaptive_interface-inlr0.03-uplr0.0003-answer_decoder-adec-product/model-c-2digit-seed2",
+        "snapshot": {
+          "calculator_result_accuracy": 0.02,
+          "forced_random_exact_match": 0.0175,
+          "forced_zero_exact_match": 0.005,
+          "injection_zero_exact_match": 0.0425,
+          "normal_exact_match": 0.02,
+          "operand_exact_match": 0.0,
+          "oracle_exact_match": 1.0,
+          "pair_exact_match": 0.0
+        },
+        "source_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage0_candidates/tiny_operand_spans_dense/oracle_train/2026-05-12_113346_842566_model-c-oracle-op0-19-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00500_weights.pt"
+      },
+      "stage1": {
+        "best_snapshot": {
+          "calculator_result_accuracy": 0.135,
+          "forced_random_exact_match": 0.0075,
+          "forced_zero_exact_match": 0.0025,
+          "injection_zero_exact_match": 0.06,
+          "mean_a_confidence": 0.05805077873170376,
+          "mean_a_entropy": 2.988308772444725,
+          "mean_b_confidence": 0.05801108710467815,
+          "mean_b_entropy": 2.9895181238651274,
+          "mean_pair_confidence": NaN,
+          "mean_pair_entropy": NaN,
+          "normal_exact_match": 0.135,
+          "operand_exact_match": 0.06,
+          "oracle_exact_match": 1.0,
+          "pair_exact_match": 0.06,
+          "samples": 400.0,
+          "step": 225
+        },
+        "final_eval_exact": 0.126953125,
+        "final_objective_weights": {
+          "answer_loss_weight": 1.0,
+          "final_adaptive_interface_loss_weight": 0.0,
+          "final_aux_operand_loss_weight": 0.0,
+          "final_expected_answer_loss_weight": 0.0,
+          "final_input_proj_anchor_weight": 0.0,
+          "final_local_target_loss_weight": 0.0,
+          "final_relaxed_calculator_entropy_weight": 0.0
+        },
+        "parameter_delta_step0_to_selected": {
+          "after_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage1_natural_bridge/2026-05-12_113630_782057_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00225_weights.pt",
+          "before_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage1_natural_bridge/2026-05-12_113630_782057_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00000_weights.pt",
+          "groups": {
+            "calculator_hook.input_proj": {
+              "changed_tensor_count": 2,
+              "l2": 22.48994446475257,
+              "max_abs": 1.9607622623443604,
+              "tensor_count": 2
+            },
+            "semantic_decoder": {
+              "changed_tensor_count": 0,
+              "l2": 0.0,
+              "max_abs": 0.0,
+              "tensor_count": 3
+            },
+            "upstream_encoder": {
+              "changed_tensor_count": 0,
+              "l2": 0.0,
+              "max_abs": 0.0,
+              "tensor_count": 29
+            }
+          }
+        },
+        "passes_gate": false,
+        "run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage1_natural_bridge/2026-05-12_113630_782057_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-adec-product/model-c-2digit-seed2",
+        "selected_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage1_natural_bridge/2026-05-12_113630_782057_model-c-op0-19-gumbel_concrete_interface-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay300-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00225_weights.pt",
+        "selected_snapshot": {
+          "calculator_result_accuracy": 0.135,
+          "forced_random_exact_match": 0.0075,
+          "forced_zero_exact_match": 0.0025,
+          "injection_zero_exact_match": 0.06,
+          "mean_a_confidence": 0.05805077873170376,
+          "mean_a_entropy": 2.988308772444725,
+          "mean_b_confidence": 0.05801108710467815,
+          "mean_b_entropy": 2.9895181238651274,
+          "mean_pair_confidence": NaN,
+          "mean_pair_entropy": NaN,
+          "normal_exact_match": 0.135,
+          "operand_exact_match": 0.06,
+          "oracle_exact_match": 1.0,
+          "pair_exact_match": 0.06,
+          "samples": 400.0,
+          "step": 225
+        },
+        "selected_stage0_candidate": {
+          "answer_decoder_interaction": "product",
+          "full_enum": {
+            "best_matches_true_operands_fraction": 0.0975,
+            "best_result_group_matches_true_sum_fraction": 1,
+            "best_result_matches_true_sum_fraction": 1,
+            "learned_result_best_fraction": 0.03,
+            "mean_effective_pair_count": 30.923316123485566,
+            "mean_effective_result_count": 2.721994184553623,
+            "mean_learned_result_minus_best_result_gap": 7.577589977383614,
+            "mean_same_best_sum_near_best_pair_count": 13.35,
+            "mean_same_true_sum_near_best_pair_count": 13.35,
+            "mean_true_result_minus_best_result_gap": 0.0,
+            "true_best_fraction": 0.0975,
+            "true_result_best_fraction": 1
+          },
+          "mlp_expansion": 1,
+          "n_embd": 16,
+          "n_head": 1,
+          "n_layer": 2,
+          "name": "tiny_operand_spans_dense",
+          "oracle_train_eval_exact": null,
+          "passes_gate": true,
+          "read_position": "operand_spans",
+          "read_span_width": 2,
+          "semantic_decoder_delta": {
+            "changed_tensor_count": 0,
+            "l2": 0.0,
+            "max_abs": 0.0,
+            "tensor_count": 3
+          },
+          "semantic_only_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage0_candidates/tiny_operand_spans_dense/step_00500_weights/semantic_only_gate/2026-05-12_113518_416072_model-c-op0-19-adaptive_interface-inlr0.03-uplr0.0003-answer_decoder-adec-product/model-c-2digit-seed2/final_weights.pt",
+          "semantic_only_run_dir": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage0_candidates/tiny_operand_spans_dense/step_00500_weights/semantic_only_gate/2026-05-12_113518_416072_model-c-op0-19-adaptive_interface-inlr0.03-uplr0.0003-answer_decoder-adec-product/model-c-2digit-seed2",
+          "snapshot": {
+            "calculator_result_accuracy": 0.02,
+            "forced_random_exact_match": 0.0175,
+            "forced_zero_exact_match": 0.005,
+            "injection_zero_exact_match": 0.0425,
+            "normal_exact_match": 0.02,
+            "operand_exact_match": 0.0,
+            "oracle_exact_match": 1.0,
+            "pair_exact_match": 0.0
+          },
+          "source_checkpoint": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage0_candidates/tiny_operand_spans_dense/oracle_train/2026-05-12_113346_842566_model-c-oracle-op0-19-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00500_weights.pt"
+        }
+      }
+    },
+    "source_summaries": {
+      "identifiable": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream/summary.json",
+      "natural": "/Users/jarnold/workspace/jeffarnoldlabs/sandboxes/calculatorInAModel/runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/summary.json"
+    }
+  }
+}
