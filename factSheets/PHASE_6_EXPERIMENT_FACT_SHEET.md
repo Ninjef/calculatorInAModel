@@ -1112,3 +1112,91 @@ Before rerunning the natural sum-only relaxed bridge, strengthen or revise the
 sum-only strict answer decoder wiring so oracle-at-eval and full-enum
 best-result-match both clear the Stage 0 gate. Do not proceed to `0..99` or
 upstream-open natural stress until this smaller wiring gate passes.
+
+## 2026-05-12 Sum-Only Semantic Decoder Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/2026-05-12-phase-6-ninth-task-Sum-only-semantic-decoder-gate-and-natural-bridge-readiness.md
+```
+
+Runner:
+
+```text
+scripts/run_phase6_sum_only_semantic_decoder_gate.py
+```
+
+Run root:
+
+```text
+runs/2026-05-12_phase6_sum_only_semantic_decoder_gate
+```
+
+Code changes:
+
+- Added the dedicated Stage 0 gate runner.
+- Added exhaustive all-pair support to the full-enum diagnostic through
+  `--exhaustive-grid`.
+- Added a test covering exhaustive grid construction.
+
+### Stage 0A Existing Decoder Diagnosis
+
+All-400 diagnosis of the existing April sum-only oracle checkpoint showed a
+strict decoder/readout failure:
+
+| Metric | Value |
+| --- | ---: |
+| Normal learned exact | `0.0300` |
+| Oracle-at-eval exact | `0.9300` |
+| Forced true result exact | `0.9300` |
+| Injection-zero exact | `0.0050` |
+| Forced-zero exact | `0.0025` |
+| Forced-random exact | `0.0325` |
+| Full-enum best-result group matches true sum | `0.9075` |
+| Mean same-true-sum near-best pair count | `13.35` |
+| Mean effective result count | `2.4820` |
+| Semantic decoder delta | `0.0` |
+
+The oracle and forced-true-result rows agreed exactly, so the miss mechanism is
+not operand injection shape. Misses were concentrated on specific result
+classes: oracle-at-eval missed all prompts with sums `12`, `31`, and `32`;
+full-enum best-result matching missed all prompts with sums `23`, `12`, and
+`31`. The checkpoint metadata matched the intended natural sum-only setup:
+`answer_format=sum`, `calculator_output_format=sum`,
+`calculator_read_position=operand_spans`, `calculator_read_span_width=2`, and
+`calculator_bottleneck_mode=answer_decoder`.
+
+### Stage 0B Candidate Ladder
+
+No candidate passed the strict natural gate:
+
+```text
+oracle-at-eval exact >= 0.98
+full-enum best-result group matches true sum >= 0.98
+injection-zero and forced-random near chance
+semantic decoder delta == 0.0
+```
+
+Best checkpoint per branch:
+
+| Branch | Best checkpoint | Oracle-at-eval | Best result=true | Injection-zero | Forced-random |
+| --- | --- | ---: | ---: | ---: | ---: |
+| tiny `operand_spans` dense | `step_00500_weights.pt` | `0.9325` | `0.9300` | `0.0050` | `0.0200` |
+| tiny `operands` dense | `step_00500_weights.pt` | `0.9150` | `0.9300` | `0.0075` | `0.0175` |
+| `n_embd=32`, `n_head=2`, `n_layer=2` | `step_01000_weights.pt` | `0.9275` | `0.9150` | `0.0050` | `0.0200` |
+| `n_embd=32`, `n_head=2`, `n_layer=3` | `step_01500_weights.pt` | `0.9350` | `0.9250` | `0.0100` | `0.0125` |
+
+Decision:
+
+- Stage 1 natural deterministic relaxed bridge training was not run.
+- This is not a natural bridge negative. The semantic decoder/wiring gate is
+  still below the threshold needed to interpret answer-only learned calculator
+  use.
+- Interpretation label: `sum_only_decoder_capacity_blocker`.
+
+Recommendation:
+
+Do not proceed to `operand_max=99`. The next axis should be a sum-only
+decoder/readout redesign or a more direct result-class decoder health fix, not
+more bridge training from a sub-0.98 natural gate.

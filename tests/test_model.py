@@ -1110,6 +1110,38 @@ def test_diagnostic_cli_forced_result_sweep_writes_outputs(
     assert summary["forced_result_batch_size"] == 4
 
 
+def test_full_enum_exhaustive_grid_helpers_cover_each_pair_once() -> None:
+    script_path = Path("scripts/run_full_enum_action_loss_diagnostic.py")
+    spec = importlib.util.spec_from_file_location("full_enum_grid", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    full_enum = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(full_enum)
+
+    specs = full_enum.all_pair_specs(2)
+    assert specs == [
+        {"sample": 0, "true_a": 0, "true_b": 0},
+        {"sample": 1, "true_a": 0, "true_b": 1},
+        {"sample": 2, "true_a": 0, "true_b": 2},
+        {"sample": 3, "true_a": 1, "true_b": 0},
+        {"sample": 4, "true_a": 1, "true_b": 1},
+        {"sample": 5, "true_a": 1, "true_b": 2},
+        {"sample": 6, "true_a": 2, "true_b": 0},
+        {"sample": 7, "true_a": 2, "true_b": 1},
+        {"sample": 8, "true_a": 2, "true_b": 2},
+    ]
+    batch = full_enum.batch_from_specs(
+        specs,
+        num_digits=1,
+        fixed_width=True,
+        device="cpu",
+        answer_format="sum",
+    )
+    assert batch.x.shape[0] == 9
+    assert full_enum.format_prompt(batch.x[0]) == "0+0="
+    assert full_enum.format_prompt(batch.x[-1]) == "2+2="
+
+
 def test_track4_action_loss_diagnostic_reports_operand_action_gaps() -> None:
     script_path = Path("scripts/run_track4_action_loss_diagnostic.py")
     spec = importlib.util.spec_from_file_location("track4_action_loss", script_path)

@@ -26,7 +26,17 @@ from scripts.overfit_one_batch import (  # noqa: E402
     make_range_batch,
     score_action_loss_candidates_chunked,
 )
-from src.data import ANSWER_FORMATS, AnswerFormat, EQ_ID  # noqa: E402
+from src.data import (  # noqa: E402
+    ANSWER_FORMATS,
+    AnswerFormat,
+    ArithmeticBatch,
+    EQ_ID,
+    answer_target,
+    make_loss_mask,
+    max_sequence_length,
+    pad_sequence,
+    tokenize,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -48,6 +58,46 @@ def format_prompt(row: torch.Tensor) -> str:
     return decode_tokens(ids)
 
 
+def all_pair_specs(operand_max: int) -> list[dict[str, int]]:
+    return [
+        {"sample": (a * (operand_max + 1)) + b, "true_a": a, "true_b": b}
+        for a in range(operand_max + 1)
+        for b in range(operand_max + 1)
+    ]
+
+
+def batch_from_specs(
+    specs: list[dict[str, int]],
+    *,
+    num_digits: int,
+    fixed_width: bool,
+    device: str | torch.device,
+    answer_format: AnswerFormat,
+) -> ArithmeticBatch:
+    seq_len = max_sequence_length(num_digits, answer_format=answer_format)
+    samples: list[list[int]] = []
+    masks: list[list[int]] = []
+    for spec in specs:
+        a = int(spec["true_a"])
+        b = int(spec["true_b"])
+        prompt = f"{a:0{num_digits}d}+{b:0{num_digits}d}=" if fixed_width else f"{a}+{b}="
+        ids = tokenize(
+            prompt
+            + answer_target(
+                a,
+                b,
+                num_digits,
+                answer_format=answer_format,
+                fixed_width=fixed_width,
+            )
+        )
+        samples.append(pad_sequence(ids, seq_len))
+        masks.append(pad_sequence(make_loss_mask(ids), seq_len, pad_id=0))
+    tokens = torch.tensor(samples, dtype=torch.long, device=device)
+    loss_mask = torch.tensor(masks, dtype=torch.bool, device=device)
+    return ArithmeticBatch(x=tokens[:, :-1], y=tokens[:, 1:], loss_mask=loss_mask[:, 1:])
+
+
 @torch.no_grad()
 def full_enum_diagnostic(
     *,
@@ -63,23 +113,37 @@ def full_enum_diagnostic(
     seed: int,
     device: str,
     answer_format: AnswerFormat,
+    sample_specs: list[dict[str, int]] | None = None,
 ) -> tuple[list[dict[str, Any]], dict[str, Any]]:
     model, train_config = load_checkpoint(checkpoint, device=device, injection_scale=None)
     model.eval()
     rng = random.Random(seed + 92_000)
     rows: list[dict[str, Any]] = []
     seen = 0
+    if sample_specs is not None:
+        samples = len(sample_specs)
     while seen < samples:
         current_batch = min(batch_size, samples - seen)
-        batch = make_range_batch(
-            batch_size=current_batch,
-            num_digits=digits,
-            operand_max=operand_max,
-            rng=rng,
-            fixed_width=True,
-            device=device,
-            answer_format=answer_format,
-        )
+        current_specs = None
+        if sample_specs is None:
+            batch = make_range_batch(
+                batch_size=current_batch,
+                num_digits=digits,
+                operand_max=operand_max,
+                rng=rng,
+                fixed_width=True,
+                device=device,
+                answer_format=answer_format,
+            )
+        else:
+            current_specs = sample_specs[seen : seen + current_batch]
+            batch = batch_from_specs(
+                current_specs,
+                num_digits=digits,
+                fixed_width=True,
+                device=device,
+                answer_format=answer_format,
+            )
         if model.cfg.calculator_action_head == "joint_pair":
             pair_logits, _, _, _ = calculator_read_pair_logits(model, batch)
             classes = model.cfg.calculator_operand_vocab_size
@@ -193,11 +257,16 @@ def full_enum_diagnostic(
             learned_pair_probability = torch.full_like(entropy, float("nan"))
             true_pair_head_probability = torch.full_like(entropy, float("nan"))
         for i in range(current_batch):
+            sample_id = (
+                int(current_specs[i]["sample"])
+                if current_specs is not None
+                else seen + i
+            )
             best_a = int(best_pairs[i, 0].item())
             best_b = int(best_pairs[i, 1].item())
             rows.append(
                 {
-                    "sample": seen + i,
+                    "sample": sample_id,
                     "prompt": format_prompt(batch.x[i]),
                     "true_a": int(true_a[i].item()),
                     "true_b": int(true_b[i].item()),
@@ -445,6 +514,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--chunk-size", type=int, default=64)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--output-root", type=Path, default=None)
+    parser.add_argument(
+        "--exhaustive-grid",
+        action="store_true",
+        help="Evaluate every operand pair in 0..operand-max exactly once.",
+    )
     return parser.parse_args()
 
 
@@ -475,7 +549,7 @@ def main() -> None:
         )
         rows, summary = full_enum_diagnostic(
             checkpoint=checkpoint,
-            samples=args.samples,
+            samples=(args.operand_max + 1) ** 2 if args.exhaustive_grid else args.samples,
             batch_size=args.batch_size,
             digits=args.digits,
             operand_max=args.operand_max,
@@ -486,8 +560,12 @@ def main() -> None:
             seed=args.seed,
             device=device,
             answer_format=args.answer_format,
+            sample_specs=all_pair_specs(args.operand_max)
+            if args.exhaustive_grid
+            else None,
         )
         summary["requested_calculator_output_format"] = args.calculator_output_format
+        summary["exhaustive_grid"] = args.exhaustive_grid
         summary["output_dir"] = str(output_dir)
         summary["device"] = device
         output_dir.mkdir(parents=True, exist_ok=True)
