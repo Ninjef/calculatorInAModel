@@ -10,6 +10,49 @@ task, teach the upstream/model-side calculator-query protocol without using
 direct true-operand supervision?
 ```
 
+## Phase 6 Closure
+
+Phase 6 is complete.
+
+Final Phase 6 conclusion:
+
+```text
+Phase 6 established a real answer-derived interface-discovery positive in the
+identifiable `sum_left_operand` setting, culminating in deterministic Concrete
+answer-loss discovery and relaxation-off retention. The natural sum-only
+failure after the product decoder gate is best explained by result-level
+underidentification and independent-head action parameterization, not by oracle
+decoder health or broken relaxation wiring.
+```
+
+Supported claims:
+
+- Answer-derived local targets can teach strict calculator protocols in the
+  identifiable task.
+- Deterministic hard-forward / soft-backward Concrete answer-loss training can
+  discover and retain the identifiable hard protocol without direct operand
+  labels, hard-best CE, oracle operands during bridge training, or semantic
+  decoder movement.
+- The deterministic Concrete positive replicated across effective seeds `2`,
+  `4`, and `5`, and tolerated modest upstream movement.
+
+Unsupported claims:
+
+- Natural sum-only result-level discovery with the current independent operand
+  heads and deterministic Concrete schedule.
+- Literal stochastic Gumbel training under the tested settings.
+- Direct expected answer-loss optimization over independent operand heads.
+- Scaling to larger natural arithmetic before resolving the natural
+  underidentification/action-parameterization boundary.
+
+Next phase recommendation:
+
+```text
+Move to natural `0..19` result-level interface discovery with a structured
+joint-pair or result-space interface. Do not start Phase 7 by scaling to
+`operand_max=99`.
+```
+
 ## Fixed Setup
 
 Unless a task explicitly says otherwise, use:

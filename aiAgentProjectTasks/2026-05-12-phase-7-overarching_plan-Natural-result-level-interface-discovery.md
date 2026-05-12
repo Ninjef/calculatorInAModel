@@ -1,0 +1,474 @@
+# Phase 7 Overarching Plan: Natural Result-Level Interface Discovery
+
+## Mission
+
+Phase 7 should move the project from identifiable calculator-query discovery
+toward natural arithmetic calculator use.
+
+Phase 6 established the strongest current learned-interface result:
+
+```text
+In an identifiable `sum_left_operand` setting, answer-derived deterministic
+hard-forward / soft-backward Concrete training can discover a hard calculator
+protocol, and answer-only continuation can retain that protocol after every
+local, auxiliary, expected-loss, relaxed, and anchor objective is exactly off.
+```
+
+Phase 6 also established the next blocker:
+
+```text
+In natural sum-only addition, the answer identifies the result but not a unique
+operand pair. The correct result group gets essentially all answer-derived
+target mass, but that mass is spread across many same-sum pairs. Independent
+operand heads therefore have no unique pair target to discover.
+```
+
+Phase 7 should therefore ask:
+
+```text
+Can a model-side interface learn to make causally useful calculator calls for
+natural `0..19` addition when the action parameterization matches the
+result-level information present in the answer loss?
+```
+
+This is not a retreat from calculator use. It is the natural next step after
+Phase 6: stop asking natural answer loss to identify an arbitrary true operand
+pair, and instead require the learned interface to produce calculator results
+that answer the task through the calculator path.
+
+## Read First
+
+Before doing Phase 7 work, read these files in this order:
+
+```text
+CLAUDE.md
+OVERARCHING_EXPERIMENT_PURPOSE.md
+SOLUTION_IDEAS.md
+docs/canonical_diagnostics.md
+factSheets/PHASE_4_EXPERIMENT_FACT_SHEET.md
+factSheets/PHASE_5_EXPERIMENT_FACT_SHEET.md
+factSheets/PHASE_6_EXPERIMENT_FACT_SHEET.md
+aiAgentProjectTasks/completed/phase6/2026-05-10-phase-6-overarching_plan-Identifiable-local-interface-discovery.md
+aiAgentWorkHistory/phase6/2026-05-12-phase-6-closure-landscape-diagnostic.md
+```
+
+For the implementation surface, inspect:
+
+```text
+src/model.py
+src/data.py
+scripts/overfit_one_batch.py
+scripts/diagnose_calculator_protocol.py
+scripts/diagnose_private_protocol.py
+scripts/run_full_enum_action_loss_diagnostic.py
+scripts/run_phase6_sum_only_semantic_decoder_gate.py
+scripts/run_phase6_closure_landscape_diagnostic.py
+```
+
+## Critical Guardrails
+
+Do not rediscover oracle success.
+
+Oracle operands, oracle-at-eval recovery, forced true result classes,
+injection-zero controls, and forced-random controls are wiring checks only.
+They must pass before learned failures are interpretable, but they are not
+progress on the central question.
+
+Do not require exact true operand pairs as the main success metric for natural
+sum-only addition.
+
+For natural addition, `(3, 7)`, `(4, 6)`, `(5, 5)`, and other same-sum pairs
+are answer-equivalent. Pair exact is still useful for diagnosis, but the Phase
+7 learned-interface target is result-level calculator use:
+
+- learned calculator-result accuracy;
+- result-equivalent pair accuracy;
+- private all-pair result accuracy;
+- full-enum learned-result best fraction;
+- learned-result minus best-result answer-NLL gap;
+- answer dependence on the learned calculator result under injection-zero and
+  forced-random interventions;
+- semantic decoder movement exactly `0.0`;
+- auxiliary/direct operand supervision exactly `0.0`;
+- relaxation/local/result-group objective exactly `0.0` for retention claims.
+
+Do not start with `operand_max=99`, three-digit arithmetic, or natural language
+tasks. Phase 7 should solve natural `0..19` result-level discovery first.
+
+## Key Interpretation From Prior Phases
+
+Phase 1 established that answer accuracy alone is unreliable: models can solve
+around the calculator, use private codes, or benefit from oracle wiring without
+learning the intended interface.
+
+Phase 2 and Phase 3 showed that answer-NLL landscapes often contain real
+calculator-action signal, but addition-only pair targets are broad and sampled
+or independent-head objectives did not robustly discover hard protocols.
+
+Phase 4 showed that when the answer target makes operand identity useful,
+direct protocol teaching can be retained after direct supervision is removed.
+
+Phase 5 showed that upstream movement can preserve or complete partially taught
+protocols, but plain answer-only training does not discover the protocol from
+scratch.
+
+Phase 6 showed that answer-derived interface discovery is possible in the
+identifiable setting, and that deterministic Concrete is the strongest current
+estimator. It also showed that natural sum-only failure is best explained by
+result-level underidentification plus independent-head action parameterization.
+
+Phase 7 should treat that diagnosis as the starting point, not as a reason to
+rerun Phase 6 schedules.
+
+## Fixed Phase 7 Baseline Setup
+
+Unless a task explicitly says otherwise, keep the natural `0..19` setting fixed:
+
+```text
+digits=2
+operand_max=19
+calculator_operand_vocab_size=20
+n_layer=2
+n_head=1
+n_embd=16
+mlp_expansion=1
+calculator_hook_after_layer=1
+answer_format=sum
+calculator_output_format=sum
+calculator_read_position=operand_spans
+calculator_read_span_width=2
+calculator_bottleneck_mode=answer_decoder
+answer_decoder_interaction=product
+freeze_semantic_decoder=true
+answer_loss_weight=1.0
+aux_operand_loss_weight=0.0
+adaptive_interface_loss_weight=0.0
+expected_answer_loss_weight=0.0
+input_proj_anchor_weight=0.0
+oracle_train=false
+oracle_warmup_steps=0
+```
+
+Use the Phase 6 product-decoder checkpoint as the standard natural semantic
+decoder gate:
+
+```text
+runs/2026-05-12_phase6_sum_only_interaction_decoder_gate/stage0_candidates/tiny_operand_spans_dense/oracle_train/2026-05-12_113346_842566_model-c-oracle-op0-19-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00500_weights.pt
+```
+
+If that path is absent in a sandbox, use the exact path recorded in
+`factSheets/PHASE_6_EXPERIMENT_FACT_SHEET.md`.
+
+For strict discovery branches, prefer:
+
+```text
+semantic_decoder_checkpoint_load_scope=semantic_decoder_only
+freeze_semantic_decoder=true
+```
+
+## Primary Research Tracks
+
+### Track A: Structured Joint-Pair Result-Group Bridge
+
+This is the mainline.
+
+Replace independent A/B operand-head pressure with a structured pair policy
+that can put probability mass on a same-result group.
+
+The preferred implementation is:
+
+- a joint `20 x 20` pair policy over calculator calls;
+- hard forward through the real calculator using the selected pair;
+- soft backward through a result distribution formed by summing joint-pair mass
+  over all pairs with the same calculator result;
+- answer loss through the frozen product decoder;
+- dense checkpoints and relaxation-off retention.
+
+The expected successful behavior is not a unique true pair. It is a hard pair
+whose calculator result is correct, with causal answer dependence on that
+calculator result.
+
+Implementation note: the repo already has `calculator_action_head=joint_pair`,
+but current CLI validation restricts it to
+`action_loss_full_enum_joint_interface`. Phase 7 may need to extend joint-pair
+support to deterministic Concrete / result-group relaxed training and to the
+diagnostics that read learned result groups.
+
+### Track B: Result-Space Interface Diagnostic
+
+This is the fastest diagnostic fallback, not the strongest final claim.
+
+Train a `0..38` natural result-space interface and map each predicted result to
+a valid calculator query, for example a deterministic canonical pair within
+`0..19`.
+
+This asks:
+
+```text
+Can answer loss learn a calculator-result request at all when the interface
+action matches the identified variable?
+```
+
+A result-space positive is useful, but weaker than Track A because it risks
+becoming answer-class prediction wrapped around a calculator call. If used,
+require strict causal controls:
+
+- hard calculator result accuracy;
+- injection-zero and forced-random near chance;
+- oracle-at-eval as wiring only;
+- no semantic decoder movement;
+- retention after any result-space relaxation or local objective is off.
+
+### Track C: Canonical Query Symmetry Breaker
+
+Use this only if Track A result-group training is unstable despite a positive
+gradient gate.
+
+Construct an answer-derived canonical query target from the best result group
+without using true operands. Examples:
+
+- fixed canonical representative for each result, such as the smallest valid
+  first operand;
+- entropy-regularized group target that later anneals to a stable
+  representative;
+- teacher selected from the answer-NLL best-result group plus a deterministic
+  tie-break rule.
+
+This branch can produce hard calculator calls, but claims must be labeled
+carefully: it solves natural result use with an imposed query convention, not
+true operand recovery.
+
+### Track D: Upstream-Open Natural Result Discovery
+
+Do not start here.
+
+Only open upstream after a frozen-upstream or input-proj-only result-level
+interface passes Stage 1 and Stage 2. When upstream opens, require dense
+checkpointing and report parameter deltas for input projection, upstream, and
+semantic decoder.
+
+## Phase 7 Standard Stages
+
+### Stage 0: Natural Decoder And Landscape Gate
+
+Before training a new natural interface, verify:
+
+- product decoder oracle-at-eval is `1.000` or near exact;
+- injection-zero and forced-random are near chance;
+- full-enum best-result group matches the true sum;
+- answer-derived pair target remains broad, confirming that pair exact should
+  not be the primary natural metric;
+- result-group target is sharp enough to train against.
+
+Useful gates:
+
+```text
+oracle-at-eval exact >= 0.99
+best-result group matches true sum >= 0.99
+mean soft target true-result group probability high
+mean soft target true-pair probability low or broad is acceptable
+semantic decoder delta exactly 0.0
+```
+
+### Stage 1: Result-Level Discovery Training
+
+Train the selected interface without true operand labels:
+
+```text
+aux_operand_loss_weight=0.0
+oracle_train=false
+oracle_warmup_steps=0
+freeze_semantic_decoder=true
+```
+
+Primary success metrics:
+
+- learned calculator-result accuracy;
+- result-equivalent pair accuracy;
+- normal answer exact;
+- private all-pair result accuracy;
+- full-enum learned-result best fraction;
+- learned-result minus best-result gap.
+
+Save dense checkpoints every `25` or `50` steps. Select by result-level
+protocol metrics, not final eval exact alone.
+
+### Stage 2: Relaxation-Off Or Objective-Off Retention
+
+From selected Stage 1 checkpoints, continue with the real hard calculator path
+and all discovery-specific objectives off:
+
+```text
+answer_loss_weight=1.0
+aux_operand_loss_weight=0.0
+adaptive_interface_loss_weight=0.0
+local_target_loss_weight=0.0
+expected_answer_loss_weight=0.0
+relaxed_calculator_entropy_weight=0.0
+input_proj_anchor_weight=0.0
+freeze_semantic_decoder=true
+```
+
+This is the central retention claim. Stage 1 alone is not enough.
+
+### Stage 3: Replication
+
+After one seed passes Stage 2, replicate across effective seeds `2`, `4`, and
+`5`, matching Phase 6's replication discipline.
+
+### Stage 4: Optional Upstream-Open Stress
+
+Only after replication, test whether modest upstream movement helps or harms
+natural result discovery. Report dense snapshots and parameter deltas.
+
+## Required Diagnostics
+
+For every selected checkpoint, run or extend the canonical diagnostics to
+report:
+
+- built-in eval exact;
+- normal exact;
+- injection-zero exact;
+- forced-zero exact;
+- forced-random exact;
+- oracle-at-eval exact;
+- learned operand exact, for diagnosis only;
+- learned pair exact, for diagnosis only;
+- result-equivalent pair accuracy;
+- learned calculator-result accuracy;
+- private all-pair answer exact;
+- private all-pair result accuracy;
+- full-enum learned result NLL, true result NLL, and best result NLL;
+- learned-result minus best-result gap;
+- learned-result best fraction;
+- best-result group true-sum fraction;
+- pair entropy and result entropy when a pair policy is used;
+- trainable parameter groups;
+- semantic decoder parameter delta;
+- upstream and input-proj parameter deltas;
+- exact final objective weights.
+
+## Success Definitions
+
+### Useful Stage 0 Positive
+
+The natural product decoder is healthy and the answer-derived result landscape
+is sharp, while the pair landscape remains broad enough to justify a
+result-group objective.
+
+### Useful Stage 1 Positive
+
+Without direct operand supervision or oracle operands, the learned hard
+calculator result rises materially above chance and the full-enum learned-result
+gap closes.
+
+### Strong Phase 7 Positive
+
+After relaxation or result-group teaching is off, answer-only continuation
+retains a natural hard calculator-result protocol:
+
+```text
+normal answer exact near exact
+learned calculator-result accuracy near exact
+private all-pair result accuracy near exact
+full-enum learned-result best fraction near 1.0
+learned-result minus best-result gap near 0.0
+injection-zero and forced-random near chance
+semantic decoder delta 0.0
+aux/direct operand supervision 0.0
+all discovery-specific objective weights 0.0
+```
+
+### Very Strong Phase 7 Positive
+
+The strong result replicates across effective seeds `2`, `4`, and `5`, and an
+upstream-open branch preserves or improves result-level protocol metrics without
+moving the semantic decoder.
+
+## Failure Interpretation
+
+If Stage 0 oracle/readout gates fail:
+
+```text
+Do not train the learned interface. Fix the natural product decoder or readout
+first.
+```
+
+If Stage 0 result group is sharp but Stage 1 fails:
+
+```text
+The result-level objective is informative, but the action parameterization or
+optimizer is still wrong. Prefer changing the interface parameterization before
+rerunning small schedule sweeps.
+```
+
+If Stage 1 succeeds but Stage 2 retention fails:
+
+```text
+The training bridge can teach natural result use, but answer-only hard
+calculator continuation cannot yet hold it. Investigate gate-triggered handoff,
+slower relaxation removal, or stability regularization.
+```
+
+If result-space succeeds but joint-pair fails:
+
+```text
+The task is learnable at result level, but pair-action policy optimization is
+the blocker. Use the result-space branch as a diagnostic floor, not the final
+calculator-query claim.
+```
+
+## Reporting Contract
+
+Every Phase 7 task completion should update or create:
+
+```text
+factSheets/PHASE_7_EXPERIMENT_FACT_SHEET.md
+aiAgentWorkHistory/phase7/<date>-<short-description>.md
+```
+
+Every completed task should include:
+
+- claim tested;
+- code changes;
+- exact commands;
+- run paths;
+- selected checkpoints;
+- target/result landscape summary if relevant;
+- fast-gate table;
+- full diagnostics table;
+- exact final objective weights;
+- parameter movement summary;
+- comparison to Phase 6 natural and identifiable baselines;
+- go/no-go recommendation.
+
+When a task is complete, move the task file to:
+
+```text
+aiAgentProjectTasks/completed/phase7/
+```
+
+then commit and push, following `CLAUDE.md`.
+
+## First Task Recommendation
+
+The first Phase 7 task should be:
+
+```text
+Phase 7 First Task: Natural Joint-Pair Result-Group Bridge Gate
+```
+
+It should:
+
+1. Verify `factSheets/PHASE_7_EXPERIMENT_FACT_SHEET.md` exists and add
+   `aiAgentWorkHistory/phase7/` when writing the first work history.
+2. Extend joint-pair diagnostics to summarize result-group mass and learned
+   result accuracy under natural sum-only addition.
+3. Add the smallest implementation needed for a joint-pair result-group
+   deterministic Concrete bridge, or prove with a gradient gate that the
+   existing implementation cannot support it cleanly.
+4. Run Stage 0 product-decoder and full-enum result landscape gates.
+5. Run one strict `semantic_decoder_only`, frozen-upstream Stage 1 seed only if
+   the gates pass.
+6. Proceed to retention and replication only after result-level hard protocol
+   metrics pass, not merely after answer exact improves.
