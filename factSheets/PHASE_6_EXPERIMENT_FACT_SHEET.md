@@ -1026,3 +1026,89 @@ Gumbel sampling remains unstable and negative under the tested settings. The
 deterministic bridge can also tolerate modest upstream movement while keeping
 the semantic decoder fixed.
 ```
+
+## 2026-05-12 Natural Sum-Only Relaxed Bridge Stage 0 Blocker
+
+Task:
+
+```text
+aiAgentProjectTasks/2026-05-12-phase-6-eighth-task-Natural-sum-only-relaxed-bridge.md
+```
+
+Runner:
+
+```text
+scripts/run_phase6_natural_sum_only_relaxed_bridge.py
+```
+
+Run root:
+
+```text
+runs/2026-05-12_phase6_natural_sum_only_relaxed_bridge
+```
+
+Code changes:
+
+- Added the dedicated natural sum-only runner with the fixed `answer_format=sum`
+  / `calculator_output_format=sum` setup and result-accuracy checkpoint
+  selection logic.
+- Extended `scripts/run_full_enum_action_loss_diagnostic.py` with result-aware
+  grouping metrics for underidentified sum-only action spaces:
+  `learned_result_best_fraction`,
+  `mean_learned_result_minus_best_result_gap`,
+  `best_result_group_matches_true_sum_fraction`, effective result counts, and
+  same-sum near-best pair counts.
+
+Stage 0 using the existing strict sum-only oracle semantic decoder checkpoint:
+
+```text
+runs/2026-04-30_175805_513968_model-c-oracle-op0-19-answer_decoder/model-c-2digit-seed2/final_weights.pt
+```
+
+| Metric | Value |
+| --- | ---: |
+| Oracle-at-eval exact | `0.9375` |
+| Injection-zero exact | `0.0000` |
+| Forced-random exact | `0.0547` |
+| Initial hard learned answer exact | `0.0078` |
+| Initial hard learned calculator-result accuracy | `0.0078` |
+| Full-enum best result group matches true sum | `0.90625` |
+| Full-enum true-pair best fraction | `0.078125` |
+| Mean same-true-sum near-best pair count | `13.9297` |
+| Mean effective action pairs | `30.1275` |
+| Mean effective result count | `2.4661` |
+| Semantic decoder delta | `0.0` |
+
+This failed the required Stage 0 gate:
+
+```text
+oracle-at-eval exact >= 0.98
+full-enum best calculator-result matches true sum on nearly all samples
+```
+
+Fresh oracle wiring attempts were run under the same sum-only / operand-span /
+answer-decoder shape. They also failed to clear the `>=0.98` oracle gate:
+
+| Branch | Run | Eval exact | Diagnostic/oracle exact | Injection-zero | Forced-random |
+| --- | --- | ---: | ---: | ---: | ---: |
+| 1000 steps, lr `0.003`, batch `64` | `runs/2026-05-12_phase6_natural_sum_only_relaxed_bridge/stage0_fresh_oracle/2026-05-12_084905_549252_model-c-oracle-op0-19-answer_decoder/model-c-2digit-seed2` | `0.9238` | `0.9453 / 0.9531` | `0.0078` | `0.0156` |
+| 3000 steps, lr `0.001`, batch `64` | `runs/2026-05-12_phase6_natural_sum_only_relaxed_bridge/stage0_fresh_oracle_lr1e3/2026-05-12_085502_082246_model-c-oracle-op0-19-answer_decoder/model-c-2digit-seed3` | `0.9395` | `0.9297 / 0.9063` | `0.0000` | `0.0156` |
+| 2000 steps, lr `0.003`, batch `400` | `runs/2026-05-12_phase6_natural_sum_only_relaxed_bridge/stage0_fresh_oracle_batch400/2026-05-12_090304_977325_model-c-oracle-op0-19-answer_decoder/model-c-2digit-seed4` | `0.9395` | `0.9141 / 0.9375` | `0.0078` | `0.0313` |
+
+Decision:
+
+- Stage 1 deterministic Concrete natural sum-only training was not run because
+  the Stage 0 wiring/landscape gate failed.
+- This is a useful negative/blocker, not evidence against the relaxed bridge
+  itself: the strict natural sum-only semantic decoder did not provide a
+  healthy enough oracle-at-eval and full-enum result landscape for interpreting
+  learned-interface training.
+- Interpretation label: `natural_sum_only_negative` with mechanism
+  `sum_only_semantic_decoder_wiring_blocker`.
+
+Recommendation:
+
+Before rerunning the natural sum-only relaxed bridge, strengthen or revise the
+sum-only strict answer decoder wiring so oracle-at-eval and full-enum
+best-result-match both clear the Stage 0 gate. Do not proceed to `0..99` or
+upstream-open natural stress until this smaller wiring gate passes.
