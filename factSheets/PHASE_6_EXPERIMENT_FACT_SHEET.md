@@ -858,3 +858,171 @@ or an upstream-open expected-loss branch only if the goal is to test whether the
 frozen random readout is the blocker. The current failure mode most directly
 supports trying a relaxation that aligns training-time mass movement with the
 hard argmax protocol.
+
+## 2026-05-12 Relaxed Bridge Replication, Stochastic Gumbel, And Upstream-Open Stress
+
+Task:
+
+```text
+aiAgentProjectTasks/2026-05-11-phase-6-seventh-task-Relaxed-bridge-replication-stochastic-and-upstream-open.md
+```
+
+Runner and run root:
+
+```text
+scripts/run_phase6_relaxed_bridge_replication_stochastic_upstream.py
+runs/2026-05-11_phase6_relaxed_bridge_replication_stochastic_upstream
+```
+
+All training branches used the strict identifiable setup with
+`freeze_semantic_decoder=true`, `oracle_train=false`,
+`oracle_warmup_steps=0`, `answer_loss_weight=1.0`,
+`aux_operand_loss_weight=0.0`, `adaptive/local_target_loss_weight=0.0`,
+`expected_answer_loss_weight=0.0`, and `input_proj_anchor_weight=0.0`.
+
+### Stage 0 Gradient Gates
+
+Both deterministic and literal stochastic Gumbel one-step gates passed with
+semantic decoder grad/delta exactly `0.0`.
+
+| Mode | Gate seed | Best-pair prob delta | Gradient cosine | Input-proj delta | Upstream delta |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| deterministic | `6201` | `+2.0915e-05` | `0.2345` | `1.0896` | `0.0` |
+| gumbel | `7201` | `+1.1708e-05` | `0.2743` | `1.0892` | `0.0` |
+| gumbel | `7202` | `+2.7953e-05` | `0.1475` | `1.0896` | `0.0` |
+| gumbel | `7203` | `+2.1150e-05` | `0.0944` | `1.0892` | `0.0` |
+
+### Stage 1 Deterministic Concrete Replication
+
+All three effective seeds reached the requested fast-gate threshold during
+deterministic hard-forward / soft-backward Concrete training.
+
+| Effective seed | First gate step | Best fast normal/operand/pair/calc | Final fast normal/operand/pair/calc | Final eval |
+| ---: | ---: | ---: | ---: | ---: |
+| `2` | `200` | `1.000 / 1.000 / 1.000 / 1.000` | `0.859 / 0.859 / 0.859 / 0.859` | `0.920` |
+| `4` | `250` | `0.961 / 0.961 / 0.961 / 0.961` | `0.844 / 0.844 / 0.844 / 0.844` | `0.766` |
+| `5` | `275` | `0.977 / 0.977 / 0.977 / 0.977` | `0.922 / 0.922 / 0.922 / 0.922` | `0.936` |
+
+Selected Stage 1 diagnostics:
+
+| Effective seed | Canonical operand/pair/calc | Private operand/pair/calc | Full-enum learned-true/best gap | Learned-best |
+| ---: | ---: | ---: | ---: | ---: |
+| `2` | `0.996 / 0.996 / 0.996` | `0.9975 / 0.9975 / 0.9975` | `0.0 / 0.0` | `1.000` |
+| `4` | `0.965 / 0.965 / 0.965` | `0.950 / 0.950 / 0.950` | `0.3548 / 0.3548` | `0.9297` |
+| `5` | `0.973 / 0.973 / 0.973` | `0.9675 / 0.9675 / 0.9675` | `0.1557 / 0.1557` | `0.9688` |
+
+Nuance: the fast-gate replication was strong, but the stricter selected
+Stage 1 full-diagnostic threshold (`>=0.98`) held cleanly only for effective
+seed `2`. Seeds `4` and `5` were near-gated at the selected Stage 1 checkpoint.
+
+### Stage 2 Relaxation-Off Retention
+
+All three deterministic seeds retained or completed to exact fast-gate metrics
+after switching to `calculator_estimator=adaptive_interface` with all
+teacher/local/expected/relaxed objectives inactive.
+
+| Effective seed | Source Stage 1 checkpoint | Final fast normal/operand/pair/calc | Final eval |
+| ---: | --- | ---: | ---: |
+| `2` | step `200` | `1.000 / 1.000 / 1.000 / 1.000` | `1.000` |
+| `4` | step `250` | `1.000 / 1.000 / 1.000 / 1.000` | `1.000` |
+| `5` | step `275` | `1.000 / 1.000 / 1.000 / 1.000` | `1.000` |
+
+Selected Stage 2 diagnostics:
+
+| Effective seed | Canonical operand/pair/calc | Private operand/pair/calc | Full-enum learned-true/best gap | Learned-best |
+| ---: | ---: | ---: | ---: | ---: |
+| `2` | `1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000` | `0.0 / 0.0` | `1.000` |
+| `4` | `0.996 / 0.996 / 0.996` | `0.9975 / 0.9975 / 0.9975` | `0.0153 / 0.0153` | `0.9922` |
+| `5` | `1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000` | `0.0 / 0.0` | `1.000` |
+
+Final retained objective weights were all clean:
+
+```text
+answer_loss_weight=1.0
+final_aux_operand_loss_weight=0.0
+final_adaptive_interface_loss_weight=0.0
+final_local_target_loss_weight=0.0
+final_expected_answer_loss_weight=0.0
+final_relaxed_calculator_entropy_weight=0.0
+final_input_proj_anchor_weight=0.0
+```
+
+Interpretation: deterministic Concrete replication is positive after
+relaxation-off retention. The answer-only retention phase completed the
+near-gated seed `4` and `5` protocols to exact or near-exact diagnostics.
+
+### Stage 3 Literal Stochastic Gumbel
+
+Literal sampled Gumbel-Softmax training failed in both the primary branch and
+the one allowed stabilization branch despite the positive stochastic gradient
+gate.
+
+| Branch | Effective seed | Best fast normal/operand/pair/calc | Final fast normal/operand/pair/calc | Final eval | Diagnostic learned-best |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| primary | `2` | `0.000 / 0.023 / 0.023 / 0.055` | `0.000 / 0.008 / 0.008 / 0.008` | `0.000` | `0.0859` |
+| stabilized (`1.5 -> 0.5`, entropy `0.01`) | `2` | `0.000 / 0.023 / 0.023 / 0.055` | `0.000 / 0.008 / 0.008 / 0.008` | `0.000` | `0.0234` |
+
+Both stochastic branches reached `NaN` losses after step `225`. This is a
+`stochastic_gumbel_negative`, not a target-identifiability negative: oracle
+wiring remained `1.000`, and full-enum true-best remained `1.000`.
+
+### Stage 4 Upstream-Open Relaxed Bridge Stress
+
+The deterministic relaxed bridge tolerated carefully opened upstream parameters
+for effective seed `2`.
+
+Stage 1 upstream-open training:
+
+| Metric | Value |
+| --- | ---: |
+| First/best gate step | `225` |
+| Best fast normal/operand/pair/calc | `0.961 / 0.961 / 0.961 / 0.961` |
+| Final fast normal/operand/pair/calc | `0.664 / 0.664 / 0.664 / 0.664` |
+| Final eval | `0.689` |
+| Input-proj delta to selected step | `24.6044` L2 / `2.5674` max |
+| Upstream delta to selected step | `0.0400` L2 / `0.0030` max |
+| Upstream tensors changed | `14 / 29` |
+| Semantic decoder delta | `0.0` |
+
+Selected upstream-open Stage 1 diagnostics at step `225`:
+
+```text
+canonical operand/pair/calc = 0.973 / 0.973 / 0.973
+private operand/pair/calc = 0.9825 / 0.9825 / 0.9825
+full-enum learned-minus-true/best gap = 0.0455 / 0.0455
+learned-best = 0.9844
+```
+
+Relaxation-off retention from the upstream-open selected checkpoint:
+
+| Retention condition | Final fast normal/operand/pair/calc | Canonical operand/pair/calc | Private operand/pair/calc | Full-enum gaps | Learned-best |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| upstream frozen | `1.000 / 1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000` | `0.0 / 0.0` | `1.000` |
+| upstream open | `1.000 / 1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000` | `1.000 / 1.000 / 1.000` | `0.0 / 0.0` | `1.000` |
+
+Interpretation: `upstream_open_positive`. Upstream parameters moved measurably
+during relaxed training, semantic decoder movement stayed exactly `0.0`, and
+the selected hard protocol survived relaxation-off retention with upstream
+frozen and with upstream still open.
+
+### Decision
+
+Keep these labels:
+
+```text
+deterministic_concrete_positive
+stochastic_gumbel_negative
+upstream_open_positive
+```
+
+The strongest updated claim is:
+
+```text
+In the strict semantic_decoder_only setup, deterministic hard-forward /
+soft-backward Concrete answer-loss training replicates across effective seeds
+2, 4, and 5 as a fast-gate learner and retains/completes to exact hard
+calculator protocols after the relaxation is turned off. Literal stochastic
+Gumbel sampling remains unstable and negative under the tested settings. The
+deterministic bridge can also tolerate modest upstream movement while keeping
+the semantic decoder fixed.
+```
