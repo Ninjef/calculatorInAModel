@@ -476,3 +476,169 @@ should move to qualitatively different learning signals: policy-gradient /
 REINFORCE-style calculator actions, target propagation or local boundary
 targets, differentiable surrogate gradients, synthetic-gradient/direct-feedback
 methods, or explicit curriculum handoffs with teacher removal.
+
+## 2026-05-13 Result-Space Boundary-Target Learning Signal
+
+Task:
+
+```text
+aiAgentProjectTasks/2026-05-13-phase-7-fourth-task-Natural-result-space-boundary-target-learning-signal.md
+```
+
+Claim tested:
+
+```text
+Can an answer-derived boundary target over calculator result classes teach a
+natural 0..19 model-side result request, with true sums used only for
+diagnostics and parity checks?
+```
+
+Code changes:
+
+- Added explicit result-boundary target training flags to
+  `scripts/overfit_one_batch.py`:
+  `--result-boundary-target-loss-weight`,
+  `--result-boundary-target-mode`,
+  `--result-boundary-target-temperature`,
+  `--result-boundary-target-min-probability-floor`, and
+  `--result-boundary-target-chunk-size`.
+- Added forced-result-class scoring over result classes `0..38`, using the
+  frozen product answer decoder to compute answer NLL for each candidate.
+- Added hard-best result CE and soft-result CE/KL targets on
+  `calculator_hook.result_proj`; target construction does not use true operands
+  or true sums.
+- Logged result-boundary target settings and metrics separately from prior
+  operand-pair local-target metrics.
+- Added tests for lowest-NLL target selection, result-proj gradient flow,
+  frozen semantic/upstream gradients, parity with direct true-sum CE only after
+  target construction, and CLI validation.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile src/model.py scripts/overfit_one_batch.py scripts/diagnose_calculator_protocol.py scripts/run_full_enum_action_loss_diagnostic.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+83 passed
+```
+
+Stage 0 boundary-target parity gate from the Phase 6 product checkpoint:
+
+| Metric | Value |
+| --- | ---: |
+| hard-best result equals true sum | `1.0000` |
+| tie-aware true-result best fraction | `1.0000` |
+| soft target true-result probability | `0.99989` |
+| target entropy | `0.00106` |
+| effective result count | `1.0011` |
+| initial hard learned result accuracy | `0.0250` |
+| result-proj gradient L2 | `0.10210` |
+| semantic decoder gradient/delta L2 | `0.0 / 0.0` |
+| upstream gradient/delta L2 | `0.0 / 0.0` |
+| trainable group | `calculator_hook.result_proj` only |
+
+Stage 1 primary run:
+
+```text
+runs/2026-05-13_phase7_result_space_boundary_target_signal/stage1_seed2_hard_best/2026-05-13_072413_688763_model-c-op0-19-gumbel_concrete_interface-result_space-inlr0.03-uplr0.0003-rbt1-hard_best_result-rbtt0.25-rbtchunk64-rtemp1-rfinal1-answer_decoder-adec-product/model-c-2digit-seed2
+```
+
+Setup:
+
+- `answer_loss_weight=0.0`
+- `result_boundary_target_loss_weight=1.0`
+- `result_boundary_target_mode=hard_best_result`
+- `result_boundary_target_temperature=0.25`
+- `input_proj_lr=0.03`
+- `steps=300`
+- frozen semantic decoder and frozen upstream encoder
+- trainable parameters: `calculator_hook.result_proj` only (`2,535`)
+
+Primary curve summary:
+
+| Step | Boundary loss | Learned result acc | Learned-best fraction | Learned-minus-best gap | Result entropy |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| `0` | `3.6638` | `0.0075` | `0.0075` | `7.5011` | `3.6637` |
+| `75` | `3.2669` | `0.0600` | `0.0600` | `7.0230` | `3.4690` |
+| `150` | `3.1388` | `0.0925` | `0.0925` | `6.7583` | `3.4150` |
+| `175` | `3.1153` | `0.1150` | `0.1150` | `6.6698` | `3.3820` |
+| `300` | `2.9622` | `0.0700` | `0.0700` | `6.7682` | `3.3110` |
+
+Because the primary run did not reach `0.70`, the single allowed optimization
+rescue was run with `input_proj_lr=0.01` and `steps=600`:
+
+```text
+runs/2026-05-13_phase7_result_space_boundary_target_signal/stage1_seed2_hard_best_lr001_rescue/2026-05-13_072601_947478_model-c-op0-19-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-hard_best_result-rbtt0.25-rbtchunk64-rtemp1-rfinal1-answer_decoder-adec-product/model-c-2digit-seed2
+```
+
+Rescue result:
+
+| Metric | Value |
+| --- | ---: |
+| best hard learned calculator-result accuracy | `0.0900` at step `250` |
+| final hard learned calculator-result accuracy | `0.0750` |
+| final eval exact | `0.0650` |
+
+Selected Stage 1 checkpoint:
+
+```text
+runs/2026-05-13_phase7_result_space_boundary_target_signal/stage1_seed2_hard_best/2026-05-13_072413_688763_model-c-op0-19-gumbel_concrete_interface-result_space-inlr0.03-uplr0.0003-rbt1-hard_best_result-rbtt0.25-rbtchunk64-rtemp1-rfinal1-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00175_weights.pt
+```
+
+Selection reason: primary step `175` had the best hard learned
+calculator-result accuracy across primary and rescue runs (`0.1150`).
+
+Selected checkpoint diagnostics:
+
+| Diagnostic | Value |
+| --- | ---: |
+| canonical normal exact | `0.0850` |
+| canonical calculator result accuracy | `0.0850` |
+| canonical result-equivalent pair accuracy | `0.0850` |
+| canonical pair exact | `0.0125` |
+| canonical injection-zero exact | `0.0550` |
+| canonical forced-random exact | `0.0225` |
+| oracle-at-eval exact | `1.0000` |
+| mean result confidence | `0.06118` |
+| mean result entropy | `3.3898` |
+| full-enum learned-result best fraction | `0.0850` |
+| full-enum learned result matches true sum | `0.0850` |
+| mean learned-result minus best-result gap | `6.8508` |
+| best result group matches true sum | `1.0000` |
+| mean soft target true result-group probability | `0.99995` |
+| mean effective result count | `1.0009` |
+
+Parameter movement from Stage 1 step `0` to selected step `175`:
+
+| Group | L2 delta | Max abs | Changed tensors |
+| --- | ---: | ---: | ---: |
+| `calculator_hook.result_proj` | `113.5894` | `5.1529` | `2/2` |
+| semantic decoder | `0.0` | `0.0` | `0/3` |
+| upstream encoder | `0.0` | `0.0` | `0/29` |
+| other interface groups | `0.0` | `0.0` | `0/2` |
+
+Interpretation:
+
+- Label: `result_boundary_target_stage1_negative`.
+- The result-boundary target itself is valid and sharp: Stage 0 hard-best and
+  tie-aware true-result gates were both `1.0`, and selected-checkpoint
+  full-enum diagnostics still show the true result group as best with
+  probability `0.99995`.
+- Despite that, the frozen operand-span features plus `result_proj` did not
+  learn a useful hard result request. The best hard result accuracy was only
+  `0.1150`, and the single allowed LR rescue reached only `0.0900`.
+- Stage 2 target-off retention was skipped because Stage 1 did not pass or
+  near-pass.
+
+Recommendation:
+
+Do not replicate this branch or run Stage 2 from these checkpoints. The next
+task should pivot to a different signal family or capacity/feature diagnosis:
+multi-sample policy gradient with per-prompt baselines, surrogate gradients,
+direct feedback alignment, or a direct separability test of whether frozen
+operand-span representations can linearly predict the answer-derived result
+target.

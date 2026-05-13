@@ -96,6 +96,11 @@ class TrainConfig:
     expected_answer_loss_entropy_weight: float
     expected_answer_loss_entropy_decay_steps: int
     expected_answer_loss_chunk_size: int
+    result_boundary_target_loss_weight: float
+    result_boundary_target_mode: str
+    result_boundary_target_temperature: float
+    result_boundary_target_min_probability_floor: float
+    result_boundary_target_chunk_size: int
     relaxed_calculator_temperature: float
     relaxed_calculator_final_temperature: float
     relaxed_calculator_temperature_decay_steps: int
@@ -622,6 +627,25 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "expected_answer_loss_hard_learned_best_fraction",
         "expected_answer_loss_hard_learned_pair_exact",
         "expected_answer_loss_hard_learned_calc_accuracy",
+        "result_boundary_target_loss",
+        "result_boundary_target_objective",
+        "result_boundary_target_loss_weight",
+        "result_boundary_target_mode",
+        "result_boundary_target_temperature",
+        "result_boundary_target_min_probability_floor",
+        "result_boundary_target_chunk_size",
+        "result_boundary_target_best_nll",
+        "result_boundary_target_true_nll",
+        "result_boundary_target_learned_nll",
+        "result_boundary_target_learned_minus_best_gap",
+        "result_boundary_target_learned_minus_true_gap",
+        "result_boundary_target_hard_best_equals_true_sum",
+        "result_boundary_target_tie_aware_true_result_best_fraction",
+        "result_boundary_target_true_result_probability",
+        "result_boundary_target_entropy",
+        "result_boundary_target_effective_results",
+        "result_boundary_target_learned_best_fraction",
+        "result_boundary_target_hard_learned_calc_accuracy",
         "relaxed_calculator_temperature",
         "relaxed_calculator_final_temperature",
         "relaxed_calculator_mode",
@@ -1329,6 +1353,137 @@ def action_loss_weights_from_losses(
         weights = weights.clamp_min(min_probability_floor)
         weights = weights / weights.sum(dim=-1, keepdim=True)
     return weights
+
+
+@torch.no_grad()
+def score_forced_result_classes_chunked(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    chunk_size: int,
+) -> torch.Tensor:
+    if chunk_size < 1:
+        raise ValueError("result-boundary target chunk size must be positive")
+    if model.calculator_hook is None:
+        raise ValueError("result-boundary target requires a calculator hook")
+    result_vocab_size = model.cfg.calculator_result_vocab_size
+    was_training = model.training
+    model.eval()
+    losses: list[torch.Tensor] = []
+    try:
+        for start in range(0, result_vocab_size, chunk_size):
+            forced_classes = torch.arange(
+                start,
+                min(start + chunk_size, result_vocab_size),
+                device=batch.x.device,
+            )
+            expanded_x = batch.x.repeat_interleave(len(forced_classes), dim=0)
+            expanded_y = batch.y.repeat_interleave(len(forced_classes), dim=0)
+            expanded_mask = batch.loss_mask.repeat_interleave(
+                len(forced_classes), dim=0
+            )
+            forced = forced_classes.repeat(batch.x.shape[0])
+            logits = model(expanded_x, forced_calculator_result_class=forced)
+            losses.append(
+                masked_cross_entropy_per_example(
+                    logits, expanded_y, expanded_mask
+                ).reshape(batch.x.shape[0], len(forced_classes))
+            )
+    finally:
+        if was_training:
+            model.train()
+    return torch.cat(losses, dim=-1)
+
+
+def result_boundary_target_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    target_mode: str,
+    temperature: float,
+    min_probability_floor: float,
+    chunk_size: int,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    if target_mode not in {"hard_best_result", "soft_result"}:
+        raise ValueError(
+            "result-boundary target mode must be 'hard_best_result' or 'soft_result'"
+        )
+    if temperature <= 0:
+        raise ValueError("result-boundary target temperature must be positive")
+    if min_probability_floor < 0:
+        raise ValueError(
+            "result-boundary target min probability floor must be non-negative"
+        )
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    full_losses = score_forced_result_classes_chunked(
+        model, batch, chunk_size=chunk_size
+    )
+    target_weights = action_loss_weights_from_losses(
+        full_losses,
+        temperature=temperature,
+        min_probability_floor=min_probability_floor,
+    )
+    best_result = full_losses.argmin(dim=-1)
+    if target_mode == "hard_best_result":
+        target_loss = torch.nn.functional.cross_entropy(result_logits, best_result)
+    else:
+        target_loss = -(
+            target_weights * result_logits.log_softmax(dim=-1)
+        ).sum(dim=-1).mean()
+
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = true_a + true_b
+    learned_result = result_logits.argmax(dim=-1)
+    best_losses = full_losses.gather(1, best_result.unsqueeze(-1)).squeeze(-1)
+    true_losses = full_losses.gather(1, true_sum.unsqueeze(-1)).squeeze(-1)
+    learned_losses = full_losses.gather(1, learned_result.unsqueeze(-1)).squeeze(-1)
+    target_entropy = -(
+        target_weights * target_weights.clamp_min(1e-12).log()
+    ).sum(dim=-1)
+    true_result_probability = target_weights.gather(
+        1, true_sum.unsqueeze(-1)
+    ).squeeze(-1)
+    tie_tolerance = 1e-6
+    true_result_strictly_beaten = full_losses < (
+        true_losses.unsqueeze(-1) - tie_tolerance
+    )
+    metrics = {
+        "result_boundary_target_loss": float(target_loss.item()),
+        "result_boundary_target_mode": target_mode,
+        "result_boundary_target_temperature": float(temperature),
+        "result_boundary_target_min_probability_floor": float(min_probability_floor),
+        "result_boundary_target_chunk_size": int(chunk_size),
+        "result_boundary_target_best_nll": float(best_losses.mean().item()),
+        "result_boundary_target_true_nll": float(true_losses.mean().item()),
+        "result_boundary_target_learned_nll": float(learned_losses.mean().item()),
+        "result_boundary_target_learned_minus_best_gap": float(
+            (learned_losses - best_losses).mean().item()
+        ),
+        "result_boundary_target_learned_minus_true_gap": float(
+            (learned_losses - true_losses).mean().item()
+        ),
+        "result_boundary_target_hard_best_equals_true_sum": float(
+            (best_result == true_sum).float().mean().item()
+        ),
+        "result_boundary_target_tie_aware_true_result_best_fraction": float(
+            (~true_result_strictly_beaten).float().mean().item()
+        ),
+        "result_boundary_target_true_result_probability": float(
+            true_result_probability.mean().item()
+        ),
+        "result_boundary_target_entropy": float(target_entropy.mean().item()),
+        "result_boundary_target_effective_results": float(
+            target_entropy.exp().mean().item()
+        ),
+        "result_boundary_target_learned_best_fraction": float(
+            (learned_result == best_result).float().mean().item()
+        ),
+        "result_boundary_target_hard_learned_calc_accuracy": float(
+            (learned_result == true_sum).float().mean().item()
+        ),
+    }
+    return target_loss, metrics
 
 
 def action_loss_full_enum_interface_loss(
@@ -2665,6 +2820,13 @@ def run_variant(
             args.expected_answer_loss_entropy_decay_steps
         ),
         expected_answer_loss_chunk_size=args.expected_answer_loss_chunk_size,
+        result_boundary_target_loss_weight=args.result_boundary_target_loss_weight,
+        result_boundary_target_mode=args.result_boundary_target_mode,
+        result_boundary_target_temperature=args.result_boundary_target_temperature,
+        result_boundary_target_min_probability_floor=(
+            args.result_boundary_target_min_probability_floor
+        ),
+        result_boundary_target_chunk_size=args.result_boundary_target_chunk_size,
         relaxed_calculator_temperature=args.relaxed_calculator_temperature,
         relaxed_calculator_final_temperature=(
             args.relaxed_calculator_final_temperature
@@ -2772,6 +2934,10 @@ def run_variant(
             and args.calculator_estimator == "gumbel_concrete_interface"
             and not args.oracle_train
         )
+        use_result_boundary_target = (
+            use_relaxed_calculator
+            and args.result_boundary_target_loss_weight > 0
+        )
         current_relaxed_temperature = relaxed_calculator_temperature(
             initial_temperature=args.relaxed_calculator_temperature,
             final_temperature=args.relaxed_calculator_final_temperature,
@@ -2817,6 +2983,9 @@ def run_variant(
         expected_answer_loss_objective_value = None
         expected_answer_loss_entropy_weight = 0.0
         expected_answer_loss_metrics: dict[str, float] = {}
+        result_boundary_target_loss_value = None
+        result_boundary_target_objective_value = None
+        result_boundary_target_metrics: dict[str, float] = {}
         relaxed_calculator_entropy_objective_value = None
         current_relaxed_entropy_weight = 0.0
         relaxed_calculator_metrics: dict[str, float] = {}
@@ -2975,6 +3144,31 @@ def run_variant(
                 expected_answer_loss_objective.item()
             )
             loss = loss + expected_answer_loss_objective
+        if use_result_boundary_target:
+            (
+                result_boundary_loss,
+                result_boundary_target_metrics,
+            ) = result_boundary_target_loss(
+                model,
+                batch,
+                num_digits=num_digits,
+                target_mode=args.result_boundary_target_mode,
+                temperature=args.result_boundary_target_temperature,
+                min_probability_floor=(
+                    args.result_boundary_target_min_probability_floor
+                ),
+                chunk_size=args.result_boundary_target_chunk_size,
+            )
+            result_boundary_target_loss_value = result_boundary_target_metrics[
+                "result_boundary_target_loss"
+            ]
+            result_boundary_objective = (
+                args.result_boundary_target_loss_weight * result_boundary_loss
+            )
+            result_boundary_target_objective_value = float(
+                result_boundary_objective.item()
+            )
+            loss = loss + result_boundary_objective
         if use_relaxed_calculator:
             current_relaxed_entropy_weight = relaxed_calculator_entropy_weight(
                 initial_weight=args.relaxed_calculator_entropy_weight,
@@ -3068,6 +3262,14 @@ def run_variant(
                     expected_answer_loss_objective_value
                 )
                 curve_row.update(expected_answer_loss_metrics)
+            if use_result_boundary_target:
+                curve_row["result_boundary_target_loss_weight"] = (
+                    args.result_boundary_target_loss_weight
+                )
+                curve_row["result_boundary_target_objective"] = (
+                    result_boundary_target_objective_value
+                )
+                curve_row.update(result_boundary_target_metrics)
             if use_relaxed_calculator:
                 curve_row["relaxed_calculator_entropy_objective"] = (
                     relaxed_calculator_entropy_objective_value
@@ -3131,6 +3333,14 @@ def run_variant(
                     f" entropy={expected_answer_loss_metrics['expected_answer_loss_entropy']:.3f}"
                     f" learned_best={expected_answer_loss_metrics['expected_answer_loss_hard_learned_best_fraction']:.3f}"
                     if use_expected_answer_loss
+                    else ""
+                )
+                + (
+                    f" result_boundary_loss={result_boundary_target_loss_value:.4f}"
+                    f" result_boundary_weight={args.result_boundary_target_loss_weight:.4f}"
+                    f" best_true={result_boundary_target_metrics['result_boundary_target_hard_best_equals_true_sum']:.3f}"
+                    f" learned_best={result_boundary_target_metrics['result_boundary_target_learned_best_fraction']:.3f}"
+                    if use_result_boundary_target
                     else ""
                 )
                 + (
@@ -3311,6 +3521,22 @@ def run_variant(
         else args.expected_answer_loss_entropy_weight
     )
     metrics["expected_answer_loss_chunk_size"] = args.expected_answer_loss_chunk_size
+    metrics["result_boundary_target_loss_weight"] = (
+        args.result_boundary_target_loss_weight
+    )
+    metrics["final_result_boundary_target_loss_weight"] = (
+        args.result_boundary_target_loss_weight
+    )
+    metrics["result_boundary_target_mode"] = args.result_boundary_target_mode
+    metrics["result_boundary_target_temperature"] = (
+        args.result_boundary_target_temperature
+    )
+    metrics["result_boundary_target_min_probability_floor"] = (
+        args.result_boundary_target_min_probability_floor
+    )
+    metrics["result_boundary_target_chunk_size"] = (
+        args.result_boundary_target_chunk_size
+    )
     metrics["relaxed_calculator_temperature"] = args.relaxed_calculator_temperature
     metrics["relaxed_calculator_final_temperature"] = (
         args.relaxed_calculator_final_temperature
@@ -3823,6 +4049,39 @@ def parse_args() -> argparse.Namespace:
         help="Number of action pairs to score per forced-decoder chunk.",
     )
     parser.add_argument(
+        "--result-boundary-target-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Weight for answer-derived result-space boundary target CE/KL. "
+            "The target is built from forced result-class answer NLLs."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-mode",
+        choices=["hard_best_result", "soft_result"],
+        default="hard_best_result",
+        help="CE to the lowest-NLL forced result or CE/KL to a soft result target.",
+    )
+    parser.add_argument(
+        "--result-boundary-target-temperature",
+        type=float,
+        default=1.0,
+        help="Softmax temperature for soft result boundary targets.",
+    )
+    parser.add_argument(
+        "--result-boundary-target-min-probability-floor",
+        type=float,
+        default=0.0,
+        help="Optional per-result probability floor before renormalizing soft targets.",
+    )
+    parser.add_argument(
+        "--result-boundary-target-chunk-size",
+        type=int,
+        default=64,
+        help="Number of forced result classes to score per decoder chunk.",
+    )
+    parser.add_argument(
         "--relaxed-calculator-temperature",
         type=float,
         default=1.0,
@@ -4141,6 +4400,32 @@ def main() -> None:
         )
     if args.expected_answer_loss_chunk_size < 1:
         raise ValueError("--expected-answer-loss-chunk-size must be positive")
+    if args.result_boundary_target_loss_weight < 0:
+        raise ValueError("--result-boundary-target-loss-weight must be non-negative")
+    if args.result_boundary_target_temperature <= 0:
+        raise ValueError("--result-boundary-target-temperature must be positive")
+    if args.result_boundary_target_min_probability_floor < 0:
+        raise ValueError(
+            "--result-boundary-target-min-probability-floor must be non-negative"
+        )
+    if args.result_boundary_target_chunk_size < 1:
+        raise ValueError("--result-boundary-target-chunk-size must be positive")
+    if (
+        args.result_boundary_target_loss_weight > 0
+        and args.calculator_action_head != "result_space"
+    ):
+        raise ValueError(
+            "--result-boundary-target-loss-weight requires "
+            "--calculator-action-head result_space"
+        )
+    if (
+        args.result_boundary_target_loss_weight > 0
+        and args.calculator_estimator != "gumbel_concrete_interface"
+    ):
+        raise ValueError(
+            "--result-boundary-target-loss-weight requires "
+            "--calculator-estimator gumbel_concrete_interface"
+        )
     if (
         args.calculator_estimator == "full_enum_expected_answer_loss"
         and args.calculator_action_head != "independent_operands"
@@ -4320,6 +4605,18 @@ def main() -> None:
                 suffix_parts.append(
                     f"expansent{args.expected_answer_loss_entropy_weight:g}"
                 )
+        if args.result_boundary_target_loss_weight > 0:
+            suffix_parts.append(
+                f"rbt{args.result_boundary_target_loss_weight:g}"
+                f"-{args.result_boundary_target_mode}"
+                f"-rbtt{args.result_boundary_target_temperature:g}"
+                f"-rbtchunk{args.result_boundary_target_chunk_size}"
+            )
+            if args.result_boundary_target_min_probability_floor > 0:
+                suffix_parts.append(
+                    "rbtfloor"
+                    f"{args.result_boundary_target_min_probability_floor:g}"
+                )
         if args.calculator_estimator == "gumbel_concrete_interface":
             suffix_parts.append(
                 f"rtemp{args.relaxed_calculator_temperature:g}"
@@ -4420,6 +4717,14 @@ def main() -> None:
         f"entropy_weight={args.expected_answer_loss_entropy_weight} "
         f"entropy_decay_steps={args.expected_answer_loss_entropy_decay_steps} "
         f"chunk_size={args.expected_answer_loss_chunk_size}"
+    )
+    print(
+        "result boundary target: "
+        f"weight={args.result_boundary_target_loss_weight} "
+        f"mode={args.result_boundary_target_mode} "
+        f"temperature={args.result_boundary_target_temperature} "
+        f"min_probability_floor={args.result_boundary_target_min_probability_floor} "
+        f"chunk_size={args.result_boundary_target_chunk_size}"
     )
     print(
         "relaxed calculator: "
