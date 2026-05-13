@@ -213,47 +213,40 @@ or joint-pair optimization.
 
 ## Status Update: 2026-05-13
 
-Track A and Track B have now both produced strict seed-2 negatives:
+Phase 7 now has one natural `0..19` retained positive:
 
-- Track A `joint_pair_stage1_negative`: hard learned calculator-result
-  accuracy peaked at `0.11`, and soft true-result probability stayed near
-  `0.034 -> 0.036`.
-- Track B `result_space_stage1_negative`: direct `0..38` result-space request
-  training peaked at `0.0925` hard learned calculator-result accuracy, with
-  soft true-result probability only `0.02564 -> 0.02920` and `37.21`
-  effective results at the selected checkpoint.
+```text
+full_grid_upstream_open_result_boundary_retained_positive
+```
 
-The result-space negative is especially informative: even after removing the
-same-sum pair ambiguity, deterministic hard-forward / soft-backward Concrete
-answer-loss training did not teach the model-side calculator request. The next
-mainline should therefore skip Stage 2 retention, seed replication, Track C
-canonical-query symmetry breaking, and operand-range scaling from these
-checkpoints.
+The current positive came from exact full-grid upstream-open result-boundary
+teaching, not from strict answer-loss Concrete discovery. Seed `2` learned a
+hard result request to `0.9675`, and target-off continuation retained it at
+`0.8325` final / `0.8800` best post-start with semantic decoder movement
+exactly `0.0`.
+
+Useful prior negatives remain informative:
+
+- joint-pair and direct result-space strict Concrete did not learn from
+  initialization;
+- frozen linear and frozen MLP result-boundary heads did not pass Stage 1;
+- random-resampled upstream-open boundary teaching was only partial;
+- exact-grid coverage stabilized that partial branch into a retained positive.
 
 Current next direction:
 
 ```text
-Explore qualitatively different learning signals rather than more small
-parameterization or schedule sweeps of the deterministic Concrete bridge.
-Prioritize policy-gradient / REINFORCE-style calculator actions,
-target-propagation or local boundary targets, differentiable surrogate
-gradients, synthetic-gradient/direct-feedback methods, or explicit curriculum
-handoffs with teacher removal.
+Replicate the exact-grid retained-positive recipe across seeds 4 and 5 before
+claiming a robust Phase 7 result. If replication holds, move to canonical-query
+or protocol stabilization. If it fails, compare against multi-sample
+result-space policy gradient or another genuinely different learning signal.
 ```
 
 Selected next task:
 
 ```text
-aiAgentProjectTasks/2026-05-13-phase-7-fourth-task-Natural-result-space-boundary-target-learning-signal.md
+aiAgentProjectTasks/2026-05-13-phase-7-seventh-task-Exact-grid-retained-positive-seed-replication.md
 ```
-
-This task chooses the target-propagation/local-boundary-target branch first.
-It should enumerate forced calculator result classes through the frozen product
-decoder, train the `result_space` request head toward the answer-derived best
-result, and then remove the boundary-target objective completely for a
-target-off retention check. This is the shortest route to a natural
-result-level calculator-use positive if the answer-derived target can teach
-what deterministic Concrete could not discover from strict initialization.
 
 ### Track A: Structured Joint-Pair Result-Group Bridge
 

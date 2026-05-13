@@ -29,6 +29,29 @@ validate new wiring. If the wiring has already been validated for the current
 configuration, skip oracle-only reruns and move directly to learned-interface
 teaching/retention.
 
+# Current Phase 7 Finding
+
+Phase 7 has a natural `0..19` retained positive:
+`full_grid_upstream_open_result_boundary_retained_positive`.
+
+Short version: exact full-grid upstream-open result-boundary teaching learned a
+hard result request (`0.9675`), and target-off continuation retained it
+(`0.8325` final; `0.8800` best post-start). Semantic decoder movement stayed
+exactly `0.0`.
+
+Do not rerun these as next steps unless debugging new code:
+
+- oracle/readout checks for natural `0..19`;
+- random-resampled upstream-open boundary-target repeats;
+- frozen linear or frozen MLP result-head boundary teaching;
+- the MLP rescue from the full-grid task;
+- immediate policy-gradient pivot as if the full-grid gate failed.
+
+Next best step: replicate the exact-grid retained-positive recipe across seeds,
+then pursue canonical-query/protocol stabilization if replication holds.
+
+For details, see `factSheets/PHASE_7_EXPERIMENT_FACT_SHEET.md`.
+
 # Navigation
 You can find a valuable set of fact sheets in factSheets/, which keeps track of all the learnings of past experiments by experiment phase
 Under aiAgentWorkHistory, we have all the work performed in the past.

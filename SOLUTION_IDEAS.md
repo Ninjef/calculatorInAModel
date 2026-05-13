@@ -2,48 +2,42 @@ Straight Through Estimator was the easy option. We tried that and it didn't seem
 
 # Current Research Status: 2026-05-13
 
-Phase 6 showed that deterministic hard-forward / soft-backward Concrete can
-discover and retain an identifiable calculator protocol when answer loss
-identifies the action. Phase 7 then tested the natural `0..19` sum-only case
-with result-level action spaces and answer-derived boundary targets:
-
-- `joint_pair_stage1_negative`: a joint `20 x 20` pair policy trained through
-  result-group mass did not learn a useful hard calculator-result protocol.
-- `result_space_stage1_negative`: even a direct `0..38` result request head
-  did not learn from strict initialization.
-- `result_boundary_target_stage1_negative`: a sharp answer-derived result
-  target did not teach a frozen linear result head.
-- `minimal_upstream_open_boundary_target_partial`: allowing upstream movement
-  raised hard result accuracy to `0.5975` while the semantic decoder stayed
-  fixed, but this still failed the pass gate and drifted by final.
-
-This means the next work should not be a small schedule sweep of STE,
-independent-head Concrete, joint-pair Concrete, frozen result-space Concrete,
-or oracle/readout checks. The most relevant next ideas are either a clearly
-different stabilization of the upstream-open partial result, or qualitatively
-different learning signals:
-
-- policy-gradient / REINFORCE-style calculator actions;
-- target propagation or local boundary targets;
-- differentiable surrogate or shadow-calculator gradients;
-- synthetic gradients or direct feedback alignment;
-- explicit curriculum handoffs with teacher removal.
-
-The selected next task is a final high-signal stabilization gate for the
-upstream-open local-boundary-target branch:
+Phase 7 now has one natural `0..19` retained positive:
 
 ```text
-aiAgentProjectTasks/2026-05-13-phase-7-sixth-task-Full-grid-upstream-open-result-boundary-retention-gate.md
+full_grid_upstream_open_result_boundary_retained_positive
 ```
 
-Reason: the only natural Phase 7 branch to move substantially was
-upstream-open result-boundary teaching. The prior `batch_size=400` training
-runs randomly resampled pairs each step rather than using a guaranteed full
-`20 x 20` ordered grid, so exact-grid training is the cleanest way to determine
-whether the partial result is limited by stochastic coverage/stability. If that
-does not pass, the next task should pivot to multi-sample result-space policy
-gradient with per-prompt or leave-one-out baselines instead of further
-boundary-target variants.
+Exact full-grid upstream-open result-boundary teaching learned a hard result
+request to `0.9675` on seed `2`, and target-off continuation retained it at
+`0.8325` final / `0.8800` best post-start. Semantic decoder movement stayed
+exactly `0.0`.
+
+Helpful now:
+
+- exact full-grid coverage;
+- upstream-open result-boundary teaching;
+- target-off retention diagnostics;
+- seed replication before protocol-stabilization work.
+
+Not helpful as next steps:
+
+- oracle/readout reruns for natural `0..19`;
+- random-resampled boundary-target repeats;
+- frozen linear or frozen MLP result-head variants;
+- the skipped MLP rescue from the full-grid task;
+- immediate policy-gradient pivots before checking replication.
+
+Selected next task:
+
+```text
+aiAgentProjectTasks/2026-05-13-phase-7-seventh-task-Exact-grid-retained-positive-seed-replication.md
+```
+
+If seeds `4` and `5` replicate seed `2`, move next to canonical-query/protocol
+stabilization. If replication fails, compare against multi-sample result-space
+policy gradient with per-prompt or leave-one-out baselines instead of more
+boundary-target schedule variants.
 
 # Alternatives to the Straight-Through Estimator
 
