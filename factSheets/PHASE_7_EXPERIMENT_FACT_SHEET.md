@@ -17,6 +17,34 @@ Phase 7 should therefore prioritize structured joint-pair or result-space
 interfaces that match the result-level information available in natural answer
 loss.
 
+## Current State After Result-Space Diagnostic
+
+As of `2026-05-13`, both strict natural result-level action
+parameterizations tried in Phase 7 are negative:
+
+- `joint_pair_stage1_negative`: hard learned calculator-result accuracy peaked
+  at `0.11`; soft true-result probability stayed near broad initial mass.
+- `result_space_stage1_negative`: even a direct `0..38` result request head
+  peaked at only `0.0925` hard learned calculator-result accuracy, while soft
+  true-result probability moved only `0.02564 -> 0.02920`.
+
+This means pair underidentification was real but not sufficient to explain the
+natural-addition failure. The frozen product decoder/readout and full-enum
+result landscape remain healthy, but deterministic hard-forward /
+soft-backward Concrete answer-loss training from strict initialization is not
+currently converting the result-level answer signal into a learned model-side
+calculator request.
+
+Current recommendation:
+
+```text
+Stop small sweeps of the deterministic Concrete result-level setup. Move next
+to qualitatively different learning signals: policy-gradient / REINFORCE-style
+calculator actions, target propagation or local boundary targets,
+differentiable surrogate gradients, synthetic-gradient/direct-feedback methods,
+or explicit curriculum handoffs with teacher removal.
+```
+
 ## Starting Guardrail
 
 Oracle/readout success is a wiring gate only. Phase 7 progress must be judged

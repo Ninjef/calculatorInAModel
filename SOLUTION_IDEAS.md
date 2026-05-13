@@ -1,5 +1,27 @@
 Straight Through Estimator was the easy option. We tried that and it didn't seem to be working too well. Other options we need to explore:
 
+# Current Research Status: 2026-05-13
+
+Phase 6 showed that deterministic hard-forward / soft-backward Concrete can
+discover and retain an identifiable calculator protocol when answer loss
+identifies the action. Phase 7 then tested the natural `0..19` sum-only case
+with result-level action spaces:
+
+- `joint_pair_stage1_negative`: a joint `20 x 20` pair policy trained through
+  result-group mass did not learn a useful hard calculator-result protocol.
+- `result_space_stage1_negative`: even a direct `0..38` result request head
+  did not learn from strict initialization.
+
+This means the next work should not be a small schedule sweep of STE,
+independent-head Concrete, joint-pair Concrete, or result-space Concrete. The
+most relevant next ideas are qualitatively different learning signals:
+
+- policy-gradient / REINFORCE-style calculator actions;
+- target propagation or local boundary targets;
+- differentiable surrogate or shadow-calculator gradients;
+- synthetic gradients or direct feedback alignment;
+- explicit curriculum handoffs with teacher removal.
+
 # Alternatives to the Straight-Through Estimator
 
 Great follow-up — and the right question to ask, because STE is just the *cheapest* solution to a much more general problem. Let me first sharpen what the problem actually is, then give you the menu.

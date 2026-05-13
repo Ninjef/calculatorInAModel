@@ -211,6 +211,36 @@ calculator-query claim. A positive says result-level calculator requests are
 learnable; a negative says the blocker is deeper than pair underidentification
 or joint-pair optimization.
 
+## Status Update: 2026-05-13
+
+Track A and Track B have now both produced strict seed-2 negatives:
+
+- Track A `joint_pair_stage1_negative`: hard learned calculator-result
+  accuracy peaked at `0.11`, and soft true-result probability stayed near
+  `0.034 -> 0.036`.
+- Track B `result_space_stage1_negative`: direct `0..38` result-space request
+  training peaked at `0.0925` hard learned calculator-result accuracy, with
+  soft true-result probability only `0.02564 -> 0.02920` and `37.21`
+  effective results at the selected checkpoint.
+
+The result-space negative is especially informative: even after removing the
+same-sum pair ambiguity, deterministic hard-forward / soft-backward Concrete
+answer-loss training did not teach the model-side calculator request. The next
+mainline should therefore skip Stage 2 retention, seed replication, Track C
+canonical-query symmetry breaking, and operand-range scaling from these
+checkpoints.
+
+Current next direction:
+
+```text
+Explore qualitatively different learning signals rather than more small
+parameterization or schedule sweeps of the deterministic Concrete bridge.
+Prioritize policy-gradient / REINFORCE-style calculator actions,
+target-propagation or local boundary targets, differentiable surrogate
+gradients, synthetic-gradient/direct-feedback methods, or explicit curriculum
+handoffs with teacher removal.
+```
+
 ### Track A: Structured Joint-Pair Result-Group Bridge
 
 This is the mainline.
