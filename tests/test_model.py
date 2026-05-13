@@ -632,6 +632,49 @@ def test_gumbel_concrete_interface_uses_hard_forward_soft_backward_signal() -> N
     assert b_logits.grad.abs().sum().item() > 0
 
 
+def test_joint_pair_gumbel_concrete_uses_result_group_soft_backward_signal() -> None:
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="gumbel_concrete_interface",
+        calculator_action_head="joint_pair",
+        relaxed_calculator_temperature=2.0,
+    )
+    hook = CalculatorHook(cfg)
+    pair_logits = torch.full((1, 1, 16), -3.0, requires_grad=True)
+    with torch.no_grad():
+        pair_logits[0, 0, 1 * 4 + 2] = 5.0
+
+    flat_result, a_pred, b_pred, signal = (
+        hook._relaxed_joint_pair_calculator_output_signal(
+            pair_logits=pair_logits,
+            dtype=torch.float32,
+        )
+    )
+
+    assert a_pred.item() == 1
+    assert b_pred.item() == 2
+    assert flat_result.argmax(dim=-1).item() == 3
+    assert torch.allclose(
+        signal.detach()[0, 0],
+        torch.tensor([0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
+    )
+
+    loss = (signal * torch.arange(signal.shape[-1], dtype=signal.dtype)).sum()
+    loss.backward()
+
+    assert pair_logits.grad is not None
+    assert pair_logits.grad.abs().sum().item() > 0
+
+
 def test_calculator_injection_is_localized_to_equals_positions() -> None:
     torch.manual_seed(0)
     hook = CalculatorHook(_small_calculator_cfg(mode="add"))
@@ -1406,6 +1449,52 @@ def test_joint_pair_head_traces_pair_action() -> None:
     assert trace["b_pred"][0, 5].item() == 2
     assert trace["result_pred"][0, 5].item() == 3
     assert torch.isfinite(trace["pair_logp"][0, 5])
+
+
+def test_joint_pair_operand_spans_projection_shape_and_relaxed_gradient() -> None:
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=20,
+        calculator_result_vocab_size=39,
+        calculator_estimator="gumbel_concrete_interface",
+        calculator_action_head="joint_pair",
+        calculator_read_position="operand_spans",
+        calculator_read_span_width=2,
+        calculator_bottleneck_mode="answer_decoder",
+        answer_decoder_interaction="product",
+        relaxed_calculator_temperature=2.0,
+    )
+    model = TinyGPT(cfg)
+    assert model.calculator_hook is not None
+    assert model.calculator_hook.pair_proj is not None
+    assert model.calculator_hook.pair_proj.in_features == 2 * 2 * cfg.n_embd
+
+    for name, param in model.named_parameters():
+        if not name.startswith("calculator_hook.pair_proj."):
+            param.requires_grad = False
+
+    x = torch.tensor([[0, 3, PLUS_ID, 0, 7, EQ_ID]])
+    logits, diagnostics = model(x, return_diagnostics=True)
+    trace = diagnostics["calculator_trace"]
+    assert trace["result_pred"][0, 5].item() == (
+        trace["a_pred"][0, 5].item() + trace["b_pred"][0, 5].item()
+    )
+
+    loss = logits[:, -1].sum()
+    loss.backward()
+
+    assert model.calculator_hook.pair_proj.weight.grad is not None
+    assert model.calculator_hook.pair_proj.weight.grad.abs().sum().item() > 0
+    assert model.tok_emb.weight.grad is None
+    assert model.calculator_hook.output_proj.weight.grad is None
 
 
 def test_joint_full_enum_interface_loss_updates_pair_projection_only() -> None:

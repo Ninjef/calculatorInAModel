@@ -829,6 +829,47 @@ def relaxed_calculator_policy_metrics(
 ) -> tuple[torch.Tensor, dict[str, float]]:
     if temperature <= 0:
         raise ValueError("relaxed calculator temperature must be positive")
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = true_a + true_b
+    if model.cfg.calculator_action_head == "joint_pair":
+        pair_logits, _, _, _ = calculator_read_pair_logits(model, batch)
+        pair_probs = torch.softmax(pair_logits / temperature, dim=-1)
+        pair_entropy = -(pair_probs * pair_probs.clamp_min(1e-12).log()).sum(dim=-1)
+        classes = model.cfg.calculator_operand_vocab_size
+        learned_pair = pair_logits.argmax(dim=-1)
+        learned_a = learned_pair // classes
+        learned_b = learned_pair % classes
+        values = torch.arange(classes, device=batch.x.device)
+        sum_idx = (values.view(-1, 1) + values.view(1, -1)).reshape(1, -1)
+        sum_idx = sum_idx.expand(pair_probs.shape[0], -1)
+        result_probs = pair_probs.new_zeros(
+            (pair_probs.shape[0], model.cfg.calculator_result_vocab_size)
+        )
+        result_probs.scatter_add_(1, sum_idx, pair_probs)
+        result_entropy = -(
+            result_probs * result_probs.clamp_min(1e-12).log()
+        ).sum(dim=-1)
+        entropy = pair_entropy
+        entropy_objective = -entropy_weight * entropy.mean()
+        learned_sum = learned_a + learned_b
+        metrics = {
+            "relaxed_calculator_temperature": float(temperature),
+            "relaxed_calculator_entropy_weight": float(entropy_weight),
+            "relaxed_calculator_entropy": float(entropy.mean().item()),
+            "relaxed_calculator_effective_pairs": float(entropy.exp().mean().item()),
+            "relaxed_calculator_result_entropy": float(result_entropy.mean().item()),
+            "relaxed_calculator_effective_results": float(
+                result_entropy.exp().mean().item()
+            ),
+            "relaxed_calculator_hard_learned_pair_exact": float(
+                ((learned_a == true_a) & (learned_b == true_b)).float().mean().item()
+            ),
+            "relaxed_calculator_hard_learned_calc_accuracy": float(
+                (learned_sum == true_sum).float().mean().item()
+            ),
+        }
+        return entropy_objective, metrics
+
     a_logits, b_logits, _, _ = calculator_read_operand_logits(model, batch)
     a_probs = torch.softmax(a_logits / temperature, dim=-1)
     b_probs = torch.softmax(b_logits / temperature, dim=-1)
@@ -837,10 +878,8 @@ def relaxed_calculator_policy_metrics(
     entropy = a_entropy + b_entropy
     entropy_objective = -entropy_weight * entropy.mean()
 
-    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
     learned_a = a_logits.argmax(dim=-1)
     learned_b = b_logits.argmax(dim=-1)
-    true_sum = true_a + true_b
     learned_sum = learned_a + learned_b
     metrics = {
         "relaxed_calculator_temperature": float(temperature),
@@ -920,13 +959,19 @@ def calculator_read_pair_logits(
                 break
     positions = model._calculator_read_positions(batch.x)
     batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
-    pair_input = torch.cat(
-        [
-            residual[batch_idx, positions["a"]],
-            residual[batch_idx, positions["b"]],
-        ],
-        dim=-1,
-    )
+    if model.cfg.calculator_read_position == "operand_spans":
+        pair_input = torch.cat(
+            model.calculator_hook._operand_span_inputs(residual, positions),
+            dim=-1,
+        )
+    else:
+        pair_input = torch.cat(
+            [
+                residual[batch_idx, positions["a"]],
+                residual[batch_idx, positions["b"]],
+            ],
+            dim=-1,
+        )
     if model.calculator_hook.pair_proj is None:
         raise ValueError("calculator pair logits require a joint pair projection")
     return (
@@ -2151,13 +2196,19 @@ def auxiliary_operand_loss(
                         if i == model.cfg.calculator_hook_after_layer:
                             break
                 positions = model._calculator_read_positions(batch.x)
-                pair_input = torch.cat(
-                    [
-                        residual[batch_idx, positions["a"]],
-                        residual[batch_idx, positions["b"]],
-                    ],
-                    dim=-1,
-                ).detach()
+                if model.cfg.calculator_read_position == "operand_spans":
+                    pair_input = torch.cat(
+                        model.calculator_hook._operand_span_inputs(residual, positions),
+                        dim=-1,
+                    ).detach()
+                else:
+                    pair_input = torch.cat(
+                        [
+                            residual[batch_idx, positions["a"]],
+                            residual[batch_idx, positions["b"]],
+                        ],
+                        dim=-1,
+                    ).detach()
         if not grad_upstream:
             if model.calculator_hook.pair_proj is None:
                 raise ValueError("joint auxiliary loss requires a pair projection")
@@ -3949,11 +4000,6 @@ def main() -> None:
         raise ValueError(
             "full_enum_expected_answer_loss requires independent operand heads"
         )
-    if (
-        args.calculator_estimator == "gumbel_concrete_interface"
-        and args.calculator_action_head != "independent_operands"
-    ):
-        raise ValueError("gumbel_concrete_interface requires independent operand heads")
     if args.relaxed_calculator_temperature <= 0:
         raise ValueError("--relaxed-calculator-temperature must be positive")
     if args.relaxed_calculator_final_temperature <= 0:
@@ -3986,11 +4032,12 @@ def main() -> None:
         )
     if (
         args.calculator_action_head == "joint_pair"
-        and args.calculator_estimator != "action_loss_full_enum_joint_interface"
+        and args.calculator_estimator
+        not in {"action_loss_full_enum_joint_interface", "gumbel_concrete_interface"}
     ):
         raise ValueError(
             "--calculator-action-head joint_pair is currently supported only with "
-            "action_loss_full_enum_joint_interface"
+            "action_loss_full_enum_joint_interface or gumbel_concrete_interface"
         )
     if args.input_proj_anchor_weight < 0:
         raise ValueError("--input-proj-anchor-weight must be non-negative")

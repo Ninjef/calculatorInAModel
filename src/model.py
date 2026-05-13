@@ -134,14 +134,6 @@ class CalculatorHook(nn.Module):
             )
         if cfg.calculator_read_span_width < 1:
             raise ValueError("calculator_read_span_width must be positive")
-        if (
-            cfg.calculator_read_position == "operand_spans"
-            and cfg.calculator_action_head != "independent_operands"
-        ):
-            raise ValueError(
-                "calculator_read_position='operand_spans' currently requires "
-                "calculator_action_head='independent_operands'"
-            )
         if cfg.calculator_operand_vocab_size < 1:
             raise ValueError("calculator operand vocab size must be positive")
         expected_result_size = (2 * cfg.calculator_operand_vocab_size) - 1
@@ -170,8 +162,11 @@ class CalculatorHook(nn.Module):
         if self.action_head == "joint_pair":
             for param in self.input_proj.parameters():
                 param.requires_grad = False
+            pair_input_width = 2 * cfg.n_embd
+            if self.read_position == "operand_spans":
+                pair_input_width *= self.read_span_width
             self.pair_proj: nn.Linear | None = nn.Linear(
-                2 * cfg.n_embd, self.operand_vocab_size * self.operand_vocab_size
+                pair_input_width, self.operand_vocab_size * self.operand_vocab_size
             )
         else:
             self.pair_proj = None
@@ -251,7 +246,21 @@ class CalculatorHook(nn.Module):
         if oracle_operands is None:
             if self.action_head == "joint_pair":
                 assert pair_logits is not None
-                if forced_result_class is not None:
+                if (
+                    self.estimator == "gumbel_concrete_interface"
+                    and forced_result_class is None
+                    and result_override == "add"
+                ):
+                    (
+                        flat_result,
+                        a_pred,
+                        b_pred,
+                        relaxed_calculator_signal,
+                    ) = self._relaxed_joint_pair_calculator_output_signal(
+                        pair_logits=pair_logits,
+                        dtype=h.dtype,
+                    )
+                elif forced_result_class is not None:
                     flat_result = self._forced_result(
                         a_pred, forced_result_class, dtype=h.dtype
                     )
@@ -431,9 +440,12 @@ class CalculatorHook(nn.Module):
         self, h: Tensor, read_positions: dict[str, Tensor]
     ) -> Tensor:
         B, T, _ = h.shape
-        batch_idx = torch.arange(B, device=h.device)
-        a_h = h[batch_idx, read_positions["a"]]
-        b_h = h[batch_idx, read_positions["b"]]
+        if self.read_position == "operand_spans":
+            a_h, b_h = self._operand_span_inputs(h, read_positions)
+        else:
+            batch_idx = torch.arange(B, device=h.device)
+            a_h = h[batch_idx, read_positions["a"]]
+            b_h = h[batch_idx, read_positions["b"]]
         if self.pair_proj is None:
             raise ValueError("joint pair logits require calculator_action_head=joint_pair")
         selected_pair_logits = self.pair_proj(torch.cat([a_h, b_h], dim=-1))
@@ -577,6 +589,17 @@ class CalculatorHook(nn.Module):
         flat_sum.scatter_add_(1, sum_idx, flat_pair)
         return flat_sum.reshape(*a_dist.shape[:-1], self.result_vocab_size)
 
+    def _sum_distribution_from_pair_distribution(self, pair_dist: Tensor) -> Tensor:
+        if pair_dist.shape[-1] != self.operand_vocab_size * self.operand_vocab_size:
+            raise ValueError("relaxed joint-pair distribution width mismatch")
+        flat_pair = pair_dist.reshape(-1, pair_dist.shape[-1])
+        values = torch.arange(self.operand_vocab_size, device=pair_dist.device)
+        sum_idx = (values.view(-1, 1) + values.view(1, -1)).reshape(1, -1)
+        sum_idx = sum_idx.expand(flat_pair.shape[0], -1)
+        flat_sum = pair_dist.new_zeros((flat_pair.shape[0], self.result_vocab_size))
+        flat_sum.scatter_add_(1, sum_idx, flat_pair)
+        return flat_sum.reshape(*pair_dist.shape[:-1], self.result_vocab_size)
+
     def _relaxed_calculator_output_signal(
         self,
         *,
@@ -604,6 +627,59 @@ class CalculatorHook(nn.Module):
         )
         a_pred = a_hard.argmax(dim=-1)
         b_pred = b_hard.argmax(dim=-1)
+        flat_result = hard_result.reshape(-1, self.result_vocab_size).to(dtype=dtype)
+        return flat_result, a_pred, b_pred, signal.to(dtype=dtype)
+
+    def _relaxed_joint_pair_calculator_output_signal(
+        self,
+        *,
+        pair_logits: Tensor,
+        dtype: torch.dtype,
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        temperature = float(self.relaxed_temperature)
+        if temperature <= 0:
+            raise ValueError("relaxed calculator temperature must be positive")
+        if self.relaxed_mode == "deterministic":
+            pair_soft = torch.softmax(pair_logits / temperature, dim=-1)
+            pair_idx = pair_logits.argmax(dim=-1)
+        elif self.relaxed_mode == "gumbel":
+            pair_gumbel = -torch.empty_like(pair_logits).exponential_().log()
+            pair_soft = torch.softmax((pair_logits + pair_gumbel) / temperature, dim=-1)
+            pair_idx = pair_soft.argmax(dim=-1)
+        else:
+            raise ValueError(f"unknown relaxed calculator mode: {self.relaxed_mode}")
+        pair_hard = F.one_hot(
+            pair_idx, num_classes=self.operand_vocab_size * self.operand_vocab_size
+        ).to(pair_logits.dtype)
+        hard_result = self._sum_distribution_from_pair_distribution(pair_hard)
+        soft_result = self._sum_distribution_from_pair_distribution(pair_soft)
+        if self.output_format == "sum":
+            hard_signal = hard_result
+            soft_signal = soft_result
+        elif self.output_format == "sum_left_operand":
+            hard_pair = pair_hard.reshape(
+                *pair_hard.shape[:-1],
+                self.operand_vocab_size,
+                self.operand_vocab_size,
+            )
+            soft_pair = pair_soft.reshape(
+                *pair_soft.shape[:-1],
+                self.operand_vocab_size,
+                self.operand_vocab_size,
+            )
+            hard_a = hard_pair.sum(dim=-1)
+            soft_a = soft_pair.sum(dim=-1)
+            hard_signal = torch.cat([hard_result, hard_a], dim=-1)
+            soft_signal = torch.cat([soft_result, soft_a], dim=-1)
+        else:
+            raise ValueError(f"unknown calculator output format: {self.output_format}")
+        signal = (
+            hard_signal.detach() + soft_signal - soft_signal.detach()
+            if self.relaxed_hard_forward
+            else soft_signal
+        )
+        a_pred = pair_idx // self.operand_vocab_size
+        b_pred = pair_idx % self.operand_vocab_size
         flat_result = hard_result.reshape(-1, self.result_vocab_size).to(dtype=dtype)
         return flat_result, a_pred, b_pred, signal.to(dtype=dtype)
 
