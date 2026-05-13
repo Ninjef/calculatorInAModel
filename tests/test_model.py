@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import torch
 
-from src.data import EQ_ID, PLUS_ID, VOCAB_SIZE, tokenize
+from src.data import EQ_ID, PLUS_ID, VOCAB_SIZE, ArithmeticBatch, tokenize
 from src.model import CalculatorHook, GPTConfig, HardAddSTE, TinyGPT, masked_cross_entropy
 from scripts.summarize_matched_retention_ladder import (
     select_checkpoint,
@@ -1553,6 +1553,68 @@ def test_joint_full_enum_interface_loss_updates_pair_projection_only() -> None:
     assert model.calculator_hook.pair_proj.weight.grad is not None
     assert model.calculator_hook.input_proj.weight.grad is None
     assert model.tok_emb.weight.grad is None
+
+
+def test_joint_pair_relaxed_metrics_report_soft_result_hardening(monkeypatch) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_relaxed_metrics", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="gumbel_concrete_interface",
+        calculator_action_head="joint_pair",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    model = TinyGPT(cfg)
+    batch = ArithmeticBatch(
+        x=torch.tensor(
+            [
+                [1, PLUS_ID, 2, EQ_ID],
+                [0, PLUS_ID, 3, EQ_ID],
+            ]
+        ),
+        y=torch.zeros((2, 4), dtype=torch.long),
+        loss_mask=torch.zeros((2, 4), dtype=torch.bool),
+    )
+    pair_logits = torch.full((2, 16), -10.0)
+    pair_logits[0, 1 * 4 + 2] = 10.0
+    pair_logits[1, 0 * 4 + 0] = 10.0
+    pair_logits[1, 0 * 4 + 3] = 9.0
+
+    def fake_pair_logits(model_arg, batch_arg):
+        assert model_arg is model
+        assert batch_arg is batch
+        return pair_logits, None, None, None
+
+    monkeypatch.setattr(overfit_script, "calculator_read_pair_logits", fake_pair_logits)
+
+    _, metrics = overfit_script.relaxed_calculator_policy_metrics(
+        model,
+        batch,
+        num_digits=1,
+        temperature=1.0,
+        entropy_weight=0.0,
+    )
+
+    assert metrics["relaxed_calculator_argmax_result_accuracy"] == pytest.approx(0.5)
+    assert metrics["relaxed_calculator_top3_result_accuracy"] == pytest.approx(1.0)
+    assert metrics["relaxed_calculator_hard_learned_calc_accuracy"] == pytest.approx(0.5)
+    assert 0.5 < metrics["relaxed_calculator_true_result_probability"] < 1.0
+    assert metrics["relaxed_calculator_result_entropy"] > 0.0
+    assert metrics["relaxed_calculator_effective_results"] > 1.0
 
 
 def test_joint_auxiliary_operand_loss_updates_pair_projection_only() -> None:

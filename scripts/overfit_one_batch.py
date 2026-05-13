@@ -629,6 +629,11 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "relaxed_calculator_entropy_weight",
         "relaxed_calculator_entropy",
         "relaxed_calculator_effective_pairs",
+        "relaxed_calculator_result_entropy",
+        "relaxed_calculator_effective_results",
+        "relaxed_calculator_true_result_probability",
+        "relaxed_calculator_argmax_result_accuracy",
+        "relaxed_calculator_top3_result_accuracy",
         "relaxed_calculator_hard_learned_pair_exact",
         "relaxed_calculator_hard_learned_calc_accuracy",
     ]
@@ -849,6 +854,10 @@ def relaxed_calculator_policy_metrics(
         result_entropy = -(
             result_probs * result_probs.clamp_min(1e-12).log()
         ).sum(dim=-1)
+        true_result_probability = result_probs.gather(1, true_sum.unsqueeze(1)).squeeze(1)
+        argmax_result = result_probs.argmax(dim=-1)
+        topk = min(3, result_probs.shape[-1])
+        topk_results = result_probs.topk(k=topk, dim=-1).indices
         entropy = pair_entropy
         entropy_objective = -entropy_weight * entropy.mean()
         learned_sum = learned_a + learned_b
@@ -860,6 +869,15 @@ def relaxed_calculator_policy_metrics(
             "relaxed_calculator_result_entropy": float(result_entropy.mean().item()),
             "relaxed_calculator_effective_results": float(
                 result_entropy.exp().mean().item()
+            ),
+            "relaxed_calculator_true_result_probability": float(
+                true_result_probability.mean().item()
+            ),
+            "relaxed_calculator_argmax_result_accuracy": float(
+                (argmax_result == true_sum).float().mean().item()
+            ),
+            "relaxed_calculator_top3_result_accuracy": float(
+                (topk_results == true_sum.unsqueeze(1)).any(dim=-1).float().mean().item()
             ),
             "relaxed_calculator_hard_learned_pair_exact": float(
                 ((learned_a == true_a) & (learned_b == true_b)).float().mean().item()
@@ -877,6 +895,20 @@ def relaxed_calculator_policy_metrics(
     b_entropy = -(b_probs * b_probs.clamp_min(1e-12).log()).sum(dim=-1)
     entropy = a_entropy + b_entropy
     entropy_objective = -entropy_weight * entropy.mean()
+    classes = model.cfg.calculator_operand_vocab_size
+    pair_probs = (a_probs.unsqueeze(2) * b_probs.unsqueeze(1)).reshape(a_probs.shape[0], -1)
+    values = torch.arange(classes, device=batch.x.device)
+    sum_idx = (values.view(-1, 1) + values.view(1, -1)).reshape(1, -1)
+    sum_idx = sum_idx.expand(pair_probs.shape[0], -1)
+    result_probs = pair_probs.new_zeros(
+        (pair_probs.shape[0], model.cfg.calculator_result_vocab_size)
+    )
+    result_probs.scatter_add_(1, sum_idx, pair_probs)
+    result_entropy = -(result_probs * result_probs.clamp_min(1e-12).log()).sum(dim=-1)
+    true_result_probability = result_probs.gather(1, true_sum.unsqueeze(1)).squeeze(1)
+    argmax_result = result_probs.argmax(dim=-1)
+    topk = min(3, result_probs.shape[-1])
+    topk_results = result_probs.topk(k=topk, dim=-1).indices
 
     learned_a = a_logits.argmax(dim=-1)
     learned_b = b_logits.argmax(dim=-1)
@@ -886,6 +918,19 @@ def relaxed_calculator_policy_metrics(
         "relaxed_calculator_entropy_weight": float(entropy_weight),
         "relaxed_calculator_entropy": float(entropy.mean().item()),
         "relaxed_calculator_effective_pairs": float(entropy.exp().mean().item()),
+        "relaxed_calculator_result_entropy": float(result_entropy.mean().item()),
+        "relaxed_calculator_effective_results": float(
+            result_entropy.exp().mean().item()
+        ),
+        "relaxed_calculator_true_result_probability": float(
+            true_result_probability.mean().item()
+        ),
+        "relaxed_calculator_argmax_result_accuracy": float(
+            (argmax_result == true_sum).float().mean().item()
+        ),
+        "relaxed_calculator_top3_result_accuracy": float(
+            (topk_results == true_sum.unsqueeze(1)).any(dim=-1).float().mean().item()
+        ),
         "relaxed_calculator_hard_learned_pair_exact": float(
             ((learned_a == true_a) & (learned_b == true_b)).float().mean().item()
         ),

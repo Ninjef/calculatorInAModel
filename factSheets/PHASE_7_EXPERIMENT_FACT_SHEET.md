@@ -146,3 +146,141 @@ Recommendation:
 Proceed to the Phase 7 Stage 1 natural decoder/full-enum landscape regression
 gate, then run the seed-2 strict joint-pair bridge only if the product decoder
 and result landscape gates still pass.
+
+## 2026-05-12 Joint-Pair Stage 1 Result Discovery
+
+Task:
+
+```text
+aiAgentProjectTasks/2026-05-12-phase-7-second-task-Natural-joint-pair-stage1-result-discovery-and-retention-gate.md
+```
+
+Claim tested:
+
+```text
+Can answer loss train a natural 20 x 20 joint-pair calculator-query policy to
+produce hard calculator calls with correct results, without true operand
+labels, oracle operands, hard-best CE, expected-loss enumeration, or semantic
+decoder movement?
+```
+
+Code changes:
+
+- Added relaxed joint-pair result metrics to `scripts/overfit_one_batch.py`:
+  `relaxed_calculator_true_result_probability`,
+  `relaxed_calculator_argmax_result_accuracy`, and
+  `relaxed_calculator_top3_result_accuracy`.
+- Mirrored the same soft result metrics for independent relaxed policies so
+  training curves keep a consistent schema.
+- Added focused coverage in `tests/test_model.py` for soft-result versus
+  hard-result metric reporting.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile src/model.py scripts/overfit_one_batch.py scripts/run_full_enum_action_loss_diagnostic.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+75 passed
+```
+
+Stage 0 gates:
+
+| Gate | Result |
+| --- | ---: |
+| oracle/readout exact | `1.000` |
+| oracle/readout injection-zero | `0.055` |
+| oracle/readout forced-random | `0.0225` |
+| full-enum best result group true sum | `1.000` |
+| soft target true result group probability | `0.99994` |
+| soft target true pair probability | `0.09749` |
+
+Stage 1 run:
+
+```text
+runs/2026-05-12_phase7_joint_pair_stage1_result_discovery/stage1_seed2_primary/2026-05-12_192703_156649_model-c-op0-19-gumbel_concrete_interface-joint_pair-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay600-answer_decoder-adec-product/model-c-2digit-seed2
+```
+
+Setup:
+
+- `digits=2`, `operand_max=19`, `calculator_operand_vocab_size=20`
+- `answer_format=sum`, `calculator_output_format=sum`
+- `calculator_action_head=joint_pair`
+- `calculator_estimator=gumbel_concrete_interface`
+- `calculator_read_position=operand_spans`, span width `2`
+- `answer_decoder_interaction=product`
+- `semantic_decoder_checkpoint_load_scope=semantic_decoder_only`
+- `freeze_semantic_decoder=true`, `freeze_upstream_encoder=true`
+- answer loss `1.0`
+- aux/adaptive/local/expected/relaxed-entropy/anchor weights all `0.0`
+- trainable parameters: `calculator_hook.pair_proj` only (`26,000`)
+
+Training curve summary:
+
+| Step | Hard result acc | Soft true-result prob | Soft argmax result acc | Top-3 result acc | Result entropy | Pair entropy |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `0` | `0.0250` | `0.03364` | `0.0650` | `0.1675` | `3.4932` | `5.9915` |
+| `150` | `0.0900` | `0.03447` | `0.0475` | `0.1625` | `3.4879` | `5.9906` |
+| `300` | `0.0300` | `0.03456` | `0.0600` | `0.1675` | `3.4829` | `5.9887` |
+| `450` | `0.1100` | `0.03383` | `0.0475` | `0.1475` | `3.4702` | `5.9821` |
+| `600` | `0.0525` | `0.03643` | `0.0325` | `0.1475` | `3.4213` | `5.9542` |
+
+Selected checkpoint:
+
+```text
+runs/2026-05-12_phase7_joint_pair_stage1_result_discovery/stage1_seed2_primary/2026-05-12_192703_156649_model-c-op0-19-gumbel_concrete_interface-joint_pair-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay600-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00450_weights.pt
+```
+
+Selection reason:
+
+- Best relaxed hard learned calculator-result accuracy in the Stage 1 curve:
+  `0.1100`.
+- This is below the near-pass threshold and near the old natural
+  independent-head negative range.
+
+Selected checkpoint diagnostics:
+
+| Diagnostic | Value |
+| --- | ---: |
+| canonical normal exact | `0.1275` |
+| canonical calculator result accuracy | `0.1275` |
+| canonical result-equivalent pair accuracy | `0.1275` |
+| canonical pair exact | `0.0125` |
+| injection-zero exact | `0.055` |
+| forced-random exact | `0.0225` |
+| oracle-at-eval exact | `1.000` |
+| full-enum learned-result best fraction | `0.1125` |
+| full-enum learned result matches true sum | `0.1125` |
+| mean learned-result minus best-result gap | `5.5218` |
+| full-enum best result group true sum | `1.000` |
+| full-enum true result group probability | `0.99994` |
+| full-enum true pair probability | `0.09749` |
+
+Parameter movement from step `0` to selected step `450`:
+
+| Group | L2 delta | Max abs | Changed tensors |
+| --- | ---: | ---: | ---: |
+| `calculator_hook.pair_proj` | `38.0941` | `2.2904` | `2/2` |
+| semantic decoder | `0.0` | `0.0` | `0/5` |
+| upstream encoder | `0.0` | `0.0` | `0/29` |
+
+Interpretation:
+
+- Label: `joint_pair_stage1_negative`.
+- The product decoder and result landscape are healthy, but strict seed-2
+  joint-pair result-group bridge training did not discover a useful hard
+  natural calculator-result protocol.
+- The new metrics distinguish this from a soft-positive/hard-handoff failure:
+  soft true-result probability stayed near the broad initial result mass
+  (`~0.034` to `0.036`), while hard result accuracy peaked at only `0.11`.
+- Retention, replication seeds `4`/`5`, upstream-open training, and
+  `operand_max=99` were not run because Stage 1 did not pass or near-pass.
+
+Recommendation:
+
+Move next to Track B result-space interface or Track C canonical symmetry
+breaker. Do not run Stage 2 retention or seed replication from this checkpoint.
