@@ -34,6 +34,13 @@ by learned calculator-result behavior under the hard calculator path:
 Exact true operand-pair recovery is diagnostic only in natural sum-only
 addition, because many valid calculator calls share the same correct result.
 
+The natural `0..19` product decoder/readout is no longer an open question. It
+has repeatedly passed oracle/readout and full-enum result-landscape checks.
+Future Phase 7 work should not present decoder usability, oracle-at-eval
+success, forced-true result success, or injection wiring as new knowledge. Run
+those checks only after code or checkpoint changes that could break the path,
+and label them as regression checks only.
+
 ## First Recommended Track
 
 Start with the Phase 7 overarching plan:

@@ -74,6 +74,15 @@ injection-zero controls, and forced-random controls are wiring checks only.
 They must pass before learned failures are interpretable, but they are not
 progress on the central question.
 
+For Phase 7 natural `0..19`, the product answer decoder/readout usability is
+already established. Treat this as settled infrastructure, not a discovery
+target. Future tasks should not spend experiment budget re-proving that oracle
+or forced-true calculator results can answer natural addition unless the
+semantic decoder checkpoint, answer-decoder implementation, calculator output
+format, or readout path has changed. If such a regression check is strictly
+needed after code changes, label it as a wiring regression only and immediately
+return to learned-interface metrics.
+
 Do not require exact true operand pairs as the main success metric for natural
 sum-only addition.
 
