@@ -1,0 +1,11 @@
+condition,samples,correct,exact_match
+normal,400,225,0.5625
+injection_zero,400,22,0.055
+forced_zero,400,2,0.005
+forced_random,400,9,0.0225
+oracle_at_eval,400,400,1.0
+force_learned_result,400,225,0.5625
+corrupt_a_read_vector,400,77,0.1925
+corrupt_b_read_vector,400,42,0.105
+swap_a_read_vector,400,225,0.5625
+swap_b_read_vector,400,225,0.5625

@@ -1,3 +1,4 @@
+import argparse
 import csv
 import importlib.util
 import json
@@ -1634,6 +1635,43 @@ def test_result_space_operand_spans_answer_loss_updates_result_projection_only()
     assert model.tok_emb.weight.grad is None
 
 
+def test_result_space_hidden_result_head_preserves_logit_contract() -> None:
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="gumbel_concrete_interface",
+        calculator_action_head="result_space",
+        calculator_read_position="operands",
+        calculator_bottleneck_mode="answer_decoder",
+        calculator_result_head_hidden_size=16,
+    )
+    model = TinyGPT(cfg)
+    assert model.calculator_hook is not None
+    assert isinstance(model.calculator_hook.result_proj, torch.nn.Sequential)
+    batch = ArithmeticBatch(
+        x=torch.tensor([[1, PLUS_ID, 2, EQ_ID], [0, PLUS_ID, 3, EQ_ID]]),
+        y=torch.zeros((2, 4), dtype=torch.long),
+        loss_mask=torch.zeros((2, 4), dtype=torch.bool),
+    )
+    positions = model._calculator_read_positions(batch.x)
+    residual = model.tok_emb(batch.x) + model.pos_emb(
+        torch.arange(batch.x.shape[1])
+    )
+    residual = model.blocks[0](residual)
+    logits = model.calculator_hook._result_space_logits(residual, positions)
+
+    assert logits.shape == (2, 4, 7)
+
+
 def test_result_boundary_target_uses_lowest_nll_result(monkeypatch) -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_result_boundary", script_path)
@@ -1843,6 +1881,140 @@ def test_result_boundary_hard_best_ce_matches_true_sum_only_after_parity(
         1.0
     )
     assert boundary_loss.item() == pytest.approx(direct_true_ce.item())
+
+
+def test_result_feature_probe_extracts_exact_result_projection_shape() -> None:
+    script_path = Path("scripts/run_phase7_result_feature_separability.py")
+    spec = importlib.util.spec_from_file_location(
+        "phase7_result_feature_probe_shape", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    probe_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(probe_script)
+
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=16,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=20,
+        calculator_result_vocab_size=39,
+        calculator_estimator="gumbel_concrete_interface",
+        calculator_action_head="result_space",
+        calculator_read_position="operand_spans",
+        calculator_read_span_width=2,
+        calculator_bottleneck_mode="answer_decoder",
+        answer_decoder_interaction="product",
+    )
+    model = TinyGPT(cfg)
+    batch = probe_script.exhaustive_natural_batch(
+        operand_max=1,
+        num_digits=2,
+        fixed_width=True,
+        answer_format="sum",
+        device="cpu",
+    )
+
+    features = probe_script.collect_probe_features(model, batch)
+
+    assert features["exact_result_proj_input"].shape == (4, 2 * 2 * cfg.n_embd)
+    assert features["operand_a_span"].shape == (4, 2 * cfg.n_embd)
+    assert features["operand_b_span"].shape == (4, 2 * cfg.n_embd)
+
+
+def test_result_feature_probe_target_parity_is_checked_after_target_construction() -> None:
+    script_path = Path("scripts/run_phase7_result_feature_separability.py")
+    spec = importlib.util.spec_from_file_location(
+        "phase7_result_feature_probe_parity", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    probe_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(probe_script)
+
+    batch = probe_script.exhaustive_natural_batch(
+        operand_max=3,
+        num_digits=1,
+        fixed_width=True,
+        answer_format="sum",
+        device="cpu",
+    )
+    true_a, true_b = probe_script.fixed_width_operands_from_batch(batch.x, num_digits=1)
+    true_sum = true_a + true_b
+    forced_losses = torch.full((batch.x.shape[0], 7), 10.0)
+    forced_losses.scatter_(1, true_sum.unsqueeze(-1), 0.0)
+    target = forced_losses.argmin(dim=-1)
+
+    assert torch.equal(target, true_sum)
+
+
+def test_result_feature_linear_probe_overfits_linearly_separable_fixture() -> None:
+    script_path = Path("scripts/run_phase7_result_feature_separability.py")
+    spec = importlib.util.spec_from_file_location(
+        "phase7_result_feature_probe_linear", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    probe_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(probe_script)
+
+    labels = torch.tensor([0, 1, 2, 0, 1, 2], dtype=torch.long)
+    features = torch.nn.functional.one_hot(labels, num_classes=3).float()
+    indices = torch.arange(labels.numel(), dtype=torch.long)
+
+    result, _ = probe_script.train_probe(
+        features,
+        labels,
+        train_indices=indices,
+        eval_indices=indices,
+        head_kind="linear",
+        hidden_size=0,
+        seed=2,
+        steps=200,
+        lr=0.1,
+        weight_decay=0.0,
+        device="cpu",
+    )
+
+    assert result.eval_accuracy == pytest.approx(1.0)
+
+
+def test_result_feature_probe_cli_validation_rejects_bad_values() -> None:
+    script_path = Path("scripts/run_phase7_result_feature_separability.py")
+    spec = importlib.util.spec_from_file_location(
+        "phase7_result_feature_probe_validate", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    probe_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(probe_script)
+
+    base = dict(
+        checkpoint=None,
+        probe_heads="linear,mlp",
+        mlp_hidden_sizes="64,128",
+        linear_steps=10,
+        mlp_steps=10,
+        folds=5,
+        result_boundary_target_chunk_size=64,
+    )
+    for override, message in [
+        ({"probe_heads": "linear,wide"}, "unsupported probe head"),
+        ({"mlp_hidden_sizes": "64,0"}, "positive"),
+        ({"linear_steps": 0}, "positive"),
+        ({"mlp_steps": 0}, "positive"),
+        ({"folds": 1}, "at least 2"),
+    ]:
+        kwargs = dict(base)
+        kwargs.update(override)
+        with pytest.raises(ValueError, match=message):
+            probe_script.validate_args(argparse.Namespace(**kwargs))
 
 
 def test_result_boundary_cli_validation(monkeypatch, tmp_path) -> None:

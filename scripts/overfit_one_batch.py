@@ -101,6 +101,7 @@ class TrainConfig:
     result_boundary_target_temperature: float
     result_boundary_target_min_probability_floor: float
     result_boundary_target_chunk_size: int
+    calculator_result_head_hidden_size: int
     relaxed_calculator_temperature: float
     relaxed_calculator_final_temperature: float
     relaxed_calculator_temperature_decay_steps: int
@@ -2583,6 +2584,7 @@ def make_model_config(
     calculator_bottleneck_mode: str = "none",
     calculator_output_format: str = "sum",
     answer_decoder_interaction: str | None = None,
+    calculator_result_head_hidden_size: int = 0,
     relaxed_calculator_temperature: float = 1.0,
     relaxed_calculator_mode: str = "deterministic",
     relaxed_calculator_hard_forward: bool = True,
@@ -2622,6 +2624,7 @@ def make_model_config(
         calculator_bottleneck_mode=calculator_bottleneck_mode,
         calculator_output_format=calculator_output_format,
         answer_decoder_interaction=answer_decoder_interaction,
+        calculator_result_head_hidden_size=calculator_result_head_hidden_size,
         relaxed_calculator_temperature=relaxed_calculator_temperature,
         relaxed_calculator_mode=relaxed_calculator_mode,
         relaxed_calculator_hard_forward=relaxed_calculator_hard_forward,
@@ -2667,6 +2670,7 @@ def run_variant(
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
         calculator_output_format=args.calculator_output_format,
         answer_decoder_interaction=args.answer_decoder_interaction,
+        calculator_result_head_hidden_size=args.calculator_result_head_hidden_size,
         relaxed_calculator_temperature=args.relaxed_calculator_temperature,
         relaxed_calculator_mode=args.relaxed_calculator_mode,
         relaxed_calculator_hard_forward=args.relaxed_calculator_hard_forward,
@@ -2827,6 +2831,7 @@ def run_variant(
             args.result_boundary_target_min_probability_floor
         ),
         result_boundary_target_chunk_size=args.result_boundary_target_chunk_size,
+        calculator_result_head_hidden_size=args.calculator_result_head_hidden_size,
         relaxed_calculator_temperature=args.relaxed_calculator_temperature,
         relaxed_calculator_final_temperature=(
             args.relaxed_calculator_final_temperature
@@ -3537,6 +3542,9 @@ def run_variant(
     metrics["result_boundary_target_chunk_size"] = (
         args.result_boundary_target_chunk_size
     )
+    metrics["calculator_result_head_hidden_size"] = (
+        args.calculator_result_head_hidden_size
+    )
     metrics["relaxed_calculator_temperature"] = args.relaxed_calculator_temperature
     metrics["relaxed_calculator_final_temperature"] = (
         args.relaxed_calculator_final_temperature
@@ -4082,6 +4090,15 @@ def parse_args() -> argparse.Namespace:
         help="Number of forced result classes to score per decoder chunk.",
     )
     parser.add_argument(
+        "--calculator-result-head-hidden-size",
+        type=int,
+        default=0,
+        help=(
+            "Hidden size for a two-layer result-space request head. "
+            "0 preserves the current linear result projection."
+        ),
+    )
+    parser.add_argument(
         "--relaxed-calculator-temperature",
         type=float,
         default=1.0,
@@ -4410,6 +4427,8 @@ def main() -> None:
         )
     if args.result_boundary_target_chunk_size < 1:
         raise ValueError("--result-boundary-target-chunk-size must be positive")
+    if args.calculator_result_head_hidden_size < 0:
+        raise ValueError("--calculator-result-head-hidden-size must be non-negative")
     if (
         args.result_boundary_target_loss_weight > 0
         and args.calculator_action_head != "result_space"
@@ -4612,11 +4631,13 @@ def main() -> None:
                 f"-rbtt{args.result_boundary_target_temperature:g}"
                 f"-rbtchunk{args.result_boundary_target_chunk_size}"
             )
-            if args.result_boundary_target_min_probability_floor > 0:
-                suffix_parts.append(
-                    "rbtfloor"
-                    f"{args.result_boundary_target_min_probability_floor:g}"
-                )
+        if args.result_boundary_target_min_probability_floor > 0:
+            suffix_parts.append(
+                "rbtfloor"
+                f"{args.result_boundary_target_min_probability_floor:g}"
+            )
+        if args.calculator_result_head_hidden_size > 0:
+            suffix_parts.append(f"rhead{args.calculator_result_head_hidden_size}")
         if args.calculator_estimator == "gumbel_concrete_interface":
             suffix_parts.append(
                 f"rtemp{args.relaxed_calculator_temperature:g}"
@@ -4725,6 +4746,10 @@ def main() -> None:
         f"temperature={args.result_boundary_target_temperature} "
         f"min_probability_floor={args.result_boundary_target_min_probability_floor} "
         f"chunk_size={args.result_boundary_target_chunk_size}"
+    )
+    print(
+        "calculator result head hidden size: "
+        f"{args.calculator_result_head_hidden_size}"
     )
     print(
         "relaxed calculator: "

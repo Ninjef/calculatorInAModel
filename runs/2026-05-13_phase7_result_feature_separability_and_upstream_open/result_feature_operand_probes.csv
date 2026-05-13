@@ -1,0 +1,7 @@
+head_kind,hidden_size,seed,train_accuracy,eval_accuracy,steps,feature_name
+linear,0,2,1.0,1.0,2500,operand_a_span
+linear,0,4,1.0,1.0,2500,operand_a_span
+linear,0,5,1.0,1.0,2500,operand_a_span
+linear,0,2,1.0,1.0,2500,operand_b_span
+linear,0,4,1.0,1.0,2500,operand_b_span
+linear,0,5,1.0,1.0,2500,operand_b_span

@@ -41,6 +41,7 @@ class GPTConfig:
     calculator_action_head: str = "independent_operands"
     calculator_output_format: str = "sum"
     answer_decoder_interaction: str = "none"
+    calculator_result_head_hidden_size: int = 0
     relaxed_calculator_temperature: float = 1.0
     relaxed_calculator_mode: str = "deterministic"
     relaxed_calculator_hard_forward: bool = True
@@ -154,6 +155,8 @@ class CalculatorHook(nn.Module):
             )
         if cfg.calculator_read_span_width < 1:
             raise ValueError("calculator_read_span_width must be positive")
+        if cfg.calculator_result_head_hidden_size < 0:
+            raise ValueError("calculator_result_head_hidden_size must be non-negative")
         if cfg.calculator_operand_vocab_size < 1:
             raise ValueError("calculator operand vocab size must be positive")
         expected_result_size = (2 * cfg.calculator_operand_vocab_size) - 1
@@ -192,9 +195,22 @@ class CalculatorHook(nn.Module):
         else:
             self.pair_proj = None
         if self.action_head == "result_space":
-            self.result_proj: nn.Linear | None = nn.Linear(
-                paired_input_width, self.result_vocab_size
-            )
+            if cfg.calculator_result_head_hidden_size == 0:
+                self.result_proj: nn.Module | None = nn.Linear(
+                    paired_input_width, self.result_vocab_size
+                )
+            else:
+                self.result_proj = nn.Sequential(
+                    nn.Linear(
+                        paired_input_width,
+                        cfg.calculator_result_head_hidden_size,
+                    ),
+                    nn.ReLU(),
+                    nn.Linear(
+                        cfg.calculator_result_head_hidden_size,
+                        self.result_vocab_size,
+                    ),
+                )
         else:
             self.result_proj = None
         self.output_signal_size = self.result_vocab_size

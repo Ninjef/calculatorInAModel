@@ -17,53 +17,227 @@ Phase 7 should therefore prioritize structured joint-pair or result-space
 interfaces that match the result-level information available in natural answer
 loss.
 
-## Current State After Result-Space Diagnostic
+## Current State After Result Feature Gate
 
-As of `2026-05-13`, both strict natural result-level action
-parameterizations tried in Phase 7 are negative:
+As of `2026-05-13`, strict natural result-level action parameterizations tried
+in Phase 7 remain below the pass gate:
 
 - `joint_pair_stage1_negative`: hard learned calculator-result accuracy peaked
   at `0.11`; soft true-result probability stayed near broad initial mass.
 - `result_space_stage1_negative`: even a direct `0..38` result request head
   peaked at only `0.0925` hard learned calculator-result accuracy, while soft
   true-result probability moved only `0.02564 -> 0.02920`.
+- `result_boundary_target_stage1_negative`: a direct answer-derived result
+  boundary target was sharp and valid, but frozen linear `result_proj` teaching
+  peaked at only `0.1150`.
+- `minimal_upstream_open_boundary_target_partial`: allowing upstream movement
+  improved hard result accuracy to `0.5975`, with semantic decoder movement
+  exactly `0.0`, but it still failed the `0.70` Stage 1 pass gate.
 
 This means pair underidentification was real but not sufficient to explain the
 natural-addition failure. The frozen product decoder/readout and full-enum
-result landscape remain healthy, but deterministic hard-forward /
-soft-backward Concrete answer-loss training from strict initialization is not
-currently converting the result-level answer signal into a learned model-side
+result landscape remain healthy. Frozen features contain nonlinear all-grid
+result information, but the current production training paths are still not
+reliably converting the result-level target into a retained model-side
 calculator request.
 
 Current recommendation:
 
 ```text
-Stop small sweeps of the deterministic Concrete result-level setup. Move next
-to qualitatively different learning signals: policy-gradient / REINFORCE-style
-calculator actions, target propagation or local boundary targets,
-differentiable surrogate gradients, synthetic-gradient/direct-feedback methods,
-or explicit curriculum handoffs with teacher removal.
+Do not run retention or seed replication from the current partial checkpoint.
+Either improve upstream-open boundary-target stability/capacity with a clearly
+different mechanism, or move to another signal family such as multi-sample
+policy gradient with per-prompt baselines, surrogate gradients, or direct
+feedback alignment.
 ```
 
-Next task selected:
+## 2026-05-13 Result Feature Separability And Upstream-Open Boundary Gate
+
+Task:
 
 ```text
-aiAgentProjectTasks/2026-05-13-phase-7-fourth-task-Natural-result-space-boundary-target-learning-signal.md
+aiAgentProjectTasks/2026-05-13-phase-7-fifth-task-Frozen-feature-result-separability-and-minimal-upstream-open-boundary-gate.md
 ```
 
-Rationale:
+Run root:
 
-- The fastest high-signal next branch is an answer-derived result boundary
-  target, because Phase 6 local-target work showed that answer-derived boundary
-  targets can teach protocols in the identifiable setting.
-- The target should be computed by enumerating forced calculator result classes
-  through the frozen product decoder and choosing/weighting the lowest answer
-  NLL result. True sums are allowed only for post-hoc parity diagnostics.
-- This is a target-propagation/local-boundary-target learning signal, not a
-  small deterministic Concrete sweep.
-- The decisive test is not Stage 1 target teaching alone. It is whether the
-  hard learned result request survives after the boundary-target objective is
-  exactly `0.0`.
+```text
+runs/2026-05-13_phase7_result_feature_separability_and_upstream_open
+```
+
+Code changes:
+
+- Added `scripts/run_phase7_result_feature_separability.py`.
+- Added `calculator_result_head_hidden_size`; `0` preserves the linear
+  `calculator_hook.result_proj`, while positive values use a one-hidden-layer
+  result-space MLP.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile src/model.py scripts/overfit_one_batch.py scripts/diagnose_calculator_protocol.py scripts/run_phase7_result_feature_separability.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+88 passed
+```
+
+### Frozen Feature Probe
+
+Artifacts:
+
+```text
+runs/2026-05-13_phase7_result_feature_separability_and_upstream_open/result_feature_separability_summary.json
+runs/2026-05-13_phase7_result_feature_separability_and_upstream_open/result_feature_probe_all400.csv
+runs/2026-05-13_phase7_result_feature_separability_and_upstream_open/result_feature_probe_5fold.csv
+```
+
+Setup:
+
+- Strict natural `0..19`, `result_space`, `operand_spans`, span width `2`.
+- Phase 6 product decoder checkpoint loaded with
+  `semantic_decoder_checkpoint_load_scope=semantic_decoder_only`.
+- Targets constructed by forced-result answer NLL enumeration, true sum used
+  only after target construction.
+
+Probe results:
+
+| Metric | Value |
+| --- | ---: |
+| answer-derived target parity with true sum | `1.0000` |
+| exact `result_proj` input width | `64` |
+| linear all-400 accuracy | `0.9217` |
+| linear 5-fold mean / min accuracy | `0.1358` / `0.0375` |
+| MLP-64 all-400 / 5-fold mean accuracy | `1.0000` / `0.1400` |
+| MLP-128 all-400 / 5-fold mean accuracy | `1.0000` / `0.1458` |
+| operand-A span linear accuracy | `1.0000` |
+| operand-B span linear accuracy | `1.0000` |
+
+Interpretation:
+
+- The exact frozen operand-span feature is not linearly sufficient by the task
+  threshold (`0.9217 < 0.98`).
+- A shallow MLP can memorize the finite all-400 natural grid exactly, so the
+  frozen representation contains useful nonlinear information for the
+  answer-derived result target.
+- Held-out fold accuracy is low for both linear and MLP probes, so this is
+  finite-grid separability rather than evidence of smooth extrapolating result
+  structure.
+
+### Conditional MLP Result Head
+
+Run:
+
+```text
+runs/2026-05-13_phase7_result_feature_separability_and_upstream_open/stage1_mlp64_boundary_target/2026-05-13_091415_689135_model-c-op0-19-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-hard_best_result-rbtt0.25-rbtchunk64-rhead64-rtemp1-rfinal1-answer_decoder-adec-product/model-c-2digit-seed2
+```
+
+Setup:
+
+- `calculator_result_head_hidden_size=64`
+- semantic decoder frozen
+- upstream frozen
+- `answer_loss_weight=0.0`
+- `result_boundary_target_loss_weight=1.0`
+- `result_boundary_target_mode=hard_best_result`
+- `input_proj_lr=0.01`
+- `steps=600`
+
+Result:
+
+| Metric | Value |
+| --- | ---: |
+| best hard learned calculator-result accuracy | `0.2950` at step `600` |
+| best learned-result best fraction | `0.2950` |
+| mean learned-result minus best-result gap at best | `3.9422` |
+| final eval exact | `0.2425` |
+
+Decision: failed the `0.70` Stage 1 gate, so target-off retention was not run.
+
+### Minimal Upstream-Open Boundary Target
+
+Run:
+
+```text
+runs/2026-05-13_phase7_result_feature_separability_and_upstream_open/stage1_upstream_open_boundary_target/2026-05-13_093849_217301_model-c-op0-19-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-hard_best_result-rbtt0.25-rbtchunk64-rtemp1-rfinal1-answer_decoder-adec-product/model-c-2digit-seed2
+```
+
+Setup:
+
+- linear result head, `calculator_result_head_hidden_size=0`
+- semantic decoder frozen
+- upstream open
+- `answer_loss_weight=0.0`
+- `result_boundary_target_loss_weight=1.0`
+- `result_boundary_target_mode=hard_best_result`
+- `input_proj_lr=0.01`, `upstream_lr=0.0003`
+- `steps=600`
+
+Best checkpoint:
+
+```text
+checkpoint_snapshots/step_00575_weights.pt
+```
+
+Stage 1 metrics:
+
+| Metric | Value |
+| --- | ---: |
+| best hard learned calculator-result accuracy | `0.5975` at step `575` |
+| best learned-result best fraction | `0.5975` |
+| mean learned-result minus best-result gap at best | `2.0629` |
+| final hard learned calculator-result accuracy | `0.4275` |
+| final eval exact | `0.4625` |
+
+Selected checkpoint diagnostics:
+
+| Diagnostic | Value |
+| --- | ---: |
+| canonical normal exact | `0.5625` |
+| canonical calculator-result accuracy | `0.5625` |
+| canonical result-equivalent pair accuracy | `0.5625` |
+| canonical pair exact | `0.0350` |
+| injection-zero exact | `0.0550` |
+| forced-random exact | `0.0225` |
+| oracle-at-eval exact | `1.0000` |
+| full-enum learned-result best fraction | `0.5900` |
+| full-enum learned result matches true sum | `0.5900` |
+| mean learned-result minus best-result gap | `2.0806` |
+| true result best fraction | `1.0000` |
+| tie-aware true best fraction | `1.0000` |
+| soft target true result-group probability | `0.99994` |
+
+Parameter movement from step `0` to step `575`:
+
+| Group | L2 delta | Max abs | Changed tensors |
+| --- | ---: | ---: | ---: |
+| semantic decoder | `0.0` | `0.0` | `0/3` |
+| `calculator_hook.result_proj` | `42.2322` | `3.9242` | `2/2` |
+| upstream encoder | `3.3516` | `0.1469` | `14/29` |
+
+Interpretation:
+
+- Label: `minimal_upstream_open_boundary_target_partial`.
+- Frozen feature probing showed nonlinear all-grid separability, but the
+  production MLP head did not teach a usable hard result request under the
+  planned Stage 1 budget.
+- Allowing upstream movement gave a substantial rescue relative to frozen
+  linear and frozen MLP branches, rising to `0.5975` hard result accuracy, but
+  it still failed the `0.70` pass gate and drifted down by final.
+- Semantic decoder movement remained exactly `0.0`; both result head and
+  upstream moved measurably.
+- Target-off retention was not run because Stage 1 did not pass.
+
+Recommendation:
+
+Do not run retention or seed replication from this checkpoint. The next task
+should either improve the upstream-open boundary target stability/capacity with
+a clearly different mechanism, or move to another signal family such as
+multi-sample policy gradient with per-prompt baselines, surrogate gradients, or
+direct feedback alignment.
 
 ## Starting Guardrail
 
