@@ -45,11 +45,24 @@ Current recommendation:
 
 ```text
 Do not run retention or seed replication from the current partial checkpoint.
-Either improve upstream-open boundary-target stability/capacity with a clearly
-different mechanism, or move to another signal family such as multi-sample
-policy gradient with per-prompt baselines, surrogate gradients, or direct
-feedback alignment.
+Run one exact full-grid upstream-open boundary-target stabilization gate before
+moving to multi-sample policy gradient. The prior `batch_size=400` runs use
+random resampling rather than a guaranteed full `20 x 20` ordered grid at every
+step, so this is the cleanest near-term test of whether the current partial
+rescue is limited by stochastic coverage/stability or by the learning signal
+itself.
 ```
+
+Selected next task:
+
+```text
+aiAgentProjectTasks/2026-05-13-phase-7-sixth-task-Full-grid-upstream-open-result-boundary-retention-gate.md
+```
+
+If exact-grid upstream-open boundary teaching and the single allowed MLP rescue
+both fail the `0.70` Stage 1 gate, Phase 7 should stop iterating on
+boundary-target capacity/schedule variants and pivot to multi-sample
+result-space policy gradient with per-prompt or leave-one-out baselines.
 
 ## 2026-05-13 Result Feature Separability And Upstream-Open Boundary Gate
 

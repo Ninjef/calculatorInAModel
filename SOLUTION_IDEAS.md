@@ -5,16 +5,23 @@ Straight Through Estimator was the easy option. We tried that and it didn't seem
 Phase 6 showed that deterministic hard-forward / soft-backward Concrete can
 discover and retain an identifiable calculator protocol when answer loss
 identifies the action. Phase 7 then tested the natural `0..19` sum-only case
-with result-level action spaces:
+with result-level action spaces and answer-derived boundary targets:
 
 - `joint_pair_stage1_negative`: a joint `20 x 20` pair policy trained through
   result-group mass did not learn a useful hard calculator-result protocol.
 - `result_space_stage1_negative`: even a direct `0..38` result request head
   did not learn from strict initialization.
+- `result_boundary_target_stage1_negative`: a sharp answer-derived result
+  target did not teach a frozen linear result head.
+- `minimal_upstream_open_boundary_target_partial`: allowing upstream movement
+  raised hard result accuracy to `0.5975` while the semantic decoder stayed
+  fixed, but this still failed the pass gate and drifted by final.
 
 This means the next work should not be a small schedule sweep of STE,
-independent-head Concrete, joint-pair Concrete, or result-space Concrete. The
-most relevant next ideas are qualitatively different learning signals:
+independent-head Concrete, joint-pair Concrete, frozen result-space Concrete,
+or oracle/readout checks. The most relevant next ideas are either a clearly
+different stabilization of the upstream-open partial result, or qualitatively
+different learning signals:
 
 - policy-gradient / REINFORCE-style calculator actions;
 - target propagation or local boundary targets;
@@ -22,18 +29,21 @@ most relevant next ideas are qualitatively different learning signals:
 - synthetic gradients or direct feedback alignment;
 - explicit curriculum handoffs with teacher removal.
 
-The selected next task is the target-propagation/local-boundary-target branch:
+The selected next task is a final high-signal stabilization gate for the
+upstream-open local-boundary-target branch:
 
 ```text
-aiAgentProjectTasks/2026-05-13-phase-7-fourth-task-Natural-result-space-boundary-target-learning-signal.md
+aiAgentProjectTasks/2026-05-13-phase-7-sixth-task-Full-grid-upstream-open-result-boundary-retention-gate.md
 ```
 
-Reason: Phase 7 already proved that strict-init deterministic Concrete does
-not teach even a direct result request, while Phase 6 showed that
-answer-derived local targets can teach and then hand off protocols in an
-identifiable setting. The next question is whether an answer-derived result
-boundary target can teach natural result requests, and whether those requests
-survive after that target is removed.
+Reason: the only natural Phase 7 branch to move substantially was
+upstream-open result-boundary teaching. The prior `batch_size=400` training
+runs randomly resampled pairs each step rather than using a guaranteed full
+`20 x 20` ordered grid, so exact-grid training is the cleanest way to determine
+whether the partial result is limited by stochastic coverage/stability. If that
+does not pass, the next task should pivot to multi-sample result-space policy
+gradient with per-prompt or leave-one-out baselines instead of further
+boundary-target variants.
 
 # Alternatives to the Straight-Through Estimator
 
