@@ -17,7 +17,159 @@ Phase 7 should therefore prioritize structured joint-pair or result-space
 interfaces that match the result-level information available in natural answer
 loss.
 
-## Current State After Result Feature Gate
+## Current State After Full-Grid Boundary Retention Gate
+
+As of `2026-05-13`, exact full-grid upstream-open boundary-target training has
+produced the first Phase 7 natural `0..19` retained positive:
+
+```text
+full_grid_upstream_open_result_boundary_retained_positive
+```
+
+Run root:
+
+```text
+runs/2026-05-13_phase7_full_grid_upstream_open_result_boundary_retention
+```
+
+Code changes:
+
+- Added `--exhaustive-grid-batch` to `scripts/overfit_one_batch.py`.
+- Added `make_exhaustive_range_batch(...)`, which builds every ordered
+  `(a, b) in 0..operand_max x 0..operand_max` exactly once using the same
+  tokenization, padding, and target masking as `make_range_batch`.
+- Recorded `exhaustive_grid_batch` and `exhaustive_grid_size` in `config.json`
+  and `metrics.json`.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile src/model.py scripts/overfit_one_batch.py scripts/diagnose_calculator_protocol.py scripts/run_full_enum_action_loss_diagnostic.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+91 passed
+```
+
+Stage 0 full-grid parity gate passed:
+
+| Metric | Value |
+| --- | ---: |
+| grid examples / duplicate pairs | `400 / 0` |
+| hard-best result equals true sum | `1.0000` |
+| tie-aware true-result best fraction | `1.0000` |
+| soft target true-result probability | `0.99989` |
+| target entropy / effective result count | `0.00105 / 1.00105` |
+| initial hard learned result accuracy | `0.0225` |
+| result-proj gradient L2 | `0.08966` |
+| upstream gradient L2 | `0.03320` |
+| semantic decoder gradient/delta L2 | `0.0 / 0.0` |
+
+Stage 1 exact-grid upstream-open teaching:
+
+```text
+runs/2026-05-13_phase7_full_grid_upstream_open_result_boundary_retention/stage1_primary_full_grid/2026-05-13_153947_011891_model-c-op0-19-fullgrid-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-hard_best_result-rbtt0.25-rbtchunk64-rtemp1-rfinal1-answer_decoder-adec-product/model-c-2digit-seed2
+```
+
+Setup:
+
+- `exhaustive_grid_batch=true`, `exhaustive_grid_size=400`
+- upstream open, semantic decoder frozen
+- `answer_loss_weight=0.0`
+- `result_boundary_target_loss_weight=1.0`
+- `calculator_result_head_hidden_size=0`
+- `input_proj_lr=0.01`, `upstream_lr=0.0003`
+- `steps=800`, dense snapshots/checkpoints every `25`
+
+Selected checkpoint:
+
+```text
+checkpoint_snapshots/step_00800_weights.pt
+```
+
+Stage 1 results:
+
+| Metric | Value |
+| --- | ---: |
+| hard learned calculator-result accuracy | `0.9675` |
+| full-enum learned-result best fraction | `0.9675` |
+| mean learned-result minus best-result gap | `0.1108` |
+| canonical normal exact / calculator-result accuracy | `0.9600 / 0.9600` |
+| injection-zero exact | `0.0550` |
+| forced-random exact | `0.0225` |
+| oracle-at-eval exact | `1.0000` |
+| final eval exact | `0.9530` |
+
+Stage 1 parameter movement from step `0` to step `800`:
+
+| Group | L2 delta | Max abs | Changed tensors |
+| --- | ---: | ---: | ---: |
+| semantic decoder | `0.0` | `0.0` | `0/5` |
+| `calculator_hook.result_proj` | `81.5030` | `4.3182` | `2/2` |
+| upstream encoder | `4.6336` | `0.1954` | `14/29` |
+| other interface groups | `0.0` | `0.0` | `0/0` |
+
+Stage 2 target-off retention:
+
+```text
+runs/2026-05-13_phase7_full_grid_upstream_open_result_boundary_retention/stage2_target_off_full_grid/2026-05-13_154541_041524_model-c-op0-19-fullgrid-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rtemp1-rfinal1-answer_decoder-adec-product/model-c-2digit-seed2
+```
+
+Setup:
+
+- initialized from Stage 1 step `800`
+- `answer_loss_weight=1.0`
+- `result_boundary_target_loss_weight=0.0`
+- aux/adaptive/expected/relaxed-entropy/anchor objectives all `0.0`
+- upstream open, semantic decoder frozen
+- `exhaustive_grid_batch=true`, `steps=400`
+
+Stage 2 results:
+
+| Metric | Value |
+| --- | ---: |
+| best post-start hard result accuracy | `0.8800` at step `375` |
+| best post-start full-enum learned-result best fraction | `0.8800` |
+| retention vs Stage 1 selected hard accuracy | `0.9096` |
+| final hard result accuracy | `0.8325` |
+| final full-enum learned-result best fraction | `0.8325` |
+| final canonical normal exact / calculator-result accuracy | `0.8275 / 0.8275` |
+| final injection-zero exact | `0.0550` |
+| final forced-random exact | `0.0225` |
+| final oracle-at-eval exact | `1.0000` |
+
+Stage 2 movement from Stage 1 selected checkpoint to final step `400`:
+
+| Group | L2 delta | Max abs | Changed tensors |
+| --- | ---: | ---: | ---: |
+| semantic decoder | `0.0` | `0.0` | `0/5` |
+| `calculator_hook.result_proj` | `2.4398` | `0.2809` | `2/2` |
+| upstream encoder | `0.2393` | `0.0372` | `14/29` |
+| other interface groups | `0.0` | `0.0` | `0/0` |
+
+Interpretation:
+
+- Exact ordered-grid coverage was enough to stabilize the upstream-open
+  answer-derived result-boundary branch.
+- The hard model-side result request survived target-off continuation: final
+  hard/full-enum result accuracy stayed above `0.70`, and the best post-start
+  target-off checkpoint retained more than `90%` of the selected Stage 1 hard
+  result accuracy.
+- Semantic decoder movement remained exactly `0.0`.
+- Oracle-at-eval and low forced/injection controls are regression checks only;
+  the substantive result is retained learned hard calculator-result behavior.
+
+Next recommendation:
+
+Replicate this exact-grid retained positive across additional seeds before
+claiming a robust Phase 7 result. If replication holds, proceed to canonical
+query/protocol stabilization; if it does not, compare exact-grid retention
+against multi-sample result-space policy-gradient methods.
+
+## Prior State After Result Feature Gate
 
 As of `2026-05-13`, strict natural result-level action parameterizations tried
 in Phase 7 remain below the pass gate:

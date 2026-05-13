@@ -55,6 +55,8 @@ class TrainConfig:
     grad_clip: float
     fixed_width: bool
     operand_max: int | None
+    exhaustive_grid_batch: bool
+    exhaustive_grid_size: int | None
     calculator_operand_vocab_size: int
     oracle_train: bool
     oracle_warmup_steps: int
@@ -2459,6 +2461,45 @@ def make_range_batch(
     )
 
 
+def make_exhaustive_range_batch(
+    *,
+    num_digits: int,
+    operand_max: int,
+    fixed_width: bool,
+    device: str | torch.device,
+    answer_format: AnswerFormat = "sum",
+) -> ArithmeticBatch:
+    seq_len = max_sequence_length(num_digits, answer_format=answer_format)
+    samples: list[list[int]] = []
+    masks: list[list[int]] = []
+    for a in range(operand_max + 1):
+        for b in range(operand_max + 1):
+            if fixed_width:
+                prompt = f"{a:0{num_digits}d}+{b:0{num_digits}d}="
+            else:
+                prompt = f"{a}+{b}="
+            ids = tokenize(
+                prompt
+                + answer_target(
+                    a,
+                    b,
+                    num_digits,
+                    answer_format=answer_format,
+                    fixed_width=fixed_width,
+                )
+            )
+            samples.append(pad_sequence(ids, seq_len))
+            masks.append(pad_sequence(make_loss_mask(ids), seq_len, pad_id=0))
+
+    tokens = torch.tensor(samples, dtype=torch.long, device=device)
+    loss_mask = torch.tensor(masks, dtype=torch.bool, device=device)
+    return ArithmeticBatch(
+        x=tokens[:, :-1],
+        y=tokens[:, 1:],
+        loss_mask=loss_mask[:, 1:],
+    )
+
+
 def auxiliary_operand_loss(
     model: TinyGPT,
     batch: ArithmeticBatch,
@@ -2724,6 +2765,17 @@ def run_variant(
     ):
         freeze_upstream_encoder_parameters(model)
     trainable_groups = trainable_parameter_summary(model)
+    exhaustive_grid_batch = None
+    exhaustive_grid_size = None
+    if args.exhaustive_grid_batch:
+        exhaustive_grid_batch = make_exhaustive_range_batch(
+            num_digits=num_digits,
+            operand_max=operand_max,
+            fixed_width=True,
+            device=device,
+            answer_format=args.answer_format,
+        )
+        exhaustive_grid_size = int(exhaustive_grid_batch.x.shape[0])
     if args.calculator_estimator in {
         "adaptive_interface",
         "action_loss_weighted_interface",
@@ -2771,6 +2823,8 @@ def run_variant(
         grad_clip=args.grad_clip,
         fixed_width=True,
         operand_max=args.operand_max,
+        exhaustive_grid_batch=args.exhaustive_grid_batch,
+        exhaustive_grid_size=exhaustive_grid_size,
         calculator_operand_vocab_size=calculator_operand_vocab_size,
         oracle_train=args.oracle_train,
         oracle_warmup_steps=args.oracle_warmup_steps,
@@ -2889,6 +2943,8 @@ def run_variant(
                 answer_format=args.answer_format,
                 device=device,
             )
+        elif exhaustive_grid_batch is not None:
+            batch = exhaustive_grid_batch
         else:
             batch = make_range_batch(
                 batch_size=args.batch_size,
@@ -3430,6 +3486,10 @@ def run_variant(
     )
     metrics["final_loss"] = final_loss
     metrics["operand_max"] = operand_max
+    metrics["exhaustive_grid_batch"] = args.exhaustive_grid_batch
+    metrics["exhaustive_grid_size"] = (
+        int(exhaustive_grid_size) if exhaustive_grid_size is not None else None
+    )
     metrics["calculator_operand_vocab_size"] = calculator_operand_vocab_size
     metrics["parameter_count"] = model.num_params()
     metrics["run_dir"] = str(run_dir)
@@ -3779,6 +3839,14 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=None,
         help="Restrict generated operands to 0..N while keeping fixed-width formatting.",
+    )
+    parser.add_argument(
+        "--exhaustive-grid-batch",
+        action="store_true",
+        help=(
+            "Reuse one fixed-width batch containing every ordered pair in "
+            "0..operand_max exactly once."
+        ),
     )
     parser.add_argument(
         "--calculator-operand-vocab-size",
@@ -4429,6 +4497,8 @@ def main() -> None:
         raise ValueError("--result-boundary-target-chunk-size must be positive")
     if args.calculator_result_head_hidden_size < 0:
         raise ValueError("--calculator-result-head-hidden-size must be non-negative")
+    if args.exhaustive_grid_batch and args.operand_max is None:
+        raise ValueError("--exhaustive-grid-batch requires --operand-max")
     if (
         args.result_boundary_target_loss_weight > 0
         and args.calculator_action_head != "result_space"
@@ -4552,6 +4622,8 @@ def main() -> None:
         suffix_parts.append(f"oraclewarm{args.oracle_warmup_steps}")
     if args.operand_max is not None:
         suffix_parts.append(f"op0-{args.operand_max}")
+    if args.exhaustive_grid_batch:
+        suffix_parts.append("fullgrid")
     if args.calculator_estimator != "ste":
         suffix_parts.append(args.calculator_estimator)
     if args.calculator_estimator in {
@@ -4695,6 +4767,7 @@ def main() -> None:
     print(f"calculator bottleneck mode: {args.calculator_bottleneck_mode}")
     print(f"calculator output format: {args.calculator_output_format}")
     print(f"answer decoder interaction: {effective_answer_decoder_interaction}")
+    print(f"exhaustive grid batch: {args.exhaustive_grid_batch}")
     print(f"calculator read span width: {args.calculator_read_span_width}")
     print(
         "aux operand loss: "

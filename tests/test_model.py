@@ -595,7 +595,7 @@ def test_gumbel_concrete_interface_uses_hard_forward_soft_backward_signal() -> N
         n_embd=8,
         n_layer=1,
         n_head=1,
-        block_size=6,
+        block_size=4,
         mlp_expansion=1,
         calculator_enabled=True,
         calculator_mode="add",
@@ -1404,6 +1404,79 @@ def test_full_enum_action_loss_builds_soft_marginals() -> None:
     )
 
 
+def test_exhaustive_range_batch_covers_ordered_pairs_once() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_exhaustive_batch", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    batch = overfit_script.make_exhaustive_range_batch(
+        num_digits=1,
+        operand_max=2,
+        fixed_width=True,
+        device="cpu",
+    )
+    true_a, true_b = overfit_script.fixed_width_operands_from_batch(
+        batch.x, num_digits=1
+    )
+    pairs = list(zip(true_a.tolist(), true_b.tolist()))
+
+    assert batch.x.shape[0] == 9
+    assert pairs == [
+        (0, 0),
+        (0, 1),
+        (0, 2),
+        (1, 0),
+        (1, 1),
+        (1, 2),
+        (2, 0),
+        (2, 1),
+        (2, 2),
+    ]
+    assert len(set(pairs)) == 9
+
+
+def test_exhaustive_range_batch_matches_range_padding_and_masks() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_exhaustive_padding", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    class OrderedPairRng:
+        def __init__(self) -> None:
+            self.values = iter([0, 0, 0, 1, 1, 0, 1, 1])
+
+        def randint(self, low: int, high: int) -> int:
+            assert low == 0
+            assert high == 1
+            return next(self.values)
+
+    exhaustive = overfit_script.make_exhaustive_range_batch(
+        num_digits=1,
+        operand_max=1,
+        fixed_width=True,
+        device="cpu",
+        answer_format="sum",
+    )
+    sampled = overfit_script.make_range_batch(
+        batch_size=4,
+        num_digits=1,
+        operand_max=1,
+        rng=OrderedPairRng(),
+        fixed_width=True,
+        device="cpu",
+        answer_format="sum",
+    )
+
+    assert torch.equal(exhaustive.x, sampled.x)
+    assert torch.equal(exhaustive.y, sampled.y)
+    assert torch.equal(exhaustive.loss_mask, sampled.loss_mask)
+
+
 def test_full_enum_interface_loss_updates_input_projection_only() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_full_enum_loss", script_path)
@@ -1641,7 +1714,7 @@ def test_result_space_hidden_result_head_preserves_logit_contract() -> None:
         n_embd=8,
         n_layer=1,
         n_head=1,
-        block_size=4,
+        block_size=6,
         mlp_expansion=1,
         calculator_enabled=True,
         calculator_mode="add",
@@ -1810,6 +1883,100 @@ def test_result_boundary_target_updates_result_projection_only(monkeypatch) -> N
     assert model.answer_decoder is not None
     assert model.answer_decoder.weight.grad is None
     assert model.tok_emb.weight.grad is None
+
+
+def test_exhaustive_grid_boundary_target_smoke_updates_open_upstream(
+    monkeypatch,
+) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_exhaustive_boundary_smoke", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="gumbel_concrete_interface",
+        calculator_action_head="result_space",
+        calculator_read_position="operands",
+        calculator_bottleneck_mode="answer_decoder",
+        answer_decoder_interaction="product",
+    )
+    model = TinyGPT(cfg)
+    overfit_script.freeze_semantic_decoder_parameters(model)
+    batch = overfit_script.make_exhaustive_range_batch(
+        num_digits=1,
+        operand_max=3,
+        fixed_width=True,
+        device="cpu",
+    )
+    true_a, true_b = overfit_script.fixed_width_operands_from_batch(
+        batch.x, num_digits=1
+    )
+    forced_losses = torch.full((batch.x.shape[0], 7), 10.0)
+    forced_losses.scatter_(1, (true_a + true_b).unsqueeze(-1), 0.0)
+    monkeypatch.setattr(
+        overfit_script,
+        "score_forced_result_classes_chunked",
+        lambda model_arg, batch_arg, *, chunk_size: forced_losses,
+    )
+    semantic_before = {
+        name: param.detach().clone()
+        for name, param in model.named_parameters()
+        if (
+            name.startswith("calculator_hook.output_proj.")
+            or name.startswith("calculator_hook.input_proj.")
+            or name.startswith("answer_decoder.")
+            or name.startswith("answer_offset_emb.")
+        )
+    }
+
+    loss, metrics = overfit_script.result_boundary_target_loss(
+        model,
+        batch,
+        num_digits=1,
+        target_mode="hard_best_result",
+        temperature=0.25,
+        min_probability_floor=0.0,
+        chunk_size=4,
+    )
+    optim = torch.optim.SGD(
+        [param for param in model.parameters() if param.requires_grad], lr=0.01
+    )
+    optim.zero_grad(set_to_none=True)
+    loss.backward()
+
+    assert metrics["result_boundary_target_hard_best_equals_true_sum"] == pytest.approx(
+        1.0
+    )
+    assert model.calculator_hook is not None
+    assert model.calculator_hook.result_proj is not None
+    assert model.calculator_hook.result_proj.weight.grad is not None
+    assert model.calculator_hook.result_proj.weight.grad.norm().item() > 0
+    upstream_grad_l2 = sum(
+        param.grad.detach().norm().item()
+        for name, param in model.named_parameters()
+        if not name.startswith("calculator_hook.") and param.grad is not None
+    )
+    assert upstream_grad_l2 > 0
+    optim.step()
+
+    for name, before in semantic_before.items():
+        after = dict(model.named_parameters())[name].detach()
+        assert torch.equal(after, before)
 
 
 def test_result_boundary_hard_best_ce_matches_true_sum_only_after_parity(
@@ -2039,6 +2206,7 @@ def test_result_boundary_cli_validation(monkeypatch, tmp_path) -> None:
         ["--result-boundary-target-loss-weight", "-0.1"],
         ["--result-boundary-target-temperature", "0"],
         ["--result-boundary-target-chunk-size", "0"],
+        ["--exhaustive-grid-batch"],
     ]
     for extra in validation_cases:
         monkeypatch.setattr(
