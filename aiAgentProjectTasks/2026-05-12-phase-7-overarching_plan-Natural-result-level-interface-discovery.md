@@ -241,6 +241,20 @@ gradients, synthetic-gradient/direct-feedback methods, or explicit curriculum
 handoffs with teacher removal.
 ```
 
+Selected next task:
+
+```text
+aiAgentProjectTasks/2026-05-13-phase-7-fourth-task-Natural-result-space-boundary-target-learning-signal.md
+```
+
+This task chooses the target-propagation/local-boundary-target branch first.
+It should enumerate forced calculator result classes through the frozen product
+decoder, train the `result_space` request head toward the answer-derived best
+result, and then remove the boundary-target objective completely for a
+target-off retention check. This is the shortest route to a natural
+result-level calculator-use positive if the answer-derived target can teach
+what deterministic Concrete could not discover from strict initialization.
+
 ### Track A: Structured Joint-Pair Result-Group Bridge
 
 This is the mainline.

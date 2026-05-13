@@ -22,6 +22,19 @@ most relevant next ideas are qualitatively different learning signals:
 - synthetic gradients or direct feedback alignment;
 - explicit curriculum handoffs with teacher removal.
 
+The selected next task is the target-propagation/local-boundary-target branch:
+
+```text
+aiAgentProjectTasks/2026-05-13-phase-7-fourth-task-Natural-result-space-boundary-target-learning-signal.md
+```
+
+Reason: Phase 7 already proved that strict-init deterministic Concrete does
+not teach even a direct result request, while Phase 6 showed that
+answer-derived local targets can teach and then hand off protocols in an
+identifiable setting. The next question is whether an answer-derived result
+boundary target can teach natural result requests, and whether those requests
+survive after that target is removed.
+
 # Alternatives to the Straight-Through Estimator
 
 Great follow-up — and the right question to ask, because STE is just the *cheapest* solution to a much more general problem. Let me first sharpen what the problem actually is, then give you the menu.

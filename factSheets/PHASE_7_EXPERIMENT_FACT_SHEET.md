@@ -45,6 +45,26 @@ differentiable surrogate gradients, synthetic-gradient/direct-feedback methods,
 or explicit curriculum handoffs with teacher removal.
 ```
 
+Next task selected:
+
+```text
+aiAgentProjectTasks/2026-05-13-phase-7-fourth-task-Natural-result-space-boundary-target-learning-signal.md
+```
+
+Rationale:
+
+- The fastest high-signal next branch is an answer-derived result boundary
+  target, because Phase 6 local-target work showed that answer-derived boundary
+  targets can teach protocols in the identifiable setting.
+- The target should be computed by enumerating forced calculator result classes
+  through the frozen product decoder and choosing/weighting the lowest answer
+  NLL result. True sums are allowed only for post-hoc parity diagnostics.
+- This is a target-propagation/local-boundary-target learning signal, not a
+  small deterministic Concrete sweep.
+- The decisive test is not Stage 1 target teaching alone. It is whether the
+  hard learned result request survives after the boundary-target objective is
+  exactly `0.0`.
+
 ## Starting Guardrail
 
 Oracle/readout success is a wiring gate only. Phase 7 progress must be judged
