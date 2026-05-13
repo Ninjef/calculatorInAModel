@@ -23,6 +23,32 @@ separate two possibilities:
 
 The decoder/readout is settled infrastructure. Do not rediscover it.
 
+## Intended Training Sequence
+
+This task is the first step in a larger shift toward new training/interface
+approaches:
+
+1. **Now: result-space request training.** Add a result-action head and train
+   it with answer loss through deterministic hard-forward / soft-backward
+   Concrete. The action is the calculator result class, not an arbitrary pair.
+2. **If Stage 1 works: objective-off retention.** Continue from the selected
+   checkpoint with hard result requests and every discovery-specific objective
+   exactly `0.0`.
+3. **If retention works: canonical query symmetry breaker.** Use the learned
+   result request to impose one deterministic valid calculator query per
+   result, then test whether the model can retain an actual query convention.
+4. **If the result-space task fails: change the learning signal.** Do not do
+   broad small schedule sweeps. Move to qualitatively different training
+   methods such as policy-gradient / REINFORCE-style calculator actions,
+   target-propagation or local boundary targets, differentiable surrogate
+   gradients, synthetic-gradient/direct-feedback methods, or explicit
+   curriculum handoffs with teacher removal.
+
+This ordering matters. Result-space is a diagnostic floor: it tells us whether
+the result-level request is learnable at all. Canonical query symmetry breaking
+comes only after result-space learning works. New estimator families come only
+after a result-aligned action space also fails or proves too unstable.
+
 ## Why This Is The Next Best Task
 
 The previous Phase 7 task established:
@@ -330,9 +356,13 @@ Interpretation:
   calculator request. It does not yet prove arbitrary query discovery.
 - A Stage 2 positive means answer-only hard continuation can retain the
   result-space calculator request after relaxation is off.
+- A result-space positive followed by retention should trigger Track C:
+  canonical query symmetry breaking, not immediate scaling to `operand_max=99`
+  or upstream-open training.
 - A Stage 1 negative means the blocker is deeper than joint-pair
   underidentification, and future work should consider local/target-prop,
-  policy-gradient, or more explicit curriculum signals.
+  policy-gradient, surrogate-gradient, synthetic-gradient/direct-feedback, or
+  more explicit curriculum signals.
 
 ## Reporting Contract
 

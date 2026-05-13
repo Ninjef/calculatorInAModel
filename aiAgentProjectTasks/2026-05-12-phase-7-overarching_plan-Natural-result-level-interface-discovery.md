@@ -177,6 +177,40 @@ freeze_semantic_decoder=true
 
 ## Primary Research Tracks
 
+## Current Training Approach Roadmap
+
+The next work is not another oracle/readout check and not a small schedule
+sweep of the failed joint-pair setup. Phase 7 should now use the following
+decision tree:
+
+1. **Result-space interface diagnostic.** Train a `0..38` result request head
+   with answer loss, then map the predicted result to a deterministic valid
+   calculator query. This asks whether the model can learn the result-level
+   calculator request when the action space matches the variable natural
+   answer loss actually identifies.
+2. **Objective-off retention.** If result-space Stage 1 passes or strongly
+   near-passes, continue with hard result requests and all relaxation/local/
+   auxiliary/expected/anchor objectives exactly off. This tests whether the
+   learned request survives after the training bridge is removed.
+3. **Canonical query symmetry breaker.** If result-space learning works,
+   convert result requests into stable calculator-query protocols by imposing
+   one deterministic query convention per result. This is the bridge from
+   "learn the result" toward "learn a calculator call."
+4. **Replication.** Replicate only after the result-space or canonical-query
+   branch passes both discovery and retention for seed `2`.
+5. **New estimator families.** If result-space learning fails from strict
+   initialization, stop treating action parameterization as the main blocker
+   and move to qualitatively different training signals: policy-gradient /
+   REINFORCE-style calculator actions, target-propagation or local boundary
+   targets, differentiable surrogate/shadow-calculator gradients, synthetic
+   gradients/direct feedback alignment, or explicit curricula with teacher
+   removal.
+
+Interpret result-space carefully: it is a diagnostic floor, not the final
+calculator-query claim. A positive says result-level calculator requests are
+learnable; a negative says the blocker is deeper than pair underidentification
+or joint-pair optimization.
+
 ### Track A: Structured Joint-Pair Result-Group Bridge
 
 This is the mainline.
