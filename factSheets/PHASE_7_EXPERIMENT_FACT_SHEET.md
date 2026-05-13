@@ -17,6 +17,118 @@ Phase 7 should therefore prioritize structured joint-pair or result-space
 interfaces that match the result-level information available in natural answer
 loss.
 
+## Current State After Exact-Grid Seed Replication
+
+As of `2026-05-13`, the exact-grid upstream-open boundary-target branch has a
+split replication result:
+
+```text
+exact_grid_seed_replication_negative
+```
+
+Run root:
+
+```text
+runs/2026-05-13_phase7_full_grid_upstream_open_result_boundary_seed_replication
+```
+
+No code changes were required for this task.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile src/model.py scripts/overfit_one_batch.py scripts/diagnose_calculator_protocol.py scripts/run_full_enum_action_loss_diagnostic.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+91 passed
+```
+
+Preflight reused the existing seed-2 Stage 0 full-grid parity artifact:
+
+```text
+runs/2026-05-13_phase7_full_grid_upstream_open_result_boundary_retention/stage0_full_grid_parity_gate/stage0_full_grid_parity_summary.json
+```
+
+The artifact still reports `400` grid examples, `0` duplicate ordered pairs,
+hard-best result parity with true sum `1.0`, tie-aware true-result best
+fraction `1.0`, and semantic decoder delta `0.0`.
+
+Note on seed naming: the CLI runs used `--seed 4` and `--seed 5`, matching the
+task. `scripts/overfit_one_batch.py` stores `seed=args.seed + num_digits`, so
+the output directories are `model-c-2digit-seed6` and `model-c-2digit-seed7`.
+
+Stage 1 exact-grid teaching replicated strongly:
+
+| CLI seed | Selected checkpoint | Hard result acc | Full-enum learned-result best fraction | Mean learned-result minus best gap | Canonical normal / calc result | Injection-zero | Forced-random | Oracle-at-eval |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `4` | `stage1_seed_4/.../model-c-2digit-seed6/checkpoint_snapshots/step_00700_weights.pt` | `1.0000` | `1.0000` | `0.0000` | `1.0000 / 1.0000` | `0.0550` | `0.0225` | `1.0000` |
+| `5` | `stage1_seed_5/.../model-c-2digit-seed7/checkpoint_snapshots/step_00750_weights.pt` | `0.9975` | `0.9975` | `0.0059` | `0.9975 / 0.9975` | `0.0550` | `0.0225` | `1.0000` |
+
+Stage 1 parameter movement:
+
+| CLI seed | Group | L2 delta | Max abs | Changed tensors |
+| --- | --- | ---: | ---: | ---: |
+| `4` | semantic decoder | `0.0` | `0.0` | `0/5` |
+| `4` | `calculator_hook.result_proj` | `93.1714` | `6.0694` | `2/2` |
+| `4` | upstream encoder | `4.8055` | `0.1961` | `14/29` |
+| `4` | other interface groups | `0.0` | `0.0` | `0/0` |
+| `5` | semantic decoder | `0.0` | `0.0` | `0/5` |
+| `5` | `calculator_hook.result_proj` | `90.6737` | `5.4942` | `2/2` |
+| `5` | upstream encoder | `5.1313` | `0.2050` | `14/29` |
+| `5` | other interface groups | `0.0` | `0.0` | `0/0` |
+
+Stage 2 target-off continuation retained above the final `0.70` floor for both
+seeds, but failed the stricter exact-grid best-post-start `90%` retention
+criterion for both seeds:
+
+| CLI seed | Stage 1 selected hard acc | Best post-start checkpoint | Best post-start exact-grid hard acc | Exact-grid retention ratio | Final exact-grid hard acc | Final full-enum learned-result best fraction | Final mean learned-result minus best gap | Strict Stage 2 gate |
+| --- | ---: | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `4` | `1.0000` | `stage2_seed_4/.../model-c-2digit-seed6/checkpoint_snapshots/step_00100_weights.pt` | `0.8700` | `0.8700` | `0.8350` | `0.8350` | `0.8142` | fail |
+| `5` | `0.9975` | `stage2_seed_5/.../model-c-2digit-seed7/checkpoint_snapshots/step_00150_weights.pt` | `0.8800` | `0.8822` | `0.7925` | `0.7925` | `0.9376` | fail |
+
+Sampled canonical diagnostics remained consistent with causal calculator-result
+dependence. For the selected Stage 2 best/final checkpoints, injection-zero was
+`0.0550`, forced-random was `0.0225`, and oracle-at-eval was `1.0000`.
+
+Stage 2 parameter movement:
+
+| CLI seed | Span | Group | L2 delta | Max abs | Changed tensors |
+| --- | --- | --- | ---: | ---: | ---: |
+| `4` | start -> best step `100` | semantic decoder | `0.0` | `0.0` | `0/5` |
+| `4` | start -> best step `100` | `calculator_hook.result_proj` | `1.3996` | `0.2410` | `2/2` |
+| `4` | start -> best step `100` | upstream encoder | `0.0725` | `0.0081` | `14/29` |
+| `4` | start -> final step `400` | semantic decoder | `0.0` | `0.0` | `0/5` |
+| `4` | start -> final step `400` | `calculator_hook.result_proj` | `2.1418` | `0.2933` | `2/2` |
+| `4` | start -> final step `400` | upstream encoder | `0.2140` | `0.0278` | `14/29` |
+| `5` | start -> best step `150` | semantic decoder | `0.0` | `0.0` | `0/5` |
+| `5` | start -> best step `150` | `calculator_hook.result_proj` | `1.7317` | `0.1574` | `2/2` |
+| `5` | start -> best step `150` | upstream encoder | `0.1051` | `0.0117` | `14/29` |
+| `5` | start -> final step `400` | semantic decoder | `0.0` | `0.0` | `0/5` |
+| `5` | start -> final step `400` | `calculator_hook.result_proj` | `2.0321` | `0.3115` | `2/2` |
+| `5` | start -> final step `400` | upstream encoder | `0.2185` | `0.0264` | `14/29` |
+
+Interpretation:
+
+- Exact-grid result-boundary teaching itself is robust across the tested seeds:
+  both CLI seeds `4` and `5` learned hard result requests near `1.0`.
+- Target-off continuation is materially retained in the weaker sense that both
+  finals stayed above `0.70`, with semantic decoder movement exactly `0.0`.
+- The strict replication gate does not pass because neither seed retained at
+  least `90%` of its selected Stage 1 exact-grid hard result accuracy at the
+  best post-start checkpoint.
+
+Recommendation:
+
+Do not proceed directly to canonical-query/protocol stabilization as if the
+seed-2 retained positive had fully replicated. The next task should analyze
+this seed fragility and compare against multi-sample result-space policy
+gradient with per-prompt or leave-one-out baselines, rather than rerunning
+oracle/readout checks or frozen-head boundary-target variants.
+
 ## Current State After Full-Grid Boundary Retention Gate
 
 As of `2026-05-13`, exact full-grid upstream-open boundary-target training has
