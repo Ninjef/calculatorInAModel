@@ -415,9 +415,11 @@ def diagnostic_rows(
                 "a_confidence": trace_value("a_confidence", float("nan")),
                 "b_confidence": trace_value("b_confidence", float("nan")),
                 "pair_confidence": trace_value("pair_confidence", float("nan")),
+                "result_confidence": trace_value("result_confidence", float("nan")),
                 "a_entropy": trace_value("a_entropy", float("nan")),
                 "b_entropy": trace_value("b_entropy", float("nan")),
                 "pair_entropy": trace_value("pair_entropy", float("nan")),
+                "result_entropy": trace_value("result_entropy", float("nan")),
                 "pair_logp": trace_value("pair_logp", float("nan")),
                 "injection_norm": trace_value("injection_norm", float("nan")),
                 "unscaled_injection_norm": trace_value(
@@ -491,9 +493,11 @@ def summarize_rows(rows: list[dict[str, Any]]) -> dict[str, Any]:
         "mean_a_confidence": mean_field("a_confidence"),
         "mean_b_confidence": mean_field("b_confidence"),
         "mean_pair_confidence": mean_field("pair_confidence"),
+        "mean_result_confidence": mean_field("result_confidence"),
         "mean_a_entropy": mean_field("a_entropy"),
         "mean_b_entropy": mean_field("b_entropy"),
         "mean_pair_entropy": mean_field("pair_entropy"),
+        "mean_result_entropy": mean_field("result_entropy"),
         "learned_result_distribution": compact_distribution(
             [row["calculator_result"] for row in operand_rows], limit=20
         ),

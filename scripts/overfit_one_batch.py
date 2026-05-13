@@ -836,6 +836,48 @@ def relaxed_calculator_policy_metrics(
         raise ValueError("relaxed calculator temperature must be positive")
     true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
     true_sum = true_a + true_b
+    if model.cfg.calculator_action_head == "result_space":
+        result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+        result_probs = torch.softmax(result_logits / temperature, dim=-1)
+        result_entropy = -(
+            result_probs * result_probs.clamp_min(1e-12).log()
+        ).sum(dim=-1)
+        true_result_probability = result_probs.gather(1, true_sum.unsqueeze(1)).squeeze(1)
+        argmax_result = result_probs.argmax(dim=-1)
+        topk = min(3, result_probs.shape[-1])
+        topk_results = result_probs.topk(k=topk, dim=-1).indices
+        max_operand = model.cfg.calculator_operand_vocab_size - 1
+        learned_a = torch.minimum(
+            argmax_result, torch.full_like(argmax_result, max_operand)
+        )
+        learned_b = argmax_result - learned_a
+        entropy_objective = -entropy_weight * result_entropy.mean()
+        metrics = {
+            "relaxed_calculator_temperature": float(temperature),
+            "relaxed_calculator_entropy_weight": float(entropy_weight),
+            "relaxed_calculator_entropy": float(result_entropy.mean().item()),
+            "relaxed_calculator_effective_pairs": float("nan"),
+            "relaxed_calculator_result_entropy": float(result_entropy.mean().item()),
+            "relaxed_calculator_effective_results": float(
+                result_entropy.exp().mean().item()
+            ),
+            "relaxed_calculator_true_result_probability": float(
+                true_result_probability.mean().item()
+            ),
+            "relaxed_calculator_argmax_result_accuracy": float(
+                (argmax_result == true_sum).float().mean().item()
+            ),
+            "relaxed_calculator_top3_result_accuracy": float(
+                (topk_results == true_sum.unsqueeze(1)).any(dim=-1).float().mean().item()
+            ),
+            "relaxed_calculator_hard_learned_pair_exact": float(
+                ((learned_a == true_a) & (learned_b == true_b)).float().mean().item()
+            ),
+            "relaxed_calculator_hard_learned_calc_accuracy": float(
+                (argmax_result == true_sum).float().mean().item()
+            ),
+        }
+        return entropy_objective, metrics
     if model.cfg.calculator_action_head == "joint_pair":
         pair_logits, _, _, _ = calculator_read_pair_logits(model, batch)
         pair_probs = torch.softmax(pair_logits / temperature, dim=-1)
@@ -1021,6 +1063,51 @@ def calculator_read_pair_logits(
         raise ValueError("calculator pair logits require a joint pair projection")
     return (
         model.calculator_hook.pair_proj(pair_input),
+        positions["a"],
+        positions["b"],
+        positions["eq"],
+    )
+
+
+def calculator_read_result_logits(
+    model: TinyGPT, batch: ArithmeticBatch
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    if model.calculator_hook is None:
+        raise ValueError("calculator result logits require a calculator hook")
+    if model.cfg.calculator_action_head != "result_space":
+        raise ValueError(
+            "calculator result logits require calculator_action_head=result_space"
+        )
+    B, T = batch.x.shape
+    assert T <= model.cfg.block_size, (
+        f"sequence length {T} > block_size {model.cfg.block_size}"
+    )
+    pos = torch.arange(T, device=batch.x.device)
+    residual = model.tok_emb(batch.x) + model.pos_emb(pos)
+    if model.cfg.calculator_hook_after_layer > 0:
+        for i, block in enumerate(model.blocks, start=1):
+            residual = block(residual)
+            if i == model.cfg.calculator_hook_after_layer:
+                break
+    positions = model._calculator_read_positions(batch.x)
+    batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
+    if model.cfg.calculator_read_position == "operand_spans":
+        result_input = torch.cat(
+            model.calculator_hook._operand_span_inputs(residual, positions),
+            dim=-1,
+        )
+    else:
+        result_input = torch.cat(
+            [
+                residual[batch_idx, positions["a"]],
+                residual[batch_idx, positions["b"]],
+            ],
+            dim=-1,
+        )
+    if model.calculator_hook.result_proj is None:
+        raise ValueError("calculator result logits require a result projection")
+    return (
+        model.calculator_hook.result_proj(result_input),
         positions["a"],
         positions["b"],
         positions["eq"],
@@ -1984,6 +2071,8 @@ def load_semantic_decoder_checkpoint(
         "calculator_hook.input_proj.bias",
         "calculator_hook.pair_proj.weight",
         "calculator_hook.pair_proj.bias",
+        "calculator_hook.result_proj.weight",
+        "calculator_hook.result_proj.bias",
     }
     unexpected_nonempty = [name for name in unexpected]
     if load_scope == "semantic_decoder_only":
@@ -2069,7 +2158,7 @@ def freeze_semantic_decoder_parameters(model: TinyGPT) -> None:
             param.requires_grad = False
     if (
         model.calculator_hook is not None
-        and model.cfg.calculator_action_head == "joint_pair"
+        and model.cfg.calculator_action_head in {"joint_pair", "result_space"}
     ):
         for param in model.calculator_hook.input_proj.parameters():
             param.requires_grad = False
@@ -2093,6 +2182,7 @@ def adaptive_optimizer_param_groups(
     effective_upstream_lr = lr if upstream_lr is None else upstream_lr
     input_params: list[torch.nn.Parameter] = []
     pair_params: list[torch.nn.Parameter] = []
+    result_params: list[torch.nn.Parameter] = []
     upstream_params: list[torch.nn.Parameter] = []
     for name, param in model.named_parameters():
         if not param.requires_grad:
@@ -2101,6 +2191,8 @@ def adaptive_optimizer_param_groups(
             input_params.append(param)
         elif name.startswith("calculator_hook.pair_proj."):
             pair_params.append(param)
+        elif name.startswith("calculator_hook.result_proj."):
+            result_params.append(param)
         else:
             upstream_params.append(param)
 
@@ -2121,6 +2213,15 @@ def adaptive_optimizer_param_groups(
                 "lr": effective_input_lr,
                 "weight_decay": weight_decay,
                 "name": "calculator_hook.pair_proj",
+            }
+        )
+    if result_params:
+        groups.append(
+            {
+                "params": result_params,
+                "lr": effective_input_lr,
+                "weight_decay": weight_decay,
+                "name": "calculator_hook.result_proj",
             }
         )
     if upstream_params:
@@ -2147,6 +2248,8 @@ def trainable_parameter_summary(model: TinyGPT) -> list[dict[str, object]]:
             if name.startswith("calculator_hook.input_proj.")
             else "calculator_hook.pair_proj"
             if name.startswith("calculator_hook.pair_proj.")
+            else "calculator_hook.result_proj"
+            if name.startswith("calculator_hook.result_proj.")
             else "upstream"
         )
         group = groups.setdefault(
@@ -3555,7 +3658,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--calculator-action-head",
-        choices=["independent_operands", "joint_pair"],
+        choices=["independent_operands", "joint_pair", "result_space"],
         default="independent_operands",
         help="Calculator action parameterization used by the learned interface head.",
     )
@@ -4083,6 +4186,22 @@ def main() -> None:
         raise ValueError(
             "--calculator-action-head joint_pair is currently supported only with "
             "action_loss_full_enum_joint_interface or gumbel_concrete_interface"
+        )
+    if (
+        args.calculator_action_head == "result_space"
+        and args.calculator_estimator != "gumbel_concrete_interface"
+    ):
+        raise ValueError(
+            "--calculator-action-head result_space is currently supported only with "
+            "gumbel_concrete_interface"
+        )
+    if (
+        args.calculator_action_head == "result_space"
+        and args.calculator_output_format != "sum"
+    ):
+        raise ValueError(
+            "--calculator-action-head result_space requires "
+            "--calculator-output-format sum"
         )
     if args.input_proj_anchor_weight < 0:
         raise ValueError("--input-proj-anchor-weight must be non-negative")

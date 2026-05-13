@@ -21,6 +21,7 @@ from scripts.overfit_one_batch import (  # noqa: E402
     action_loss_weights_from_losses,
     calculator_read_operand_logits,
     calculator_read_pair_logits,
+    calculator_read_result_logits,
     fixed_width_operands_from_batch,
     full_enum_action_pairs,
     make_range_batch,
@@ -160,11 +161,35 @@ def full_enum_diagnostic(
                 dim=-2,
             )
             learned_idx_from_head = pair_logits.argmax(dim=-1)
+            learned_result_from_head = None
+        elif model.cfg.calculator_action_head == "result_space":
+            result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+            classes = model.cfg.calculator_operand_vocab_size
+            a_logits = result_logits.new_zeros((current_batch, classes))
+            b_logits = result_logits.new_zeros((current_batch, classes))
+            pair_logits = None
+            learned_result_from_head = result_logits.argmax(dim=-1)
+            max_operand = classes - 1
+            learned_idx_from_head = (
+                torch.minimum(
+                    learned_result_from_head,
+                    torch.full_like(learned_result_from_head, max_operand),
+                )
+                * classes
+                + (
+                    learned_result_from_head
+                    - torch.minimum(
+                        learned_result_from_head,
+                        torch.full_like(learned_result_from_head, max_operand),
+                    )
+                )
+            )
         else:
             a_logits, b_logits, _, _ = calculator_read_operand_logits(model, batch)
             classes = a_logits.shape[-1]
             pair_logits = None
             learned_idx_from_head = None
+            learned_result_from_head = None
         pairs = full_enum_action_pairs(classes=classes, device=device)
         candidates = pairs.unsqueeze(0).expand(current_batch, -1, -1)
         losses = score_action_loss_candidates_chunked(
@@ -203,7 +228,11 @@ def full_enum_diagnostic(
             if bool(mask.any()):
                 result_losses[:, result_idx] = losses[:, mask].min(dim=1).values
         true_sums = true_a + true_b
-        learned_sums = learned_a + learned_b
+        learned_sums = (
+            learned_result_from_head
+            if learned_result_from_head is not None
+            else learned_a + learned_b
+        )
         best_result_idx = result_losses.argmin(dim=-1)
         best_result_losses = result_losses.gather(
             1, best_result_idx.unsqueeze(-1)

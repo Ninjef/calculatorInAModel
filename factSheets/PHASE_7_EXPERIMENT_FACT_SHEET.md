@@ -291,3 +291,140 @@ Recommendation:
 
 Move next to Track B result-space interface or Track C canonical symmetry
 breaker. Do not run Stage 2 retention or seed replication from this checkpoint.
+
+## 2026-05-13 Result-Space Interface Diagnostic
+
+Task:
+
+```text
+aiAgentProjectTasks/2026-05-13-phase-7-third-task-Natural-result-space-interface-diagnostic.md
+```
+
+Claim tested:
+
+```text
+Can natural answer loss train a frozen-upstream model-side `0..38`
+calculator-result request when the action space exactly matches the result
+class identified by the answer target?
+```
+
+Code changes:
+
+- Added `calculator_action_head=result_space`.
+- Added `calculator_hook.result_proj`, mapping paired operand-span read
+  representations to `calculator_result_vocab_size` logits.
+- Hard forward picks `result_pred=argmax(result_logits)` and maps it to a
+  deterministic valid canonical query:
+  `a=min(result, operand_max)`, `b=result-a`.
+- Deterministic Concrete backward uses a soft result distribution directly over
+  `0..38`, with hard-forward / soft-backward calculator-output signal through
+  the frozen semantic decoder.
+- Added trace fields for result confidence and result entropy.
+- Extended relaxed metrics and full-enum diagnostics for result-space heads.
+- Added focused tests for canonical mapping coverage, result-proj gradients,
+  frozen semantic/upstream gradients, relaxed metrics, and CLI/model validation.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile src/model.py scripts/overfit_one_batch.py scripts/diagnose_calculator_protocol.py scripts/diagnose_private_protocol.py scripts/run_full_enum_action_loss_diagnostic.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+79 passed
+```
+
+Stage 1 run:
+
+```text
+runs/2026-05-13_phase7_result_space_interface_diagnostic/stage1_seed2_primary/2026-05-12_203621_038904_model-c-op0-19-gumbel_concrete_interface-result_space-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay600-answer_decoder-adec-product/model-c-2digit-seed2
+```
+
+Setup:
+
+- `digits=2`, `operand_max=19`, `calculator_operand_vocab_size=20`,
+  `calculator_result_vocab_size=39`
+- `answer_format=sum`, `calculator_output_format=sum`
+- `calculator_action_head=result_space`
+- `calculator_estimator=gumbel_concrete_interface`
+- `calculator_read_position=operand_spans`, span width `2`
+- `answer_decoder_interaction=product`
+- `semantic_decoder_checkpoint_load_scope=semantic_decoder_only`
+- `freeze_semantic_decoder=true`, `freeze_upstream_encoder=true`
+- answer loss `1.0`
+- aux/adaptive/local/expected/relaxed-entropy/anchor weights all `0.0`
+- trainable parameters: `calculator_hook.result_proj` only (`2,535`)
+
+Training curve summary:
+
+| Step | Hard result acc | Soft true-result prob | Soft argmax result acc | Top-3 result acc | Result entropy | Effective results |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `0` | `0.0075` | `0.02564` | `0.0075` | `0.0850` | `3.6636` | `38.9999` |
+| `150` | `0.0675` | `0.02613` | `0.0675` | `0.1650` | `3.6627` | `38.9645` |
+| `300` | `0.0325` | `0.02641` | `0.0325` | `0.1575` | `3.6602` | `38.8684` |
+| `450` | `0.0425` | `0.02733` | `0.0425` | `0.1625` | `3.6523` | `38.5648` |
+| `600` | `0.0925` | `0.02920` | `0.0925` | `0.1750` | `3.6163` | `37.2100` |
+
+Selected checkpoint:
+
+```text
+runs/2026-05-13_phase7_result_space_interface_diagnostic/stage1_seed2_primary/2026-05-12_203621_038904_model-c-op0-19-gumbel_concrete_interface-result_space-inlr0.03-uplr0.0003-rtemp2-rfinal0.5-rdecay600-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00600_weights.pt
+```
+
+Selection reason:
+
+- Best hard learned calculator-result accuracy in the Stage 1 curve:
+  `0.0925`.
+- This is below the near-pass threshold and near the strict joint-pair
+  negative range.
+
+Selected checkpoint diagnostics:
+
+| Diagnostic | Value |
+| --- | ---: |
+| canonical normal exact | `0.0975` |
+| canonical calculator result accuracy | `0.0975` |
+| canonical result-equivalent pair accuracy | `0.0975` |
+| canonical pair exact | `0.0100` |
+| injection-zero exact | `0.0550` |
+| forced-random exact | `0.0225` |
+| oracle-at-eval exact | `1.0000` |
+| mean result confidence | `0.03018` |
+| mean result entropy | `3.6502` |
+| full-enum learned-result best fraction | `0.0850` |
+| full-enum learned result matches true sum | `0.0850` |
+| mean learned-result minus best-result gap | `4.7702` |
+| best result group matches true sum | `1.0000` |
+| mean soft target true result group probability | `0.99994` |
+| mean soft target true pair probability | `0.09749` |
+
+Parameter movement from step `0` to selected step `600`:
+
+| Group | L2 delta | Max abs | Changed tensors |
+| --- | ---: | ---: | ---: |
+| `calculator_hook.result_proj` | `18.0823` | `2.8812` | `2/2` |
+| semantic decoder | `0.0` | `0.0` | `0/3` |
+| upstream encoder | `0.0` | `0.0` | `0/29` |
+
+Interpretation:
+
+- Label: `result_space_stage1_negative`.
+- The natural product decoder/readout path remains healthy as a wiring
+  regression (`oracle-at-eval=1.0`), and the full-enum landscape remains
+  result-sharp.
+- Strict frozen-upstream result-space training did not learn a useful hard
+  calculator-result request. Soft true-result probability rose only from
+  `0.02564` to `0.02920`, while effective results remained broad at `37.21`.
+- This is not a soft-positive/hard-handoff case and not a retention candidate.
+
+Recommendation:
+
+Do not run Stage 2 retention, seed replication, Track C canonical-query
+symmetry breaking, or operand-range scaling from this checkpoint. The next work
+should move to qualitatively different learning signals: policy-gradient /
+REINFORCE-style calculator actions, target propagation or local boundary
+targets, differentiable surrogate gradients, synthetic-gradient/direct-feedback
+methods, or explicit curriculum handoffs with teacher removal.

@@ -675,6 +675,49 @@ def test_joint_pair_gumbel_concrete_uses_result_group_soft_backward_signal() -> 
     assert pair_logits.grad.abs().sum().item() > 0
 
 
+def test_result_space_gumbel_concrete_uses_result_soft_backward_signal() -> None:
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="gumbel_concrete_interface",
+        calculator_action_head="result_space",
+        relaxed_calculator_temperature=2.0,
+    )
+    hook = CalculatorHook(cfg)
+    result_logits = torch.full((1, 1, 7), -3.0, requires_grad=True)
+    with torch.no_grad():
+        result_logits[0, 0, 5] = 5.0
+
+    flat_result, a_pred, b_pred, signal = (
+        hook._relaxed_result_space_calculator_output_signal(
+            result_logits=result_logits,
+            dtype=torch.float32,
+        )
+    )
+
+    assert a_pred.item() == 3
+    assert b_pred.item() == 2
+    assert flat_result.argmax(dim=-1).item() == 5
+    assert torch.allclose(
+        signal.detach()[0, 0],
+        torch.tensor([0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0]),
+    )
+
+    loss = (signal * torch.arange(signal.shape[-1], dtype=signal.dtype)).sum()
+    loss.backward()
+
+    assert result_logits.grad is not None
+    assert result_logits.grad.abs().sum().item() > 0
+
+
 def test_calculator_injection_is_localized_to_equals_positions() -> None:
     torch.manual_seed(0)
     hook = CalculatorHook(_small_calculator_cfg(mode="add"))
@@ -1497,6 +1540,100 @@ def test_joint_pair_operand_spans_projection_shape_and_relaxed_gradient() -> Non
     assert model.calculator_hook.output_proj.weight.grad is None
 
 
+def test_result_space_forward_traces_valid_canonical_pair_for_every_result() -> None:
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=20,
+        calculator_result_vocab_size=39,
+        calculator_estimator="gumbel_concrete_interface",
+        calculator_action_head="result_space",
+        calculator_read_position="operands",
+        calculator_bottleneck_mode="answer_decoder",
+        answer_decoder_interaction="product",
+        relaxed_calculator_temperature=2.0,
+    )
+    model = TinyGPT(cfg)
+    assert model.calculator_hook is not None
+    assert model.calculator_hook.result_proj is not None
+    x = torch.tensor([[0, 3, PLUS_ID, 0, 7, EQ_ID]])
+
+    for result_class in range(cfg.calculator_result_vocab_size):
+        with torch.no_grad():
+            model.calculator_hook.result_proj.weight.zero_()
+            model.calculator_hook.result_proj.bias.fill_(-10.0)
+            model.calculator_hook.result_proj.bias[result_class] = 10.0
+
+        _, diagnostics = model(x, return_diagnostics=True)
+        trace = diagnostics["calculator_trace"]
+        a_pred = trace["a_pred"][0, 5].item()
+        b_pred = trace["b_pred"][0, 5].item()
+
+        assert trace["result_pred"][0, 5].item() == result_class
+        assert a_pred == min(result_class, cfg.calculator_operand_vocab_size - 1)
+        assert b_pred == result_class - a_pred
+        assert 0 <= a_pred < cfg.calculator_operand_vocab_size
+        assert 0 <= b_pred < cfg.calculator_operand_vocab_size
+        assert torch.isfinite(trace["result_confidence"][0, 5])
+        assert torch.isfinite(trace["result_entropy"][0, 5])
+
+
+def test_result_space_operand_spans_answer_loss_updates_result_projection_only() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_result_space_grad", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=20,
+        calculator_result_vocab_size=39,
+        calculator_estimator="gumbel_concrete_interface",
+        calculator_action_head="result_space",
+        calculator_read_position="operand_spans",
+        calculator_read_span_width=2,
+        calculator_bottleneck_mode="answer_decoder",
+        answer_decoder_interaction="product",
+        relaxed_calculator_temperature=2.0,
+    )
+    model = TinyGPT(cfg)
+    overfit_script.freeze_semantic_decoder_parameters(model)
+    overfit_script.freeze_upstream_encoder_parameters(model)
+    assert model.calculator_hook is not None
+    assert model.calculator_hook.result_proj is not None
+    assert model.calculator_hook.result_proj.in_features == 2 * 2 * cfg.n_embd
+
+    x = torch.tensor([[0, 3, PLUS_ID, 0, 7, EQ_ID]])
+    logits = model(x)
+    loss = logits[:, -1].sum()
+    loss.backward()
+
+    assert model.calculator_hook.result_proj.weight.grad is not None
+    assert model.calculator_hook.result_proj.weight.grad.abs().sum().item() > 0
+    assert model.calculator_hook.input_proj.weight.grad is None
+    assert model.calculator_hook.output_proj.weight.grad is None
+    assert model.answer_decoder is not None
+    assert model.answer_decoder.weight.grad is None
+    assert model.tok_emb.weight.grad is None
+
+
 def test_joint_full_enum_interface_loss_updates_pair_projection_only() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_joint_full_enum_loss", script_path)
@@ -1615,6 +1752,107 @@ def test_joint_pair_relaxed_metrics_report_soft_result_hardening(monkeypatch) ->
     assert 0.5 < metrics["relaxed_calculator_true_result_probability"] < 1.0
     assert metrics["relaxed_calculator_result_entropy"] > 0.0
     assert metrics["relaxed_calculator_effective_results"] > 1.0
+
+
+def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_result_space_metrics", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="gumbel_concrete_interface",
+        calculator_action_head="result_space",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    model = TinyGPT(cfg)
+    batch = ArithmeticBatch(
+        x=torch.tensor(
+            [
+                [1, PLUS_ID, 2, EQ_ID],
+                [0, PLUS_ID, 3, EQ_ID],
+            ]
+        ),
+        y=torch.zeros((2, 4), dtype=torch.long),
+        loss_mask=torch.zeros((2, 4), dtype=torch.bool),
+    )
+    result_logits = torch.full((2, 7), -10.0)
+    result_logits[0, 3] = 10.0
+    result_logits[1, 0] = 10.0
+    result_logits[1, 3] = 9.0
+
+    def fake_result_logits(model_arg, batch_arg):
+        assert model_arg is model
+        assert batch_arg is batch
+        return result_logits, None, None, None
+
+    monkeypatch.setattr(
+        overfit_script, "calculator_read_result_logits", fake_result_logits
+    )
+
+    _, metrics = overfit_script.relaxed_calculator_policy_metrics(
+        model,
+        batch,
+        num_digits=1,
+        temperature=1.0,
+        entropy_weight=0.0,
+    )
+
+    assert metrics["relaxed_calculator_argmax_result_accuracy"] == pytest.approx(0.5)
+    assert metrics["relaxed_calculator_top3_result_accuracy"] == pytest.approx(1.0)
+    assert metrics["relaxed_calculator_hard_learned_calc_accuracy"] == pytest.approx(0.5)
+    assert 0.5 < metrics["relaxed_calculator_true_result_probability"] < 1.0
+    assert metrics["relaxed_calculator_result_entropy"] > 0.0
+    assert metrics["relaxed_calculator_effective_results"] > 1.0
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(script_path),
+            "--variant",
+            "model-c",
+            "--calculator-estimator",
+            "gumbel_concrete_interface",
+            "--calculator-action-head",
+            "result_space",
+        ],
+    )
+    parsed = overfit_script.parse_args()
+    assert parsed.calculator_action_head == "result_space"
+    assert parsed.calculator_estimator == "gumbel_concrete_interface"
+
+    with pytest.raises(ValueError, match="result_space.*gumbel_concrete_interface"):
+        CalculatorHook(
+            GPTConfig(
+                calculator_enabled=True,
+                calculator_mode="add",
+                calculator_estimator="ste",
+                calculator_action_head="result_space",
+            )
+        )
+    with pytest.raises(ValueError, match="result_space.*calculator_output_format"):
+        CalculatorHook(
+            GPTConfig(
+                calculator_enabled=True,
+                calculator_mode="add",
+                calculator_estimator="gumbel_concrete_interface",
+                calculator_action_head="result_space",
+                calculator_output_format="sum_left_operand",
+            )
+        )
 
 
 def test_joint_auxiliary_operand_loss_updates_pair_projection_only() -> None:

@@ -108,10 +108,14 @@ class CalculatorHook(nn.Module):
                 "{'deterministic', 'gumbel'}, "
                 f"got {cfg.relaxed_calculator_mode!r}"
             )
-        if cfg.calculator_action_head not in {"independent_operands", "joint_pair"}:
+        if cfg.calculator_action_head not in {
+            "independent_operands",
+            "joint_pair",
+            "result_space",
+        }:
             raise ValueError(
                 "calculator_action_head must be one of "
-                "{'independent_operands', 'joint_pair'}, "
+                "{'independent_operands', 'joint_pair', 'result_space'}, "
                 f"got {cfg.calculator_action_head!r}"
             )
         if cfg.calculator_output_format not in {"sum", "sum_left_operand"}:
@@ -119,6 +123,22 @@ class CalculatorHook(nn.Module):
                 "calculator_output_format must be one of "
                 "{'sum', 'sum_left_operand'}, "
                 f"got {cfg.calculator_output_format!r}"
+            )
+        if (
+            cfg.calculator_action_head == "result_space"
+            and cfg.calculator_estimator != "gumbel_concrete_interface"
+        ):
+            raise ValueError(
+                "calculator_action_head='result_space' is currently supported "
+                "only with calculator_estimator='gumbel_concrete_interface'"
+            )
+        if (
+            cfg.calculator_action_head == "result_space"
+            and cfg.calculator_output_format != "sum"
+        ):
+            raise ValueError(
+                "calculator_action_head='result_space' requires "
+                "calculator_output_format='sum'"
             )
         if cfg.answer_decoder_interaction not in {"none", "product"}:
             raise ValueError(
@@ -159,17 +179,24 @@ class CalculatorHook(nn.Module):
         if self.read_position == "operand_spans":
             input_width *= self.read_span_width
         self.input_proj = nn.Linear(input_width, 2 * self.operand_vocab_size)
-        if self.action_head == "joint_pair":
+        if self.action_head in {"joint_pair", "result_space"}:
             for param in self.input_proj.parameters():
                 param.requires_grad = False
-            pair_input_width = 2 * cfg.n_embd
+            paired_input_width = 2 * cfg.n_embd
             if self.read_position == "operand_spans":
-                pair_input_width *= self.read_span_width
+                paired_input_width *= self.read_span_width
+        if self.action_head == "joint_pair":
             self.pair_proj: nn.Linear | None = nn.Linear(
-                pair_input_width, self.operand_vocab_size * self.operand_vocab_size
+                paired_input_width, self.operand_vocab_size * self.operand_vocab_size
             )
         else:
             self.pair_proj = None
+        if self.action_head == "result_space":
+            self.result_proj: nn.Linear | None = nn.Linear(
+                paired_input_width, self.result_vocab_size
+            )
+        else:
+            self.result_proj = None
         self.output_signal_size = self.result_vocab_size
         if self.output_format == "sum_left_operand":
             self.output_signal_size += self.operand_vocab_size
@@ -204,6 +231,7 @@ class CalculatorHook(nn.Module):
         else:
             read_positions = self._operand_read_positions(tokens)
         pair_logits = None
+        result_logits = None
         pair_logp = None
         if self.action_head == "joint_pair":
             pair_logits = self._joint_pair_logits(h, read_positions)
@@ -212,6 +240,13 @@ class CalculatorHook(nn.Module):
             b_pred = pair_pred % self.operand_vocab_size
             a_logits = self._marginal_logits_from_pair_logits(pair_logits, dim="a")
             b_logits = self._marginal_logits_from_pair_logits(pair_logits, dim="b")
+        elif self.action_head == "result_space":
+            result_logits = self._result_space_logits(h, read_positions)
+            result_pred = result_logits.argmax(dim=-1)
+            a_pred, b_pred = self._canonical_pair_from_result(result_pred)
+            a_logits, b_logits = self._canonical_operand_logits(
+                a_pred, b_pred, dtype=h.dtype
+            )
         else:
             if self.read_position == "operand_spans":
                 a_input, b_input = self._operand_span_inputs(h, read_positions)
@@ -263,6 +298,29 @@ class CalculatorHook(nn.Module):
                 elif forced_result_class is not None:
                     flat_result = self._forced_result(
                         a_pred, forced_result_class, dtype=h.dtype
+                    )
+                else:
+                    flat_result = self._overridden_result(
+                        a_pred, b_pred, result_override, dtype=h.dtype
+                    )
+            elif self.action_head == "result_space":
+                assert result_logits is not None
+                if forced_result_class is not None:
+                    flat_result = self._forced_result(
+                        a_pred, forced_result_class, dtype=h.dtype
+                    )
+                elif (
+                    self.estimator == "gumbel_concrete_interface"
+                    and result_override == "add"
+                ):
+                    (
+                        flat_result,
+                        a_pred,
+                        b_pred,
+                        relaxed_calculator_signal,
+                    ) = self._relaxed_result_space_calculator_output_signal(
+                        result_logits=result_logits,
+                        dtype=h.dtype,
                     )
                 else:
                     flat_result = self._overridden_result(
@@ -354,6 +412,7 @@ class CalculatorHook(nn.Module):
                 a_logits=a_logits,
                 b_logits=b_logits,
                 pair_logits=pair_logits,
+                result_logits=result_logits,
                 a_pred=a_pred,
                 b_pred=b_pred,
                 a_logp=a_logp,
@@ -436,20 +495,56 @@ class CalculatorHook(nn.Module):
         selected = logits[batch_idx, positions]
         return selected.unsqueeze(1).expand(B, T, C)
 
-    def _joint_pair_logits(
-        self, h: Tensor, read_positions: dict[str, Tensor]
-    ) -> Tensor:
-        B, T, _ = h.shape
+    def _paired_read_input(self, h: Tensor, read_positions: dict[str, Tensor]) -> Tensor:
+        B = h.shape[0]
         if self.read_position == "operand_spans":
             a_h, b_h = self._operand_span_inputs(h, read_positions)
         else:
             batch_idx = torch.arange(B, device=h.device)
             a_h = h[batch_idx, read_positions["a"]]
             b_h = h[batch_idx, read_positions["b"]]
+        return torch.cat([a_h, b_h], dim=-1)
+
+    def _joint_pair_logits(
+        self, h: Tensor, read_positions: dict[str, Tensor]
+    ) -> Tensor:
+        B, T, _ = h.shape
         if self.pair_proj is None:
             raise ValueError("joint pair logits require calculator_action_head=joint_pair")
-        selected_pair_logits = self.pair_proj(torch.cat([a_h, b_h], dim=-1))
+        selected_pair_logits = self.pair_proj(self._paired_read_input(h, read_positions))
         return selected_pair_logits.unsqueeze(1).expand(B, T, -1)
+
+    def _result_space_logits(
+        self, h: Tensor, read_positions: dict[str, Tensor]
+    ) -> Tensor:
+        B, T, _ = h.shape
+        if self.result_proj is None:
+            raise ValueError(
+                "result logits require calculator_action_head=result_space"
+            )
+        selected_result_logits = self.result_proj(
+            self._paired_read_input(h, read_positions)
+        )
+        return selected_result_logits.unsqueeze(1).expand(B, T, -1)
+
+    def _canonical_pair_from_result(self, result_idx: Tensor) -> tuple[Tensor, Tensor]:
+        max_operand = self.operand_vocab_size - 1
+        a_pred = torch.minimum(result_idx, torch.full_like(result_idx, max_operand))
+        b_pred = result_idx - a_pred
+        return a_pred, b_pred
+
+    def _canonical_operand_logits(
+        self, a_pred: Tensor, b_pred: Tensor, *, dtype: torch.dtype
+    ) -> tuple[Tensor, Tensor]:
+        a_logits = a_pred.new_full(
+            (*a_pred.shape, self.operand_vocab_size), -20
+        ).to(dtype=dtype)
+        b_logits = b_pred.new_full(
+            (*b_pred.shape, self.operand_vocab_size), -20
+        ).to(dtype=dtype)
+        a_logits.scatter_(-1, a_pred.unsqueeze(-1), 20.0)
+        b_logits.scatter_(-1, b_pred.unsqueeze(-1), 20.0)
+        return a_logits, b_logits
 
     def _marginal_logits_from_pair_logits(self, pair_logits: Tensor, *, dim: str) -> Tensor:
         pair_logp = pair_logits.log_softmax(dim=-1).reshape(
@@ -683,6 +778,38 @@ class CalculatorHook(nn.Module):
         flat_result = hard_result.reshape(-1, self.result_vocab_size).to(dtype=dtype)
         return flat_result, a_pred, b_pred, signal.to(dtype=dtype)
 
+    def _relaxed_result_space_calculator_output_signal(
+        self,
+        *,
+        result_logits: Tensor,
+        dtype: torch.dtype,
+    ) -> tuple[Tensor, Tensor, Tensor, Tensor]:
+        temperature = float(self.relaxed_temperature)
+        if temperature <= 0:
+            raise ValueError("relaxed calculator temperature must be positive")
+        if self.relaxed_mode == "deterministic":
+            result_soft = torch.softmax(result_logits / temperature, dim=-1)
+            result_idx = result_logits.argmax(dim=-1)
+        elif self.relaxed_mode == "gumbel":
+            result_gumbel = -torch.empty_like(result_logits).exponential_().log()
+            result_soft = torch.softmax(
+                (result_logits + result_gumbel) / temperature, dim=-1
+            )
+            result_idx = result_soft.argmax(dim=-1)
+        else:
+            raise ValueError(f"unknown relaxed calculator mode: {self.relaxed_mode}")
+        result_hard = F.one_hot(result_idx, num_classes=self.result_vocab_size).to(
+            result_logits.dtype
+        )
+        signal = (
+            result_hard.detach() + result_soft - result_soft.detach()
+            if self.relaxed_hard_forward
+            else result_soft
+        )
+        a_pred, b_pred = self._canonical_pair_from_result(result_idx)
+        flat_result = result_hard.reshape(-1, self.result_vocab_size).to(dtype=dtype)
+        return flat_result, a_pred, b_pred, signal.to(dtype=dtype)
+
     def _empty_trace(
         self, h: Tensor, tokens: Tensor, injection: Tensor
     ) -> dict[str, Tensor]:
@@ -705,9 +832,11 @@ class CalculatorHook(nn.Module):
             "a_confidence": nan_float,
             "b_confidence": nan_float,
             "pair_confidence": nan_float,
+            "result_confidence": nan_float,
             "a_entropy": nan_float,
             "b_entropy": nan_float,
             "pair_entropy": nan_float,
+            "result_entropy": nan_float,
             "a_logp": nan_float,
             "b_logp": nan_float,
             "pair_logp": nan_float,
@@ -731,6 +860,7 @@ class CalculatorHook(nn.Module):
         a_logits: Tensor,
         b_logits: Tensor,
         pair_logits: Tensor | None,
+        result_logits: Tensor | None,
         a_pred: Tensor,
         b_pred: Tensor,
         a_logp: Tensor | None,
@@ -765,6 +895,13 @@ class CalculatorHook(nn.Module):
                     .clamp_min(1e-12)
                     .log()
                 )
+        if result_logits is None:
+            result_confidence = a_logits.new_full(a_pred.shape, float("nan"))
+            result_entropy = result_confidence
+        else:
+            result_probs = result_logits.softmax(dim=-1)
+            result_confidence = result_probs.max(dim=-1).values
+            result_entropy = self._entropy(result_probs)
         read_position_id = (
             0
             if self.read_position == "eq"
@@ -782,9 +919,11 @@ class CalculatorHook(nn.Module):
             "a_confidence": a_probs.max(dim=-1).values,
             "b_confidence": b_probs.max(dim=-1).values,
             "pair_confidence": pair_confidence,
+            "result_confidence": result_confidence,
             "a_entropy": self._entropy(a_probs),
             "b_entropy": self._entropy(b_probs),
             "pair_entropy": pair_entropy,
+            "result_entropy": result_entropy,
             "a_logp": a_logp,
             "b_logp": b_logp,
             "pair_logp": pair_logp,
