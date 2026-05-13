@@ -642,3 +642,54 @@ multi-sample policy gradient with per-prompt baselines, surrogate gradients,
 direct feedback alignment, or a direct separability test of whether frozen
 operand-span representations can linearly predict the answer-derived result
 target.
+
+## 2026-05-13 Next Selected Task: Result Feature Separability And Minimal Upstream-Open Gate
+
+Task document:
+
+```text
+aiAgentProjectTasks/2026-05-13-phase-7-fifth-task-Frozen-feature-result-separability-and-minimal-upstream-open-boundary-gate.md
+```
+
+Decision:
+
+```text
+Before moving to policy gradient or surrogate-gradient families, directly test
+whether the exact frozen operand-span features consumed by result_proj can
+linearly or shallowly recover the answer-derived result target.
+```
+
+Rationale:
+
+- The Phase 7 boundary-target objective already provided a sharp supervised
+  result target without using true sums for target construction.
+- That objective still failed with only the frozen linear `result_proj`
+  trainable, peaking at `0.1150` hard learned calculator-result accuracy.
+- This makes frozen-feature availability and head capacity the most urgent
+  ambiguity. If the exact `result_proj` input is not separable, more frozen
+  deterministic Concrete or frozen boundary-target schedules are low value.
+- A controlled probe is cheap and decisive: it separates linear-head failure,
+  shallow-capacity failure, and representation failure.
+
+Task structure:
+
+1. Add a result separability diagnostic over the exhaustive natural `0..19`
+   grid, using answer-derived best-result targets and true sums only for
+   post-hoc parity.
+2. Train controlled linear and one-hidden-layer probes on the exact paired
+   operand-span feature consumed by `calculator_hook.result_proj`.
+3. If a linear probe passes, debug the mismatch with the in-model boundary
+   target rather than changing estimator families.
+4. If only a shallow probe passes, test the smallest MLP result head under the
+   same boundary-target objective.
+5. If frozen probes fail, run the minimal upstream-open boundary-target branch
+   with semantic decoder frozen, then attempt target-off retention only if
+   Stage 1 reaches the result-level gate.
+
+Interpretation guardrail:
+
+This task is not a learned calculator-use claim by itself. The probe is a
+diagnostic gate. A project-level positive still requires a hard learned
+calculator-result protocol under the real calculator path and, for retention
+claims, all result-boundary/local/auxiliary/expected/anchor objectives exactly
+`0.0`.
