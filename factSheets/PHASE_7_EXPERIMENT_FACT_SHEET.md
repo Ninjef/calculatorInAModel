@@ -179,6 +179,103 @@ got a negative. The next task must use result-space actions, multi-sample
 per-prompt advantages, and a gradient-agreement diagnostic against the known
 boundary-target ceiling before spending long-run training budget.
 
+## 2026-05-14 Multi-Sample Result-Space Policy-Gradient Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/2026-05-14-phase-7-eighth-task-Multi-sample-result-space-policy-gradient-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-14_phase7_multisample_result_space_policy_gradient_gate
+```
+
+Code changes:
+
+- `calculator_action_head=result_space` now supports
+  `calculator_estimator=reinforce`.
+- Result-space REINFORCE samples from `calculator_hook.result_proj`, maps the
+  sampled result to the deterministic canonical calculator pair, and records
+  `result_logp`; `sampled_logp` is now the sampled result log-probability for
+  result-space policies.
+- `scripts/overfit_one_batch.py` now supports
+  `reinforce_baseline_mode={global_ema,per_prompt_mean,leave_one_out}`,
+  `reinforce_num_samples_per_prompt`, and a diagnostic-only
+  PG-vs-boundary gradient gate.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile src/model.py scripts/overfit_one_batch.py scripts/diagnose_calculator_protocol.py scripts/run_full_enum_action_loss_diagnostic.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+92 passed
+```
+
+Stage 0 exact-grid gradient gate used natural `0..19`, exhaustive `400`
+prompts, `calculator_action_head=result_space`,
+`calculator_estimator=reinforce`, frozen semantic decoder, no oracle operands,
+no boundary-target update, and `K=16` samples per prompt with the
+leave-one-out baseline.
+
+Artifact:
+
+```text
+runs/2026-05-14_phase7_multisample_result_space_policy_gradient_gate/stage0_gradient_gate/2026-05-14_075911_897578_model-c-op0-19-fullgrid-reinforce-result_space-K16-leave_one_out-inlr0.01-uplr0.0003-graddiag-answer_decoder-adec-product/model-c-2digit-seed4/reinforce_gradient_diagnostic_summary.json
+```
+
+Stage 0 results:
+
+| Metric | Value |
+| --- | ---: |
+| answer loss | `7.9035` |
+| PG objective / policy loss | `0.001336 / 0.001336` |
+| advantage mean / std | `0.000000006 / 3.4309` |
+| result entropy | `3.6636` |
+| sampled result accuracy | `0.0278` |
+| PG result-proj grad L2 | `0.1551` |
+| PG upstream grad L2 | `0.0574` |
+| PG semantic decoder grad L2 | `0.0` |
+| boundary result-proj grad L2 | `0.0897` |
+| boundary upstream grad L2 | `0.0332` |
+| boundary semantic decoder grad L2 | `0.0` |
+| PG-vs-boundary result-proj cosine | `-0.0945` |
+| PG-vs-boundary upstream cosine | `-0.1108` |
+| global EMA advantage std | `3.7048` |
+| per-prompt mean advantage std | `3.1542` |
+| leave-one-out advantage std | `3.4382` |
+
+Interpretation:
+
+- The policy-gradient plumbing is live: result-proj and upstream PG gradients
+  are nonzero, and semantic decoder gradient remains exactly `0.0`.
+- Per-prompt and leave-one-out baselines reduce advantage standard deviation
+  versus the legacy global EMA baseline on this fixed-grid diagnostic.
+- The decisive gate fails because the result-proj PG gradient is negatively
+  aligned with the known answer-derived boundary-target ceiling
+  (`cosine=-0.0945`).
+
+Decision:
+
+```text
+multisample_result_space_policy_gradient_stage0_alignment_negative
+```
+
+Stage 1 and Stage 2 were intentionally not run. Per the task gate, vanilla
+multi-sample result-space policy gradient should not receive long-run training
+budget while its fixed-grid estimate is anti-aligned with the boundary-target
+ceiling. Next work should move to actor-critic/NVIL-style learned baselines
+only if the gradient alignment can be improved, or to surrogate/shadow
+calculator gradients, synthetic gradients/direct feedback alignment, or a
+stricter decoder-phase bottleneck.
+
 ## Current State After Full-Grid Boundary Retention Gate
 
 As of `2026-05-13`, exact full-grid upstream-open boundary-target training has

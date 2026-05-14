@@ -127,11 +127,13 @@ class CalculatorHook(nn.Module):
             )
         if (
             cfg.calculator_action_head == "result_space"
-            and cfg.calculator_estimator != "gumbel_concrete_interface"
+            and cfg.calculator_estimator
+            not in {"gumbel_concrete_interface", "reinforce"}
         ):
             raise ValueError(
                 "calculator_action_head='result_space' is currently supported "
-                "only with calculator_estimator='gumbel_concrete_interface'"
+                "only with calculator_estimator='gumbel_concrete_interface' "
+                "or 'reinforce'"
             )
         if (
             cfg.calculator_action_head == "result_space"
@@ -249,6 +251,7 @@ class CalculatorHook(nn.Module):
         pair_logits = None
         result_logits = None
         pair_logp = None
+        result_logp = None
         if self.action_head == "joint_pair":
             pair_logits = self._joint_pair_logits(h, read_positions)
             pair_pred = pair_logits.argmax(dim=-1)
@@ -258,7 +261,12 @@ class CalculatorHook(nn.Module):
             b_logits = self._marginal_logits_from_pair_logits(pair_logits, dim="b")
         elif self.action_head == "result_space":
             result_logits = self._result_space_logits(h, read_positions)
-            result_pred = result_logits.argmax(dim=-1)
+            if self.estimator == "reinforce" and oracle_operands is None:
+                result_dist = torch.distributions.Categorical(logits=result_logits)
+                result_pred = result_dist.sample()
+                result_logp = result_dist.log_prob(result_pred)
+            else:
+                result_pred = result_logits.argmax(dim=-1)
             a_pred, b_pred = self._canonical_pair_from_result(result_pred)
             a_logits, b_logits = self._canonical_operand_logits(
                 a_pred, b_pred, dtype=h.dtype
@@ -434,6 +442,7 @@ class CalculatorHook(nn.Module):
                 a_logp=a_logp,
                 b_logp=b_logp,
                 pair_logp=pair_logp,
+                result_logp=result_logp,
                 result=result,
                 tokens=tokens,
                 read_positions=read_positions,
@@ -856,6 +865,7 @@ class CalculatorHook(nn.Module):
             "a_logp": nan_float,
             "b_logp": nan_float,
             "pair_logp": nan_float,
+            "result_logp": nan_float,
             "sampled_logp": nan_float,
             "injection_norm": injection.norm(dim=-1),
             "unscaled_injection_norm": injection.norm(dim=-1),
@@ -882,6 +892,7 @@ class CalculatorHook(nn.Module):
         a_logp: Tensor | None,
         b_logp: Tensor | None,
         pair_logp: Tensor | None,
+        result_logp: Tensor | None,
         result: Tensor,
         tokens: Tensor,
         read_positions: dict[str, Tensor],
@@ -918,6 +929,20 @@ class CalculatorHook(nn.Module):
             result_probs = result_logits.softmax(dim=-1)
             result_confidence = result_probs.max(dim=-1).values
             result_entropy = self._entropy(result_probs)
+            if result_logp is None:
+                result_logp = (
+                    result_probs.gather(-1, result.argmax(dim=-1).unsqueeze(-1))
+                    .squeeze(-1)
+                    .clamp_min(1e-12)
+                    .log()
+                )
+        if result_logp is None:
+            result_logp = a_logits.new_full(a_pred.shape, float("nan"))
+        sampled_logp = (
+            result_logp
+            if self.action_head == "result_space"
+            else a_logp + b_logp
+        )
         read_position_id = (
             0
             if self.read_position == "eq"
@@ -943,7 +968,8 @@ class CalculatorHook(nn.Module):
             "a_logp": a_logp,
             "b_logp": b_logp,
             "pair_logp": pair_logp,
-            "sampled_logp": a_logp + b_logp,
+            "result_logp": result_logp,
+            "sampled_logp": sampled_logp,
             "injection_norm": scaled_injection.norm(dim=-1),
             "unscaled_injection_norm": unscaled_injection.norm(dim=-1),
             "oracle_used": torch.full(

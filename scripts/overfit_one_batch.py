@@ -119,6 +119,8 @@ class TrainConfig:
     freeze_semantic_decoder: bool
     freeze_upstream_encoder: bool
     trainable_parameter_groups: list[dict[str, object]]
+    reinforce_baseline_mode: str
+    reinforce_num_samples_per_prompt: int
     reinforce_baseline_beta: float
     reinforce_entropy_weight: float
     reinforce_entropy_decay_steps: int
@@ -549,7 +551,10 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "policy_loss",
         "policy_baseline",
         "policy_advantage_mean",
+        "policy_advantage_std",
         "sampled_logp",
+        "result_entropy",
+        "sampled_result_accuracy",
         "operand_entropy",
         "entropy_weight",
         "adaptive_interface_loss",
@@ -695,6 +700,121 @@ def masked_cross_entropy_per_example(
     ).reshape(B, T)
     mask_f = mask.to(loss.dtype)
     return (loss * mask_f).sum(dim=-1) / mask_f.sum(dim=-1).clamp(min=1.0)
+
+
+def single_eq_trace_values(
+    trace: dict[str, torch.Tensor], batch: ArithmeticBatch, key: str
+) -> torch.Tensor:
+    eq_mask = trace["eq_mask"]
+    eq_counts = eq_mask.long().sum(dim=-1)
+    if not torch.all(eq_counts == 1):
+        raise ValueError("REINFORCE training expects one '=' token per example")
+    eq_pos = eq_mask.float().argmax(dim=-1).long()
+    batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
+    return trace[key][batch_idx, eq_pos]
+
+
+def reinforce_entropy_from_trace(
+    trace: dict[str, torch.Tensor],
+    batch: ArithmeticBatch,
+    *,
+    action_head: str,
+) -> torch.Tensor:
+    if action_head == "result_space":
+        return single_eq_trace_values(trace, batch, "result_entropy")
+    return single_eq_trace_values(trace, batch, "a_entropy") + single_eq_trace_values(
+        trace, batch, "b_entropy"
+    )
+
+
+def reinforce_advantages(
+    sample_losses: torch.Tensor,
+    *,
+    baseline_mode: str,
+    global_baseline: float | None,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if baseline_mode == "global_ema":
+        if global_baseline is None:
+            baseline = sample_losses.detach().mean()
+        else:
+            baseline = sample_losses.new_tensor(float(global_baseline))
+        advantages = sample_losses.detach() - baseline
+        return advantages, baseline.expand_as(sample_losses)
+    if baseline_mode == "per_prompt_mean":
+        baseline = sample_losses.detach().mean(dim=0, keepdim=True)
+        return sample_losses.detach() - baseline, baseline.expand_as(sample_losses)
+    if baseline_mode == "leave_one_out":
+        if sample_losses.shape[0] < 2:
+            raise ValueError("leave_one_out REINFORCE baseline requires K >= 2")
+        detached = sample_losses.detach()
+        baseline = (detached.sum(dim=0, keepdim=True) - detached) / (
+            sample_losses.shape[0] - 1
+        )
+        return detached - baseline, baseline
+    raise ValueError(f"unknown reinforce baseline mode: {baseline_mode}")
+
+
+def reinforce_policy_gradient_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    baseline_mode: str,
+    num_samples_per_prompt: int,
+    global_baseline: float | None,
+    entropy_weight: float,
+) -> tuple[torch.Tensor, torch.Tensor, dict[str, float]]:
+    if num_samples_per_prompt < 1:
+        raise ValueError("REINFORCE samples per prompt must be positive")
+    sample_losses: list[torch.Tensor] = []
+    sample_logps: list[torch.Tensor] = []
+    sample_entropies: list[torch.Tensor] = []
+    sampled_result_accs: list[torch.Tensor] = []
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = true_a + true_b
+    for _ in range(num_samples_per_prompt):
+        logits, diagnostics = model(batch.x, return_diagnostics=True)
+        per_example_loss = masked_cross_entropy_per_example(
+            logits, batch.y, batch.loss_mask
+        )
+        trace = diagnostics["calculator_trace"]
+        sample_losses.append(per_example_loss)
+        sample_logps.append(single_eq_trace_values(trace, batch, "sampled_logp"))
+        sample_entropies.append(
+            reinforce_entropy_from_trace(
+                trace, batch, action_head=model.cfg.calculator_action_head
+            )
+        )
+        sampled_result = single_eq_trace_values(trace, batch, "result_pred")
+        sampled_result_accs.append((sampled_result == true_sum).float())
+
+    losses = torch.stack(sample_losses, dim=0)
+    logps = torch.stack(sample_logps, dim=0)
+    entropies = torch.stack(sample_entropies, dim=0)
+    result_acc = torch.stack(sampled_result_accs, dim=0)
+    advantages, baselines = reinforce_advantages(
+        losses,
+        baseline_mode=baseline_mode,
+        global_baseline=global_baseline,
+    )
+    policy_loss = (advantages * logps).mean()
+    entropy_loss = -entropy_weight * entropies.mean()
+    objective = policy_loss + entropy_loss
+    answer_loss = losses.mean()
+    metrics = {
+        "policy_loss": float(policy_loss.detach().item()),
+        "policy_objective": float(objective.detach().item()),
+        "policy_baseline": float(baselines.mean().detach().item()),
+        "policy_advantage_mean": float(advantages.mean().detach().item()),
+        "policy_advantage_std": float(advantages.std(unbiased=False).detach().item()),
+        "sampled_logp": float(logps.mean().detach().item()),
+        "operand_entropy": float(entropies.mean().detach().item()),
+        "result_entropy": float(entropies.mean().detach().item())
+        if model.cfg.calculator_action_head == "result_space"
+        else float("nan"),
+        "sampled_result_accuracy": float(result_acc.mean().detach().item()),
+    }
+    return objective, answer_loss, metrics
 
 
 def make_oracle_operands_from_values(
@@ -1487,6 +1607,175 @@ def result_boundary_target_loss(
         ),
     }
     return target_loss, metrics
+
+
+def parameter_group_name(name: str) -> str:
+    if name.startswith("calculator_hook.result_proj."):
+        return "calculator_hook.result_proj"
+    if name.startswith("calculator_hook.input_proj."):
+        return "calculator_hook.input_proj"
+    if name.startswith("calculator_hook.pair_proj."):
+        return "calculator_hook.pair_proj"
+    if name.startswith(SEMANTIC_DECODER_CHECKPOINT_PREFIXES):
+        return "semantic_decoder"
+    return "upstream"
+
+
+def flattened_group_gradients(model: TinyGPT) -> dict[str, torch.Tensor]:
+    chunks: dict[str, list[torch.Tensor]] = {}
+    for name, param in model.named_parameters():
+        group = parameter_group_name(name)
+        if param.grad is None:
+            grad = torch.zeros_like(param.detach()).reshape(-1)
+        else:
+            grad = param.grad.detach().reshape(-1)
+        chunks.setdefault(group, []).append(grad.cpu())
+    return {
+        group: torch.cat(group_chunks) if group_chunks else torch.tensor([])
+        for group, group_chunks in chunks.items()
+    }
+
+
+def gradient_l2(gradients: dict[str, torch.Tensor], group: str) -> float:
+    grad = gradients.get(group)
+    if grad is None or grad.numel() == 0:
+        return 0.0
+    return float(grad.norm().item())
+
+
+def gradient_cosine(
+    left: dict[str, torch.Tensor], right: dict[str, torch.Tensor], group: str
+) -> float:
+    left_grad = left.get(group)
+    right_grad = right.get(group)
+    if left_grad is None or right_grad is None or left_grad.numel() == 0:
+        return float("nan")
+    denom = left_grad.norm() * right_grad.norm()
+    if float(denom.item()) == 0.0:
+        return float("nan")
+    return float(torch.dot(left_grad, right_grad).div(denom).item())
+
+
+def run_reinforce_gradient_diagnostic(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    baseline_mode: str,
+    num_samples_per_prompt: int,
+    global_baseline: float | None,
+    entropy_weight: float,
+    result_boundary_target_mode: str,
+    result_boundary_target_temperature: float,
+    result_boundary_target_min_probability_floor: float,
+    result_boundary_target_chunk_size: int,
+) -> dict[str, float | int | str]:
+    if model.cfg.calculator_action_head != "result_space":
+        raise ValueError("REINFORCE gradient diagnostic requires result_space head")
+    model.train()
+    baseline_summaries: dict[str, dict[str, float]] = {}
+    for mode in ["global_ema", "per_prompt_mean", "leave_one_out"]:
+        if mode == "leave_one_out" and num_samples_per_prompt < 2:
+            continue
+        model.zero_grad(set_to_none=True)
+        _, _, mode_metrics = reinforce_policy_gradient_loss(
+            model,
+            batch,
+            num_digits=num_digits,
+            baseline_mode=mode,
+            num_samples_per_prompt=num_samples_per_prompt,
+            global_baseline=global_baseline,
+            entropy_weight=entropy_weight,
+        )
+        baseline_summaries[mode] = {
+            "advantage_mean": mode_metrics["policy_advantage_mean"],
+            "advantage_std": mode_metrics["policy_advantage_std"],
+            "policy_objective": mode_metrics["policy_objective"],
+            "result_entropy": mode_metrics["result_entropy"],
+            "sampled_result_accuracy": mode_metrics["sampled_result_accuracy"],
+        }
+
+    model.zero_grad(set_to_none=True)
+    pg_objective, pg_answer_loss, pg_metrics = reinforce_policy_gradient_loss(
+        model,
+        batch,
+        num_digits=num_digits,
+        baseline_mode=baseline_mode,
+        num_samples_per_prompt=num_samples_per_prompt,
+        global_baseline=global_baseline,
+        entropy_weight=entropy_weight,
+    )
+    pg_objective.backward()
+    pg_grads = flattened_group_gradients(model)
+
+    model.zero_grad(set_to_none=True)
+    boundary_loss, boundary_metrics = result_boundary_target_loss(
+        model,
+        batch,
+        num_digits=num_digits,
+        target_mode=result_boundary_target_mode,
+        temperature=result_boundary_target_temperature,
+        min_probability_floor=result_boundary_target_min_probability_floor,
+        chunk_size=result_boundary_target_chunk_size,
+    )
+    boundary_loss.backward()
+    boundary_grads = flattened_group_gradients(model)
+    model.zero_grad(set_to_none=True)
+
+    result_pg_norm = gradient_l2(pg_grads, "calculator_hook.result_proj")
+    result_boundary_norm = gradient_l2(boundary_grads, "calculator_hook.result_proj")
+    upstream_pg_norm = gradient_l2(pg_grads, "upstream")
+    upstream_boundary_norm = gradient_l2(boundary_grads, "upstream")
+    summary: dict[str, float | int | str] = {
+        "diagnostic": "reinforce_result_space_gradient_agreement",
+        "batch_size": int(batch.x.shape[0]),
+        "reinforce_baseline_mode": baseline_mode,
+        "reinforce_num_samples_per_prompt": int(num_samples_per_prompt),
+        "answer_loss": float(pg_answer_loss.detach().item()),
+        "policy_gradient_objective": pg_metrics["policy_objective"],
+        "policy_loss": pg_metrics["policy_loss"],
+        "advantage_mean": pg_metrics["policy_advantage_mean"],
+        "advantage_std": pg_metrics["policy_advantage_std"],
+        "sampled_logp": pg_metrics["sampled_logp"],
+        "result_entropy": pg_metrics["result_entropy"],
+        "sampled_result_accuracy": pg_metrics["sampled_result_accuracy"],
+        "pg_result_proj_grad_l2": result_pg_norm,
+        "pg_upstream_grad_l2": upstream_pg_norm,
+        "pg_semantic_decoder_grad_l2": gradient_l2(pg_grads, "semantic_decoder"),
+        "boundary_result_proj_grad_l2": result_boundary_norm,
+        "boundary_upstream_grad_l2": upstream_boundary_norm,
+        "boundary_semantic_decoder_grad_l2": gradient_l2(
+            boundary_grads, "semantic_decoder"
+        ),
+        "pg_vs_boundary_result_proj_cosine": gradient_cosine(
+            pg_grads, boundary_grads, "calculator_hook.result_proj"
+        ),
+        "pg_vs_boundary_upstream_cosine": gradient_cosine(
+            pg_grads, boundary_grads, "upstream"
+        ),
+        "pg_vs_boundary_result_proj_relative_norm": (
+            result_pg_norm / result_boundary_norm
+            if result_boundary_norm > 0
+            else float("nan")
+        ),
+        "pg_vs_boundary_upstream_relative_norm": (
+            upstream_pg_norm / upstream_boundary_norm
+            if upstream_boundary_norm > 0
+            else float("nan")
+        ),
+        "global_ema_advantage_std": baseline_summaries.get(
+            "global_ema", {}
+        ).get("advantage_std", float("nan")),
+        "per_prompt_mean_advantage_std": baseline_summaries.get(
+            "per_prompt_mean", {}
+        ).get("advantage_std", float("nan")),
+        "leave_one_out_advantage_std": baseline_summaries.get(
+            "leave_one_out", {}
+        ).get("advantage_std", float("nan")),
+    }
+    for key, value in boundary_metrics.items():
+        summary[f"boundary_{key}"] = value
+    return summary
 
 
 def action_loss_full_enum_interface_loss(
@@ -2723,6 +3012,10 @@ def run_variant(
         calculator_hook_after_layer=args.calculator_hook_after_layer,
     )
     model = TinyGPT(cfg).to(device)
+    use_result_space_reinforce = (
+        args.calculator_estimator == "reinforce"
+        and args.calculator_action_head == "result_space"
+    )
     if args.semantic_decoder_checkpoint is not None:
         load_semantic_decoder_checkpoint(
             model,
@@ -2735,33 +3028,39 @@ def run_variant(
             model, args.input_proj_anchor_checkpoint, device=device
         )
     if (
-        args.calculator_estimator
-        in {
-            "adaptive_interface",
-            "action_loss_weighted_interface",
-            "action_loss_replay_interface",
-            "action_loss_full_enum_interface",
-            "action_loss_full_enum_joint_interface",
-            "identifiable_full_enum_local_target",
-            "full_enum_expected_answer_loss",
-            "gumbel_concrete_interface",
-        }
-        and args.freeze_semantic_decoder
+        args.freeze_semantic_decoder
+        and (
+            args.calculator_estimator
+            in {
+                "adaptive_interface",
+                "action_loss_weighted_interface",
+                "action_loss_replay_interface",
+                "action_loss_full_enum_interface",
+                "action_loss_full_enum_joint_interface",
+                "identifiable_full_enum_local_target",
+                "full_enum_expected_answer_loss",
+                "gumbel_concrete_interface",
+            }
+            or use_result_space_reinforce
+        )
     ):
         freeze_semantic_decoder_parameters(model)
     if (
-        args.calculator_estimator
-        in {
-            "adaptive_interface",
-            "action_loss_weighted_interface",
-            "action_loss_replay_interface",
-            "action_loss_full_enum_interface",
-            "action_loss_full_enum_joint_interface",
-            "identifiable_full_enum_local_target",
-            "full_enum_expected_answer_loss",
-            "gumbel_concrete_interface",
-        }
-        and args.freeze_upstream_encoder
+        args.freeze_upstream_encoder
+        and (
+            args.calculator_estimator
+            in {
+                "adaptive_interface",
+                "action_loss_weighted_interface",
+                "action_loss_replay_interface",
+                "action_loss_full_enum_interface",
+                "action_loss_full_enum_joint_interface",
+                "identifiable_full_enum_local_target",
+                "full_enum_expected_answer_loss",
+                "gumbel_concrete_interface",
+            }
+            or use_result_space_reinforce
+        )
     ):
         freeze_upstream_encoder_parameters(model)
     trainable_groups = trainable_parameter_summary(model)
@@ -2776,16 +3075,20 @@ def run_variant(
             answer_format=args.answer_format,
         )
         exhaustive_grid_size = int(exhaustive_grid_batch.x.shape[0])
-    if args.calculator_estimator in {
-        "adaptive_interface",
-        "action_loss_weighted_interface",
-        "action_loss_replay_interface",
-        "action_loss_full_enum_interface",
-        "action_loss_full_enum_joint_interface",
-        "identifiable_full_enum_local_target",
-        "full_enum_expected_answer_loss",
-        "gumbel_concrete_interface",
-    }:
+    if (
+        args.calculator_estimator
+        in {
+            "adaptive_interface",
+            "action_loss_weighted_interface",
+            "action_loss_replay_interface",
+            "action_loss_full_enum_interface",
+            "action_loss_full_enum_joint_interface",
+            "identifiable_full_enum_local_target",
+            "full_enum_expected_answer_loss",
+            "gumbel_concrete_interface",
+        }
+        or use_result_space_reinforce
+    ):
         optim = torch.optim.AdamW(
             adaptive_optimizer_param_groups(
                 model,
@@ -2913,6 +3216,8 @@ def run_variant(
         freeze_semantic_decoder=args.freeze_semantic_decoder,
         freeze_upstream_encoder=args.freeze_upstream_encoder,
         trainable_parameter_groups=trainable_groups,
+        reinforce_baseline_mode=args.reinforce_baseline_mode,
+        reinforce_num_samples_per_prompt=args.reinforce_num_samples_per_prompt,
         reinforce_baseline_beta=args.reinforce_baseline_beta,
         reinforce_entropy_weight=args.reinforce_entropy_weight,
         reinforce_entropy_decay_steps=args.reinforce_entropy_decay_steps,
@@ -2926,6 +3231,53 @@ def run_variant(
     (run_dir / "config.json").write_text(
         json.dumps(asdict(train_cfg), indent=2) + "\n"
     )
+    if args.reinforce_gradient_diagnostic_only:
+        if exhaustive_grid_batch is not None:
+            diagnostic_batch = exhaustive_grid_batch
+        else:
+            diagnostic_batch = make_range_batch(
+                batch_size=args.batch_size,
+                num_digits=num_digits,
+                operand_max=operand_max,
+                rng=rng,
+                fixed_width=True,
+                device=device,
+                answer_format=args.answer_format,
+            )
+        diagnostic_summary = run_reinforce_gradient_diagnostic(
+            model,
+            diagnostic_batch,
+            num_digits=num_digits,
+            baseline_mode=args.reinforce_baseline_mode,
+            num_samples_per_prompt=args.reinforce_num_samples_per_prompt,
+            global_baseline=None,
+            entropy_weight=args.reinforce_entropy_weight,
+            result_boundary_target_mode=args.result_boundary_target_mode,
+            result_boundary_target_temperature=args.result_boundary_target_temperature,
+            result_boundary_target_min_probability_floor=(
+                args.result_boundary_target_min_probability_floor
+            ),
+            result_boundary_target_chunk_size=args.result_boundary_target_chunk_size,
+        )
+        diagnostic_summary["run_dir"] = str(run_dir)
+        diagnostic_summary["num_digits"] = int(num_digits)
+        (run_dir / "reinforce_gradient_diagnostic_summary.json").write_text(
+            json.dumps(diagnostic_summary, indent=2) + "\n"
+        )
+        print(
+            "reinforce gradient diagnostic: "
+            f"pg_result_grad={diagnostic_summary['pg_result_proj_grad_l2']:.6f} "
+            f"cos={diagnostic_summary['pg_vs_boundary_result_proj_cosine']:.6f} "
+            f"adv_std={diagnostic_summary['advantage_std']:.6f} "
+            f"sample_result_acc={diagnostic_summary['sampled_result_accuracy']:.4f}"
+        )
+        return {
+            "num_digits": num_digits,
+            "exact_match": float("nan"),
+            "final_loss": float("nan"),
+            "run_dir": str(run_dir),
+            "reinforce_gradient_diagnostic": diagnostic_summary,
+        }
 
     curve: list[dict[str, float | int]] = []
     snapshots: list[dict[str, object]] = []
@@ -3012,21 +3364,24 @@ def run_variant(
                 args.relaxed_calculator_hard_forward
             )
         if use_reinforce:
-            logits, diagnostics = model(
-                batch.x, oracle_operands=oracle_operands, return_diagnostics=True
-            )
+            diagnostics = {}
+            per_example_answer_loss = None
+            answer_loss = batch.x.new_tensor(0.0, dtype=torch.float)
         else:
             diagnostics = {}
             logits = model(batch.x, oracle_operands=oracle_operands)
-        per_example_answer_loss = masked_cross_entropy_per_example(
-            logits, batch.y, batch.loss_mask
-        )
-        answer_loss = per_example_answer_loss.mean()
+            per_example_answer_loss = masked_cross_entropy_per_example(
+                logits, batch.y, batch.loss_mask
+            )
+            answer_loss = per_example_answer_loss.mean()
         loss = args.answer_loss_weight * answer_loss
         policy_loss_value = None
         policy_advantage_mean = None
+        policy_advantage_std = None
         sampled_logp_value = None
         operand_entropy_value = None
+        result_entropy_value = None
+        sampled_result_accuracy_value = None
         entropy_weight = 0.0
         adaptive_interface_loss_value = None
         adaptive_interface_objective_value = None
@@ -3054,33 +3409,33 @@ def run_variant(
         anchor_weight = 0.0
         if use_reinforce:
             if policy_baseline is None:
-                policy_baseline = float(answer_loss.detach().item())
-            trace = diagnostics["calculator_trace"]
-            eq_mask = trace["eq_mask"]
-            eq_counts = eq_mask.long().sum(dim=-1)
-            if not torch.all(eq_counts == 1):
-                raise ValueError("REINFORCE training expects one '=' token per example")
-            eq_pos = eq_mask.float().argmax(dim=-1).long()
-            batch_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
-            sampled_logp = trace["sampled_logp"][batch_idx, eq_pos]
-            operand_entropy = (
-                trace["a_entropy"][batch_idx, eq_pos]
-                + trace["b_entropy"][batch_idx, eq_pos]
-            )
-            advantage = per_example_answer_loss.detach() - policy_baseline
-            policy_loss = (advantage * sampled_logp).mean()
+                policy_baseline = None
             if args.reinforce_entropy_decay_steps > 0:
                 entropy_weight = args.reinforce_entropy_weight * max(
                     0.0, 1.0 - (step / args.reinforce_entropy_decay_steps)
                 )
             else:
                 entropy_weight = args.reinforce_entropy_weight
-            entropy_loss = -entropy_weight * operand_entropy.mean()
-            loss = loss + policy_loss + entropy_loss
-            policy_loss_value = policy_loss.item()
-            policy_advantage_mean = advantage.mean().item()
-            sampled_logp_value = sampled_logp.mean().item()
-            operand_entropy_value = operand_entropy.mean().item()
+            policy_objective, answer_loss, policy_metrics = (
+                reinforce_policy_gradient_loss(
+                    model,
+                    batch,
+                    num_digits=num_digits,
+                    baseline_mode=args.reinforce_baseline_mode,
+                    num_samples_per_prompt=args.reinforce_num_samples_per_prompt,
+                    global_baseline=policy_baseline,
+                    entropy_weight=entropy_weight,
+                )
+            )
+            loss = (args.answer_loss_weight * answer_loss) + policy_objective
+            policy_loss_value = policy_metrics["policy_loss"]
+            policy_baseline = policy_metrics["policy_baseline"]
+            policy_advantage_mean = policy_metrics["policy_advantage_mean"]
+            policy_advantage_std = policy_metrics["policy_advantage_std"]
+            sampled_logp_value = policy_metrics["sampled_logp"]
+            operand_entropy_value = policy_metrics["operand_entropy"]
+            result_entropy_value = policy_metrics["result_entropy"]
+            sampled_result_accuracy_value = policy_metrics["sampled_result_accuracy"]
         if use_adaptive_interface:
             adaptive_loss, adaptive_metrics = adaptive_interface_loss(
                 model,
@@ -3295,8 +3650,11 @@ def run_variant(
                 curve_row["policy_loss"] = policy_loss_value
                 curve_row["policy_baseline"] = policy_baseline
                 curve_row["policy_advantage_mean"] = policy_advantage_mean
+                curve_row["policy_advantage_std"] = policy_advantage_std
                 curve_row["sampled_logp"] = sampled_logp_value
                 curve_row["operand_entropy"] = operand_entropy_value
+                curve_row["result_entropy"] = result_entropy_value
+                curve_row["sampled_result_accuracy"] = sampled_result_accuracy_value
                 curve_row["entropy_weight"] = entropy_weight
             if use_adaptive_interface:
                 curve_row["adaptive_interface_loss"] = adaptive_interface_loss_value
@@ -3358,7 +3716,9 @@ def run_variant(
                 + (
                     f" policy_loss={policy_loss_value:.4f}"
                     f" baseline={policy_baseline:.4f}"
+                    f" adv_std={policy_advantage_std:.4f}"
                     f" entropy={operand_entropy_value:.4f}"
+                    f" sample_result_acc={sampled_result_accuracy_value:.3f}"
                     if use_reinforce
                     else ""
                 )
@@ -3465,13 +3825,15 @@ def run_variant(
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
         optim.step()
-        if use_reinforce:
+        if use_reinforce and args.reinforce_baseline_mode == "global_ema":
             answer_loss_value = float(answer_loss.detach().item())
-            assert policy_baseline is not None
-            policy_baseline = (
-                args.reinforce_baseline_beta * policy_baseline
-                + (1.0 - args.reinforce_baseline_beta) * answer_loss_value
-            )
+            if policy_baseline is None:
+                policy_baseline = answer_loss_value
+            else:
+                policy_baseline = (
+                    args.reinforce_baseline_beta * policy_baseline
+                    + (1.0 - args.reinforce_baseline_beta) * answer_loss_value
+                )
 
     metrics = evaluate(
         model,
@@ -4317,6 +4679,22 @@ def parse_args() -> argparse.Namespace:
         help="Exponential moving average coefficient for the answer-loss baseline.",
     )
     parser.add_argument(
+        "--reinforce-baseline-mode",
+        choices=["global_ema", "per_prompt_mean", "leave_one_out"],
+        default="global_ema",
+        help=(
+            "Control variate for REINFORCE. global_ema preserves the legacy "
+            "single-sample behavior; per_prompt_mean and leave_one_out use K "
+            "samples per prompt."
+        ),
+    )
+    parser.add_argument(
+        "--reinforce-num-samples-per-prompt",
+        type=int,
+        default=1,
+        help="Number of stochastic calculator-action samples per prompt.",
+    )
+    parser.add_argument(
         "--reinforce-entropy-weight",
         type=float,
         default=0.01,
@@ -4327,6 +4705,14 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=0,
         help="Linearly decay entropy weight to zero over this many steps; 0 keeps it constant.",
+    )
+    parser.add_argument(
+        "--reinforce-gradient-diagnostic-only",
+        action="store_true",
+        help=(
+            "Run one fixed-batch result-space policy-gradient diagnostic and "
+            "PG-vs-boundary gradient agreement check, then exit."
+        ),
     )
     parser.add_argument("--seed", type=int, default=DEFAULT_SEED)
     parser.add_argument("--log-every", type=int, default=LOG_EVERY)
@@ -4386,6 +4772,30 @@ def main() -> None:
         raise ValueError("--checkpoint-every requires --snapshot-every")
     if args.calculator_estimator == "reinforce" and args.variant != "model-c":
         raise ValueError("--calculator-estimator reinforce requires --variant model-c")
+    result_space_reinforce_requested = (
+        args.calculator_estimator == "reinforce"
+        and args.calculator_action_head == "result_space"
+    )
+    if (
+        (
+            args.calculator_estimator
+            in {
+                "adaptive_interface",
+                "action_loss_weighted_interface",
+                "action_loss_replay_interface",
+                "action_loss_full_enum_interface",
+                "action_loss_full_enum_joint_interface",
+                "identifiable_full_enum_local_target",
+                "full_enum_expected_answer_loss",
+                "gumbel_concrete_interface",
+            }
+            or result_space_reinforce_requested
+        )
+        and args.variant != "model-c"
+    ):
+        raise ValueError(
+            "--calculator-estimator adaptive/action-loss interface requires --variant model-c"
+        )
     if (
         args.calculator_estimator
         in {
@@ -4398,21 +4808,8 @@ def main() -> None:
             "full_enum_expected_answer_loss",
             "gumbel_concrete_interface",
         }
-        and args.variant != "model-c"
+        or result_space_reinforce_requested
     ):
-        raise ValueError(
-            "--calculator-estimator adaptive/action-loss interface requires --variant model-c"
-        )
-    if args.calculator_estimator in {
-        "adaptive_interface",
-        "action_loss_weighted_interface",
-        "action_loss_replay_interface",
-        "action_loss_full_enum_interface",
-        "action_loss_full_enum_joint_interface",
-        "identifiable_full_enum_local_target",
-        "full_enum_expected_answer_loss",
-        "gumbel_concrete_interface",
-    }:
         if args.oracle_train:
             raise ValueError(
                 "adaptive/action-loss interface is for learned operands, not --oracle-train"
@@ -4563,11 +4960,12 @@ def main() -> None:
         )
     if (
         args.calculator_action_head == "result_space"
-        and args.calculator_estimator != "gumbel_concrete_interface"
+        and args.calculator_estimator
+        not in {"gumbel_concrete_interface", "reinforce"}
     ):
         raise ValueError(
             "--calculator-action-head result_space is currently supported only with "
-            "gumbel_concrete_interface"
+            "gumbel_concrete_interface or reinforce"
         )
     if (
         args.calculator_action_head == "result_space"
@@ -4594,6 +4992,20 @@ def main() -> None:
         raise ValueError("--upstream-lr must be positive")
     if not 0 <= args.reinforce_baseline_beta < 1:
         raise ValueError("--reinforce-baseline-beta must be in [0, 1)")
+    if args.reinforce_num_samples_per_prompt < 1:
+        raise ValueError("--reinforce-num-samples-per-prompt must be positive")
+    if (
+        args.reinforce_baseline_mode == "leave_one_out"
+        and args.reinforce_num_samples_per_prompt < 2
+    ):
+        raise ValueError("--reinforce-baseline-mode leave_one_out requires K >= 2")
+    if (
+        args.reinforce_gradient_diagnostic_only
+        and not result_space_reinforce_requested
+    ):
+        raise ValueError(
+            "--reinforce-gradient-diagnostic-only requires result_space reinforce"
+        )
     if args.reinforce_entropy_weight < 0:
         raise ValueError("--reinforce-entropy-weight must be non-negative")
     if args.reinforce_entropy_decay_steps < 0:
@@ -4626,6 +5038,19 @@ def main() -> None:
         suffix_parts.append("fullgrid")
     if args.calculator_estimator != "ste":
         suffix_parts.append(args.calculator_estimator)
+    if args.calculator_estimator == "reinforce":
+        if args.calculator_action_head != "independent_operands":
+            suffix_parts.append(args.calculator_action_head)
+        if args.reinforce_num_samples_per_prompt != 1:
+            suffix_parts.append(f"K{args.reinforce_num_samples_per_prompt}")
+        if args.reinforce_baseline_mode != "global_ema":
+            suffix_parts.append(args.reinforce_baseline_mode)
+        if args.input_proj_lr is not None:
+            suffix_parts.append(f"inlr{args.input_proj_lr:g}")
+        if args.upstream_lr is not None:
+            suffix_parts.append(f"uplr{args.upstream_lr:g}")
+        if args.reinforce_gradient_diagnostic_only:
+            suffix_parts.append("graddiag")
     if args.calculator_estimator in {
         "adaptive_interface",
         "action_loss_weighted_interface",
@@ -4782,6 +5207,15 @@ def main() -> None:
     )
     print(f"calculator estimator: {args.calculator_estimator}")
     print(f"calculator action head: {args.calculator_action_head}")
+    print(
+        "reinforce: "
+        f"baseline_mode={args.reinforce_baseline_mode} "
+        f"samples_per_prompt={args.reinforce_num_samples_per_prompt} "
+        f"baseline_beta={args.reinforce_baseline_beta} "
+        f"entropy_weight={args.reinforce_entropy_weight} "
+        f"entropy_decay_steps={args.reinforce_entropy_decay_steps} "
+        f"gradient_diagnostic_only={args.reinforce_gradient_diagnostic_only}"
+    )
     print(
         "adaptive interface: "
         f"target_mode={args.adaptive_interface_target_mode} "

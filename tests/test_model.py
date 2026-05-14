@@ -1659,6 +1659,47 @@ def test_result_space_forward_traces_valid_canonical_pair_for_every_result() -> 
         assert torch.isfinite(trace["result_entropy"][0, 5])
 
 
+def test_result_space_reinforce_trace_uses_sampled_result_logprob() -> None:
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=20,
+        calculator_result_vocab_size=39,
+        calculator_estimator="reinforce",
+        calculator_action_head="result_space",
+        calculator_read_position="operands",
+        calculator_bottleneck_mode="answer_decoder",
+        answer_decoder_interaction="product",
+    )
+    model = TinyGPT(cfg)
+    assert model.calculator_hook is not None
+    assert model.calculator_hook.result_proj is not None
+    with torch.no_grad():
+        model.calculator_hook.result_proj.weight.zero_()
+        model.calculator_hook.result_proj.bias.zero_()
+
+    x = torch.tensor([[0, 3, PLUS_ID, 0, 4, EQ_ID]])
+    _, diagnostics = model(x, return_diagnostics=True)
+    trace = diagnostics["calculator_trace"]
+
+    result_pred = trace["result_pred"][0, 5].item()
+    assert trace["a_pred"][0, 5].item() + trace["b_pred"][0, 5].item() == result_pred
+    assert torch.isfinite(trace["result_logp"][0, 5])
+    assert trace["sampled_logp"][0, 5].item() == pytest.approx(
+        trace["result_logp"][0, 5].item()
+    )
+    assert trace["sampled_logp"][0, 5].item() != pytest.approx(
+        (trace["a_logp"][0, 5] + trace["b_logp"][0, 5]).item()
+    )
+
+
 def test_result_space_operand_spans_answer_loss_updates_result_projection_only() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_result_space_grad", script_path)
