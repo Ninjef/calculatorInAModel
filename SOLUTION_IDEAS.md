@@ -35,6 +35,9 @@ Helpful now:
   estimator-family comparisons;
 - the Stage 0 PG-vs-boundary gradient-agreement diagnostic for checking any
   new score-function/control-variate estimator before long runs;
+- exact result-marginal answer-loss gradients over the small `0..38` result
+  action space as the next diagnostic fork before committing to learned
+  control-variate methods;
 - improved estimator families: actor-critic/NVIL-style learned baselines,
   RELAX/REBAR-style control variates, surrogate/shadow-calculator gradients,
   synthetic gradients/direct feedback alignment, or stricter decoder-phase
@@ -58,6 +61,16 @@ representable and teachable, but naive sampled answer-loss credit assignment is
 not yet aligned with that known good direction. Future score-function work
 should first pass the fixed-grid gradient-agreement gate, not just reduce
 variance.
+
+Immediate selected next task:
+
+```text
+aiAgentProjectTasks/2026-05-14-phase-7-ninth-task-Exact-result-marginal-answer-loss-gradient-gate.md
+```
+
+This task should distinguish finite-sample PG variance from objective
+misalignment by comparing exact result-marginal answer-loss gradients against
+sampled PG and the boundary-target ceiling on the exact grid.
 
 # Alternatives to the Straight-Through Estimator
 

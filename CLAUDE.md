@@ -81,13 +81,17 @@ Do not rerun these as next steps unless debugging new code:
 - vanilla multi-sample result-space policy-gradient long runs without first
   fixing the Stage 0 gradient-alignment problem.
 
-Next best step: improve or replace the estimator family before spending long
-run budget. Candidate directions are actor-critic/NVIL-style learned baselines
-checked by the same PG-vs-boundary gradient gate, RELAX/REBAR-style control
-variates, surrogate/shadow-calculator gradients, synthetic gradients/direct
-feedback alignment, or a stricter decoder-phase bottleneck. Do not move
-directly to canonical-query/protocol stabilization as if Phase 7 retention had
-robustly replicated.
+Next best step: run the exact result-marginal answer-loss gradient gate before
+spending more long-run budget. The selected task is
+`aiAgentProjectTasks/2026-05-14-phase-7-ninth-task-Exact-result-marginal-answer-loss-gradient-gate.md`.
+It should enumerate the small `0..38` result action space, compare the exact
+expected answer-loss gradient against both sampled PG and the boundary-target
+ceiling, and decide whether the PG negative was variance/control-variate
+weakness or objective misalignment. Only after that fork should the project
+choose actor-critic/NVIL, RELAX/REBAR, surrogate/shadow-calculator gradients,
+synthetic gradients/direct feedback alignment, or stricter decoder-phase
+bottlenecks. Do not move directly to canonical-query/protocol stabilization as
+if Phase 7 retention had robustly replicated.
 
 For details, see `factSheets/PHASE_7_EXPERIMENT_FACT_SHEET.md`.
 

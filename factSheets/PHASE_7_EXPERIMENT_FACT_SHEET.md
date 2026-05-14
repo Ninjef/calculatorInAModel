@@ -149,7 +149,7 @@ this seed fragility and compare against multi-sample result-space policy
 gradient with per-prompt or leave-one-out baselines, rather than rerunning
 oracle/readout checks or frozen-head boundary-target variants.
 
-## Current Selected Next Task
+## Previous Selected Next Task
 
 As of `2026-05-14`, the selected next task is:
 
@@ -275,6 +275,40 @@ ceiling. Next work should move to actor-critic/NVIL-style learned baselines
 only if the gradient alignment can be improved, or to surrogate/shadow
 calculator gradients, synthetic gradients/direct feedback alignment, or a
 stricter decoder-phase bottleneck.
+
+## Current Selected Next Task After Policy-Gradient Gate
+
+As of `2026-05-14`, the selected next task is:
+
+```text
+aiAgentProjectTasks/2026-05-14-phase-7-ninth-task-Exact-result-marginal-answer-loss-gradient-gate.md
+```
+
+Rationale:
+
+- The multi-sample result-space PG negative left an important ambiguity: the
+  sampled estimator may be too noisy, or the exact expected answer-loss
+  objective over result actions may itself be misaligned.
+- Before moving to actor-critic/NVIL/RELAX, compute the exact result-marginal
+  answer-loss gradient over the small `0..38` result action space and compare
+  it on the exact `20 x 20` grid against both the sampled PG gradient and the
+  boundary-target ceiling.
+- If the exact result-marginal gradient aligns while sampled PG does not, the
+  immediate blocker is estimator variance/control variates; exact enumeration
+  can be used as the fastest controlled training signal while the result space
+  remains small.
+- If the exact result-marginal gradient is also negative or near-zero, stop
+  expected-cost/score-function work and pivot to a different mechanism such as
+  surrogate/shadow calculator gradients, synthetic gradients/direct feedback
+  alignment, or a stricter decoder-phase bottleneck.
+
+Guardrail:
+
+This is not a repeat of the Phase 6 independent-head expected answer-loss
+negative. That branch enumerated `20 x 20` operand pairs and collapsed to wrong
+hard actions. The new task must use `calculator_action_head=result_space`,
+exact enumeration over only `39` result classes, and a Stage 0 gradient
+alignment gate before any long training run.
 
 ## Current State After Full-Grid Boundary Retention Gate
 

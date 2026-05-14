@@ -213,10 +213,11 @@ or joint-pair optimization.
 
 ## Status Update: 2026-05-14
 
-Phase 7 now has a split natural `0..19` exact-grid result:
+Phase 7 now has two natural `0..19` exact-grid results:
 
 ```text
 exact_grid_seed_replication_negative
+multisample_result_space_policy_gradient_stage0_alignment_negative
 ```
 
 Exact full-grid upstream-open result-boundary teaching works: seed `2` learned
@@ -232,21 +233,27 @@ Useful prior negatives remain informative:
   initialization;
 - frozen linear and frozen MLP result-boundary heads did not pass Stage 1;
 - random-resampled upstream-open boundary teaching was only partial;
-- exact-grid coverage stabilized that partial branch into a retained positive.
+- exact-grid coverage stabilized that partial branch into a single-seed
+  retained positive, but strict retention did not robustly replicate;
+- vanilla `K=16` result-space REINFORCE produced nonzero result-proj/upstream
+  gradients, but its Stage 0 sampled gradient was anti-aligned with the
+  boundary-target ceiling (`result-proj cosine=-0.0945`, upstream
+  `cosine=-0.1108`).
 
 Current next direction:
 
 ```text
-Stop treating boundary-target teaching/retention as the mainline. Use it as a
-supervised ceiling/control, and compare against a genuinely different learning
-signal: multi-sample result-space policy gradient with per-prompt or
-leave-one-out baselines.
+Stop treating boundary-target teaching/retention and vanilla sampled
+policy-gradient as the mainline. Use the boundary-target branch as a supervised
+ceiling/control, and run an exact result-marginal answer-loss gradient gate
+before choosing actor-critic/control-variate work or pivoting to surrogate /
+synthetic-gradient mechanisms.
 ```
 
 Selected next task:
 
 ```text
-aiAgentProjectTasks/2026-05-14-phase-7-eighth-task-Multi-sample-result-space-policy-gradient-gate.md
+aiAgentProjectTasks/2026-05-14-phase-7-ninth-task-Exact-result-marginal-answer-loss-gradient-gate.md
 ```
 
 ### Track A: Structured Joint-Pair Result-Group Bridge
