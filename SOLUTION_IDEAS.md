@@ -2,11 +2,12 @@ Straight Through Estimator was the easy option. We tried that and it didn't seem
 
 # Current Research Status: 2026-05-14
 
-Phase 7 has two important natural `0..19` result-level results:
+Phase 7 has three important natural `0..19` result-level results:
 
 ```text
 exact_grid_seed_replication_negative
 multisample_result_space_policy_gradient_stage0_alignment_negative
+result_space_expected_answer_loss_alignment_negative
 ```
 
 Exact full-grid upstream-open result-boundary teaching can learn hard result
@@ -26,6 +27,16 @@ the boundary-target ceiling at initialization (`result-proj cosine=-0.0945`;
 upstream `cosine=-0.1108`), so vanilla multi-sample result-space PG should
 not receive long-run training budget without first fixing gradient alignment.
 
+The exact result-marginal answer-loss gate then showed that the raw
+expected-cost objective itself is anti-aligned with the boundary-target
+ceiling, not merely sampled poorly. Raw exact expected answer-loss gradients
+had nonzero result-proj/upstream L2 and semantic decoder gradient exactly
+`0.0`, but exact-vs-boundary cosine was negative (`-0.0978` result-proj,
+`-0.1231` upstream). Sampled PG was strongly aligned with that raw exact
+gradient (`0.9577` result-proj, `0.9736` upstream). Detached z-score
+normalization weakly improved result-head cosine (`0.0764`) but still failed
+the upstream gate (`-0.0007`), so Stage 1 exact-marginal training was skipped.
+
 Helpful now:
 
 - exact full-grid coverage;
@@ -33,15 +44,12 @@ Helpful now:
 - target-off retention diagnostics as stability probes, not novelty claims;
 - the boundary-target branch as a supervised ceiling/control for new
   estimator-family comparisons;
-- the Stage 0 PG-vs-boundary gradient-agreement diagnostic for checking any
-  new score-function/control-variate estimator before long runs;
-- exact result-marginal answer-loss gradients over the small `0..38` result
-  action space as the next diagnostic fork before committing to learned
-  control-variate methods;
-- improved estimator families: actor-critic/NVIL-style learned baselines,
-  RELAX/REBAR-style control variates, surrogate/shadow-calculator gradients,
-  synthetic gradients/direct feedback alignment, or stricter decoder-phase
-  bottlenecks.
+- three-way fixed-grid gradient-agreement diagnostics against exact
+  result-marginal and boundary-target controls for any new estimator;
+- qualitatively different learning signals: surrogate/shadow-calculator
+  gradients, synthetic gradients/direct feedback alignment, stricter
+  decoder-phase bottlenecks, or a new estimator that first passes the
+  alignment gate.
 
 Not helpful as next steps:
 
@@ -54,23 +62,15 @@ Not helpful as next steps:
   robustly replicated.
 - vanilla multi-sample result-space PG long runs while the Stage 0
   PG-vs-boundary cosine remains negative or near zero.
+- raw exact result-marginal expected-cost long runs, or learned-baseline
+  methods that merely estimate the same raw expected-cost gradient.
 
-The key implication is that result-space parameterization alone was not enough.
-The boundary-target branch proves that the natural result request is
-representable and teachable, but naive sampled answer-loss credit assignment is
-not yet aligned with that known good direction. Future score-function work
-should first pass the fixed-grid gradient-agreement gate, not just reduce
+The key implication is that result-space parameterization alone was not enough,
+and raw answer-loss expected-cost optimization is itself the wrong local
+direction at initialization. The boundary-target branch proves that the natural
+result request is representable and teachable, but the next useful branch
+should change the learning signal rather than only reducing score-function
 variance.
-
-Immediate selected next task:
-
-```text
-aiAgentProjectTasks/2026-05-14-phase-7-ninth-task-Exact-result-marginal-answer-loss-gradient-gate.md
-```
-
-This task should distinguish finite-sample PG variance from objective
-misalignment by comparing exact result-marginal answer-loss gradients against
-sampled PG and the boundary-target ceiling on the exact grid.
 
 # Alternatives to the Straight-Through Estimator
 

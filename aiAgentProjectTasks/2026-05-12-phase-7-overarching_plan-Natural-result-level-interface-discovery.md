@@ -239,21 +239,23 @@ Useful prior negatives remain informative:
   gradients, but its Stage 0 sampled gradient was anti-aligned with the
   boundary-target ceiling (`result-proj cosine=-0.0945`, upstream
   `cosine=-0.1108`).
+- exact result-marginal expected answer-loss over result classes also failed
+  the Stage 0 alignment gate. Raw exact expected-cost gradients were nonzero
+  but anti-aligned with the boundary-target ceiling (`result-proj
+  cosine=-0.0978`, upstream `cosine=-0.1231`), and sampled PG was strongly
+  aligned with that raw exact gradient. Detached z-score normalization weakly
+  improved the result-head cosine but still failed upstream-open alignment.
 
 Current next direction:
 
 ```text
-Stop treating boundary-target teaching/retention and vanilla sampled
-policy-gradient as the mainline. Use the boundary-target branch as a supervised
-ceiling/control, and run an exact result-marginal answer-loss gradient gate
-before choosing actor-critic/control-variate work or pivoting to surrogate /
-synthetic-gradient mechanisms.
-```
-
-Selected next task:
-
-```text
-aiAgentProjectTasks/2026-05-14-phase-7-ninth-task-Exact-result-marginal-answer-loss-gradient-gate.md
+Stop treating boundary-target teaching/retention, vanilla sampled
+policy-gradient, and raw exact expected-cost training as the mainline. Use the
+boundary-target branch as a supervised ceiling/control for new mechanisms, and
+pivot to a qualitatively different learning signal such as surrogate/shadow
+calculator gradients, synthetic gradients/direct feedback alignment, stricter
+decoder-phase bottlenecks, or another estimator that first passes the
+fixed-grid gradient-alignment gate.
 ```
 
 ### Track A: Structured Joint-Pair Result-Group Bridge

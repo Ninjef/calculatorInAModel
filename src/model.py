@@ -128,12 +128,16 @@ class CalculatorHook(nn.Module):
         if (
             cfg.calculator_action_head == "result_space"
             and cfg.calculator_estimator
-            not in {"gumbel_concrete_interface", "reinforce"}
+            not in {
+                "gumbel_concrete_interface",
+                "reinforce",
+                "full_enum_expected_answer_loss",
+            }
         ):
             raise ValueError(
                 "calculator_action_head='result_space' is currently supported "
-                "only with calculator_estimator='gumbel_concrete_interface' "
-                "or 'reinforce'"
+                "only with calculator_estimator='gumbel_concrete_interface', "
+                "'reinforce', or 'full_enum_expected_answer_loss'"
             )
         if (
             cfg.calculator_action_head == "result_space"

@@ -98,6 +98,7 @@ class TrainConfig:
     expected_answer_loss_entropy_weight: float
     expected_answer_loss_entropy_decay_steps: int
     expected_answer_loss_chunk_size: int
+    expected_answer_loss_gradient_diagnostic_only: bool
     result_boundary_target_loss_weight: float
     result_boundary_target_mode: str
     result_boundary_target_temperature: float
@@ -623,17 +624,23 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "expected_answer_loss_entropy_weight",
         "expected_answer_loss_entropy",
         "expected_answer_loss_effective_pairs",
+        "expected_answer_loss_effective_results",
         "expected_answer_loss_best_nll",
         "expected_answer_loss_true_nll",
         "expected_answer_loss_learned_nll",
+        "expected_answer_loss_raw_expected_nll",
         "expected_answer_loss_expected_minus_best_gap",
         "expected_answer_loss_learned_minus_best_gap",
         "expected_answer_loss_learned_minus_true_gap",
         "expected_answer_loss_best_pair_probability",
         "expected_answer_loss_true_pair_probability",
         "expected_answer_loss_learned_pair_probability",
+        "expected_answer_loss_best_result_probability",
+        "expected_answer_loss_true_result_probability",
+        "expected_answer_loss_learned_result_probability",
         "expected_answer_loss_hard_learned_best_fraction",
         "expected_answer_loss_hard_learned_pair_exact",
+        "expected_answer_loss_hard_learned_result_accuracy",
         "expected_answer_loss_hard_learned_calc_accuracy",
         "result_boundary_target_loss",
         "result_boundary_target_objective",
@@ -1656,6 +1663,25 @@ def gradient_cosine(
     return float(torch.dot(left_grad, right_grad).div(denom).item())
 
 
+@contextmanager
+def temporary_calculator_estimator(model: TinyGPT, estimator: str):
+    old_cfg_estimator = model.cfg.calculator_estimator
+    old_hook_estimator = (
+        model.calculator_hook.estimator
+        if model.calculator_hook is not None
+        else None
+    )
+    model.cfg.calculator_estimator = estimator
+    if model.calculator_hook is not None:
+        model.calculator_hook.estimator = estimator
+    try:
+        yield
+    finally:
+        model.cfg.calculator_estimator = old_cfg_estimator
+        if model.calculator_hook is not None and old_hook_estimator is not None:
+            model.calculator_hook.estimator = old_hook_estimator
+
+
 def run_reinforce_gradient_diagnostic(
     model: TinyGPT,
     batch: ArithmeticBatch,
@@ -1773,6 +1799,187 @@ def run_reinforce_gradient_diagnostic(
             "leave_one_out", {}
         ).get("advantage_std", float("nan")),
     }
+    for key, value in boundary_metrics.items():
+        summary[f"boundary_{key}"] = value
+    return summary
+
+
+def run_expected_answer_loss_gradient_diagnostic(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    policy_temperature: float,
+    cost_normalization: str,
+    entropy_weight: float,
+    expected_answer_loss_chunk_size: int,
+    baseline_mode: str,
+    num_samples_per_prompt: int,
+    global_baseline: float | None,
+    reinforce_entropy_weight: float,
+    result_boundary_target_mode: str,
+    result_boundary_target_temperature: float,
+    result_boundary_target_min_probability_floor: float,
+    result_boundary_target_chunk_size: int,
+) -> dict[str, float | int | str]:
+    if model.cfg.calculator_action_head != "result_space":
+        raise ValueError(
+            "expected answer-loss gradient diagnostic requires result_space head"
+        )
+    model.train()
+    baseline_summaries: dict[str, dict[str, float]] = {}
+    with temporary_calculator_estimator(model, "reinforce"):
+        for mode in ["global_ema", "per_prompt_mean", "leave_one_out"]:
+            if mode == "leave_one_out" and num_samples_per_prompt < 2:
+                continue
+            model.zero_grad(set_to_none=True)
+            _, _, mode_metrics = reinforce_policy_gradient_loss(
+                model,
+                batch,
+                num_digits=num_digits,
+                baseline_mode=mode,
+                num_samples_per_prompt=num_samples_per_prompt,
+                global_baseline=global_baseline,
+                entropy_weight=reinforce_entropy_weight,
+            )
+            baseline_summaries[mode] = {
+                "advantage_mean": mode_metrics["policy_advantage_mean"],
+                "advantage_std": mode_metrics["policy_advantage_std"],
+                "policy_objective": mode_metrics["policy_objective"],
+                "result_entropy": mode_metrics["result_entropy"],
+                "sampled_result_accuracy": mode_metrics["sampled_result_accuracy"],
+            }
+
+    model.zero_grad(set_to_none=True)
+    exact_objective, exact_metrics = full_enum_expected_answer_loss(
+        model,
+        batch,
+        num_digits=num_digits,
+        policy_temperature=policy_temperature,
+        cost_normalization=cost_normalization,
+        entropy_weight=entropy_weight,
+        chunk_size=expected_answer_loss_chunk_size,
+    )
+    exact_objective.backward()
+    exact_grads = flattened_group_gradients(model)
+
+    model.zero_grad(set_to_none=True)
+    with temporary_calculator_estimator(model, "reinforce"):
+        pg_objective, pg_answer_loss, pg_metrics = reinforce_policy_gradient_loss(
+            model,
+            batch,
+            num_digits=num_digits,
+            baseline_mode=baseline_mode,
+            num_samples_per_prompt=num_samples_per_prompt,
+            global_baseline=global_baseline,
+            entropy_weight=reinforce_entropy_weight,
+        )
+    pg_objective.backward()
+    pg_grads = flattened_group_gradients(model)
+
+    model.zero_grad(set_to_none=True)
+    boundary_loss, boundary_metrics = result_boundary_target_loss(
+        model,
+        batch,
+        num_digits=num_digits,
+        target_mode=result_boundary_target_mode,
+        temperature=result_boundary_target_temperature,
+        min_probability_floor=result_boundary_target_min_probability_floor,
+        chunk_size=result_boundary_target_chunk_size,
+    )
+    boundary_loss.backward()
+    boundary_grads = flattened_group_gradients(model)
+    model.zero_grad(set_to_none=True)
+
+    exact_result_norm = gradient_l2(exact_grads, "calculator_hook.result_proj")
+    exact_upstream_norm = gradient_l2(exact_grads, "upstream")
+    pg_result_norm = gradient_l2(pg_grads, "calculator_hook.result_proj")
+    pg_upstream_norm = gradient_l2(pg_grads, "upstream")
+    boundary_result_norm = gradient_l2(boundary_grads, "calculator_hook.result_proj")
+    boundary_upstream_norm = gradient_l2(boundary_grads, "upstream")
+    summary: dict[str, float | int | str] = {
+        "diagnostic": "result_space_expected_answer_loss_gradient_agreement",
+        "batch_size": int(batch.x.shape[0]),
+        "expected_answer_loss_policy_temperature": float(policy_temperature),
+        "expected_answer_loss_cost_normalization": cost_normalization,
+        "expected_answer_loss_entropy_weight": float(entropy_weight),
+        "expected_answer_loss_chunk_size": int(expected_answer_loss_chunk_size),
+        "exact_expected_answer_loss_objective": float(
+            exact_objective.detach().item()
+        ),
+        "exact_result_proj_grad_l2": exact_result_norm,
+        "exact_upstream_grad_l2": exact_upstream_norm,
+        "exact_semantic_decoder_grad_l2": gradient_l2(
+            exact_grads, "semantic_decoder"
+        ),
+        "reinforce_baseline_mode": baseline_mode,
+        "reinforce_num_samples_per_prompt": int(num_samples_per_prompt),
+        "answer_loss": float(pg_answer_loss.detach().item()),
+        "policy_gradient_objective": pg_metrics["policy_objective"],
+        "policy_loss": pg_metrics["policy_loss"],
+        "advantage_mean": pg_metrics["policy_advantage_mean"],
+        "advantage_std": pg_metrics["policy_advantage_std"],
+        "sampled_logp": pg_metrics["sampled_logp"],
+        "result_entropy": pg_metrics["result_entropy"],
+        "sampled_result_accuracy": pg_metrics["sampled_result_accuracy"],
+        "pg_result_proj_grad_l2": pg_result_norm,
+        "pg_upstream_grad_l2": pg_upstream_norm,
+        "pg_semantic_decoder_grad_l2": gradient_l2(pg_grads, "semantic_decoder"),
+        "boundary_result_proj_grad_l2": boundary_result_norm,
+        "boundary_upstream_grad_l2": boundary_upstream_norm,
+        "boundary_semantic_decoder_grad_l2": gradient_l2(
+            boundary_grads, "semantic_decoder"
+        ),
+        "exact_vs_boundary_result_proj_cosine": gradient_cosine(
+            exact_grads, boundary_grads, "calculator_hook.result_proj"
+        ),
+        "exact_vs_boundary_upstream_cosine": gradient_cosine(
+            exact_grads, boundary_grads, "upstream"
+        ),
+        "pg_vs_exact_result_proj_cosine": gradient_cosine(
+            pg_grads, exact_grads, "calculator_hook.result_proj"
+        ),
+        "pg_vs_exact_upstream_cosine": gradient_cosine(
+            pg_grads, exact_grads, "upstream"
+        ),
+        "pg_vs_boundary_result_proj_cosine": gradient_cosine(
+            pg_grads, boundary_grads, "calculator_hook.result_proj"
+        ),
+        "pg_vs_boundary_upstream_cosine": gradient_cosine(
+            pg_grads, boundary_grads, "upstream"
+        ),
+        "exact_vs_boundary_result_proj_relative_norm": (
+            exact_result_norm / boundary_result_norm
+            if boundary_result_norm > 0
+            else float("nan")
+        ),
+        "exact_vs_boundary_upstream_relative_norm": (
+            exact_upstream_norm / boundary_upstream_norm
+            if boundary_upstream_norm > 0
+            else float("nan")
+        ),
+        "pg_vs_exact_result_proj_relative_norm": (
+            pg_result_norm / exact_result_norm
+            if exact_result_norm > 0
+            else float("nan")
+        ),
+        "pg_vs_exact_upstream_relative_norm": (
+            pg_upstream_norm / exact_upstream_norm
+            if exact_upstream_norm > 0
+            else float("nan")
+        ),
+        "global_ema_advantage_std": baseline_summaries.get(
+            "global_ema", {}
+        ).get("advantage_std", float("nan")),
+        "per_prompt_mean_advantage_std": baseline_summaries.get(
+            "per_prompt_mean", {}
+        ).get("advantage_std", float("nan")),
+        "leave_one_out_advantage_std": baseline_summaries.get(
+            "leave_one_out", {}
+        ).get("advantage_std", float("nan")),
+    }
+    for key, value in exact_metrics.items():
+        summary[key] = value
     for key, value in boundary_metrics.items():
         summary[f"boundary_{key}"] = value
     return summary
@@ -2013,6 +2220,16 @@ def full_enum_expected_answer_loss(
 ) -> tuple[torch.Tensor, dict[str, float]]:
     if policy_temperature <= 0:
         raise ValueError("expected answer-loss policy temperature must be positive")
+    if model.cfg.calculator_action_head == "result_space":
+        return result_space_expected_answer_loss(
+            model,
+            batch,
+            num_digits=num_digits,
+            policy_temperature=policy_temperature,
+            cost_normalization=cost_normalization,
+            entropy_weight=entropy_weight,
+            chunk_size=chunk_size,
+        )
     a_logits, b_logits, _, _ = calculator_read_operand_logits(model, batch)
     classes = a_logits.shape[-1]
     pairs = full_enum_action_pairs(classes=classes, device=batch.x.device)
@@ -2082,6 +2299,91 @@ def full_enum_expected_answer_loss(
         ),
         "expected_answer_loss_hard_learned_calc_accuracy": float(
             (learned_sum == true_sum).float().mean().item()
+        ),
+    }
+    return objective, metrics
+
+
+def result_space_expected_answer_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    policy_temperature: float,
+    cost_normalization: str,
+    entropy_weight: float,
+    chunk_size: int,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    if policy_temperature <= 0:
+        raise ValueError("expected answer-loss policy temperature must be positive")
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    with torch.no_grad():
+        full_costs = score_forced_result_classes_chunked(
+            model, batch, chunk_size=chunk_size
+        )
+        objective_costs = normalize_expected_answer_costs(
+            full_costs, mode=cost_normalization
+        )
+
+    result_probs = torch.softmax(result_logits / policy_temperature, dim=-1)
+    expected_loss = (result_probs * objective_costs.detach()).sum(dim=-1).mean()
+    entropy = -(
+        result_probs * result_probs.clamp_min(1e-12).log()
+    ).sum(dim=-1)
+    objective = expected_loss - (entropy_weight * entropy.mean())
+
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = true_a + true_b
+    learned_result = result_logits.argmax(dim=-1)
+    best_result = full_costs.argmin(dim=-1)
+    learned_costs = full_costs.gather(
+        1, learned_result.unsqueeze(-1)
+    ).squeeze(-1)
+    true_costs = full_costs.gather(1, true_sum.unsqueeze(-1)).squeeze(-1)
+    best_costs = full_costs.gather(1, best_result.unsqueeze(-1)).squeeze(-1)
+    expected_raw = (result_probs.detach() * full_costs).sum(dim=-1)
+    best_probs = result_probs.gather(1, best_result.unsqueeze(-1)).squeeze(-1)
+    true_probs = result_probs.gather(1, true_sum.unsqueeze(-1)).squeeze(-1)
+    learned_probs = result_probs.gather(
+        1, learned_result.unsqueeze(-1)
+    ).squeeze(-1)
+    metrics = {
+        "expected_answer_loss": float(expected_loss.item()),
+        "expected_answer_loss_policy_temperature": float(policy_temperature),
+        "expected_answer_loss_cost_normalization": cost_normalization,
+        "expected_answer_loss_entropy_weight": float(entropy_weight),
+        "expected_answer_loss_entropy": float(entropy.mean().item()),
+        "expected_answer_loss_effective_results": float(entropy.exp().mean().item()),
+        "expected_answer_loss_best_nll": float(best_costs.mean().item()),
+        "expected_answer_loss_true_nll": float(true_costs.mean().item()),
+        "expected_answer_loss_learned_nll": float(learned_costs.mean().item()),
+        "expected_answer_loss_raw_expected_nll": float(expected_raw.mean().item()),
+        "expected_answer_loss_expected_minus_best_gap": float(
+            (expected_raw - best_costs).mean().item()
+        ),
+        "expected_answer_loss_learned_minus_best_gap": float(
+            (learned_costs - best_costs).mean().item()
+        ),
+        "expected_answer_loss_learned_minus_true_gap": float(
+            (learned_costs - true_costs).mean().item()
+        ),
+        "expected_answer_loss_best_result_probability": float(
+            best_probs.mean().item()
+        ),
+        "expected_answer_loss_true_result_probability": float(
+            true_probs.mean().item()
+        ),
+        "expected_answer_loss_learned_result_probability": float(
+            learned_probs.mean().item()
+        ),
+        "expected_answer_loss_hard_learned_best_fraction": float(
+            (learned_result == best_result).float().mean().item()
+        ),
+        "expected_answer_loss_hard_learned_result_accuracy": float(
+            (learned_result == true_sum).float().mean().item()
+        ),
+        "expected_answer_loss_hard_learned_calc_accuracy": float(
+            (learned_result == true_sum).float().mean().item()
         ),
     }
     return objective, metrics
@@ -3181,6 +3483,9 @@ def run_variant(
             args.expected_answer_loss_entropy_decay_steps
         ),
         expected_answer_loss_chunk_size=args.expected_answer_loss_chunk_size,
+        expected_answer_loss_gradient_diagnostic_only=(
+            args.expected_answer_loss_gradient_diagnostic_only
+        ),
         result_boundary_target_loss_weight=args.result_boundary_target_loss_weight,
         result_boundary_target_mode=args.result_boundary_target_mode,
         result_boundary_target_temperature=args.result_boundary_target_temperature,
@@ -3277,6 +3582,57 @@ def run_variant(
             "final_loss": float("nan"),
             "run_dir": str(run_dir),
             "reinforce_gradient_diagnostic": diagnostic_summary,
+        }
+    if args.expected_answer_loss_gradient_diagnostic_only:
+        if exhaustive_grid_batch is not None:
+            diagnostic_batch = exhaustive_grid_batch
+        else:
+            diagnostic_batch = make_range_batch(
+                batch_size=args.batch_size,
+                num_digits=num_digits,
+                operand_max=operand_max,
+                rng=rng,
+                fixed_width=True,
+                device=device,
+                answer_format=args.answer_format,
+            )
+        diagnostic_summary = run_expected_answer_loss_gradient_diagnostic(
+            model,
+            diagnostic_batch,
+            num_digits=num_digits,
+            policy_temperature=args.expected_answer_loss_policy_temperature,
+            cost_normalization=args.expected_answer_loss_cost_normalization,
+            entropy_weight=args.expected_answer_loss_entropy_weight,
+            expected_answer_loss_chunk_size=args.expected_answer_loss_chunk_size,
+            baseline_mode=args.reinforce_baseline_mode,
+            num_samples_per_prompt=args.reinforce_num_samples_per_prompt,
+            global_baseline=None,
+            reinforce_entropy_weight=args.reinforce_entropy_weight,
+            result_boundary_target_mode=args.result_boundary_target_mode,
+            result_boundary_target_temperature=args.result_boundary_target_temperature,
+            result_boundary_target_min_probability_floor=(
+                args.result_boundary_target_min_probability_floor
+            ),
+            result_boundary_target_chunk_size=args.result_boundary_target_chunk_size,
+        )
+        diagnostic_summary["run_dir"] = str(run_dir)
+        diagnostic_summary["num_digits"] = int(num_digits)
+        (run_dir / "expected_answer_loss_gradient_diagnostic_summary.json").write_text(
+            json.dumps(diagnostic_summary, indent=2) + "\n"
+        )
+        print(
+            "expected answer-loss gradient diagnostic: "
+            f"exact_result_grad={diagnostic_summary['exact_result_proj_grad_l2']:.6f} "
+            f"exact_boundary_cos={diagnostic_summary['exact_vs_boundary_result_proj_cosine']:.6f} "
+            f"pg_exact_cos={diagnostic_summary['pg_vs_exact_result_proj_cosine']:.6f} "
+            f"learned_acc={diagnostic_summary['expected_answer_loss_hard_learned_calc_accuracy']:.4f}"
+        )
+        return {
+            "num_digits": num_digits,
+            "exact_match": float("nan"),
+            "final_loss": float("nan"),
+            "run_dir": str(run_dir),
+            "expected_answer_loss_gradient_diagnostic": diagnostic_summary,
         }
 
     curve: list[dict[str, float | int]] = []
@@ -4487,6 +4843,15 @@ def parse_args() -> argparse.Namespace:
         help="Number of action pairs to score per forced-decoder chunk.",
     )
     parser.add_argument(
+        "--expected-answer-loss-gradient-diagnostic-only",
+        action="store_true",
+        help=(
+            "Run one fixed-batch result-space exact expected answer-loss "
+            "gradient diagnostic against sampled PG and boundary gradients, "
+            "then exit."
+        ),
+    )
+    parser.add_argument(
         "--result-boundary-target-loss-weight",
         type=float,
         default=0.0,
@@ -4914,10 +5279,12 @@ def main() -> None:
         )
     if (
         args.calculator_estimator == "full_enum_expected_answer_loss"
-        and args.calculator_action_head != "independent_operands"
+        and args.calculator_action_head
+        not in {"independent_operands", "result_space"}
     ):
         raise ValueError(
-            "full_enum_expected_answer_loss requires independent operand heads"
+            "full_enum_expected_answer_loss requires independent operand "
+            "or result-space heads"
         )
     if args.relaxed_calculator_temperature <= 0:
         raise ValueError("--relaxed-calculator-temperature must be positive")
@@ -4961,11 +5328,15 @@ def main() -> None:
     if (
         args.calculator_action_head == "result_space"
         and args.calculator_estimator
-        not in {"gumbel_concrete_interface", "reinforce"}
+        not in {
+            "gumbel_concrete_interface",
+            "reinforce",
+            "full_enum_expected_answer_loss",
+        }
     ):
         raise ValueError(
             "--calculator-action-head result_space is currently supported only with "
-            "gumbel_concrete_interface or reinforce"
+            "gumbel_concrete_interface, reinforce, or full_enum_expected_answer_loss"
         )
     if (
         args.calculator_action_head == "result_space"
@@ -5005,6 +5376,14 @@ def main() -> None:
     ):
         raise ValueError(
             "--reinforce-gradient-diagnostic-only requires result_space reinforce"
+        )
+    if args.expected_answer_loss_gradient_diagnostic_only and not (
+        args.calculator_estimator == "full_enum_expected_answer_loss"
+        and args.calculator_action_head == "result_space"
+    ):
+        raise ValueError(
+            "--expected-answer-loss-gradient-diagnostic-only requires "
+            "result_space full_enum_expected_answer_loss"
         )
     if args.reinforce_entropy_weight < 0:
         raise ValueError("--reinforce-entropy-weight must be non-negative")
@@ -5121,6 +5500,8 @@ def main() -> None:
                 suffix_parts.append(
                     f"expansent{args.expected_answer_loss_entropy_weight:g}"
                 )
+            if args.expected_answer_loss_gradient_diagnostic_only:
+                suffix_parts.append("expansgraddiag")
         if args.result_boundary_target_loss_weight > 0:
             suffix_parts.append(
                 f"rbt{args.result_boundary_target_loss_weight:g}"
@@ -5244,7 +5625,8 @@ def main() -> None:
         f"cost_normalization={args.expected_answer_loss_cost_normalization} "
         f"entropy_weight={args.expected_answer_loss_entropy_weight} "
         f"entropy_decay_steps={args.expected_answer_loss_entropy_decay_steps} "
-        f"chunk_size={args.expected_answer_loss_chunk_size}"
+        f"chunk_size={args.expected_answer_loss_chunk_size} "
+        f"gradient_diagnostic_only={args.expected_answer_loss_gradient_diagnostic_only}"
     )
     print(
         "result boundary target: "

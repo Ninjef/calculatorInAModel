@@ -70,6 +70,18 @@ the fixed-grid policy-gradient estimate was anti-aligned with the known
 boundary-target ceiling (`result-proj cosine=-0.0945`, upstream
 `cosine=-0.1108`), so Stage 1 long training was intentionally skipped.
 
+The exact result-marginal answer-loss gate has now resolved that ambiguity as
+another negative: `result_space_expected_answer_loss_alignment_negative`.
+Raw exact expected answer-loss over result classes produced nonzero result-proj
+and upstream gradients with semantic decoder gradient exactly `0.0`, but both
+were anti-aligned with the boundary-target ceiling (`result-proj
+cosine=-0.0978`, upstream `cosine=-0.1231`). The sampled PG gradient was
+strongly aligned with this raw exact expected-cost gradient (`result-proj
+cosine=0.9577`, upstream `cosine=0.9736`), so the previous PG failure was not
+mainly finite-sample variance. Detached z-score cost normalization weakly
+improved the result-head cosine (`0.0764`) but still failed the upstream-open
+gate (`-0.0007`). Stage 1 exact-marginal training was intentionally skipped.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -80,18 +92,16 @@ Do not rerun these as next steps unless debugging new code:
   mechanism or diagnose the observed seed fragility.
 - vanilla multi-sample result-space policy-gradient long runs without first
   fixing the Stage 0 gradient-alignment problem.
+- raw exact expected-cost/result-marginal training, or learned-baseline
+  variants that merely estimate the same raw expected-cost gradient.
 
-Next best step: run the exact result-marginal answer-loss gradient gate before
-spending more long-run budget. The selected task is
-`aiAgentProjectTasks/2026-05-14-phase-7-ninth-task-Exact-result-marginal-answer-loss-gradient-gate.md`.
-It should enumerate the small `0..38` result action space, compare the exact
-expected answer-loss gradient against both sampled PG and the boundary-target
-ceiling, and decide whether the PG negative was variance/control-variate
-weakness or objective misalignment. Only after that fork should the project
-choose actor-critic/NVIL, RELAX/REBAR, surrogate/shadow-calculator gradients,
-synthetic gradients/direct feedback alignment, or stricter decoder-phase
-bottlenecks. Do not move directly to canonical-query/protocol stabilization as
-if Phase 7 retention had robustly replicated.
+Next best step: pivot to a qualitatively different learning signal and run the
+same kind of fixed-grid gradient-alignment gate before long training. The most
+promising branches are surrogate/shadow-calculator gradients, synthetic
+gradients/direct feedback alignment, stricter decoder-phase bottlenecks, or a
+new estimator whose gradient is demonstrably aligned with the boundary-target
+ceiling. Do not move directly to canonical-query/protocol stabilization as if
+Phase 7 retention had robustly replicated.
 
 For details, see `factSheets/PHASE_7_EXPERIMENT_FACT_SHEET.md`.
 

@@ -1926,6 +1926,148 @@ def test_result_boundary_target_updates_result_projection_only(monkeypatch) -> N
     assert model.tok_emb.weight.grad is None
 
 
+def test_result_space_expected_answer_loss_uses_result_marginal(monkeypatch) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_result_expected_loss", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="full_enum_expected_answer_loss",
+        calculator_action_head="result_space",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    model = TinyGPT(cfg)
+    batch = ArithmeticBatch(
+        x=torch.tensor([[1, PLUS_ID, 2, EQ_ID], [0, PLUS_ID, 3, EQ_ID]]),
+        y=torch.zeros((2, 4), dtype=torch.long),
+        loss_mask=torch.zeros((2, 4), dtype=torch.bool),
+    )
+    result_logits = torch.zeros((2, 7), requires_grad=True)
+    forced_losses = torch.tensor(
+        [
+            [5.0, 4.0, 3.0, 0.5, 3.5, 4.5, 5.5],
+            [7.0, 6.0, 5.0, 0.25, 4.0, 3.0, 2.0],
+        ]
+    )
+
+    monkeypatch.setattr(
+        overfit_script,
+        "calculator_read_result_logits",
+        lambda model_arg, batch_arg: (result_logits, None, None, None),
+    )
+    monkeypatch.setattr(
+        overfit_script,
+        "score_forced_result_classes_chunked",
+        lambda model_arg, batch_arg, *, chunk_size: forced_losses,
+    )
+
+    loss, metrics = overfit_script.full_enum_expected_answer_loss(
+        model,
+        batch,
+        num_digits=1,
+        policy_temperature=1.0,
+        cost_normalization="none",
+        entropy_weight=0.0,
+        chunk_size=4,
+    )
+
+    assert loss.item() == pytest.approx(forced_losses.mean(dim=1).mean().item())
+    assert metrics["expected_answer_loss_best_nll"] == pytest.approx(0.375)
+    assert metrics["expected_answer_loss_true_nll"] == pytest.approx(0.375)
+    assert metrics["expected_answer_loss_hard_learned_calc_accuracy"] == pytest.approx(
+        0.0
+    )
+    loss.backward()
+    assert result_logits.grad is not None
+    assert result_logits.grad.abs().sum().item() > 0
+
+
+def test_result_space_expected_answer_loss_updates_result_projection_only(
+    monkeypatch,
+) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_result_expected_loss_grad", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="full_enum_expected_answer_loss",
+        calculator_action_head="result_space",
+        calculator_read_position="operands",
+        calculator_bottleneck_mode="answer_decoder",
+        answer_decoder_interaction="product",
+    )
+    model = TinyGPT(cfg)
+    overfit_script.freeze_semantic_decoder_parameters(model)
+    overfit_script.freeze_upstream_encoder_parameters(model)
+    batch = ArithmeticBatch(
+        x=torch.tensor([[1, PLUS_ID, 2, EQ_ID], [0, PLUS_ID, 3, EQ_ID]]),
+        y=torch.zeros((2, 4), dtype=torch.long),
+        loss_mask=torch.zeros((2, 4), dtype=torch.bool),
+    )
+    forced_losses = torch.tensor(
+        [
+            [5.0, 4.0, 3.0, 0.5, 3.5, 4.5, 5.5],
+            [7.0, 6.0, 5.0, 0.25, 4.0, 3.0, 2.0],
+        ]
+    )
+    monkeypatch.setattr(
+        overfit_script,
+        "score_forced_result_classes_chunked",
+        lambda model_arg, batch_arg, *, chunk_size: forced_losses,
+    )
+
+    loss, _ = overfit_script.full_enum_expected_answer_loss(
+        model,
+        batch,
+        num_digits=1,
+        policy_temperature=1.0,
+        cost_normalization="none",
+        entropy_weight=0.0,
+        chunk_size=4,
+    )
+    loss.backward()
+
+    assert model.calculator_hook is not None
+    assert model.calculator_hook.result_proj is not None
+    assert model.calculator_hook.result_proj.weight.grad is not None
+    assert model.calculator_hook.result_proj.weight.grad.abs().sum().item() > 0
+    assert model.calculator_hook.output_proj.weight.grad is None
+    assert model.answer_decoder is not None
+    assert model.answer_decoder.weight.grad is None
+    assert model.tok_emb.weight.grad is None
+
+
 def test_exhaustive_grid_boundary_target_smoke_updates_open_upstream(
     monkeypatch,
 ) -> None:

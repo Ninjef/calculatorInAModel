@@ -276,9 +276,10 @@ only if the gradient alignment can be improved, or to surrogate/shadow
 calculator gradients, synthetic gradients/direct feedback alignment, or a
 stricter decoder-phase bottleneck.
 
-## Current Selected Next Task After Policy-Gradient Gate
+## Selected Task After Policy-Gradient Gate
 
-As of `2026-05-14`, the selected next task is:
+As of `2026-05-14`, before the exact result-marginal gate above, the selected
+next task was:
 
 ```text
 aiAgentProjectTasks/2026-05-14-phase-7-ninth-task-Exact-result-marginal-answer-loss-gradient-gate.md
@@ -309,6 +310,112 @@ negative. That branch enumerated `20 x 20` operand pairs and collapsed to wrong
 hard actions. The new task must use `calculator_action_head=result_space`,
 exact enumeration over only `39` result classes, and a Stage 0 gradient
 alignment gate before any long training run.
+
+## 2026-05-14 Exact Result-Marginal Answer-Loss Gradient Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/2026-05-14-phase-7-ninth-task-Exact-result-marginal-answer-loss-gradient-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-14_phase7_exact_result_marginal_answer_loss_gradient_gate
+```
+
+Code changes:
+
+- `calculator_action_head=result_space` now supports
+  `calculator_estimator=full_enum_expected_answer_loss`.
+- The expected answer-loss objective now has a result-space branch that
+  enumerates the `0..38` forced result classes, computes detached answer-NLL
+  costs, and minimizes the model result policy's exact expected cost.
+- Added `--expected-answer-loss-gradient-diagnostic-only`, which reports exact
+  result-marginal, sampled result-space PG, and boundary-target gradients on
+  the same fixed batch.
+- Added tests covering result-space expected-loss metrics and
+  result-projection gradients.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile src/model.py scripts/overfit_one_batch.py scripts/diagnose_calculator_protocol.py scripts/run_full_enum_action_loss_diagnostic.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+94 passed
+```
+
+Primary raw-cost Stage 0 artifact:
+
+```text
+runs/2026-05-14_phase7_exact_result_marginal_answer_loss_gradient_gate/stage0_gradient_gate/2026-05-14_093048_129116_model-c-op0-19-fullgrid-full_enum_expected_answer_loss-result_space-inlr0.01-uplr0.0003-expanspolt1-expanschunk64-expansgraddiag-answer_decoder-adec-product/model-c-2digit-seed4/expected_answer_loss_gradient_diagnostic_summary.json
+```
+
+Raw-cost gate table:
+
+| Gate | Value | Pass? |
+| --- | ---: | --- |
+| exact-grid prompts | `400` | yes |
+| exact result-proj grad L2 > 0 | `0.1465` | yes |
+| exact upstream grad L2 > 0 | `0.0549` | yes |
+| exact semantic decoder grad L2 == 0.0 | `0.0` | yes |
+| exact-vs-boundary result-proj cosine > 0.0 | `-0.0978` | no |
+| exact-vs-boundary upstream cosine > 0.0 | `-0.1231` | no |
+| sampled PG-vs-exact result-proj cosine | `0.9577` | diagnostic |
+| sampled PG-vs-exact upstream cosine | `0.9736` | diagnostic |
+
+Raw-cost diagnostic details:
+
+| Metric | Value |
+| --- | ---: |
+| exact expected answer-loss objective | `7.8521` |
+| raw expected NLL | `7.8521` |
+| best/true result NLL | `0.0004 / 0.0004` |
+| learned result NLL | `8.5497` |
+| expected-minus-best gap | `7.8517` |
+| best/true result probability under policy | `0.02565 / 0.02565` |
+| hard learned result accuracy | `0.0225` |
+| boundary true-result probability | `0.8003` |
+| sampled PG-vs-boundary result/upstream cosine | `-0.0945 / -0.1108` |
+
+Z-score cost normalization was checked because it is an allowed detached
+normalization:
+
+```text
+runs/2026-05-14_phase7_exact_result_marginal_answer_loss_gradient_gate/stage0_gradient_gate_zscore/2026-05-14_093119_897295_model-c-op0-19-fullgrid-full_enum_expected_answer_loss-result_space-inlr0.01-uplr0.0003-expanspolt1-expanschunk64-zscore-expansgraddiag-answer_decoder-adec-product/model-c-2digit-seed4/expected_answer_loss_gradient_diagnostic_summary.json
+```
+
+It did not clear the strict upstream-open gate. Result-proj exact-vs-boundary
+cosine became weakly positive (`0.0764`), but upstream cosine remained
+non-positive (`-0.0007`). Stage 1 exact-marginal training was therefore
+skipped.
+
+Decision:
+
+```text
+result_space_expected_answer_loss_alignment_negative
+```
+
+Interpretation:
+
+- The previous sampled PG negative was not primarily a finite-sample
+  variance/control-variate artifact. With raw answer NLL costs, sampled PG was
+  strongly aligned with the exact result-marginal gradient, and both were
+  anti-aligned with the supervised boundary-target ceiling.
+- Detached z-score normalization weakens the negative at the result head but
+  still does not produce a positive upstream-open alignment gate.
+- Do not spend long-run budget on raw exact expected-cost training, vanilla
+  result-space PG, or learned-baseline variants that only estimate the same
+  raw expected-cost gradient. The next best branch is a qualitatively different
+  learning signal: surrogate/shadow-calculator gradients, synthetic
+  gradients/direct feedback alignment, stricter decoder-phase bottlenecks, or
+  another estimator that first passes the same three-way gradient gate.
 
 ## Current State After Full-Grid Boundary Retention Gate
 
