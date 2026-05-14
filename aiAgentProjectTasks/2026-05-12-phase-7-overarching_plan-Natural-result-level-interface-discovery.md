@@ -211,19 +211,20 @@ calculator-query claim. A positive says result-level calculator requests are
 learnable; a negative says the blocker is deeper than pair underidentification
 or joint-pair optimization.
 
-## Status Update: 2026-05-13
+## Status Update: 2026-05-14
 
-Phase 7 now has one natural `0..19` retained positive:
+Phase 7 now has a split natural `0..19` exact-grid result:
 
 ```text
-full_grid_upstream_open_result_boundary_retained_positive
+exact_grid_seed_replication_negative
 ```
 
-The current positive came from exact full-grid upstream-open result-boundary
-teaching, not from strict answer-loss Concrete discovery. Seed `2` learned a
-hard result request to `0.9675`, and target-off continuation retained it at
-`0.8325` final / `0.8800` best post-start with semantic decoder movement
-exactly `0.0`.
+Exact full-grid upstream-open result-boundary teaching works: seed `2` learned
+a hard result request to `0.9675`, and CLI seeds `4` and `5` relearned Stage 1
+requests to `1.0000` and `0.9975`. However, strict target-off retention did
+not robustly replicate. Seeds `4` and `5` retained only `87.0%` and `88.2%` at
+their best post-start checkpoints, below the `90%` gate. Semantic decoder
+movement stayed exactly `0.0`.
 
 Useful prior negatives remain informative:
 
@@ -236,21 +237,23 @@ Useful prior negatives remain informative:
 Current next direction:
 
 ```text
-Replicate the exact-grid retained-positive recipe across seeds 4 and 5 before
-claiming a robust Phase 7 result. If replication holds, move to canonical-query
-or protocol stabilization. If it fails, compare against multi-sample
-result-space policy gradient or another genuinely different learning signal.
+Stop treating boundary-target teaching/retention as the mainline. Use it as a
+supervised ceiling/control, and compare against a genuinely different learning
+signal: multi-sample result-space policy gradient with per-prompt or
+leave-one-out baselines.
 ```
 
 Selected next task:
 
 ```text
-aiAgentProjectTasks/2026-05-13-phase-7-seventh-task-Exact-grid-retained-positive-seed-replication.md
+aiAgentProjectTasks/2026-05-14-phase-7-eighth-task-Multi-sample-result-space-policy-gradient-gate.md
 ```
 
 ### Track A: Structured Joint-Pair Result-Group Bridge
 
-This is the mainline.
+This was the original Phase 7 mainline. After the exact-grid seed-replication
+negative, do not treat it as the immediate next task unless the selected
+policy-gradient gate creates a reason to return to joint-pair optimization.
 
 Replace independent A/B operand-head pressure with a structured pair policy
 that can put probability mass on a same-result group.

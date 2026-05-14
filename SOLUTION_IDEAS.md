@@ -1,24 +1,29 @@
 Straight Through Estimator was the easy option. We tried that and it didn't seem to be working too well. Other options we need to explore:
 
-# Current Research Status: 2026-05-13
+# Current Research Status: 2026-05-14
 
-Phase 7 now has one natural `0..19` retained positive:
+Phase 7 has a split natural `0..19` result-level result:
 
 ```text
-full_grid_upstream_open_result_boundary_retained_positive
+exact_grid_seed_replication_negative
 ```
 
-Exact full-grid upstream-open result-boundary teaching learned a hard result
-request to `0.9675` on seed `2`, and target-off continuation retained it at
-`0.8325` final / `0.8800` best post-start. Semantic decoder movement stayed
-exactly `0.0`.
+Exact full-grid upstream-open result-boundary teaching can learn hard result
+requests. Seed `2` produced a retained positive, and CLI seeds `4` and `5`
+both relearned Stage 1 result requests near `1.0`. However, target-off
+continuation did not robustly clear the strict `90%` retention gate for seeds
+`4` and `5` (`87.0%` and `88.2%` best post-start retention). Semantic decoder
+movement stayed exactly `0.0`.
 
 Helpful now:
 
 - exact full-grid coverage;
 - upstream-open result-boundary teaching;
-- target-off retention diagnostics;
-- seed replication before protocol-stabilization work.
+- target-off retention diagnostics as stability probes, not novelty claims;
+- the boundary-target branch as a supervised ceiling/control for new
+  estimator-family comparisons;
+- multi-sample result-space policy gradient with per-prompt or leave-one-out
+  baselines.
 
 Not helpful as next steps:
 
@@ -26,18 +31,23 @@ Not helpful as next steps:
 - random-resampled boundary-target repeats;
 - frozen linear or frozen MLP result-head variants;
 - the skipped MLP rescue from the full-grid task;
-- immediate policy-gradient pivots before checking replication.
+- more target-off retention reruns that do not introduce a new mechanism;
+- canonical-query/protocol stabilization as if exact-grid retention had
+  robustly replicated.
 
 Selected next task:
 
 ```text
-aiAgentProjectTasks/2026-05-13-phase-7-seventh-task-Exact-grid-retained-positive-seed-replication.md
+aiAgentProjectTasks/2026-05-14-phase-7-eighth-task-Multi-sample-result-space-policy-gradient-gate.md
 ```
 
-If seeds `4` and `5` replicate seed `2`, move next to canonical-query/protocol
-stabilization. If replication fails, compare against multi-sample result-space
-policy gradient with per-prompt or leave-one-out baselines instead of more
-boundary-target schedule variants.
+This is not a repeat of Phase 1 single-sample REINFORCE. The next task should
+use the Phase 7 result-space action, exact-grid batches, multi-sample
+per-prompt advantages, and gradient-agreement diagnostics against the known
+boundary-target ceiling. If it fails at the estimator-alignment gate, move to
+surrogate/shadow-calculator gradients, synthetic gradients/direct feedback
+alignment, or a stricter decoder-phase bottleneck instead of long schedule
+sweeps.
 
 # Alternatives to the Straight-Through Estimator
 

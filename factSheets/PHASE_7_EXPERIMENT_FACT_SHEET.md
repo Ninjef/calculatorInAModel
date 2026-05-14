@@ -149,6 +149,36 @@ this seed fragility and compare against multi-sample result-space policy
 gradient with per-prompt or leave-one-out baselines, rather than rerunning
 oracle/readout checks or frozen-head boundary-target variants.
 
+## Current Selected Next Task
+
+As of `2026-05-14`, the selected next task is:
+
+```text
+aiAgentProjectTasks/2026-05-14-phase-7-eighth-task-Multi-sample-result-space-policy-gradient-gate.md
+```
+
+Rationale:
+
+- The useful Phase 7 signal is no longer whether answer-derived
+  boundary-target teaching can fit the exact grid. It can.
+- The unresolved blocker is whether a learning signal closer to true
+  non-differentiable tool use can discover and retain the natural result
+  request robustly.
+- The boundary-target branch should now be treated as a supervised
+  ceiling/control for estimator-family comparisons.
+- Multi-sample result-space policy gradient is the most direct next big bet:
+  it keeps the natural result-level action space, uses exact-grid coverage,
+  and replaces scalar single-sample REINFORCE with per-prompt or
+  leave-one-out baselines.
+
+Guardrail:
+
+This is not a repeat of Phase 1 single-sample REINFORCE. Phase 1 already tried
+single-sample independent-operand REINFORCE with a moving scalar baseline and
+got a negative. The next task must use result-space actions, multi-sample
+per-prompt advantages, and a gradient-agreement diagnostic against the known
+boundary-target ceiling before spending long-run training budget.
+
 ## Current State After Full-Grid Boundary Retention Gate
 
 As of `2026-05-13`, exact full-grid upstream-open boundary-target training has
