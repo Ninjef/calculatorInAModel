@@ -45,21 +45,30 @@ possible.
 
 # Current Phase 7 Finding
 
-Phase 7 has a single-seed natural `0..19` retained positive:
-`full_grid_upstream_open_result_boundary_retained_positive`.
+Phase 7 has a supervised natural `0..19` result-level ceiling, but not yet a
+robust answer-loss discovery result.
 
-Short version: exact full-grid upstream-open result-boundary teaching learned a
-hard result request (`0.9675`), and target-off continuation retained it
-(`0.8325` final; `0.8800` best post-start). Semantic decoder movement stayed
-exactly `0.0`.
+Exact full-grid upstream-open result-boundary teaching can learn hard natural
+result requests. Seed `2` produced a single-seed retained positive
+(`0.9675` Stage 1 hard result accuracy; `0.8800` best post-start target-off
+retention), and CLI seeds `4` and `5` relearned Stage 1 requests near exact
+(`1.0000` and `0.9975`).
 
-However, the seed-replication task did not pass the strict retention gate.
-Seeds 4 and 5 both relearned the exact-grid result request in Stage 1
-(`1.0000` and `0.9975` hard result accuracy), but their target-off Stage 2
-best post-start checkpoints retained only `87.0%` and `88.2%` of the selected
-Stage 1 accuracy, below the required `90%` threshold. This is
-`exact_grid_seed_replication_negative`, not a robust retained-positive
-replication.
+However, the strict retention replication gate failed. Seeds `4` and `5`
+retained only `87.0%` and `88.2%` of their selected Stage 1 hard result
+accuracy at the best post-start target-off checkpoints, below the required
+`90%` threshold. This is `exact_grid_seed_replication_negative`, not a robust
+retained-positive replication.
+
+The next estimator-family test also produced a useful negative:
+`multisample_result_space_policy_gradient_stage0_alignment_negative`.
+Result-space REINFORCE is now implemented and wired: `K=16` exact-grid
+multi-sample policy gradient produced nonzero result-proj/upstream gradients,
+semantic decoder gradient stayed exactly `0.0`, and per-prompt/leave-one-out
+baselines reduced advantage variance versus the old global EMA baseline. But
+the fixed-grid policy-gradient estimate was anti-aligned with the known
+boundary-target ceiling (`result-proj cosine=-0.0945`, upstream
+`cosine=-0.1108`), so Stage 1 long training was intentionally skipped.
 
 Do not rerun these as next steps unless debugging new code:
 
@@ -69,12 +78,16 @@ Do not rerun these as next steps unless debugging new code:
 - the MLP rescue from the full-grid task;
 - more target-off retention reruns that do not introduce a genuinely new
   mechanism or diagnose the observed seed fragility.
+- vanilla multi-sample result-space policy-gradient long runs without first
+  fixing the Stage 0 gradient-alignment problem.
 
-Next best step: analyze why exact-grid target-off retention is seed-fragile and
-compare against a genuinely different learning signal, especially multi-sample
-result-space policy gradient with per-prompt or leave-one-out baselines. Do
-not move directly to canonical-query/protocol stabilization as if Phase 7
-retention had robustly replicated.
+Next best step: improve or replace the estimator family before spending long
+run budget. Candidate directions are actor-critic/NVIL-style learned baselines
+checked by the same PG-vs-boundary gradient gate, RELAX/REBAR-style control
+variates, surrogate/shadow-calculator gradients, synthetic gradients/direct
+feedback alignment, or a stricter decoder-phase bottleneck. Do not move
+directly to canonical-query/protocol stabilization as if Phase 7 retention had
+robustly replicated.
 
 For details, see `factSheets/PHASE_7_EXPERIMENT_FACT_SHEET.md`.
 

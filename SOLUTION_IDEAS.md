@@ -2,10 +2,11 @@ Straight Through Estimator was the easy option. We tried that and it didn't seem
 
 # Current Research Status: 2026-05-14
 
-Phase 7 has a split natural `0..19` result-level result:
+Phase 7 has two important natural `0..19` result-level results:
 
 ```text
 exact_grid_seed_replication_negative
+multisample_result_space_policy_gradient_stage0_alignment_negative
 ```
 
 Exact full-grid upstream-open result-boundary teaching can learn hard result
@@ -15,6 +16,16 @@ continuation did not robustly clear the strict `90%` retention gate for seeds
 `4` and `5` (`87.0%` and `88.2%` best post-start retention). Semantic decoder
 movement stayed exactly `0.0`.
 
+The follow-up estimator-family gate implemented result-space REINFORCE and
+tested exact-grid `K=16` multi-sample policy gradient with per-prompt and
+leave-one-out baselines. The plumbing is live: result-proj/upstream gradients
+were nonzero, semantic decoder gradient stayed exactly `0.0`, and the
+per-prompt/leave-one-out baselines reduced advantage variance versus the old
+global EMA baseline. But the policy-gradient estimate was anti-aligned with
+the boundary-target ceiling at initialization (`result-proj cosine=-0.0945`;
+upstream `cosine=-0.1108`), so vanilla multi-sample result-space PG should
+not receive long-run training budget without first fixing gradient alignment.
+
 Helpful now:
 
 - exact full-grid coverage;
@@ -22,8 +33,12 @@ Helpful now:
 - target-off retention diagnostics as stability probes, not novelty claims;
 - the boundary-target branch as a supervised ceiling/control for new
   estimator-family comparisons;
-- multi-sample result-space policy gradient with per-prompt or leave-one-out
-  baselines.
+- the Stage 0 PG-vs-boundary gradient-agreement diagnostic for checking any
+  new score-function/control-variate estimator before long runs;
+- improved estimator families: actor-critic/NVIL-style learned baselines,
+  RELAX/REBAR-style control variates, surrogate/shadow-calculator gradients,
+  synthetic gradients/direct feedback alignment, or stricter decoder-phase
+  bottlenecks.
 
 Not helpful as next steps:
 
@@ -34,20 +49,15 @@ Not helpful as next steps:
 - more target-off retention reruns that do not introduce a new mechanism;
 - canonical-query/protocol stabilization as if exact-grid retention had
   robustly replicated.
+- vanilla multi-sample result-space PG long runs while the Stage 0
+  PG-vs-boundary cosine remains negative or near zero.
 
-Selected next task:
-
-```text
-aiAgentProjectTasks/2026-05-14-phase-7-eighth-task-Multi-sample-result-space-policy-gradient-gate.md
-```
-
-This is not a repeat of Phase 1 single-sample REINFORCE. The next task should
-use the Phase 7 result-space action, exact-grid batches, multi-sample
-per-prompt advantages, and gradient-agreement diagnostics against the known
-boundary-target ceiling. If it fails at the estimator-alignment gate, move to
-surrogate/shadow-calculator gradients, synthetic gradients/direct feedback
-alignment, or a stricter decoder-phase bottleneck instead of long schedule
-sweeps.
+The key implication is that result-space parameterization alone was not enough.
+The boundary-target branch proves that the natural result request is
+representable and teachable, but naive sampled answer-loss credit assignment is
+not yet aligned with that known good direction. Future score-function work
+should first pass the fixed-grid gradient-agreement gate, not just reduce
+variance.
 
 # Alternatives to the Straight-Through Estimator
 
@@ -73,6 +83,13 @@ Treat the calculator's input as a *stochastic action* sampled from a distributio
 $$\nabla_\theta \mathbb{E}[L] = \mathbb{E}[L \cdot \nabla_\theta \log p_\theta(a)]$$
 
 You don't need the calculator to be differentiable — you just need to evaluate the loss after running it. This is **unbiased**, unlike STE. The catch is **enormous variance**, which is why people developed control-variate variants: NVIL, MuProp, REBAR, RELAX. If your calculator outputs are discrete (digits, tokens), this is the most theoretically clean option.
+
+Phase 7 update: vanilla result-space REINFORCE with exact-grid `K=16`
+multi-sample advantages did not pass the gradient-alignment gate against the
+boundary-target ceiling. Do not treat longer vanilla REINFORCE schedules as the
+next obvious move. If returning to score-function estimators, add a stronger
+control variate or critic and first check PG-vs-boundary cosine on the fixed
+grid.
 
 ### 2. **Gumbel-Softmax / Concrete relaxation**
 
