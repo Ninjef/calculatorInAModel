@@ -417,6 +417,36 @@ Interpretation:
   gradients/direct feedback alignment, stricter decoder-phase bottlenecks, or
   another estimator that first passes the same three-way gradient gate.
 
+## Selected Task After Exact Result-Marginal Gate
+
+As of `2026-05-14`, the selected next task is:
+
+```text
+aiAgentProjectTasks/2026-05-14-phase-7-tenth-task-Gradient-friendly-result-decoder-alignment-gate.md
+```
+
+Rationale:
+
+- The exact result-marginal gate showed that the current frozen product
+  decoder is not merely noisy for upstream result-policy learning; its raw
+  answer-loss expected-cost gradient is locally anti-aligned with the known
+  good boundary-target direction.
+- Actor-critic, learned baselines, or RELAX/NVIL-style control variates are
+  therefore not the fastest next move if they preserve the same expected
+  gradient.
+- The next most direct architectural question is whether the downstream
+  decoder can be made gradient-friendly, not just forced-result accurate.
+- This keeps the same exact-grid discipline: any decoder candidate must first
+  pass exact result-marginal vs boundary-target gradient alignment before long
+  model-side training.
+- If a result-calibrated decoder passes, Stage 1 can test exact
+  result-marginal answer-loss discovery with true-result labels,
+  boundary-target CE/KL, oracle operands, and semantic decoder movement all
+  off.
+- If it fails, Phase 7 should move away from ordinary answer-loss geometry and
+  toward explicitly biased backward channels such as synthetic gradients,
+  direct feedback alignment, or learned shadow-gradient modules.
+
 ## Current State After Full-Grid Boundary Retention Gate
 
 As of `2026-05-13`, exact full-grid upstream-open boundary-target training has

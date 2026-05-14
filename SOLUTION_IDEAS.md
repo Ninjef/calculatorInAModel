@@ -50,6 +50,8 @@ Helpful now:
   gradients, synthetic gradients/direct feedback alignment, stricter
   decoder-phase bottlenecks, or a new estimator that first passes the
   alignment gate.
+- decoder/loss-geometry checks that ask whether the downstream answer decoder
+  can be made gradient-friendly, not merely correct under forced true results.
 
 Not helpful as next steps:
 
@@ -71,6 +73,20 @@ direction at initialization. The boundary-target branch proves that the natural
 result request is representable and teachable, but the next useful branch
 should change the learning signal rather than only reducing score-function
 variance.
+
+Selected next task:
+
+```text
+aiAgentProjectTasks/2026-05-14-phase-7-tenth-task-Gradient-friendly-result-decoder-alignment-gate.md
+```
+
+Rationale: before jumping to a fully learned synthetic-gradient system, test
+the smallest architectural question exposed by the exact result-marginal
+negative. The current frozen product decoder is answer-accurate but locally
+misleading for result-policy learning. A result-calibrated decoder gate asks
+whether ordinary answer-loss discovery can be rescued by downstream loss
+geometry while keeping the model-side calculator request training free of true
+result labels, boundary-target updates, and semantic decoder movement.
 
 # Alternatives to the Straight-Through Estimator
 

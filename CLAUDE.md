@@ -95,12 +95,14 @@ Do not rerun these as next steps unless debugging new code:
 - raw exact expected-cost/result-marginal training, or learned-baseline
   variants that merely estimate the same raw expected-cost gradient.
 
-Next best step: pivot to a qualitatively different learning signal and run the
-same kind of fixed-grid gradient-alignment gate before long training. The most
-promising branches are surrogate/shadow-calculator gradients, synthetic
-gradients/direct feedback alignment, stricter decoder-phase bottlenecks, or a
-new estimator whose gradient is demonstrably aligned with the boundary-target
-ceiling. Do not move directly to canonical-query/protocol stabilization as if
+Next best step: run
+`aiAgentProjectTasks/2026-05-14-phase-7-tenth-task-Gradient-friendly-result-decoder-alignment-gate.md`.
+The selected bet is a stricter decoder/loss-geometry gate: test whether a
+result-calibrated frozen decoder can make exact answer-loss gradients over
+result actions align with the boundary-target ceiling before any long
+training. If that fails, pivot to explicitly biased backward channels such as
+synthetic gradients/direct feedback alignment or learned shadow-gradient
+modules. Do not move directly to canonical-query/protocol stabilization as if
 Phase 7 retention had robustly replicated.
 
 For details, see `factSheets/PHASE_7_EXPERIMENT_FACT_SHEET.md`.

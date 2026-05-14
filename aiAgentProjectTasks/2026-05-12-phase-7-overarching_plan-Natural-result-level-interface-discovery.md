@@ -252,10 +252,19 @@ Current next direction:
 Stop treating boundary-target teaching/retention, vanilla sampled
 policy-gradient, and raw exact expected-cost training as the mainline. Use the
 boundary-target branch as a supervised ceiling/control for new mechanisms, and
-pivot to a qualitatively different learning signal such as surrogate/shadow
-calculator gradients, synthetic gradients/direct feedback alignment, stricter
-decoder-phase bottlenecks, or another estimator that first passes the
-fixed-grid gradient-alignment gate.
+pivot to a qualitatively different learning signal. The selected next task is
+the gradient-friendly result decoder alignment gate: test whether downstream
+decoder/loss geometry can make the exact answer-loss gradient over result
+actions align with the boundary-target ceiling before spending long-run
+training budget. If that fails, move to explicitly biased backward channels
+such as synthetic gradients/direct feedback alignment or learned
+shadow-gradient modules.
+```
+
+Selected next task:
+
+```text
+aiAgentProjectTasks/2026-05-14-phase-7-tenth-task-Gradient-friendly-result-decoder-alignment-gate.md
 ```
 
 ### Track A: Structured Joint-Pair Result-Group Bridge
