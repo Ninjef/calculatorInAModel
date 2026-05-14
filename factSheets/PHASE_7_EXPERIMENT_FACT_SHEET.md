@@ -17,6 +17,26 @@ Phase 7 should therefore prioritize structured joint-pair or result-space
 interfaces that match the result-level information available in natural answer
 loss.
 
+## Retention Guardrail
+
+Target-off retention is not new by itself. Earlier phases already established
+the general pattern:
+
+- Phase 4: direct operand supervision can teach an identifiable
+  `sum_left_operand` calculator-query protocol, and answer loss retains it
+  after `aux_operand_loss_weight=0.0` across seeds.
+- Phase 5: upstream-open answer-only continuations can preserve or complete
+  partially taught identifiable protocols, while no-handoff answer-only
+  discovery still fails.
+- Phase 6: answer-derived identifiable bridges, including deterministic
+  Concrete, can retain after local/relaxed objectives are exactly off.
+
+For Phase 7, the only reason to run target-off retention is to test a new
+natural result-level interface or a real stability question. Do not spend new
+tasks simply re-proving that retention-after-teaching is possible. If a Stage 1
+teaching signal is already known to work, the next task should either diagnose
+retention fragility or change the learning signal/action parameterization.
+
 ## Current State After Exact-Grid Seed Replication
 
 As of `2026-05-13`, the exact-grid upstream-open boundary-target branch has a

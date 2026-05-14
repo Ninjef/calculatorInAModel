@@ -29,9 +29,23 @@ validate new wiring. If the wiring has already been validated for the current
 configuration, skip oracle-only reruns and move directly to learned-interface
 teaching/retention.
 
+Do not rediscover target-off retention as a novel research result. The project
+has already tested the general pattern many times: teach or scaffold a
+calculator interface, remove the scaffold, and ask whether answer loss retains
+or completes the protocol. Phase 4 established seed-robust aux-zero retention
+for the identifiable `sum_left_operand` true-operand protocol. Phase 5 showed
+upstream-open answer-only continuations can preserve or complete partially
+taught identifiable protocols, while no-handoff answer-only discovery still
+fails. Phase 6 established relaxation/local-target-off retention for
+answer-derived identifiable bridges, including deterministic Concrete across
+seeds. Future target-off/retention runs should only be done when they test a
+genuinely new interface, objective, action parameterization, or stability
+question; do not spend tasks merely re-proving that retention-after-teaching is
+possible.
+
 # Current Phase 7 Finding
 
-Phase 7 has a natural `0..19` retained positive:
+Phase 7 has a single-seed natural `0..19` retained positive:
 `full_grid_upstream_open_result_boundary_retained_positive`.
 
 Short version: exact full-grid upstream-open result-boundary teaching learned a
@@ -39,16 +53,28 @@ hard result request (`0.9675`), and target-off continuation retained it
 (`0.8325` final; `0.8800` best post-start). Semantic decoder movement stayed
 exactly `0.0`.
 
+However, the seed-replication task did not pass the strict retention gate.
+Seeds 4 and 5 both relearned the exact-grid result request in Stage 1
+(`1.0000` and `0.9975` hard result accuracy), but their target-off Stage 2
+best post-start checkpoints retained only `87.0%` and `88.2%` of the selected
+Stage 1 accuracy, below the required `90%` threshold. This is
+`exact_grid_seed_replication_negative`, not a robust retained-positive
+replication.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
 - random-resampled upstream-open boundary-target repeats;
 - frozen linear or frozen MLP result-head boundary teaching;
 - the MLP rescue from the full-grid task;
-- immediate policy-gradient pivot as if the full-grid gate failed.
+- more target-off retention reruns that do not introduce a genuinely new
+  mechanism or diagnose the observed seed fragility.
 
-Next best step: replicate the exact-grid retained-positive recipe across seeds,
-then pursue canonical-query/protocol stabilization if replication holds.
+Next best step: analyze why exact-grid target-off retention is seed-fragile and
+compare against a genuinely different learning signal, especially multi-sample
+result-space policy gradient with per-prompt or leave-one-out baselines. Do
+not move directly to canonical-query/protocol stabilization as if Phase 7
+retention had robustly replicated.
 
 For details, see `factSheets/PHASE_7_EXPERIMENT_FACT_SHEET.md`.
 
