@@ -419,7 +419,7 @@ Interpretation:
 
 ## Selected Task After Exact Result-Marginal Gate
 
-As of `2026-05-14`, the selected next task is:
+As of `2026-05-14`, this task has been run.
 
 ```text
 aiAgentProjectTasks/2026-05-14-phase-7-tenth-task-Gradient-friendly-result-decoder-alignment-gate.md
@@ -446,6 +446,112 @@ Rationale:
 - If it fails, Phase 7 should move away from ordinary answer-loss geometry and
   toward explicitly biased backward channels such as synthetic gradients,
   direct feedback alignment, or learned shadow-gradient modules.
+
+## 2026-05-14 Gradient-Friendly Result Decoder Alignment Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/2026-05-14-phase-7-tenth-task-Gradient-friendly-result-decoder-alignment-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-14_phase7_gradient_friendly_result_decoder_gate
+```
+
+Code changes:
+
+- Added `scripts/run_phase7_gradient_friendly_result_decoder_gate.py`.
+- The runner trains two narrow result-calibrated decoder candidates while
+  updating only semantic decoder tensors:
+  `answer_offset_emb`, `answer_decoder`, and
+  `calculator_hook.output_proj`.
+- It then loads each candidate with
+  `semantic_decoder_checkpoint_load_scope=semantic_decoder_only`, freezes the
+  semantic decoder, and reuses the exact result-marginal / sampled PG /
+  boundary-target gradient diagnostic on the exhaustive `20 x 20` grid.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile src/model.py scripts/overfit_one_batch.py scripts/diagnose_calculator_protocol.py scripts/run_full_enum_action_loss_diagnostic.py scripts/run_phase7_gradient_friendly_result_decoder_gate.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+94 passed
+```
+
+Stage 0 artifact:
+
+```text
+runs/2026-05-14_phase7_gradient_friendly_result_decoder_gate/2026-05-14_113835_814589/stage0_gradient_friendly_decoder_gate_summary.json
+```
+
+Stage 0 decoder-geometry table:
+
+| Decoder | Forced/oracle exact | Hard-best=true | Tie-aware true-best | Raw expected NLL | Best/true NLL | Learned NLL | Exact result/upstream grad L2 | Semantic grad L2 | Exact-vs-boundary result/upstream cosine | PG-vs-exact result/upstream cosine | PG-vs-boundary result/upstream cosine |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| baseline | `1.000 / 1.000` | `1.000` | `1.000` | `7.8521` | `0.0004 / 0.0004` | `8.5497` | `0.1465 / 0.0549` | `0.0` | `-0.0978 / -0.1231` | `0.9577 / 0.9736` | `-0.0945 / -0.1108` |
+| soft calibration | `1.000 / 1.000` | `1.000` | `1.000` | `7.8441` | `0.0004 / 0.0004` | `8.5417` | `0.1465 / 0.0547` | `0.0` | `-0.0911 / -0.1175` | `0.9579 / 0.9737` | `-0.0876 / -0.1044` |
+| contrastive margin | `1.000 / 1.000` | `1.000` | `1.000` | `14.4892` | `0.0000 / 0.0000` | `15.7934` | `0.2562 / 0.0824` | `0.0` | `0.1204 / 0.0484` | `0.9560 / 0.9640` | `0.0949 / 0.0410` |
+
+The contrastive-margin decoder passed the formal Stage 0 sign gate:
+
+```text
+gradient_friendly_decoder_alignment_pass
+```
+
+Selected decoder:
+
+```text
+runs/2026-05-14_phase7_gradient_friendly_result_decoder_gate/2026-05-14_113835_814589/contrastive_margin_best_weights.pt
+```
+
+Stage 1 exact result-marginal training was therefore run with the aligned
+decoder frozen and all true-result, boundary-target, oracle-action, aux, and
+semantic-decoder movement signals off.
+
+Stage 1 run:
+
+```text
+runs/2026-05-14_phase7_gradient_friendly_result_decoder_gate/stage1_exact_marginal_discovery/2026-05-14_113930_411831_model-c-op0-19-fullgrid-full_enum_expected_answer_loss-result_space-inlr0.01-uplr0.0003-expanspolt1-expanschunk64-answer_decoder-adec-product/model-c-2digit-seed4
+```
+
+Stage 1 result:
+
+| Checkpoint | Normal / calc-result acc | Injection-zero | Forced-random | Oracle | Learned-best | Entropy | Learned-best NLL gap |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| best sampled diagnostic, step `275` | `0.105 / 0.105` | `0.0325` | `0.0225` | `1.000` | not logged in snapshot | not logged in snapshot | not logged in snapshot |
+| best training-curve learned-result, step `300` | sampled normal `0.068` | sampled zero `0.033` | not logged | `1.000` | `0.0750` | `0.0367` | `8.2436` |
+| final, step `800` | `0.090 / 0.090` | `0.0375` | `0.0275` | `1.000` | `0.0750` | `0.00003` | `8.2003` |
+
+Final `metrics.json` exact-match was `0.085`, and final loss was `8.2003`.
+The learned result policy collapsed to a few wrong classes rather than
+discovering the true-sum request.
+
+Decision:
+
+```text
+gradient_friendly_decoder_stage0_pass_stage1_exact_marginal_discovery_negative
+```
+
+Interpretation:
+
+- The contrastive decoder shows that downstream decoder geometry can flip the
+  local exact expected-cost gradient positive against the boundary ceiling.
+- That local sign improvement was too weak to rescue discovery: exact
+  expected-cost training still collapsed under the strict no-teacher,
+  semantic-frozen downstream test.
+- Do not treat ordinary expected-cost or score-function training as recovered
+  by decoder calibration alone. The next Phase 7 branch should use an
+  explicitly biased backward channel, such as synthetic gradients/direct
+  feedback alignment or a learned shadow-gradient module, and keep the same
+  exact-grid boundary-ceiling gate.
 
 ## Current State After Full-Grid Boundary Retention Gate
 

@@ -2,12 +2,13 @@ Straight Through Estimator was the easy option. We tried that and it didn't seem
 
 # Current Research Status: 2026-05-14
 
-Phase 7 has three important natural `0..19` result-level results:
+Phase 7 has four important natural `0..19` result-level results:
 
 ```text
 exact_grid_seed_replication_negative
 multisample_result_space_policy_gradient_stage0_alignment_negative
 result_space_expected_answer_loss_alignment_negative
+gradient_friendly_decoder_stage0_pass_stage1_exact_marginal_discovery_negative
 ```
 
 Exact full-grid upstream-open result-boundary teaching can learn hard result
@@ -37,6 +38,15 @@ gradient (`0.9577` result-proj, `0.9736` upstream). Detached z-score
 normalization weakly improved result-head cosine (`0.0764`) but still failed
 the upstream gate (`-0.0007`), so Stage 1 exact-marginal training was skipped.
 
+The gradient-friendly decoder gate showed that decoder geometry can flip the
+local sign but still fail discovery. A contrastive-margin decoder made exact
+expected-cost gradients positively aligned with the boundary ceiling
+(`0.1204` result-proj cosine, `0.0484` upstream cosine), with forced
+true/oracle exact accuracy still `1.0` and semantic decoder gradient exactly
+`0.0`. But exact-grid result-marginal training with that decoder frozen
+collapsed to a low-entropy wrong result policy (`0.0750` learned-best hard
+result accuracy; final exact-match `0.085`).
+
 Helpful now:
 
 - exact full-grid coverage;
@@ -47,11 +57,11 @@ Helpful now:
 - three-way fixed-grid gradient-agreement diagnostics against exact
   result-marginal and boundary-target controls for any new estimator;
 - qualitatively different learning signals: surrogate/shadow-calculator
-  gradients, synthetic gradients/direct feedback alignment, stricter
-  decoder-phase bottlenecks, or a new estimator that first passes the
-  alignment gate.
-- decoder/loss-geometry checks that ask whether the downstream answer decoder
-  can be made gradient-friendly, not merely correct under forced true results.
+  gradients, synthetic gradients/direct feedback alignment, learned
+  shadow-gradient modules, or a new estimator that first passes the alignment
+  gate and remains stable during early training.
+- decoder/loss-geometry checks only if they introduce a genuinely stronger
+  backward channel than weak local expected-cost sign alignment.
 
 Not helpful as next steps:
 
@@ -66,27 +76,27 @@ Not helpful as next steps:
   PG-vs-boundary cosine remains negative or near zero.
 - raw exact result-marginal expected-cost long runs, or learned-baseline
   methods that merely estimate the same raw expected-cost gradient.
+- more decoder-only calibration branches that only sharpen forced true results
+  or weakly improve ordinary expected-cost geometry.
 
 The key implication is that result-space parameterization alone was not enough,
-and raw answer-loss expected-cost optimization is itself the wrong local
-direction at initialization. The boundary-target branch proves that the natural
-result request is representable and teachable, but the next useful branch
-should change the learning signal rather than only reducing score-function
-variance.
+and ordinary answer-loss expected-cost optimization is not rescued by weak
+decoder calibration. The boundary-target branch proves that the natural result
+request is representable and teachable, but the next useful branch should
+change the backward signal rather than only reducing score-function variance or
+reshaping the same expected-cost objective.
 
-Selected next task:
+Selected next direction:
 
 ```text
-aiAgentProjectTasks/2026-05-14-phase-7-tenth-task-Gradient-friendly-result-decoder-alignment-gate.md
+synthetic gradients / direct feedback alignment / learned shadow-gradient modules
 ```
 
-Rationale: before jumping to a fully learned synthetic-gradient system, test
-the smallest architectural question exposed by the exact result-marginal
-negative. The current frozen product decoder is answer-accurate but locally
-misleading for result-policy learning. A result-calibrated decoder gate asks
-whether ordinary answer-loss discovery can be rescued by downstream loss
-geometry while keeping the model-side calculator request training free of true
-result labels, boundary-target updates, and semantic decoder movement.
+Rationale: the current result-space action is representable, and one decoder
+variant made the local expected-cost gradient point in the right signed
+direction, but exact expected-cost training still collapsed. The next branch
+should supply an explicitly biased/useful backward signal at the calculator
+boundary while retaining the exact-grid boundary-ceiling diagnostic as a gate.
 
 # Alternatives to the Straight-Through Estimator
 

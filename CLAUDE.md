@@ -82,6 +82,19 @@ mainly finite-sample variance. Detached z-score cost normalization weakly
 improved the result-head cosine (`0.0764`) but still failed the upstream-open
 gate (`-0.0007`). Stage 1 exact-marginal training was intentionally skipped.
 
+The gradient-friendly decoder gate produced a mixed but ultimately negative
+result for ordinary expected-cost discovery:
+`gradient_friendly_decoder_stage0_pass_stage1_exact_marginal_discovery_negative`.
+A contrastive-margin decoder made the Stage 0 exact expected-cost gradient
+locally positive against the boundary ceiling (`result-proj cosine=0.1204`,
+upstream `cosine=0.0484`) while forced true/oracle exact accuracy stayed
+`1.0` and downstream semantic decoder gradient stayed exactly `0.0`.
+However, Stage 1 exact-grid result-marginal training with that decoder frozen
+still collapsed to a low-entropy wrong result policy (`0.0750` learned-best
+hard result accuracy in the training curve; final exact-match `0.085`).
+Local decoder-gradient sign improvement alone did not rescue answer-loss
+discovery.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -94,16 +107,15 @@ Do not rerun these as next steps unless debugging new code:
   fixing the Stage 0 gradient-alignment problem.
 - raw exact expected-cost/result-marginal training, or learned-baseline
   variants that merely estimate the same raw expected-cost gradient.
+- more decoder-only calibration branches that only aim to make forced true
+  results sharper or weakly improve the same ordinary expected-cost geometry.
 
-Next best step: run
-`aiAgentProjectTasks/2026-05-14-phase-7-tenth-task-Gradient-friendly-result-decoder-alignment-gate.md`.
-The selected bet is a stricter decoder/loss-geometry gate: test whether a
-result-calibrated frozen decoder can make exact answer-loss gradients over
-result actions align with the boundary-target ceiling before any long
-training. If that fails, pivot to explicitly biased backward channels such as
-synthetic gradients/direct feedback alignment or learned shadow-gradient
-modules. Do not move directly to canonical-query/protocol stabilization as if
-Phase 7 retention had robustly replicated.
+Next best step: pivot to explicitly biased backward channels such as synthetic
+gradients/direct feedback alignment or learned shadow-gradient modules. Keep
+the exact-grid boundary-ceiling diagnostic as the Stage 0 gate for any new
+mechanism. Do not move directly to canonical-query/protocol stabilization as
+if Phase 7 retention had robustly replicated, and do not treat ordinary
+expected-cost/score-function training as rescued by decoder calibration alone.
 
 For details, see `factSheets/PHASE_7_EXPERIMENT_FACT_SHEET.md`.
 
