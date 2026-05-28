@@ -363,6 +363,21 @@ signal does not transfer as-is when a neuron path can solve around the
 calculator; future non-bottleneck work needs a causal calculator-use pressure
 or staged handoff, not just the bottleneck assignment objective.
 
+A first explicit non-bottleneck causal-use pressure was then tested and was
+also negative. The new objective logs `calculator_causal_gap =
+zero_injection_loss - normal_loss` and applies a hinge requiring the
+zero-injection path to be worse by a margin. This is non-prescriptive and costs
+one extra zero-injection forward, not a forced-result sweep. On top of additive
+answer loss plus assignment weight `10`, causal-gap weights `10` and `50`
+with margin `0.5` did create a large final causal gap (`1.27` and `0.84`),
+but calculator-result accuracy stayed near chance (`0.000` and `0.0425`
+final), best result-policy accuracy stayed at `0.030` and `0.045`, and final
+exact fell to `0.560` and `0.4225` versus `0.700` without the gap objective.
+Label: `non_bottleneck_causal_gap_pressure_negative`. The objective can
+damage the bypass path without teaching correct calculator requests; next
+non-bottleneck work needs a target or handoff that ties causal dependence to
+true result-level calculator utility.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -457,6 +472,10 @@ Do not rerun these as next steps unless debugging new code:
   improvement-assignment weight `10` for 800 steps on the same seed as novelty.
   It learned answer accuracy mostly through the neuron path while calculator
   result accuracy stayed near chance.
+- non-bottleneck additive answer loss plus assignment weight `10` with
+  calculator causal-gap hinge margin `0.5` and weights `10` or `50` for 800
+  steps on the same seed. It created a loss gap but not correct calculator
+  requests.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -468,9 +487,10 @@ selection, a target-off handoff with a stronger natural answer-loss bridge
 than plain decay, a lower-cost assignment approximation that does not enumerate
 all result classes every step, a non-bottleneck version of the hard-assignment
 gate only if it adds explicit causal calculator-use pressure or a staged
-bottleneck-to-additive handoff, a Jacobian-conditioned state more substantial
-than the result-output `J^T answer_grad` feature, or a richer target
-construction that remains valid after upstream movement.
+bottleneck-to-additive handoff that is stronger than a plain zero-injection
+loss-gap hinge, a Jacobian-conditioned state more substantial than the
+result-output `J^T answer_grad` feature, or a richer target construction that
+remains valid after upstream movement.
 Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`

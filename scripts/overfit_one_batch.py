@@ -114,6 +114,8 @@ class TrainConfig:
     result_policy_improvement_assignment_quota_multiplier: float
     result_policy_stabilization_temperature: float
     result_policy_stabilization_decay_steps: int
+    calculator_causal_gap_weight: float
+    calculator_causal_gap_margin: float
     boundary_feedback_weight: float
     boundary_feedback_mode: str
     boundary_feedback_seed: int
@@ -726,6 +728,12 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_policy_hard_marginal_effective_results",
         "result_policy_argmax_result_accuracy",
         "result_policy_top3_result_accuracy",
+        "calculator_causal_gap_weight",
+        "calculator_causal_gap_margin",
+        "calculator_causal_gap_objective",
+        "calculator_causal_gap",
+        "calculator_causal_gap_zero_loss",
+        "calculator_causal_gap_normal_loss",
         "optimizer_step_delta_l2",
         "optimizer_step_unclamped_delta_l2",
         "optimizer_step_trust_scale",
@@ -6359,6 +6367,8 @@ def run_variant(
         result_policy_stabilization_decay_steps=(
             args.result_policy_stabilization_decay_steps
         ),
+        calculator_causal_gap_weight=args.calculator_causal_gap_weight,
+        calculator_causal_gap_margin=args.calculator_causal_gap_margin,
         boundary_feedback_weight=args.boundary_feedback_weight,
         boundary_feedback_mode=args.boundary_feedback_mode,
         boundary_feedback_seed=args.boundary_feedback_seed,
@@ -7092,6 +7102,8 @@ def run_variant(
         result_boundary_target_metrics: dict[str, float] = {}
         result_policy_stabilization_objective_value = None
         result_policy_stabilization_metrics: dict[str, float] = {}
+        calculator_causal_gap_objective_value = None
+        calculator_causal_gap_metrics: dict[str, float] = {}
         boundary_feedback_loss_value = None
         boundary_feedback_objective_value = None
         boundary_feedback_metrics: dict[str, float | int | str] = {}
@@ -7330,6 +7342,43 @@ def run_variant(
                 result_policy_stabilization_objective.item()
             )
             loss = loss + result_policy_stabilization_objective
+        if args.calculator_causal_gap_weight > 0:
+            if use_reinforce:
+                raise ValueError(
+                    "calculator causal-gap objective is not supported with reinforce"
+                )
+            with temporary_calculator_injection_scale(model, 0.0):
+                zero_logits = model(batch.x, oracle_operands=oracle_operands)
+            zero_answer_loss = masked_cross_entropy_per_example(
+                zero_logits, batch.y, batch.loss_mask
+            ).mean()
+            causal_gap = zero_answer_loss - answer_loss
+            calculator_causal_gap_objective = (
+                args.calculator_causal_gap_weight
+                * torch.relu(args.calculator_causal_gap_margin - causal_gap)
+            )
+            calculator_causal_gap_objective_value = float(
+                calculator_causal_gap_objective.detach().item()
+            )
+            calculator_causal_gap_metrics = {
+                "calculator_causal_gap_weight": float(
+                    args.calculator_causal_gap_weight
+                ),
+                "calculator_causal_gap_margin": float(
+                    args.calculator_causal_gap_margin
+                ),
+                "calculator_causal_gap_objective": (
+                    calculator_causal_gap_objective_value
+                ),
+                "calculator_causal_gap": float(causal_gap.detach().item()),
+                "calculator_causal_gap_zero_loss": float(
+                    zero_answer_loss.detach().item()
+                ),
+                "calculator_causal_gap_normal_loss": float(
+                    answer_loss.detach().item()
+                ),
+            }
+            loss = loss + calculator_causal_gap_objective
         if use_boundary_feedback:
             (
                 boundary_feedback_loss,
@@ -7508,6 +7557,8 @@ def run_variant(
                     result_policy_stabilization_objective_value
                 )
                 curve_row.update(result_policy_stabilization_metrics)
+            if args.calculator_causal_gap_weight > 0:
+                curve_row.update(calculator_causal_gap_metrics)
             if use_boundary_feedback:
                 curve_row["boundary_feedback_weight"] = (
                     args.boundary_feedback_weight
@@ -7607,6 +7658,12 @@ def run_variant(
                     f" result_policy_hard_eff={result_policy_stabilization_metrics['result_policy_hard_marginal_effective_results']:.3f}"
                     f" result_policy_acc={result_policy_stabilization_metrics['result_policy_argmax_result_accuracy']:.3f}"
                     if use_result_policy_stabilization
+                    else ""
+                )
+                + (
+                    f" causal_gap={calculator_causal_gap_metrics['calculator_causal_gap']:.4f}"
+                    f" causal_obj={calculator_causal_gap_objective_value:.4f}"
+                    if args.calculator_causal_gap_weight > 0
                     else ""
                 )
                 + (
@@ -8009,6 +8066,8 @@ def run_variant(
             step=args.steps,
         )
     )
+    metrics["calculator_causal_gap_weight"] = args.calculator_causal_gap_weight
+    metrics["calculator_causal_gap_margin"] = args.calculator_causal_gap_margin
     metrics["boundary_feedback_weight"] = args.boundary_feedback_weight
     metrics["final_boundary_feedback_weight"] = args.boundary_feedback_weight
     metrics["boundary_feedback_mode"] = args.boundary_feedback_mode
@@ -8741,6 +8800,25 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--calculator-causal-gap-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Weight for a non-prescriptive causal-use hinge. The objective "
+            "encourages zero-injection answer loss to exceed normal answer "
+            "loss by --calculator-causal-gap-margin."
+        ),
+    )
+    parser.add_argument(
+        "--calculator-causal-gap-margin",
+        type=float,
+        default=0.0,
+        help=(
+            "Required zero-injection minus normal answer-loss margin for the "
+            "calculator causal-use hinge."
+        ),
+    )
+    parser.add_argument(
         "--boundary-feedback-weight",
         type=float,
         default=0.0,
@@ -9400,6 +9478,10 @@ def main() -> None:
         raise ValueError(
             "--result-policy-stabilization-decay-steps must be non-negative"
         )
+    if args.calculator_causal_gap_weight < 0:
+        raise ValueError("--calculator-causal-gap-weight must be non-negative")
+    if args.calculator_causal_gap_margin < 0:
+        raise ValueError("--calculator-causal-gap-margin must be non-negative")
     if args.boundary_feedback_weight < 0:
         raise ValueError("--boundary-feedback-weight must be non-negative")
     if args.shadow_feedback_ridge < 0:
@@ -9919,6 +10001,9 @@ def main() -> None:
                 suffix_parts.append(
                     f"rpoldcy{args.result_policy_stabilization_decay_steps}"
                 )
+        if args.calculator_causal_gap_weight > 0:
+            suffix_parts.append(f"causalgapw{args.calculator_causal_gap_weight:g}")
+            suffix_parts.append(f"causalgapm{args.calculator_causal_gap_margin:g}")
         if args.calculator_result_head_hidden_size > 0:
             suffix_parts.append(f"rhead{args.calculator_result_head_hidden_size}")
         if args.calculator_estimator == "gumbel_concrete_interface":
@@ -10073,6 +10158,11 @@ def main() -> None:
         f"{args.result_policy_improvement_assignment_quota_multiplier} "
         f"temperature={args.result_policy_stabilization_temperature} "
         f"decay_steps={args.result_policy_stabilization_decay_steps}"
+    )
+    print(
+        "calculator causal gap: "
+        f"weight={args.calculator_causal_gap_weight} "
+        f"margin={args.calculator_causal_gap_margin}"
     )
     print(
         "boundary feedback: "

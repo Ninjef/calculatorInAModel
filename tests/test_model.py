@@ -4297,6 +4297,10 @@ def test_training_cli_supports_non_bottleneck_result_space_assignment(
             "1",
             "--result-policy-improvement-assignment-weight",
             "1",
+            "--calculator-causal-gap-weight",
+            "0.5",
+            "--calculator-causal-gap-margin",
+            "0.25",
             "--result-boundary-target-chunk-size",
             "5",
             "--run-root",
@@ -4317,7 +4321,14 @@ def test_training_cli_supports_non_bottleneck_result_space_assignment(
     assert config["calculator_action_head"] == "result_space"
     assert config["calculator_bottleneck_mode"] == "none"
     assert config["result_policy_improvement_assignment_weight"] == 1.0
+    assert config["calculator_causal_gap_weight"] == 0.5
+    assert config["calculator_causal_gap_margin"] == 0.25
     assert metrics["calculator_action_head"] == "result_space"
     assert metrics["calculator_bottleneck_mode"] == "none"
     assert metrics["result_policy_improvement_assignment_weight"] == 1.0
+    assert metrics["calculator_causal_gap_weight"] == 0.5
+    assert metrics["calculator_causal_gap_margin"] == 0.25
     assert (run_dir / "diagnostic_snapshots.csv").exists()
+    curve_rows = list(csv.DictReader((run_dir / "training_curve.csv").open()))
+    assert "calculator_causal_gap" in curve_rows[-1]
+    assert "calculator_causal_gap_objective" in curve_rows[-1]

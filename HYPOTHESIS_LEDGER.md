@@ -183,3 +183,9 @@ Conclusion: Non-bottleneck answer+assignment reached `0.700` final exact, but ca
 Do not repeat: Same additive result-space `ste`, answer-loss `1`, assignment weight `10`, 800-step seed-2 exact-grid gate as novelty.
 Next allowed test: Add causal calculator-use pressure, staged bottleneck-to-additive handoff, or a target that remains tied to true calculator utility when the neuron path can bypass.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-non-bottleneck-hard-assignment-gate.md`
+
+DISPROVEN: A zero-injection causal-gap hinge is enough to make non-bottleneck hard assignment learn calculator use.
+Conclusion: Gap weights `10/50` with margin `0.5` produced final causal gaps `1.27/0.84`, but final calculator-result accuracy stayed `0.000/0.0425` and final exact fell to `0.560/0.4225`.
+Do not repeat: Same additive assignment-weight `10`, causal-gap margin `0.5`, weights `10/50`, 800-step seed-2 exact-grid gate as novelty.
+Next allowed test: A staged bottleneck-to-additive handoff or causal target that rewards correct result-level utility, not merely making zero-injection worse.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-non-bottleneck-causal-gap-gate.md`

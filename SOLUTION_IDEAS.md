@@ -269,6 +269,14 @@ calculator-result accuracy was only `0.0325`, result-policy accuracy was
 Future non-bottleneck ideas need an explicit causal-use pressure, staged
 bottleneck-to-additive handoff, or a way to compute improvement targets that
 does not get corrupted by the bypass path.
+A first causal-use pressure was tested as a hinge on
+`zero_injection_loss - normal_loss`. It is cheap and non-prescriptive, but by
+itself it was not enough: weights `10/50` with margin `0.5` created a large
+causal gap while calculator-result accuracy stayed near chance and answer
+accuracy fell. This suggests the next non-bottleneck approach should not only
+make ablations worse; it must connect the causal path to correct result-level
+utility, for example by staged bottleneck-to-additive training or a better
+assignment target.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

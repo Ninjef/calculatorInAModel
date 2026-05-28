@@ -3385,3 +3385,66 @@ Interpretation:
   Future non-bottleneck work needs explicit causal calculator-use pressure,
   staged bottleneck-to-additive handoff, or a target construction that remains
   valid under bypass.
+
+## 2026-05-28 Non-Bottleneck Causal Gap Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-thirty-eighth-task-Non-bottleneck-causal-gap-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_non_bottleneck_causal_gap_gate
+```
+
+Code change:
+
+- Added `--calculator-causal-gap-weight`.
+- Added `--calculator-causal-gap-margin`.
+- The training curve now logs `calculator_causal_gap`,
+  `calculator_causal_gap_objective`, `calculator_causal_gap_zero_loss`, and
+  `calculator_causal_gap_normal_loss`.
+
+Question:
+
+Can a cheap, non-prescriptive zero-injection causal-use hinge rescue additive
+non-bottleneck hard assignment?
+
+Configuration:
+
+- additive path: `calculator_bottleneck_mode=none`;
+- `calculator_estimator=ste`;
+- `calculator_action_head=result_space`;
+- answer loss weight `1`;
+- assignment weight `10`;
+- causal-gap margin `0.5`;
+- causal-gap weights `10` and `50`;
+- exact-grid natural `0..19`;
+- CLI seed `2`, 800 steps.
+
+Result:
+
+| Setup | Final eval exact | Best normal snapshot | Last zero-injection | Last learned calc | Best result-policy acc | Last causal gap |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| assignment `10`, no gap | `0.700` | `0.8200` at `650` | `0.6500` | `0.0325` | `0.0575` | n/a |
+| assignment `10`, gap weight `10` | `0.560` | `0.5750` at `750` | `0.3375` | `0.0000` | `0.0300` | `1.2717` |
+| assignment `10`, gap weight `50` | `0.4225` | `0.4800` at `750` | `0.2750` | `0.0425` | `0.0450` | `0.8372` |
+
+Decision:
+
+```text
+non_bottleneck_causal_gap_pressure_negative
+```
+
+Interpretation:
+
+- The hinge can mechanically create a causal gap by making zero-injection
+  behavior worse.
+- It does not by itself teach correct calculator requests: learned
+  calculator-result accuracy and result-policy accuracy remain near chance.
+- Non-bottleneck progress needs a causal target tied to correct result-level
+  utility, or a staged bottleneck-to-additive handoff, not merely pressure for
+  the calculator path to matter.

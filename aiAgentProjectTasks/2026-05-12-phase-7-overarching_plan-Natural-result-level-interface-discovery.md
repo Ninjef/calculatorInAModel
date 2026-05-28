@@ -1261,3 +1261,30 @@ the model has a neuron bypass. Future non-bottleneck tests should add explicit
 causal calculator-use pressure, use a staged bottleneck-to-additive handoff, or
 construct improvement targets that stay tied to true calculator utility despite
 the bypass path.
+
+## Status Update: 2026-05-28, Non-Bottleneck Causal Gap
+
+The first explicit causal-use pressure for additive non-bottleneck training was
+negative:
+
+```text
+non_bottleneck_causal_gap_pressure_negative
+```
+
+The new `--calculator-causal-gap-weight` objective computes
+`zero_injection_loss - normal_loss` and applies a hinge against
+`--calculator-causal-gap-margin`. This is cheaper and less prescriptive than
+forced result-class scoring because it uses one zero-injection counterfactual
+forward.
+
+On top of the failed additive answer-loss plus assignment-weight-`10` setup,
+gap weights `10` and `50` with margin `0.5` did create causal gaps by step
+`800` (`1.2717` and `0.8372`). But they did not teach result-level calculator
+use: final learned calculator-result accuracy was `0.0000` and `0.0425`, best
+result-policy accuracy was only `0.0300` and `0.0450`, and final exact fell to
+`0.560` and `0.4225` versus `0.700` without the gap objective.
+
+The lesson is sharp: making the zero-injection path worse is not the same as
+teaching correct calculator requests. Next non-bottleneck work should use a
+staged bottleneck-to-additive handoff or a causal target that rewards correct
+result-level utility.
