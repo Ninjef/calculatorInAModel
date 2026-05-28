@@ -3921,7 +3921,8 @@ def test_semantic_decoder_checkpoint_load_scope_is_opt_in(tmp_path: Path) -> Non
         calculator_hook_after_layer=1,
         calculator_operand_vocab_size=3,
         calculator_result_vocab_size=5,
-        calculator_estimator="adaptive_interface",
+        calculator_estimator="direct_feedback_alignment",
+        calculator_action_head="result_space",
         calculator_bottleneck_mode="answer_decoder",
     )
     source = TinyGPT(cfg)
@@ -3965,6 +3966,39 @@ def test_semantic_decoder_checkpoint_load_scope_is_opt_in(tmp_path: Path) -> Non
         checkpoint_state["calculator_hook.input_proj.weight"],
     )
     assert torch.equal(full_state["tok_emb.weight"], checkpoint_state["tok_emb.weight"])
+
+    additive_cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_estimator="ste",
+        calculator_action_head="result_space",
+        calculator_bottleneck_mode="none",
+    )
+    additive_target = TinyGPT(additive_cfg)
+    overfit_script.load_semantic_decoder_checkpoint(
+        additive_target, checkpoint_path, load_scope="compatible_model"
+    )
+    additive_state = additive_target.state_dict()
+    assert "answer_decoder.weight" not in additive_state
+    assert torch.equal(
+        additive_state["calculator_hook.result_proj.weight"],
+        checkpoint_state["calculator_hook.result_proj.weight"],
+    )
+    assert torch.equal(
+        additive_state["calculator_hook.output_proj.weight"],
+        checkpoint_state["calculator_hook.output_proj.weight"],
+    )
+    assert torch.equal(
+        additive_state["tok_emb.weight"], checkpoint_state["tok_emb.weight"]
+    )
 
 
 def test_strict_phase6_runner_threads_semantic_decoder_only_scope(tmp_path: Path) -> None:
@@ -4301,6 +4335,7 @@ def test_training_cli_supports_non_bottleneck_result_space_assignment(
             "0.5",
             "--calculator-causal-gap-margin",
             "0.25",
+            "--freeze-calculator-policy",
             "--result-boundary-target-chunk-size",
             "5",
             "--run-root",
@@ -4323,11 +4358,17 @@ def test_training_cli_supports_non_bottleneck_result_space_assignment(
     assert config["result_policy_improvement_assignment_weight"] == 1.0
     assert config["calculator_causal_gap_weight"] == 0.5
     assert config["calculator_causal_gap_margin"] == 0.25
+    assert config["freeze_calculator_policy"]
     assert metrics["calculator_action_head"] == "result_space"
     assert metrics["calculator_bottleneck_mode"] == "none"
     assert metrics["result_policy_improvement_assignment_weight"] == 1.0
     assert metrics["calculator_causal_gap_weight"] == 0.5
     assert metrics["calculator_causal_gap_margin"] == 0.25
+    assert metrics["freeze_calculator_policy"]
+    trainable_names = {
+        group["name"] for group in metrics["trainable_parameter_groups"]
+    }
+    assert "calculator_hook.result_proj" not in trainable_names
     assert (run_dir / "diagnostic_snapshots.csv").exists()
     curve_rows = list(csv.DictReader((run_dir / "training_curve.csv").open()))
     assert "calculator_causal_gap" in curve_rows[-1]

@@ -164,6 +164,7 @@ class TrainConfig:
     optimizer_step_line_search_scales: str
     freeze_semantic_decoder: bool
     freeze_upstream_encoder: bool
+    freeze_calculator_policy: bool
     trainable_parameter_groups: list[dict[str, object]]
     reinforce_baseline_mode: str
     reinforce_num_samples_per_prompt: int
@@ -5643,10 +5644,10 @@ SEMANTIC_DECODER_CHECKPOINT_PREFIXES = (
 def load_semantic_decoder_checkpoint(
     model: TinyGPT, checkpoint_path: Path, *, load_scope: str = "full_model"
 ) -> None:
-    if load_scope not in {"full_model", "semantic_decoder_only"}:
+    if load_scope not in {"full_model", "semantic_decoder_only", "compatible_model"}:
         raise ValueError(
             "semantic decoder checkpoint load scope must be "
-            "'full_model' or 'semantic_decoder_only'"
+            "'full_model', 'semantic_decoder_only', or 'compatible_model'"
         )
     checkpoint = torch.load(checkpoint_path, map_location="cpu")
     state_dict = checkpoint.get("model_state_dict", checkpoint)
@@ -5656,6 +5657,12 @@ def load_semantic_decoder_checkpoint(
             name: tensor
             for name, tensor in state_dict.items()
             if name.startswith(SEMANTIC_DECODER_CHECKPOINT_PREFIXES)
+        }
+    if load_scope == "compatible_model":
+        state_dict = {
+            name: tensor
+            for name, tensor in state_dict.items()
+            if name in model_state and tensor.shape == model_state[name].shape
         }
     state_dict = {
         name: tensor
@@ -5682,6 +5689,8 @@ def load_semantic_decoder_checkpoint(
             for name in model_state
             if not name.startswith(SEMANTIC_DECODER_CHECKPOINT_PREFIXES)
         )
+    elif load_scope == "compatible_model":
+        allowed_missing.update(name for name in model_state if name not in state_dict)
     disallowed_missing = [name for name in missing if name not in allowed_missing]
     if disallowed_missing or unexpected_nonempty:
         raise ValueError(
@@ -5768,6 +5777,26 @@ def freeze_semantic_decoder_parameters(model: TinyGPT) -> None:
 def freeze_upstream_encoder_parameters(model: TinyGPT) -> None:
     for module in [model.tok_emb, model.pos_emb, model.blocks, model.ln_f, model.lm_head]:
         for param in module.parameters():
+            param.requires_grad = False
+
+
+def freeze_calculator_policy_parameters(model: TinyGPT) -> None:
+    if model.calculator_hook is None:
+        return
+    for module in [model.tok_emb, model.pos_emb]:
+        for param in module.parameters():
+            param.requires_grad = False
+    for block in list(model.blocks)[: model.cfg.calculator_hook_after_layer]:
+        for param in block.parameters():
+            param.requires_grad = False
+    if model.cfg.calculator_action_head == "result_space":
+        for param in model.calculator_hook.result_proj.parameters():
+            param.requires_grad = False
+    elif model.cfg.calculator_action_head == "joint_pair":
+        for param in model.calculator_hook.pair_proj.parameters():
+            param.requires_grad = False
+    else:
+        for param in model.calculator_hook.input_proj.parameters():
             param.requires_grad = False
 
 
@@ -6219,6 +6248,8 @@ def run_variant(
         )
     ):
         freeze_upstream_encoder_parameters(model)
+    if args.freeze_calculator_policy:
+        freeze_calculator_policy_parameters(model)
     trainable_groups = trainable_parameter_summary(model)
     exhaustive_grid_batch = None
     exhaustive_grid_size = None
@@ -6451,6 +6482,7 @@ def run_variant(
         optimizer_step_line_search_scales=args.optimizer_step_line_search_scales,
         freeze_semantic_decoder=args.freeze_semantic_decoder,
         freeze_upstream_encoder=args.freeze_upstream_encoder,
+        freeze_calculator_policy=args.freeze_calculator_policy,
         trainable_parameter_groups=trainable_groups,
         reinforce_baseline_mode=args.reinforce_baseline_mode,
         reinforce_num_samples_per_prompt=args.reinforce_num_samples_per_prompt,
@@ -8193,6 +8225,7 @@ def run_variant(
         metrics["final_optimizer_step"] = last_optimizer_step_metrics
     metrics["freeze_semantic_decoder"] = args.freeze_semantic_decoder
     metrics["freeze_upstream_encoder"] = args.freeze_upstream_encoder
+    metrics["freeze_calculator_policy"] = args.freeze_calculator_policy
     metrics["aux_operand_loss_grad_upstream"] = args.aux_operand_loss_grad_upstream
     metrics["trainable_parameter_groups"] = trainable_groups
     metrics["final_aux_operand_loss_weight"] = auxiliary_operand_weight(
@@ -8547,11 +8580,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--semantic-decoder-checkpoint-load-scope",
-        choices=["full_model", "semantic_decoder_only"],
+        choices=["full_model", "semantic_decoder_only", "compatible_model"],
         default="full_model",
         help=(
-            "Load the full checkpoint for backward compatibility, or only frozen "
-            "answer-decoder/calculator-output semantic tensors."
+            "Load the full checkpoint for backward compatibility, only frozen "
+            "answer-decoder/calculator-output semantic tensors, or every "
+            "shape-compatible tensor present in the target model."
         ),
     )
     parser.add_argument(
@@ -9150,6 +9184,16 @@ def parse_args() -> argparse.Namespace:
         "--freeze-upstream-encoder",
         action="store_true",
         help="Diagnostic: freeze transformer encoder and train only the interface.",
+    )
+    parser.add_argument(
+        "--freeze-calculator-policy",
+        action="store_true",
+        help=(
+            "Freeze embeddings, blocks before the calculator hook, and the "
+            "calculator action head. Useful for staged transfer where a learned "
+            "calculator-query policy should be preserved while downstream "
+            "additive readout learns."
+        ),
     )
     parser.add_argument(
         "--calculator-read-position",

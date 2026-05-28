@@ -378,6 +378,25 @@ damage the bypass path without teaching correct calculator requests; next
 non-bottleneck work needs a target or handoff that ties causal dependence to
 true result-level calculator utility.
 
+A staged bottleneck-to-additive handoff then produced the first strong
+non-bottleneck calculator-dependence partial positive. A new
+`compatible_model` checkpoint load scope copies only shape-compatible tensors
+from a bottleneck run into an additive model, and `--freeze-calculator-policy`
+freezes the embeddings, pre-hook block, and result action head while allowing
+the additive output projection and downstream/readout layers to train. Without
+freezing, the transferred bottleneck policy started at `0.9125`
+calculator-result accuracy but collapsed to `0.0300` by step `50`; final
+normal was `0.8075`, injection-zero was `0.7675`, and learned calculator
+accuracy was only `0.0250`. With the policy frozen, the additive model reached
+`0.940` final eval exact and `0.9475` best snapshot exact by step `800`, while
+injection-zero stayed `0.0175`, forced-random stayed `0.0500`, oracle reached
+`0.9600`, and learned calculator-result accuracy stayed `0.9200`. Label:
+`bottleneck_to_additive_freeze_policy_handoff_partial_positive`. This is real
+non-bottleneck calculator-path use, but not yet the final goal: it is staged,
+inherits a bottleneck-trained policy, and freezes that policy during handoff.
+Next work should replicate seeds, test unfreezing schedules, and search for a
+more scalable/non-prescriptive way to create or preserve the policy.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -476,6 +495,12 @@ Do not rerun these as next steps unless debugging new code:
   calculator causal-gap hinge margin `0.5` and weights `10` or `50` for 800
   steps on the same seed. It created a loss gap but not correct calculator
   requests.
+- compatible bottleneck-to-additive checkpoint loading without freezing the
+  calculator policy on the same seed; it immediately destroyed the transferred
+  result policy.
+- frozen-policy bottleneck-to-additive handoff on the same seed/checkpoint as
+  novelty. This is now a partial positive; next tests should vary seeds,
+  checkpoints, unfreeze schedules, or the way the policy is acquired.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -488,9 +513,10 @@ than plain decay, a lower-cost assignment approximation that does not enumerate
 all result classes every step, a non-bottleneck version of the hard-assignment
 gate only if it adds explicit causal calculator-use pressure or a staged
 bottleneck-to-additive handoff that is stronger than a plain zero-injection
-loss-gap hinge, a Jacobian-conditioned state more substantial than the
-result-output `J^T answer_grad` feature, or a richer target construction that
-remains valid after upstream movement.
+loss-gap hinge, seed replication/unfreeze schedules for the frozen-policy
+bottleneck-to-additive handoff, a Jacobian-conditioned state more substantial
+than the result-output `J^T answer_grad` feature, or a richer target
+construction that remains valid after upstream movement.
 Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`

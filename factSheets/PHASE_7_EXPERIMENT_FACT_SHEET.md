@@ -3448,3 +3448,83 @@ Interpretation:
 - Non-bottleneck progress needs a causal target tied to correct result-level
   utility, or a staged bottleneck-to-additive handoff, not merely pressure for
   the calculator path to matter.
+
+## 2026-05-28 Bottleneck-to-Additive Transfer Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-thirty-ninth-task-Bottleneck-to-additive-transfer-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_bottleneck_to_additive_transfer_gate
+```
+
+Code changes:
+
+- Added `--semantic-decoder-checkpoint-load-scope compatible_model`, which
+  loads only tensors whose names exist in the target model and whose shapes
+  match. This allows a bottleneck checkpoint to initialize an additive model
+  while skipping incompatible modules such as `answer_decoder`.
+- Added `--freeze-calculator-policy`, which freezes embeddings, pre-hook
+  transformer blocks, and the calculator action head while leaving the
+  calculator output projection, post-hook block, final norm, and answer head
+  trainable.
+
+Question:
+
+Can a natural result policy trained in the answer-decoder bottleneck be handed
+to an additive non-bottleneck model, and can the downstream additive path learn
+to depend on the calculator instead of the bypass?
+
+Source checkpoint:
+
+```text
+runs/2026-05-28_phase7_hard_improvement_assignment_convergence_gate/answer0_w10_steps1600/2026-05-28_164332_598334_model-c-op0-19-fullgrid-direct_feedback_alignment-answer_decoder-adec-product/model-c-2digit-seed4/final_weights.pt
+```
+
+Configuration:
+
+- additive path: `calculator_bottleneck_mode=none`;
+- `calculator_estimator=ste`;
+- `calculator_action_head=result_space`;
+- compatible load from the bottleneck final checkpoint above;
+- answer loss weight `1`;
+- no assignment target;
+- exact-grid natural `0..19`;
+- CLI seed `2`, 800 steps.
+
+Result:
+
+| Setup | Final eval exact | Best normal snapshot | Last injection-zero | Last forced-random | Last oracle | Last learned calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| compatible load, no freeze | `0.7825` | `0.8075` at `800` | `0.7675` | `0.7375` | `0.7825` | `0.0250` |
+| compatible load, freeze policy | `0.9400` | `0.9475` at `800` | `0.0175` | `0.0500` | `0.9600` | `0.9200` |
+
+Policy-retention trace:
+
+| Setup | Step `0` learned calc | Step `50` learned calc | Step `800` learned calc |
+| --- | ---: | ---: | ---: |
+| compatible load, no freeze | `0.9125` | `0.0300` | `0.0250` |
+| compatible load, freeze policy | `0.9125` | `0.8925` | `0.9200` |
+
+Decision:
+
+```text
+bottleneck_to_additive_freeze_policy_handoff_partial_positive
+```
+
+Interpretation:
+
+- The unfrozen run proves that compatible loading works but answer-only
+  additive training immediately destroys the transferred calculator policy.
+- Freezing the policy creates strong non-bottleneck calculator dependence:
+  normal accuracy is high, injection-zero and forced-random are near chance,
+  oracle is high, and learned result accuracy remains high.
+- This is not yet the final goal because the policy is inherited from a
+  bottleneck-trained, forced-assignment phase and then frozen. Next work should
+  replicate across seeds/checkpoints, test staged unfreezing, and find a
+  scalable or less prescriptive way to acquire and preserve the policy.

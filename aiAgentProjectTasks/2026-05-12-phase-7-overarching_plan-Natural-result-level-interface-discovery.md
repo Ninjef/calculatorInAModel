@@ -1288,3 +1288,34 @@ The lesson is sharp: making the zero-injection path worse is not the same as
 teaching correct calculator requests. Next non-bottleneck work should use a
 staged bottleneck-to-additive handoff or a causal target that rewards correct
 result-level utility.
+
+## Status Update: 2026-05-28, Bottleneck-to-Additive Transfer
+
+The first staged bottleneck-to-additive transfer gate produced a partial
+positive:
+
+```text
+bottleneck_to_additive_freeze_policy_handoff_partial_positive
+```
+
+A new compatible checkpoint-loading scope can initialize an additive model from
+the strong bottleneck hard-assignment checkpoint while skipping incompatible
+answer-decoder tensors. A new `--freeze-calculator-policy` option freezes the
+embeddings, pre-hook block, and result action head so the downstream additive
+path can train without destroying the learned calculator policy.
+
+The unfrozen handoff showed the failure mode clearly: learned calculator-result
+accuracy started at `0.9125` from the checkpoint but collapsed to `0.0300` by
+step `50` and `0.0250` by step `800`; final normal/injection-zero snapshots
+were `0.8075/0.7675`, so the model mostly used the bypass path.
+
+With the calculator policy frozen, the same additive handoff reached `0.940`
+final eval exact and `0.9475` best normal snapshot by step `800`, while
+injection-zero stayed `0.0175`, forced-random stayed `0.0500`, oracle reached
+`0.9600`, and learned calculator-result accuracy stayed `0.9200`.
+
+This is the first strong non-bottleneck calculator-dependence result in Phase
+7. It does not close the project goal yet: the policy was trained in a
+bottleneck with a forced-assignment objective and then frozen. Next work should
+replicate across seeds/checkpoints, test controlled unfreezing, and look for a
+more scalable or less prescriptive policy-acquisition method.

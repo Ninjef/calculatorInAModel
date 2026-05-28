@@ -277,6 +277,18 @@ accuracy fell. This suggests the next non-bottleneck approach should not only
 make ablations worse; it must connect the causal path to correct result-level
 utility, for example by staged bottleneck-to-additive training or a better
 assignment target.
+A first staged bottleneck-to-additive handoff then showed that this route can
+work if the learned calculator policy is protected during handoff. Loading a
+strong bottleneck checkpoint into an additive model without freezing preserved
+the result policy only at step `0` (`0.9125`) and destroyed it by step `50`
+(`0.0300`), after which the model solved mostly through the neuron path.
+Freezing the embeddings, pre-hook block, and result action head kept final
+calculator-result accuracy at `0.9200` and reached `0.9475` normal snapshot
+accuracy with injection-zero only `0.0175`. This is the first strong
+non-bottleneck calculator-dependence result, but it is a staged and frozen
+handoff, not from-scratch non-prescriptive discovery. Useful next work:
+replicate seeds, try controlled unfreezing, and replace the prescriptive
+bottleneck policy-creation phase with a cheaper or less supervised mechanism.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

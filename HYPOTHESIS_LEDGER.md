@@ -189,3 +189,9 @@ Conclusion: Gap weights `10/50` with margin `0.5` produced final causal gaps `1.
 Do not repeat: Same additive assignment-weight `10`, causal-gap margin `0.5`, weights `10/50`, 800-step seed-2 exact-grid gate as novelty.
 Next allowed test: A staged bottleneck-to-additive handoff or causal target that rewards correct result-level utility, not merely making zero-injection worse.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-non-bottleneck-causal-gap-gate.md`
+
+PARTIAL: A frozen bottleneck-trained result policy can be handed to an additive non-bottleneck model.
+Conclusion: Compatible checkpoint loading preserved a `0.9125` bottleneck result policy; without freezing it collapsed to `0.0300` by step `50`, but freezing embeddings/pre-hook block/result head kept final calculator-result accuracy `0.9200` and produced `0.9475` normal versus `0.0175` injection-zero.
+Do not repeat: Same seed/checkpoint compatible transfer without freezing, or same frozen-policy 800-step handoff as novelty.
+Next allowed test: Seed/checkpoint replication, staged unfreezing, or a scalable/non-prescriptive way to acquire and preserve the policy.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-transfer-gate.md`
