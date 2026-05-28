@@ -1568,3 +1568,103 @@ diagnostic gate. A project-level positive still requires a hard learned
 calculator-result protocol under the real calculator path and, for retention
 claims, all result-boundary/local/auxiliary/expected/anchor objectives exactly
 `0.0`.
+
+## 2026-05-28 Boundary-Feedback Result-Space Gradient Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-eleventh-task-Boundary-feedback-result-space-gradient-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_boundary_feedback_gradient_gate
+```
+
+Code changes:
+
+- Added `calculator_estimator=direct_feedback_alignment` for result-space
+  calculator actions.
+- Added a boundary-feedback objective that computes answer-loss gradients at
+  the calculator injection under the frozen answer decoder, maps them to
+  result-logit feedback, and applies the detached feedback as a surrogate
+  result-space gradient.
+- Added `--boundary-feedback-weight`, `--boundary-feedback-mode`,
+  `--boundary-feedback-seed`, and
+  `--boundary-feedback-gradient-diagnostic-only`.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile src/model.py scripts/overfit_one_batch.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+96 passed
+```
+
+Stage 0 output-projection feedback passed the formal local alignment gate:
+
+| Metric | Value |
+| --- | ---: |
+| feedback result-proj grad L2 | `0.01867` |
+| feedback upstream grad L2 | `0.00544` |
+| feedback semantic decoder grad L2 | `0.0` |
+| result-proj cosine vs boundary | `0.27723` |
+| upstream cosine vs boundary | `0.43823` |
+
+Decision:
+
+```text
+boundary_feedback_output_projection_stage0_alignment_pass
+```
+
+Stage 1 output-projection feedback discovery failed:
+
+| Metric | Value |
+| --- | ---: |
+| best snapshot normal exact / calc-result accuracy | `0.155` at step `800` |
+| final exact match | `0.160` |
+| final learned calc-result accuracy in training curve | `0.150` |
+| final injection-zero exact match | `0.0625` |
+| final forced-random exact match | `0.0156` |
+| final oracle-at-eval exact match | `1.0` |
+
+Decision:
+
+```text
+boundary_feedback_stage0_output_projection_alignment_pass_stage1_discovery_negative
+```
+
+Stage 0 fixed-random direct feedback with seed `0` failed the result-head
+alignment gate:
+
+| Metric | Value |
+| --- | ---: |
+| feedback result-proj grad L2 | `0.00378` |
+| feedback upstream grad L2 | `0.00117` |
+| feedback semantic decoder grad L2 | `0.0` |
+| result-proj cosine vs boundary | `-0.00363` |
+| upstream cosine vs boundary | `0.45997` |
+
+Decision:
+
+```text
+fixed_random_direct_feedback_stage0_result_head_alignment_negative
+```
+
+Interpretation:
+
+- A biased boundary-feedback channel can be locally aligned when using the
+  frozen calculator output projection as the feedback matrix.
+- That local alignment is still insufficient for natural result request
+  discovery; the Stage 1 run stayed far below the `0.70` discovery floor.
+- A single fixed-random DFA matrix did not pass Stage 0 at the result head.
+- Next work should use a learned shadow-gradient/synthetic-gradient module or
+  stronger feedback objective, with the same exact-grid Stage 0 gate and an
+  early Stage 1 lift check before long-run budget.

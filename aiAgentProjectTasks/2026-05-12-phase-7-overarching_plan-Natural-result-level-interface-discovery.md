@@ -573,3 +573,32 @@ It should:
    the gates pass.
 6. Proceed to retention and replication only after result-level hard protocol
    metrics pass, not merely after answer exact improves.
+
+## Status Update: 2026-05-28
+
+The first biased backward-channel branch has been tested:
+
+```text
+boundary_feedback_stage0_output_projection_alignment_pass_stage1_discovery_negative
+fixed_random_direct_feedback_stage0_result_head_alignment_negative
+```
+
+Output-projection boundary feedback passed the Stage 0 exact-grid alignment
+gate against the boundary-target ceiling (`result-proj cosine=0.2772`,
+upstream `0.4382`, semantic decoder gradient `0.0`). However, Stage 1 training
+with semantic decoder frozen and all oracle/boundary/aux/expected objectives
+off reached only `0.155` best snapshot calculator-result accuracy and `0.160`
+final exact match. A fixed-random direct-feedback seed had positive upstream
+cosine but failed the result-head gate (`-0.0036`), so no long random-DFA run
+was launched.
+
+Current next direction:
+
+```text
+learned shadow-gradient / synthetic-gradient module with Stage 0 gate and early
+Stage 1 lift requirement
+```
+
+Do not rerun plain output-projection feedback or fixed-random DFA long runs
+without a genuinely stronger feedback mechanism and a positive result-head
+Stage 0 gate.

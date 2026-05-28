@@ -2068,6 +2068,134 @@ def test_result_space_expected_answer_loss_updates_result_projection_only(
     assert model.tok_emb.weight.grad is None
 
 
+def test_boundary_feedback_updates_result_projection_and_open_upstream() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_boundary_feedback_grad", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="direct_feedback_alignment",
+        calculator_action_head="result_space",
+        calculator_read_position="operands",
+        calculator_bottleneck_mode="answer_decoder",
+        answer_decoder_interaction="product",
+    )
+    model = TinyGPT(cfg)
+    overfit_script.freeze_semantic_decoder_parameters(model)
+    batch = ArithmeticBatch(
+        x=torch.tensor([[1, PLUS_ID, 2, EQ_ID], [0, PLUS_ID, 3, EQ_ID]]),
+        y=torch.zeros((2, 4), dtype=torch.long),
+        loss_mask=torch.tensor(
+            [[False, False, False, True], [False, False, False, True]]
+        ),
+    )
+
+    loss, metrics = overfit_script.boundary_feedback_alignment_loss(
+        model,
+        batch,
+        num_digits=1,
+        feedback_mode="output_proj_transpose",
+        feedback_seed=0,
+    )
+    loss.backward()
+
+    assert metrics["boundary_feedback_signal_l2"] > 0.0
+    assert model.calculator_hook is not None
+    assert model.calculator_hook.result_proj is not None
+    assert model.calculator_hook.result_proj.weight.grad is not None
+    assert model.calculator_hook.result_proj.weight.grad.abs().sum().item() > 0
+    assert model.answer_decoder is not None
+    assert model.answer_decoder.weight.grad is None
+    assert model.tok_emb.weight.grad is not None
+    assert model.tok_emb.weight.grad.abs().sum().item() > 0
+
+
+def test_boundary_feedback_gradient_diagnostic_reports_alignment(
+    monkeypatch,
+) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_boundary_feedback_diag", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="direct_feedback_alignment",
+        calculator_action_head="result_space",
+        calculator_read_position="operands",
+        calculator_bottleneck_mode="answer_decoder",
+        answer_decoder_interaction="product",
+    )
+    model = TinyGPT(cfg)
+    overfit_script.freeze_semantic_decoder_parameters(model)
+    batch = ArithmeticBatch(
+        x=torch.tensor([[1, PLUS_ID, 2, EQ_ID], [0, PLUS_ID, 3, EQ_ID]]),
+        y=torch.zeros((2, 4), dtype=torch.long),
+        loss_mask=torch.tensor(
+            [[False, False, False, True], [False, False, False, True]]
+        ),
+    )
+    forced_losses = torch.tensor(
+        [
+            [5.0, 4.0, 3.0, 0.5, 3.5, 4.5, 5.5],
+            [7.0, 6.0, 5.0, 0.25, 4.0, 3.0, 2.0],
+        ]
+    )
+    monkeypatch.setattr(
+        overfit_script,
+        "score_forced_result_classes_chunked",
+        lambda model_arg, batch_arg, *, chunk_size: forced_losses,
+    )
+
+    summary = overfit_script.run_boundary_feedback_gradient_diagnostic(
+        model,
+        batch,
+        num_digits=1,
+        feedback_mode="output_proj_transpose",
+        feedback_seed=0,
+        result_boundary_target_mode="hard_best_result",
+        result_boundary_target_temperature=1.0,
+        result_boundary_target_min_probability_floor=0.0,
+        result_boundary_target_chunk_size=4,
+    )
+
+    assert summary["feedback_result_proj_grad_l2"] > 0.0
+    assert summary["feedback_upstream_grad_l2"] > 0.0
+    assert summary["feedback_semantic_decoder_grad_l2"] == pytest.approx(0.0)
+    assert "feedback_vs_boundary_result_proj_cosine" in summary
+    assert "feedback_vs_boundary_upstream_cosine" in summary
+
+
 def test_exhaustive_grid_boundary_target_smoke_updates_open_upstream(
     monkeypatch,
 ) -> None:
@@ -2607,6 +2735,25 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     parsed = overfit_script.parse_args()
     assert parsed.calculator_action_head == "result_space"
     assert parsed.calculator_estimator == "gumbel_concrete_interface"
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(script_path),
+            "--variant",
+            "model-c",
+            "--calculator-estimator",
+            "direct_feedback_alignment",
+            "--calculator-action-head",
+            "result_space",
+            "--boundary-feedback-weight",
+            "1.0",
+        ],
+    )
+    parsed = overfit_script.parse_args()
+    assert parsed.calculator_estimator == "direct_feedback_alignment"
+    assert parsed.boundary_feedback_mode == "output_proj_transpose"
 
     with pytest.raises(ValueError, match="result_space.*gumbel_concrete_interface"):
         CalculatorHook(

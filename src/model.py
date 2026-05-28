@@ -99,6 +99,7 @@ class CalculatorHook(nn.Module):
             "identifiable_full_enum_local_target",
             "full_enum_expected_answer_loss",
             "gumbel_concrete_interface",
+            "direct_feedback_alignment",
         }:
             raise ValueError(f"unknown calculator estimator: {cfg.calculator_estimator}")
         if cfg.relaxed_calculator_temperature <= 0:
@@ -132,12 +133,14 @@ class CalculatorHook(nn.Module):
                 "gumbel_concrete_interface",
                 "reinforce",
                 "full_enum_expected_answer_loss",
+                "direct_feedback_alignment",
             }
         ):
             raise ValueError(
                 "calculator_action_head='result_space' is currently supported "
                 "only with calculator_estimator='gumbel_concrete_interface', "
-                "'reinforce', or 'full_enum_expected_answer_loss'"
+                "'reinforce', 'full_enum_expected_answer_loss', or "
+                "'direct_feedback_alignment'"
             )
         if (
             cfg.calculator_action_head == "result_space"
@@ -363,6 +366,7 @@ class CalculatorHook(nn.Module):
                 "identifiable_full_enum_local_target",
                 "full_enum_expected_answer_loss",
                 "gumbel_concrete_interface",
+                "direct_feedback_alignment",
             }:
                 flat_a_logits = a_logits.reshape(-1, self.operand_vocab_size)
                 flat_b_logits = b_logits.reshape(-1, self.operand_vocab_size)

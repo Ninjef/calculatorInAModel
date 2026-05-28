@@ -1,6 +1,7 @@
 import argparse
 import csv
 import json
+import math
 import random
 import sys
 from contextlib import contextmanager
@@ -104,6 +105,10 @@ class TrainConfig:
     result_boundary_target_temperature: float
     result_boundary_target_min_probability_floor: float
     result_boundary_target_chunk_size: int
+    boundary_feedback_weight: float
+    boundary_feedback_mode: str
+    boundary_feedback_seed: int
+    boundary_feedback_gradient_diagnostic_only: bool
     calculator_result_head_hidden_size: int
     relaxed_calculator_temperature: float
     relaxed_calculator_final_temperature: float
@@ -1616,6 +1621,113 @@ def result_boundary_target_loss(
     return target_loss, metrics
 
 
+def _selected_eq_rows(tensor: torch.Tensor, tokens: torch.Tensor) -> torch.Tensor:
+    eq_mask = tokens == EQ_ID
+    if not bool(eq_mask.any().item()):
+        raise ValueError("boundary feedback requires an '=' token per example")
+    eq_pos = eq_mask.float().argmax(dim=-1).long()
+    batch_idx = torch.arange(tokens.shape[0], device=tokens.device)
+    return tensor[batch_idx, eq_pos]
+
+
+def boundary_feedback_matrix(
+    *,
+    model: TinyGPT,
+    mode: str,
+    seed: int,
+    device: torch.device | str,
+    dtype: torch.dtype,
+) -> torch.Tensor:
+    if model.calculator_hook is None:
+        raise ValueError("boundary feedback requires a calculator hook")
+    if mode == "output_proj_transpose":
+        return model.calculator_hook.output_proj.weight.detach().to(
+            device=device,
+            dtype=dtype,
+        )
+    if mode == "direct_random":
+        generator = torch.Generator(device="cpu")
+        generator.manual_seed(seed)
+        matrix = torch.randn(
+            model.cfg.n_embd,
+            model.cfg.calculator_result_vocab_size,
+            generator=generator,
+            dtype=torch.float32,
+        ) / math.sqrt(model.cfg.n_embd)
+        return matrix.to(device=device, dtype=dtype)
+    raise ValueError(
+        "boundary feedback mode must be 'output_proj_transpose' or 'direct_random'"
+    )
+
+
+def boundary_feedback_alignment_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    feedback_mode: str,
+    feedback_seed: int,
+) -> tuple[torch.Tensor, dict[str, float | int | str]]:
+    if model.cfg.calculator_action_head != "result_space":
+        raise ValueError("boundary feedback requires result_space head")
+    if model.calculator_hook is None:
+        raise ValueError("boundary feedback requires a calculator hook")
+    if model.cfg.calculator_bottleneck_mode != "answer_decoder":
+        raise ValueError("boundary feedback currently requires answer_decoder bottleneck")
+
+    model.zero_grad(set_to_none=True)
+    with torch.no_grad():
+        _, diagnostics = model(batch.x, return_diagnostics=True)
+    injection = diagnostics["calculator_injection"].detach().requires_grad_(True)
+    base_logits = injection.new_zeros(
+        (*batch.x.shape, model.cfg.vocab_size),
+    )
+    logits = model._answer_bottleneck_logits(base_logits, injection, batch.x)
+    answer_loss = masked_cross_entropy_per_example(
+        logits,
+        batch.y,
+        batch.loss_mask,
+    ).mean()
+    answer_loss.backward()
+    if injection.grad is None:
+        raise RuntimeError("calculator injection gradient was not populated")
+    injection_grad = injection.grad.detach()
+    feedback_input = _selected_eq_rows(injection_grad, batch.x)
+    feedback = feedback_input @ boundary_feedback_matrix(
+        model=model,
+        mode=feedback_mode,
+        seed=feedback_seed,
+        device=feedback_input.device,
+        dtype=feedback_input.dtype,
+    )
+    model.zero_grad(set_to_none=True)
+
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    objective = (result_logits * feedback.detach()).sum(dim=-1).mean()
+
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = true_a + true_b
+    learned_result = result_logits.argmax(dim=-1)
+    result_probs = result_logits.softmax(dim=-1)
+    result_entropy = -(
+        result_probs * result_probs.clamp_min(1e-12).log()
+    ).sum(dim=-1)
+    metrics: dict[str, float | int | str] = {
+        "boundary_feedback_loss": float(objective.detach().item()),
+        "boundary_feedback_answer_loss": float(answer_loss.detach().item()),
+        "boundary_feedback_mode": feedback_mode,
+        "boundary_feedback_seed": int(feedback_seed),
+        "boundary_feedback_input_grad_l2": float(feedback_input.norm().item()),
+        "boundary_feedback_signal_l2": float(feedback.norm().item()),
+        "boundary_feedback_signal_abs_mean": float(feedback.abs().mean().item()),
+        "boundary_feedback_result_entropy": float(result_entropy.mean().item()),
+        "boundary_feedback_hard_learned_calc_accuracy": float(
+            (learned_result == true_sum).float().mean().item()
+        ),
+    }
+    return objective, metrics
+
+
 def parameter_group_name(name: str) -> str:
     if name.startswith("calculator_hook.result_proj."):
         return "calculator_hook.result_proj"
@@ -1980,6 +2092,97 @@ def run_expected_answer_loss_gradient_diagnostic(
     }
     for key, value in exact_metrics.items():
         summary[key] = value
+    for key, value in boundary_metrics.items():
+        summary[f"boundary_{key}"] = value
+    return summary
+
+
+def run_boundary_feedback_gradient_diagnostic(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    feedback_mode: str,
+    feedback_seed: int,
+    result_boundary_target_mode: str,
+    result_boundary_target_temperature: float,
+    result_boundary_target_min_probability_floor: float,
+    result_boundary_target_chunk_size: int,
+) -> dict[str, float | int | str]:
+    if model.cfg.calculator_action_head != "result_space":
+        raise ValueError("boundary feedback diagnostic requires result_space head")
+    model.train()
+
+    feedback_objective, feedback_metrics = boundary_feedback_alignment_loss(
+        model,
+        batch,
+        num_digits=num_digits,
+        feedback_mode=feedback_mode,
+        feedback_seed=feedback_seed,
+    )
+    feedback_objective.backward()
+    feedback_grads = flattened_group_gradients(model)
+
+    model.zero_grad(set_to_none=True)
+    boundary_loss, boundary_metrics = result_boundary_target_loss(
+        model,
+        batch,
+        num_digits=num_digits,
+        target_mode=result_boundary_target_mode,
+        temperature=result_boundary_target_temperature,
+        min_probability_floor=result_boundary_target_min_probability_floor,
+        chunk_size=result_boundary_target_chunk_size,
+    )
+    boundary_loss.backward()
+    boundary_grads = flattened_group_gradients(model)
+    model.zero_grad(set_to_none=True)
+
+    feedback_result_norm = gradient_l2(
+        feedback_grads,
+        "calculator_hook.result_proj",
+    )
+    feedback_upstream_norm = gradient_l2(feedback_grads, "upstream")
+    boundary_result_norm = gradient_l2(boundary_grads, "calculator_hook.result_proj")
+    boundary_upstream_norm = gradient_l2(boundary_grads, "upstream")
+    summary: dict[str, float | int | str] = {
+        "diagnostic": "boundary_feedback_gradient_agreement",
+        "batch_size": int(batch.x.shape[0]),
+        "boundary_feedback_mode": feedback_mode,
+        "boundary_feedback_seed": int(feedback_seed),
+        "feedback_result_proj_grad_l2": feedback_result_norm,
+        "feedback_upstream_grad_l2": feedback_upstream_norm,
+        "feedback_semantic_decoder_grad_l2": gradient_l2(
+            feedback_grads,
+            "semantic_decoder",
+        ),
+        "boundary_result_proj_grad_l2": boundary_result_norm,
+        "boundary_upstream_grad_l2": boundary_upstream_norm,
+        "boundary_semantic_decoder_grad_l2": gradient_l2(
+            boundary_grads,
+            "semantic_decoder",
+        ),
+        "feedback_vs_boundary_result_proj_cosine": gradient_cosine(
+            feedback_grads,
+            boundary_grads,
+            "calculator_hook.result_proj",
+        ),
+        "feedback_vs_boundary_upstream_cosine": gradient_cosine(
+            feedback_grads,
+            boundary_grads,
+            "upstream",
+        ),
+        "feedback_vs_boundary_result_proj_relative_norm": (
+            feedback_result_norm / boundary_result_norm
+            if boundary_result_norm > 0
+            else float("nan")
+        ),
+        "feedback_vs_boundary_upstream_relative_norm": (
+            feedback_upstream_norm / boundary_upstream_norm
+            if boundary_upstream_norm > 0
+            else float("nan")
+        ),
+    }
+    summary.update(feedback_metrics)
     for key, value in boundary_metrics.items():
         summary[f"boundary_{key}"] = value
     return summary
@@ -3342,6 +3545,7 @@ def run_variant(
                 "identifiable_full_enum_local_target",
                 "full_enum_expected_answer_loss",
                 "gumbel_concrete_interface",
+                "direct_feedback_alignment",
             }
             or use_result_space_reinforce
         )
@@ -3360,6 +3564,7 @@ def run_variant(
                 "identifiable_full_enum_local_target",
                 "full_enum_expected_answer_loss",
                 "gumbel_concrete_interface",
+                "direct_feedback_alignment",
             }
             or use_result_space_reinforce
         )
@@ -3388,6 +3593,7 @@ def run_variant(
             "identifiable_full_enum_local_target",
             "full_enum_expected_answer_loss",
             "gumbel_concrete_interface",
+            "direct_feedback_alignment",
         }
         or use_result_space_reinforce
     ):
@@ -3493,6 +3699,12 @@ def run_variant(
             args.result_boundary_target_min_probability_floor
         ),
         result_boundary_target_chunk_size=args.result_boundary_target_chunk_size,
+        boundary_feedback_weight=args.boundary_feedback_weight,
+        boundary_feedback_mode=args.boundary_feedback_mode,
+        boundary_feedback_seed=args.boundary_feedback_seed,
+        boundary_feedback_gradient_diagnostic_only=(
+            args.boundary_feedback_gradient_diagnostic_only
+        ),
         calculator_result_head_hidden_size=args.calculator_result_head_hidden_size,
         relaxed_calculator_temperature=args.relaxed_calculator_temperature,
         relaxed_calculator_final_temperature=(
@@ -3634,6 +3846,51 @@ def run_variant(
             "run_dir": str(run_dir),
             "expected_answer_loss_gradient_diagnostic": diagnostic_summary,
         }
+    if args.boundary_feedback_gradient_diagnostic_only:
+        if exhaustive_grid_batch is not None:
+            diagnostic_batch = exhaustive_grid_batch
+        else:
+            diagnostic_batch = make_range_batch(
+                batch_size=args.batch_size,
+                num_digits=num_digits,
+                operand_max=operand_max,
+                rng=rng,
+                fixed_width=True,
+                device=device,
+                answer_format=args.answer_format,
+            )
+        diagnostic_summary = run_boundary_feedback_gradient_diagnostic(
+            model,
+            diagnostic_batch,
+            num_digits=num_digits,
+            feedback_mode=args.boundary_feedback_mode,
+            feedback_seed=args.boundary_feedback_seed,
+            result_boundary_target_mode=args.result_boundary_target_mode,
+            result_boundary_target_temperature=args.result_boundary_target_temperature,
+            result_boundary_target_min_probability_floor=(
+                args.result_boundary_target_min_probability_floor
+            ),
+            result_boundary_target_chunk_size=args.result_boundary_target_chunk_size,
+        )
+        diagnostic_summary["run_dir"] = str(run_dir)
+        diagnostic_summary["num_digits"] = int(num_digits)
+        (run_dir / "boundary_feedback_gradient_diagnostic_summary.json").write_text(
+            json.dumps(diagnostic_summary, indent=2) + "\n"
+        )
+        print(
+            "boundary-feedback gradient diagnostic: "
+            f"feedback_result_grad={diagnostic_summary['feedback_result_proj_grad_l2']:.6f} "
+            f"result_cos={diagnostic_summary['feedback_vs_boundary_result_proj_cosine']:.6f} "
+            f"upstream_cos={diagnostic_summary['feedback_vs_boundary_upstream_cosine']:.6f} "
+            f"learned_acc={diagnostic_summary['boundary_feedback_hard_learned_calc_accuracy']:.4f}"
+        )
+        return {
+            "num_digits": num_digits,
+            "exact_match": float("nan"),
+            "final_loss": float("nan"),
+            "run_dir": str(run_dir),
+            "boundary_feedback_gradient_diagnostic": diagnostic_summary,
+        }
 
     curve: list[dict[str, float | int]] = []
     snapshots: list[dict[str, object]] = []
@@ -3698,6 +3955,11 @@ def run_variant(
             and args.calculator_estimator == "full_enum_expected_answer_loss"
             and not args.oracle_train
         )
+        use_boundary_feedback = (
+            args.variant == "model-c"
+            and args.calculator_estimator == "direct_feedback_alignment"
+            and not args.oracle_train
+        )
         use_relaxed_calculator = (
             args.variant == "model-c"
             and args.calculator_estimator == "gumbel_concrete_interface"
@@ -3758,6 +4020,9 @@ def run_variant(
         result_boundary_target_loss_value = None
         result_boundary_target_objective_value = None
         result_boundary_target_metrics: dict[str, float] = {}
+        boundary_feedback_loss_value = None
+        boundary_feedback_objective_value = None
+        boundary_feedback_metrics: dict[str, float | int | str] = {}
         relaxed_calculator_entropy_objective_value = None
         current_relaxed_entropy_weight = 0.0
         relaxed_calculator_metrics: dict[str, float] = {}
@@ -3941,6 +4206,25 @@ def run_variant(
                 result_boundary_objective.item()
             )
             loss = loss + result_boundary_objective
+        if use_boundary_feedback:
+            (
+                boundary_feedback_loss,
+                boundary_feedback_metrics,
+            ) = boundary_feedback_alignment_loss(
+                model,
+                batch,
+                num_digits=num_digits,
+                feedback_mode=args.boundary_feedback_mode,
+                feedback_seed=args.boundary_feedback_seed,
+            )
+            boundary_feedback_loss_value = float(boundary_feedback_loss.item())
+            boundary_feedback_objective = (
+                args.boundary_feedback_weight * boundary_feedback_loss
+            )
+            boundary_feedback_objective_value = float(
+                boundary_feedback_objective.item()
+            )
+            loss = loss + boundary_feedback_objective
         if use_relaxed_calculator:
             current_relaxed_entropy_weight = relaxed_calculator_entropy_weight(
                 initial_weight=args.relaxed_calculator_entropy_weight,
@@ -4045,6 +4329,14 @@ def run_variant(
                     result_boundary_target_objective_value
                 )
                 curve_row.update(result_boundary_target_metrics)
+            if use_boundary_feedback:
+                curve_row["boundary_feedback_weight"] = (
+                    args.boundary_feedback_weight
+                )
+                curve_row["boundary_feedback_objective"] = (
+                    boundary_feedback_objective_value
+                )
+                curve_row.update(boundary_feedback_metrics)
             if use_relaxed_calculator:
                 curve_row["relaxed_calculator_entropy_objective"] = (
                     relaxed_calculator_entropy_objective_value
@@ -4118,6 +4410,14 @@ def run_variant(
                     f" best_true={result_boundary_target_metrics['result_boundary_target_hard_best_equals_true_sum']:.3f}"
                     f" learned_best={result_boundary_target_metrics['result_boundary_target_learned_best_fraction']:.3f}"
                     if use_result_boundary_target
+                    else ""
+                )
+                + (
+                    f" boundary_feedback_loss={boundary_feedback_loss_value:.4f}"
+                    f" boundary_feedback_weight={args.boundary_feedback_weight:.4f}"
+                    f" feedback_norm={boundary_feedback_metrics['boundary_feedback_signal_l2']:.3f}"
+                    f" learned_calc={boundary_feedback_metrics['boundary_feedback_hard_learned_calc_accuracy']:.3f}"
+                    if use_boundary_feedback
                     else ""
                 )
                 + (
@@ -4320,6 +4620,10 @@ def run_variant(
     metrics["result_boundary_target_chunk_size"] = (
         args.result_boundary_target_chunk_size
     )
+    metrics["boundary_feedback_weight"] = args.boundary_feedback_weight
+    metrics["final_boundary_feedback_weight"] = args.boundary_feedback_weight
+    metrics["boundary_feedback_mode"] = args.boundary_feedback_mode
+    metrics["boundary_feedback_seed"] = args.boundary_feedback_seed
     metrics["calculator_result_head_hidden_size"] = (
         args.calculator_result_head_hidden_size
     )
@@ -4672,6 +4976,7 @@ def parse_args() -> argparse.Namespace:
             "identifiable_full_enum_local_target",
             "full_enum_expected_answer_loss",
             "gumbel_concrete_interface",
+            "direct_feedback_alignment",
         ],
         default="ste",
         help="Estimator for the learned calculator input interface.",
@@ -4883,6 +5188,39 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=64,
         help="Number of forced result classes to score per decoder chunk.",
+    )
+    parser.add_argument(
+        "--boundary-feedback-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Weight for answer-gradient boundary feedback into result-space "
+            "logits. Used with --calculator-estimator direct_feedback_alignment."
+        ),
+    )
+    parser.add_argument(
+        "--boundary-feedback-mode",
+        choices=["output_proj_transpose", "direct_random"],
+        default="output_proj_transpose",
+        help=(
+            "Map answer-loss gradients at the calculator injection back into "
+            "result logits with either the output projection transpose or a "
+            "fixed random direct-feedback matrix."
+        ),
+    )
+    parser.add_argument(
+        "--boundary-feedback-seed",
+        type=int,
+        default=0,
+        help="Seed for the fixed random direct-feedback matrix.",
+    )
+    parser.add_argument(
+        "--boundary-feedback-gradient-diagnostic-only",
+        action="store_true",
+        help=(
+            "Run one fixed-batch boundary-feedback gradient diagnostic against "
+            "the boundary-target ceiling, then exit."
+        ),
     )
     parser.add_argument(
         "--calculator-result-head-hidden-size",
@@ -5153,6 +5491,7 @@ def main() -> None:
                 "identifiable_full_enum_local_target",
                 "full_enum_expected_answer_loss",
                 "gumbel_concrete_interface",
+                "direct_feedback_alignment",
             }
             or result_space_reinforce_requested
         )
@@ -5172,6 +5511,7 @@ def main() -> None:
             "identifiable_full_enum_local_target",
             "full_enum_expected_answer_loss",
             "gumbel_concrete_interface",
+            "direct_feedback_alignment",
         }
         or result_space_reinforce_requested
     ):
@@ -5257,6 +5597,8 @@ def main() -> None:
         )
     if args.result_boundary_target_chunk_size < 1:
         raise ValueError("--result-boundary-target-chunk-size must be positive")
+    if args.boundary_feedback_weight < 0:
+        raise ValueError("--boundary-feedback-weight must be non-negative")
     if args.calculator_result_head_hidden_size < 0:
         raise ValueError("--calculator-result-head-hidden-size must be non-negative")
     if args.exhaustive_grid_batch and args.operand_max is None:
@@ -5285,6 +5627,21 @@ def main() -> None:
         raise ValueError(
             "full_enum_expected_answer_loss requires independent operand "
             "or result-space heads"
+        )
+    if (
+        args.calculator_estimator == "direct_feedback_alignment"
+        and args.calculator_action_head != "result_space"
+    ):
+        raise ValueError(
+            "direct_feedback_alignment requires --calculator-action-head result_space"
+        )
+    if (
+        args.calculator_estimator == "direct_feedback_alignment"
+        and not args.boundary_feedback_gradient_diagnostic_only
+        and args.boundary_feedback_weight <= 0
+    ):
+        raise ValueError(
+            "direct_feedback_alignment training requires --boundary-feedback-weight > 0"
         )
     if args.relaxed_calculator_temperature <= 0:
         raise ValueError("--relaxed-calculator-temperature must be positive")
@@ -5332,11 +5689,13 @@ def main() -> None:
             "gumbel_concrete_interface",
             "reinforce",
             "full_enum_expected_answer_loss",
+            "direct_feedback_alignment",
         }
     ):
         raise ValueError(
             "--calculator-action-head result_space is currently supported only with "
-            "gumbel_concrete_interface, reinforce, or full_enum_expected_answer_loss"
+            "gumbel_concrete_interface, reinforce, full_enum_expected_answer_loss, "
+            "or direct_feedback_alignment"
         )
     if (
         args.calculator_action_head == "result_space"
@@ -5384,6 +5743,14 @@ def main() -> None:
         raise ValueError(
             "--expected-answer-loss-gradient-diagnostic-only requires "
             "result_space full_enum_expected_answer_loss"
+        )
+    if args.boundary_feedback_gradient_diagnostic_only and not (
+        args.calculator_estimator == "direct_feedback_alignment"
+        and args.calculator_action_head == "result_space"
+    ):
+        raise ValueError(
+            "--boundary-feedback-gradient-diagnostic-only requires "
+            "result_space direct_feedback_alignment"
         )
     if args.reinforce_entropy_weight < 0:
         raise ValueError("--reinforce-entropy-weight must be non-negative")
@@ -5502,6 +5869,15 @@ def main() -> None:
                 )
             if args.expected_answer_loss_gradient_diagnostic_only:
                 suffix_parts.append("expansgraddiag")
+        if args.calculator_estimator == "direct_feedback_alignment":
+            suffix_parts.append(
+                f"bf{args.boundary_feedback_weight:g}"
+                f"-{args.boundary_feedback_mode}"
+            )
+            if args.boundary_feedback_mode == "direct_random":
+                suffix_parts.append(f"bfseed{args.boundary_feedback_seed}")
+            if args.boundary_feedback_gradient_diagnostic_only:
+                suffix_parts.append("bfgraddiag")
         if args.result_boundary_target_loss_weight > 0:
             suffix_parts.append(
                 f"rbt{args.result_boundary_target_loss_weight:g}"
@@ -5635,6 +6011,13 @@ def main() -> None:
         f"temperature={args.result_boundary_target_temperature} "
         f"min_probability_floor={args.result_boundary_target_min_probability_floor} "
         f"chunk_size={args.result_boundary_target_chunk_size}"
+    )
+    print(
+        "boundary feedback: "
+        f"weight={args.boundary_feedback_weight} "
+        f"mode={args.boundary_feedback_mode} "
+        f"seed={args.boundary_feedback_seed} "
+        f"gradient_diagnostic_only={args.boundary_feedback_gradient_diagnostic_only}"
     )
     print(
         "calculator result head hidden size: "

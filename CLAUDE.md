@@ -95,6 +95,15 @@ hard result accuracy in the training curve; final exact-match `0.085`).
 Local decoder-gradient sign improvement alone did not rescue answer-loss
 discovery.
 
+The first explicitly biased backward-channel task produced another useful
+negative. Output-projection boundary feedback passed the fixed-grid Stage 0
+alignment gate (`result-proj cosine=0.2772`, upstream `0.4382`, semantic
+decoder gradient `0.0`), but Stage 1 discovery reached only `0.155` best
+snapshot calculator-result accuracy and `0.160` final exact match. A
+fixed-random direct-feedback seed failed the Stage 0 result-head gate
+(`result-proj cosine=-0.0036`). Label:
+`boundary_feedback_stage0_output_projection_alignment_pass_stage1_discovery_negative`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -109,13 +118,17 @@ Do not rerun these as next steps unless debugging new code:
   variants that merely estimate the same raw expected-cost gradient.
 - more decoder-only calibration branches that only aim to make forced true
   results sharper or weakly improve the same ordinary expected-cost geometry.
+- plain output-projection boundary feedback with the same Stage 1 objective and
+  schedule, or fixed-random DFA long runs that do not first pass result-head
+  Stage 0 alignment.
 
-Next best step: pivot to explicitly biased backward channels such as synthetic
-gradients/direct feedback alignment or learned shadow-gradient modules. Keep
-the exact-grid boundary-ceiling diagnostic as the Stage 0 gate for any new
-mechanism. Do not move directly to canonical-query/protocol stabilization as
-if Phase 7 retention had robustly replicated, and do not treat ordinary
-expected-cost/score-function training as rescued by decoder calibration alone.
+Next best step: move from plain direct feedback to learned shadow-gradient or
+synthetic-gradient modules. Keep the exact-grid boundary-ceiling diagnostic as
+the Stage 0 gate for any new mechanism, and require early Stage 1 lift above
+the `0.16` boundary-feedback baseline before long runs. Do not move directly to
+canonical-query/protocol stabilization as if Phase 7 retention had robustly
+replicated, and do not treat ordinary expected-cost/score-function training as
+rescued by decoder calibration alone.
 
 For details, see `factSheets/PHASE_7_EXPERIMENT_FACT_SHEET.md`.
 
