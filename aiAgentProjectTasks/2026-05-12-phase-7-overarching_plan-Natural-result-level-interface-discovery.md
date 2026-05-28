@@ -747,3 +747,27 @@ had a smaller result gap but missed upstream (`0.6436/0.4763`).
 No Stage 1 early-lift run was launched. Next work should change objective,
 regularization, or target construction rather than rerunning plain feature
 z-scoring.
+
+## Status Update: 2026-05-28, Online MLP Directional Losses
+
+Directional shadow losses were added to the online MLP shadow-feedback
+diagnostic:
+
+```text
+online_mlp_shadow_feedback_directional_loss_partial_no_go
+```
+
+The new `cosine` and `mse_plus_cosine` modes train against normalized-target
+direction instead of componentwise MSE alone. This materially improved heldout
+agreement for the simple answer-gradient plus result-logit state. With target
+normalization and validation selection, `cosine` h16/h32 reached heldout
+result/upstream cosines `0.7646/0.8007` and `0.7937/0.8270`; `mse_plus_cosine`
+h16/h32 reached `0.7785/0.8112` and `0.7853/0.8174`.
+
+The full gate still failed because train-heldout result gaps stayed around
+`0.20`, above the `0.15` fence. Smaller h8 reduced capacity but missed the
+heldout cosine threshold (`0.5990/0.5859` for `cosine`).
+
+No Stage 1 early-lift run was launched. Next work should add explicit norm/gap
+regularization, a more stable target construction, or a qualitatively
+different learned-gradient state.

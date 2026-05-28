@@ -186,8 +186,11 @@ features did not fix this; `h32` reached heldout `0.7037/0.7611` but gaps
 widened to `0.2853/0.2131`. Fit-split per-feature z-score standardization
 also failed: the best simpler-state `h32` run reached only `0.6691/0.7028`
 heldout with large gaps, while policy-state standardization was worse.
-Stronger regularization, a different loss, or a more stable target
-construction remain the next plausible branches.
+Directional shadow losses then improved the heldout direction signal but still
+missed the full gate: `cosine` h16/h32 reached `0.7646/0.8007` and
+`0.7937/0.8270`, but result train-heldout gaps stayed around `0.20`.
+Stronger norm/gap regularization or a more stable target construction remain
+the next plausible branches.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

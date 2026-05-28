@@ -2170,3 +2170,67 @@ Interpretation:
 - No Stage 1 run was launched.
 - Next work should change objective, regularization, or target construction
   rather than rerunning feature scaling alone.
+
+## 2026-05-28 Online MLP Shadow-Feedback Directional-Loss Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-nineteenth-task-Online-MLP-shadow-feedback-directional-loss-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_online_shadow_feedback_directional_loss_gate
+```
+
+Code changes:
+
+- Added `--shadow-feedback-loss-mode`.
+- Added `cosine`, which optimizes normalized-target direction.
+- Added `mse_plus_cosine`, which combines componentwise MSE with the
+  directional objective.
+- Preserved `mse` as the default loss mode.
+- Added tests for directional loss behavior and CLI defaults.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+101 passed
+```
+
+Stage 0B validation-selected diagnostics with target normalization,
+`injection_grad_logits` features, and no feature normalization:
+
+| Loss mode | Hidden | Heldout result/upstream cosine | Train-heldout gap | Heldout relative norm | Decision |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `cosine` | `8` | `0.59905 / 0.58589` | `0.17300 / 0.15366` | `1.5006 / 1.2359` | cosine fail |
+| `cosine` | `16` | `0.76465 / 0.80065` | `0.19855 / 0.15470` | `1.1896 / 1.0965` | gap fail |
+| `cosine` | `32` | `0.79370 / 0.82697` | `0.20239 / 0.15449` | `1.0114 / 1.0177` | gap fail |
+| `mse_plus_cosine` | `8` | `0.58189 / 0.58367` | `0.17915 / 0.15090` | `1.5508 / 1.2926` | cosine fail |
+| `mse_plus_cosine` | `16` | `0.77848 / 0.81119` | `0.20450 / 0.16076` | `1.1373 / 1.0900` | gap fail |
+| `mse_plus_cosine` | `32` | `0.78528 / 0.81739` | `0.20909 / 0.16364` | `1.0599 / 1.0650` | gap fail |
+
+Decision:
+
+```text
+online_mlp_shadow_feedback_directional_loss_partial_no_go
+```
+
+Interpretation:
+
+- Directional losses materially improved heldout model-gradient direction.
+- `cosine` h32 produced the cleanest relative norms (`1.0114 / 1.0177`) and
+  the best heldout cosines, but still overfit the fit split too much.
+- No Stage 1 run was launched because the result train-heldout gap remained
+  above `0.15`.
+- Next work should combine the directional signal with explicit norm/gap
+  regularization or a more stable target construction.

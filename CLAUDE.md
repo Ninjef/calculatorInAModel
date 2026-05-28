@@ -160,6 +160,16 @@ state, `h32` reached `0.6691/0.7028` with gaps `0.2830/0.2658`; `h16` had a
 small result gap but missed upstream badly (`0.6436/0.4763`). Label:
 `online_mlp_shadow_feedback_feature_standardization_negative`.
 
+Directional shadow losses were then added for the online MLP warmup:
+`cosine` and `mse_plus_cosine` optimize normalized-target direction rather
+than only componentwise MSE. This materially improved the simple
+answer-gradient plus result-logit state, but still did not clear the full gate.
+With target normalization and validation selection, `cosine` h16/h32 reached
+heldout result/upstream cosines `0.7646/0.8007` and `0.7937/0.8270`, but
+result train-heldout gaps stayed around `0.20`; h8 reduced capacity but missed
+the heldout cosine threshold (`0.5990/0.5859`). Label:
+`online_mlp_shadow_feedback_directional_loss_partial_no_go`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -192,11 +202,14 @@ Do not rerun these as next steps unless debugging new code:
 - fit-split per-feature z-score standardization on either
   `injection_grad_logits` or `injection_grad_policy_state` with the same
   target-normalized `h16/h32`, `lr=1e-3`, `100`-step Stage 0B gate as novelty.
+- plain `cosine` or `mse_plus_cosine` online MLP shadow losses on
+  `injection_grad_logits` with per-result target normalization, h8/h16/h32,
+  `lr=1e-3`, `100` steps as novelty.
 
 Next best step: improve shadow generalization by changing the objective or
-regularization, not by simple feature appending or plain fit-split z-scoring.
-Plausible branches include explicit regularization, a different
-synthetic-gradient loss, a more stable target construction, or a qualitatively
+regularization beyond plain directional loss, not by simple feature appending
+or plain fit-split z-scoring. Plausible branches include explicit norm/gap
+regularization, a more stable target construction, or a qualitatively
 different learned-gradient state. Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`

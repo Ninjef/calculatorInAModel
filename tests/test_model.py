@@ -2374,6 +2374,7 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
         target_normalization="fit_zscore_per_result",
         feature_mode="injection_grad_policy_state",
         feature_normalization="fit_zscore_per_feature",
+        loss_mode="mse_plus_cosine",
         result_boundary_target_mode="hard_best_result",
         result_boundary_target_temperature=1.0,
         result_boundary_target_min_probability_floor=0.0,
@@ -2392,12 +2393,14 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
     assert summary["shadow_feedback_feature_normalization"] == (
         "fit_zscore_per_feature"
     )
+    assert summary["shadow_feedback_loss_mode"] == "mse_plus_cosine"
     assert summary["shadow_feedback_feature_dim"] == 30
     assert summary["shadow_feedback_feature_scale_clamped_count"] >= 0
     assert "heldout_shadow_feedback_feature_probs_l2" in summary
     assert "heldout_shadow_feedback_feature_entropy_mean" in summary
     assert "heldout_shadow_feedback_normalized_feature_l2" in summary
     assert summary["shadow_feedback_target_scale_clamped_count"] >= 0
+    assert "shadow_feedback_final_fit_objective" in summary
     assert "shadow_feedback_final_normalized_fit_mse" in summary
     assert summary["shadow_feedback_best_step"] >= 0
     assert summary["shadow_feedback_validation_history"]
@@ -2497,6 +2500,37 @@ def test_shadow_feedback_feature_normalizer_uses_fit_statistics_only() -> None:
     assert normalized_heldout[0, 0].item() == pytest.approx(
         (100.0 - 3.0) / scale[0, 0].item()
     )
+
+
+def test_shadow_feedback_prediction_loss_modes() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_shadow_loss_modes", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    target = torch.tensor([[1.0, 0.0], [0.0, 1.0]])
+    aligned = target.clone()
+    opposite = -target
+
+    assert overfit_script.shadow_feedback_prediction_loss(
+        aligned,
+        target,
+        mode="cosine",
+    ).item() == pytest.approx(0.0, abs=1e-6)
+    assert overfit_script.shadow_feedback_prediction_loss(
+        opposite,
+        target,
+        mode="cosine",
+    ).item() == pytest.approx(2.0)
+    assert overfit_script.shadow_feedback_prediction_loss(
+        aligned,
+        target,
+        mode="mse_plus_cosine",
+    ).item() == pytest.approx(0.0, abs=1e-6)
 
 
 def test_exhaustive_grid_boundary_target_smoke_updates_open_upstream(
@@ -3092,6 +3126,8 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "injection_grad_policy_state",
             "--shadow-feedback-feature-normalization",
             "fit_zscore_per_feature",
+            "--shadow-feedback-loss-mode",
+            "mse_plus_cosine",
         ],
     )
     parsed = overfit_script.parse_args()
@@ -3109,6 +3145,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_target_normalization == "fit_zscore_per_result"
     assert parsed.shadow_feedback_feature_mode == "injection_grad_policy_state"
     assert parsed.shadow_feedback_feature_normalization == "fit_zscore_per_feature"
+    assert parsed.shadow_feedback_loss_mode == "mse_plus_cosine"
 
     monkeypatch.setattr(
         sys,
@@ -3137,6 +3174,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_target_normalization == "none"
     assert parsed.shadow_feedback_feature_mode == "injection_grad_logits"
     assert parsed.shadow_feedback_feature_normalization == "none"
+    assert parsed.shadow_feedback_loss_mode == "mse"
 
     with pytest.raises(ValueError, match="result_space.*gumbel_concrete_interface"):
         CalculatorHook(

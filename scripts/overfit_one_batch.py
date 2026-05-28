@@ -124,6 +124,7 @@ class TrainConfig:
     shadow_feedback_target_normalization: str
     shadow_feedback_feature_mode: str
     shadow_feedback_feature_normalization: str
+    shadow_feedback_loss_mode: str
     shadow_feedback_gradient_diagnostic_only: bool
     calculator_result_head_hidden_size: int
     relaxed_calculator_temperature: float
@@ -2199,6 +2200,29 @@ def normalize_shadow_feedback_features(
     )
 
 
+def shadow_feedback_prediction_loss(
+    predicted: torch.Tensor,
+    target: torch.Tensor,
+    *,
+    mode: str,
+) -> torch.Tensor:
+    mse = torch.nn.functional.mse_loss(predicted, target)
+    if mode == "mse":
+        return mse
+    pred_flat = predicted.reshape(-1)
+    target_flat = target.reshape(-1)
+    denom = pred_flat.norm() * target_flat.norm()
+    if float(denom.detach().item()) == 0.0:
+        cosine_loss = torch.ones((), device=predicted.device, dtype=predicted.dtype)
+    else:
+        cosine_loss = 1.0 - torch.dot(pred_flat, target_flat).div(denom)
+    if mode == "cosine":
+        return cosine_loss
+    if mode == "mse_plus_cosine":
+        return mse + cosine_loss
+    raise ValueError("shadow feedback loss mode must be mse, cosine, or mse_plus_cosine")
+
+
 def shadow_feedback_feature_dim(model: TinyGPT, *, feature_mode: str) -> int:
     if feature_mode == "injection_grad_logits":
         return model.cfg.n_embd + model.cfg.calculator_result_vocab_size
@@ -2820,6 +2844,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
     target_normalization: str,
     feature_mode: str,
     feature_normalization: str,
+    loss_mode: str,
     result_boundary_target_mode: str,
     result_boundary_target_temperature: float,
     result_boundary_target_min_probability_floor: float,
@@ -2865,6 +2890,10 @@ def run_online_shadow_feedback_gradient_diagnostic(
         raise ValueError(
             "shadow feedback feature normalization must be none or "
             "fit_zscore_per_feature"
+        )
+    if loss_mode not in {"mse", "cosine", "mse_plus_cosine"}:
+        raise ValueError(
+            "shadow feedback loss mode must be mse, cosine, or mse_plus_cosine"
         )
     model.train()
 
@@ -2964,6 +2993,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
 
     last_train_metrics: dict[str, float | int | str] = {}
     last_train_loss = float("nan")
+    last_train_objective = float("nan")
     last_train_cosine = float("nan")
     last_normalized_train_loss = float("nan")
     last_normalized_train_cosine = float("nan")
@@ -3049,7 +3079,11 @@ def run_online_shadow_feedback_gradient_diagnostic(
                 mean=target_mean,
                 scale=target_scale,
             )
-            fit_loss = torch.nn.functional.mse_loss(predicted, normalized_target)
+            fit_loss = shadow_feedback_prediction_loss(
+                predicted,
+                normalized_target,
+                mode=loss_mode,
+            )
             optimizer.zero_grad(set_to_none=True)
             fit_loss.backward()
             optimizer.step()
@@ -3065,7 +3099,13 @@ def run_online_shadow_feedback_gradient_diagnostic(
                 denormalized_prediction,
                 target.detach(),
             )
-            last_normalized_train_loss = float(fit_loss.detach().item())
+            last_train_objective = float(fit_loss.detach().item())
+            last_normalized_train_loss = float(
+                torch.nn.functional.mse_loss(
+                    predicted.detach(),
+                    normalized_target.detach(),
+                ).item()
+            )
             last_normalized_train_cosine = _shadow_prediction_cosine(
                 predicted.detach(),
                 normalized_target.detach(),
@@ -3151,8 +3191,10 @@ def run_online_shadow_feedback_gradient_diagnostic(
         "shadow_feedback_target_normalization": target_normalization,
         "shadow_feedback_feature_mode": feature_mode,
         "shadow_feedback_feature_normalization": feature_normalization,
+        "shadow_feedback_loss_mode": loss_mode,
         "shadow_feedback_feature_dim": int(feature_dim),
         "shadow_feedback_final_fit_mse": last_train_loss,
+        "shadow_feedback_final_fit_objective": last_train_objective,
         "shadow_feedback_final_fit_prediction_cosine": last_train_cosine,
         "shadow_feedback_final_normalized_fit_mse": last_normalized_train_loss,
         "shadow_feedback_final_normalized_fit_prediction_cosine": (
@@ -5159,6 +5201,7 @@ def run_variant(
         shadow_feedback_feature_normalization=(
             args.shadow_feedback_feature_normalization
         ),
+        shadow_feedback_loss_mode=args.shadow_feedback_loss_mode,
         shadow_feedback_gradient_diagnostic_only=(
             args.shadow_feedback_gradient_diagnostic_only
         ),
@@ -5376,6 +5419,7 @@ def run_variant(
                 target_normalization=args.shadow_feedback_target_normalization,
                 feature_mode=args.shadow_feedback_feature_mode,
                 feature_normalization=args.shadow_feedback_feature_normalization,
+                loss_mode=args.shadow_feedback_loss_mode,
                 result_boundary_target_mode=args.result_boundary_target_mode,
                 result_boundary_target_temperature=(
                     args.result_boundary_target_temperature
@@ -6318,6 +6362,7 @@ def run_variant(
     metrics["shadow_feedback_feature_normalization"] = (
         args.shadow_feedback_feature_normalization
     )
+    metrics["shadow_feedback_loss_mode"] = args.shadow_feedback_loss_mode
     metrics["final_shadow_feedback_weight"] = args.shadow_feedback_weight
     if shadow_feedback_calibration_metrics:
         metrics["shadow_feedback_calibration"] = shadow_feedback_calibration_metrics
@@ -7027,6 +7072,15 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Normalize online MLP shadow input features using statistics fit "
             "on the fit split only."
+        ),
+    )
+    parser.add_argument(
+        "--shadow-feedback-loss-mode",
+        choices=["mse", "cosine", "mse_plus_cosine"],
+        default="mse",
+        help=(
+            "Training loss for the online MLP shadow module. Cosine modes "
+            "optimize normalized-target direction instead of plain MSE alone."
         ),
     )
     parser.add_argument(
@@ -7783,6 +7837,8 @@ def main() -> None:
                         suffix_parts.append(
                             f"fnorm{args.shadow_feedback_feature_normalization}"
                         )
+                    if args.shadow_feedback_loss_mode != "mse":
+                        suffix_parts.append(f"sloss{args.shadow_feedback_loss_mode}")
                 else:
                     suffix_parts.append(
                         f"shadowridge{args.shadow_feedback_ridge:g}"
@@ -7953,6 +8009,7 @@ def main() -> None:
         f"target_normalization={args.shadow_feedback_target_normalization} "
         f"feature_mode={args.shadow_feedback_feature_mode} "
         f"feature_normalization={args.shadow_feedback_feature_normalization} "
+        f"loss_mode={args.shadow_feedback_loss_mode} "
         f"gradient_diagnostic_only={args.shadow_feedback_gradient_diagnostic_only}"
     )
     print(
