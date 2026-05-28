@@ -117,6 +117,8 @@ class TrainConfig:
     shadow_feedback_online_lr: float
     shadow_feedback_warmup_steps: int
     shadow_feedback_updates_per_step: int
+    shadow_feedback_validation_fraction: float
+    shadow_feedback_validation_every: int
     shadow_feedback_gradient_diagnostic_only: bool
     calculator_result_head_hidden_size: int
     relaxed_calculator_temperature: float
@@ -2607,6 +2609,16 @@ def _shadow_prediction_cosine(
     return float(torch.dot(pred_flat, target_flat).div(denom).item())
 
 
+def online_shadow_feedback_selection_score(
+    summary: dict[str, float | int | str],
+) -> float:
+    result_cosine = float(summary["shadow_vs_boundary_result_proj_cosine"])
+    upstream_cosine = float(summary["shadow_vs_boundary_upstream_cosine"])
+    if math.isnan(result_cosine) or math.isnan(upstream_cosine):
+        return float("-inf")
+    return min(result_cosine, upstream_cosine)
+
+
 def run_online_shadow_feedback_gradient_diagnostic(
     model: TinyGPT,
     batch: ArithmeticBatch,
@@ -2617,6 +2629,8 @@ def run_online_shadow_feedback_gradient_diagnostic(
     learning_rate: float,
     warmup_steps: int,
     updates_per_step: int,
+    validation_fraction: float,
+    validation_every: int,
     result_boundary_target_mode: str,
     result_boundary_target_temperature: float,
     result_boundary_target_min_probability_floor: float,
@@ -2634,12 +2648,32 @@ def run_online_shadow_feedback_gradient_diagnostic(
         raise ValueError("shadow feedback warmup steps must be positive")
     if updates_per_step < 1:
         raise ValueError("shadow feedback updates per step must be positive")
+    if validation_fraction < 0 or validation_fraction >= 1:
+        raise ValueError("shadow feedback validation fraction must be in [0, 1)")
+    if heldout_fraction + validation_fraction >= 1:
+        raise ValueError(
+            "shadow feedback validation plus heldout fractions must leave fit examples"
+        )
+    if validation_every < 0:
+        raise ValueError("shadow feedback validation cadence must be non-negative")
+    if validation_fraction > 0 and validation_every < 1:
+        raise ValueError(
+            "shadow feedback validation fraction requires validation_every > 0"
+        )
     model.train()
 
     fit_batch, heldout_batch = shadow_feedback_heldout_split(
         batch,
         heldout_fraction=heldout_fraction,
     )
+    validation_batch: ArithmeticBatch | None = None
+    if validation_fraction > 0:
+        fit_fraction = 1.0 - heldout_fraction
+        validation_within_fit_fraction = validation_fraction / fit_fraction
+        fit_batch, validation_batch = shadow_feedback_heldout_split(
+            fit_batch,
+            heldout_fraction=validation_within_fit_fraction,
+        )
     feature_dim = model.cfg.n_embd + model.cfg.calculator_result_vocab_size
     shadow_module = ShadowFeedbackMLP(
         input_dim=feature_dim,
@@ -2651,7 +2685,56 @@ def run_online_shadow_feedback_gradient_diagnostic(
     last_train_metrics: dict[str, float | int | str] = {}
     last_train_loss = float("nan")
     last_train_cosine = float("nan")
-    for _ in range(warmup_steps):
+    best_state: dict[str, torch.Tensor] | None = None
+    best_validation_summary: dict[str, float | int | str] = {}
+    best_validation_step = -1
+    best_validation_score = float("-inf")
+    validation_history: list[dict[str, float | int]] = []
+
+    def maybe_update_best(step: int) -> None:
+        nonlocal best_state
+        nonlocal best_validation_summary
+        nonlocal best_validation_step
+        nonlocal best_validation_score
+        if validation_batch is None:
+            return
+        validation_summary = run_online_shadow_feedback_module_gradient_diagnostic(
+            model,
+            validation_batch,
+            shadow_module=shadow_module,
+            num_digits=num_digits,
+            result_boundary_target_mode=result_boundary_target_mode,
+            result_boundary_target_temperature=result_boundary_target_temperature,
+            result_boundary_target_min_probability_floor=(
+                result_boundary_target_min_probability_floor
+            ),
+            result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+        )
+        score = online_shadow_feedback_selection_score(validation_summary)
+        validation_history.append(
+            {
+                "step": int(step),
+                "update": int(step * updates_per_step),
+                "score": float(score),
+                "result_proj_cosine": float(
+                    validation_summary["shadow_vs_boundary_result_proj_cosine"]
+                ),
+                "upstream_cosine": float(
+                    validation_summary["shadow_vs_boundary_upstream_cosine"]
+                ),
+            }
+        )
+        if score > best_validation_score:
+            best_validation_score = score
+            best_validation_step = int(step)
+            best_validation_summary = validation_summary
+            best_state = {
+                name: value.detach().cpu().clone()
+                for name, value in shadow_module.state_dict().items()
+            }
+
+    maybe_update_best(0)
+    for warmup_step in range(1, warmup_steps + 1):
         for _update in range(updates_per_step):
             shadow_module.train()
             features, target, train_metrics = shadow_feedback_mlp_examples(
@@ -2678,6 +2761,10 @@ def run_online_shadow_feedback_gradient_diagnostic(
                 target.detach(),
             )
             last_train_metrics = train_metrics
+        if validation_every > 0 and warmup_step % validation_every == 0:
+            maybe_update_best(warmup_step)
+    if validation_every > 0 and warmup_steps % validation_every != 0:
+        maybe_update_best(warmup_steps)
 
     train_summary = run_online_shadow_feedback_module_gradient_diagnostic(
         model,
@@ -2722,9 +2809,96 @@ def run_online_shadow_feedback_gradient_diagnostic(
         "shadow_feedback_online_lr": float(learning_rate),
         "shadow_feedback_warmup_steps": int(warmup_steps),
         "shadow_feedback_updates_per_step": int(updates_per_step),
+        "shadow_feedback_validation_fraction": float(validation_fraction),
+        "shadow_feedback_test_fraction": float(heldout_fraction),
+        "shadow_feedback_validation_every": int(validation_every),
+        "shadow_feedback_validation_batch_size": (
+            int(validation_batch.x.shape[0]) if validation_batch is not None else 0
+        ),
+        "shadow_feedback_selection_mode": (
+            "validation_best_checkpoint" if validation_batch is not None else "final"
+        ),
+        "shadow_feedback_selection_metric": "min_result_upstream_cosine",
+        "shadow_feedback_selection_metric_formula": (
+            "min(shadow_vs_boundary_result_proj_cosine, "
+            "shadow_vs_boundary_upstream_cosine)"
+        ),
+        "shadow_feedback_validation_history": validation_history,
+        "shadow_feedback_best_state_restored": bool(best_state is not None),
         "shadow_feedback_final_fit_mse": last_train_loss,
         "shadow_feedback_final_fit_prediction_cosine": last_train_cosine,
     }
+    if best_state is not None and validation_batch is not None:
+        summary["shadow_feedback_best_step"] = int(best_validation_step)
+        summary["shadow_feedback_best_update"] = int(
+            best_validation_step * updates_per_step
+        )
+        summary["shadow_feedback_best_validation_score"] = float(
+            best_validation_score
+        )
+        for key, value in train_summary.items():
+            if key != "diagnostic":
+                summary[f"final_train_{key}"] = value
+        for key, value in heldout_summary.items():
+            if key != "diagnostic":
+                summary[f"final_heldout_{key}"] = value
+        shadow_module.load_state_dict(
+            {
+                name: value.to(device=batch.x.device)
+                for name, value in best_state.items()
+            }
+        )
+        train_summary = run_online_shadow_feedback_module_gradient_diagnostic(
+            model,
+            fit_batch,
+            shadow_module=shadow_module,
+            num_digits=num_digits,
+            result_boundary_target_mode=result_boundary_target_mode,
+            result_boundary_target_temperature=result_boundary_target_temperature,
+            result_boundary_target_min_probability_floor=(
+                result_boundary_target_min_probability_floor
+            ),
+            result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+        )
+        heldout_summary = run_online_shadow_feedback_module_gradient_diagnostic(
+            model,
+            heldout_batch,
+            shadow_module=shadow_module,
+            num_digits=num_digits,
+            result_boundary_target_mode=result_boundary_target_mode,
+            result_boundary_target_temperature=result_boundary_target_temperature,
+            result_boundary_target_min_probability_floor=(
+                result_boundary_target_min_probability_floor
+            ),
+            result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+        )
+        result_gap = (
+            float(train_summary["shadow_vs_boundary_result_proj_cosine"])
+            - float(heldout_summary["shadow_vs_boundary_result_proj_cosine"])
+        )
+        upstream_gap = (
+            float(train_summary["shadow_vs_boundary_upstream_cosine"])
+            - float(heldout_summary["shadow_vs_boundary_upstream_cosine"])
+        )
+        for key, value in best_validation_summary.items():
+            if key != "diagnostic":
+                summary[f"validation_{key}"] = value
+        summary["shadow_feedback_train_validation_result_proj_cosine_gap"] = (
+            float(train_summary["shadow_vs_boundary_result_proj_cosine"])
+            - float(best_validation_summary["shadow_vs_boundary_result_proj_cosine"])
+        )
+        summary["shadow_feedback_train_validation_upstream_cosine_gap"] = (
+            float(train_summary["shadow_vs_boundary_upstream_cosine"])
+            - float(best_validation_summary["shadow_vs_boundary_upstream_cosine"])
+        )
+        summary["shadow_feedback_validation_test_result_proj_cosine_gap"] = (
+            float(best_validation_summary["shadow_vs_boundary_result_proj_cosine"])
+            - float(heldout_summary["shadow_vs_boundary_result_proj_cosine"])
+        )
+        summary["shadow_feedback_validation_test_upstream_cosine_gap"] = (
+            float(best_validation_summary["shadow_vs_boundary_upstream_cosine"])
+            - float(heldout_summary["shadow_vs_boundary_upstream_cosine"])
+        )
     for key, value in last_train_metrics.items():
         summary[f"fit_{key}"] = value
     for key, value in train_summary.items():
@@ -4621,6 +4795,10 @@ def run_variant(
         shadow_feedback_online_lr=args.shadow_feedback_online_lr,
         shadow_feedback_warmup_steps=args.shadow_feedback_warmup_steps,
         shadow_feedback_updates_per_step=args.shadow_feedback_updates_per_step,
+        shadow_feedback_validation_fraction=(
+            args.shadow_feedback_validation_fraction
+        ),
+        shadow_feedback_validation_every=args.shadow_feedback_validation_every,
         shadow_feedback_gradient_diagnostic_only=(
             args.shadow_feedback_gradient_diagnostic_only
         ),
@@ -4833,6 +5011,8 @@ def run_variant(
                 learning_rate=args.shadow_feedback_online_lr,
                 warmup_steps=args.shadow_feedback_warmup_steps,
                 updates_per_step=args.shadow_feedback_updates_per_step,
+                validation_fraction=args.shadow_feedback_validation_fraction,
+                validation_every=args.shadow_feedback_validation_every,
                 result_boundary_target_mode=args.result_boundary_target_mode,
                 result_boundary_target_temperature=(
                     args.result_boundary_target_temperature
@@ -5762,6 +5942,12 @@ def run_variant(
     metrics["shadow_feedback_updates_per_step"] = (
         args.shadow_feedback_updates_per_step
     )
+    metrics["shadow_feedback_validation_fraction"] = (
+        args.shadow_feedback_validation_fraction
+    )
+    metrics["shadow_feedback_validation_every"] = (
+        args.shadow_feedback_validation_every
+    )
     metrics["final_shadow_feedback_weight"] = args.shadow_feedback_weight
     if shadow_feedback_calibration_metrics:
         metrics["shadow_feedback_calibration"] = shadow_feedback_calibration_metrics
@@ -6425,6 +6611,26 @@ def parse_args() -> argparse.Namespace:
         help="Shadow module optimizer updates per warmup step.",
     )
     parser.add_argument(
+        "--shadow-feedback-validation-fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "Optional deterministic validation fraction for online MLP "
+            "shadow-feedback checkpoint selection. This is separate from the "
+            "heldout test fraction used for the final gate."
+        ),
+    )
+    parser.add_argument(
+        "--shadow-feedback-validation-every",
+        type=int,
+        default=0,
+        help=(
+            "Validate online MLP shadow-feedback every N warmup steps and "
+            "restore the best validation checkpoint before heldout reporting. "
+            "0 disables validation selection."
+        ),
+    )
+    parser.add_argument(
         "--shadow-feedback-gradient-diagnostic-only",
         action="store_true",
         help=(
@@ -6823,6 +7029,27 @@ def main() -> None:
         raise ValueError("--shadow-feedback-warmup-steps must be positive")
     if args.shadow_feedback_updates_per_step < 1:
         raise ValueError("--shadow-feedback-updates-per-step must be positive")
+    if not 0 <= args.shadow_feedback_validation_fraction < 1:
+        raise ValueError("--shadow-feedback-validation-fraction must be in [0, 1)")
+    if (
+        args.shadow_feedback_validation_fraction
+        + args.shadow_feedback_heldout_fraction
+        >= 1
+    ):
+        raise ValueError(
+            "--shadow-feedback-validation-fraction plus "
+            "--shadow-feedback-heldout-fraction must leave fit examples"
+        )
+    if args.shadow_feedback_validation_every < 0:
+        raise ValueError("--shadow-feedback-validation-every must be non-negative")
+    if (
+        args.shadow_feedback_validation_fraction > 0
+        and args.shadow_feedback_validation_every < 1
+    ):
+        raise ValueError(
+            "--shadow-feedback-validation-fraction requires "
+            "--shadow-feedback-validation-every > 0"
+        )
     if (
         args.shadow_feedback_mode == "online_mlp"
         and args.shadow_feedback_weight > 0
@@ -7138,6 +7365,13 @@ def main() -> None:
                     suffix_parts.append(
                         f"warm{args.shadow_feedback_warmup_steps}"
                     )
+                    if args.shadow_feedback_validation_fraction > 0:
+                        suffix_parts.append(
+                            f"val{args.shadow_feedback_validation_fraction:g}"
+                        )
+                        suffix_parts.append(
+                            f"valevery{args.shadow_feedback_validation_every}"
+                        )
                 else:
                     suffix_parts.append(
                         f"shadowridge{args.shadow_feedback_ridge:g}"
@@ -7303,6 +7537,8 @@ def main() -> None:
         f"online_lr={args.shadow_feedback_online_lr} "
         f"warmup_steps={args.shadow_feedback_warmup_steps} "
         f"updates_per_step={args.shadow_feedback_updates_per_step} "
+        f"validation_fraction={args.shadow_feedback_validation_fraction} "
+        f"validation_every={args.shadow_feedback_validation_every} "
         f"gradient_diagnostic_only={args.shadow_feedback_gradient_diagnostic_only}"
     )
     print(

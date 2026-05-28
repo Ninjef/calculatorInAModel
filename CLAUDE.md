@@ -128,6 +128,13 @@ gaps were too large (`0.2683/0.2202`). Hidden size `16` reduced the result
 gap, but heldout result cosine fell to `0.6255`. Label:
 `online_mlp_shadow_feedback_stage0b_partial_alignment_no_clean_gate`.
 
+Validation-selected early stopping was then added with a separate validation
+split and untouched heldout test split. The selected `h64` checkpoint at step
+`60` reached heldout-test result/upstream cosines `0.6449/0.7266`, with
+train-test gaps `0.3201/0.2414`; the final unselected checkpoint was also
+below the result-head threshold (`0.6955`). Label:
+`online_mlp_shadow_feedback_validation_selection_negative`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -151,16 +158,18 @@ Do not rerun these as next steps unless debugging new code:
 - simple online MLP shadow warmups with only injection-gradient plus result-logit
   state at `h64` or `h16`, `lr=1e-3`, `100` steps, unless adding a real
   anti-overfit or target-normalization change.
+- validation-selected early stopping alone on that same simple online MLP
+  shadow target/state as a Stage 1 go signal.
 
-Next best step: improve shadow-gradient generalization before Stage 1, e.g.
-validation early stopping, explicit regularization, target normalization,
-richer policy state, or a different synthetic-gradient objective. Keep the
-exact-grid boundary-ceiling diagnostic as the Stage 0 gate for any new
-mechanism, require a heldout warmup pass before Stage 1, and require early
-Stage 1 lift above the `0.16` boundary-feedback baseline before long runs. Do
-not move directly to canonical-query/protocol stabilization as if Phase 7
-retention had robustly replicated, and do not treat ordinary
-expected-cost/score-function training as rescued by decoder calibration alone.
+Next best step: improve the learned-gradient target or state before Stage 1,
+e.g. target normalization, explicit regularization, richer policy features, or
+a different synthetic-gradient objective. Keep the exact-grid boundary-ceiling
+diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
+pass before Stage 1, and require early Stage 1 lift above the `0.16`
+boundary-feedback baseline before long runs. Do not move directly to
+canonical-query/protocol stabilization as if Phase 7 retention had robustly
+replicated, and do not treat ordinary expected-cost/score-function training as
+rescued by decoder calibration alone.
 
 For details, see `factSheets/PHASE_7_EXPERIMENT_FACT_SHEET.md`.
 

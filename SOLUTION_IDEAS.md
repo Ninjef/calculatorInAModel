@@ -176,8 +176,11 @@ heldout alignment (`0.7167` result-proj, `0.7601` upstream) but overfit the
 fit split (`0.2683/0.2202` train-heldout gaps); hidden size `16` reduced the
 gap but missed the result-proj threshold (`0.6255`). Do not launch Stage 1
 from this simple form. Next synthetic-gradient attempts should explicitly
-address generalization, for example validation early stopping, stronger
-regularization, target normalization, or richer state.
+address the target/state itself. Validation early stopping alone was tested
+next with a separate heldout-test split; the selected checkpoint reached only
+`0.6449` heldout-test result-proj cosine. Stronger regularization, target
+normalization, richer state, or a different synthetic-gradient objective remain
+the next plausible branches.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

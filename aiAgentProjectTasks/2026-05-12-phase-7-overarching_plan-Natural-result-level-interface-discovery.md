@@ -662,3 +662,24 @@ No Stage 1 early-lift run was launched. The next shadow-gradient task should
 add a real generalization improvement such as validation early stopping,
 regularization, target normalization, richer policy state, or a different
 synthetic-gradient objective before spending Stage 1 budget.
+
+## Status Update: 2026-05-28, Online MLP Validation Selection
+
+Validation-selected checkpointing was added to the online MLP shadow-feedback
+diagnostic:
+
+```text
+online_mlp_shadow_feedback_validation_selection_negative
+```
+
+The diagnostic now keeps a separate validation split for shadow checkpoint
+selection and an untouched heldout-test split for the final gate. With `h64`,
+`lr=1e-3`, `100` warmup steps, `0.1` validation, and `0.2` heldout test, the
+best validation checkpoint was step `60`. It reached heldout-test
+result/upstream cosines `0.6449/0.7266`, with train-test gaps
+`0.3201/0.2414`. The final unselected checkpoint was closer on result cosine
+(`0.6955`) but still below the `0.70` result threshold.
+
+No Stage 1 early-lift run was launched. Next work should change the shadow
+target/state or add stronger regularization rather than relying on validation
+selection alone.

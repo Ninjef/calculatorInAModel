@@ -2369,6 +2369,8 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
         learning_rate=1e-3,
         warmup_steps=3,
         updates_per_step=1,
+        validation_fraction=0.25,
+        validation_every=1,
         result_boundary_target_mode="hard_best_result",
         result_boundary_target_temperature=1.0,
         result_boundary_target_min_probability_floor=0.0,
@@ -2378,14 +2380,20 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
     assert summary["diagnostic"] == (
         "online_mlp_shadow_feedback_heldout_gradient_agreement"
     )
-    assert summary["shadow_feedback_fit_batch_size"] == 2
+    assert summary["shadow_feedback_fit_batch_size"] == 1
     assert summary["shadow_feedback_heldout_batch_size"] == 2
+    assert summary["shadow_feedback_validation_batch_size"] == 1
+    assert summary["shadow_feedback_best_state_restored"] is True
+    assert summary["shadow_feedback_best_step"] >= 0
+    assert summary["shadow_feedback_validation_history"]
     assert summary["heldout_shadow_result_proj_grad_l2"] > 0.0
     assert summary["heldout_shadow_upstream_grad_l2"] > 0.0
     assert summary["heldout_shadow_semantic_decoder_grad_l2"] == pytest.approx(0.0)
+    assert "validation_shadow_vs_boundary_result_proj_cosine" in summary
     assert "heldout_shadow_vs_boundary_result_proj_cosine" in summary
     assert "heldout_shadow_vs_boundary_upstream_cosine" in summary
     assert "shadow_feedback_train_heldout_result_proj_cosine_gap" in summary
+    assert "shadow_feedback_validation_test_result_proj_cosine_gap" in summary
     for name, param in model.named_parameters():
         assert torch.allclose(param, before_params[name])
 
@@ -2973,6 +2981,10 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "7",
             "--shadow-feedback-updates-per-step",
             "2",
+            "--shadow-feedback-validation-fraction",
+            "0.1",
+            "--shadow-feedback-validation-every",
+            "5",
         ],
     )
     parsed = overfit_script.parse_args()
@@ -2985,6 +2997,8 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_online_lr == pytest.approx(0.002)
     assert parsed.shadow_feedback_warmup_steps == 7
     assert parsed.shadow_feedback_updates_per_step == 2
+    assert parsed.shadow_feedback_validation_fraction == pytest.approx(0.1)
+    assert parsed.shadow_feedback_validation_every == 5
 
     monkeypatch.setattr(
         sys,
@@ -3008,6 +3022,8 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_mode == "online_mlp"
     assert parsed.shadow_feedback_hidden_size == 64
     assert parsed.shadow_feedback_warmup_steps == 100
+    assert parsed.shadow_feedback_validation_fraction == pytest.approx(0.0)
+    assert parsed.shadow_feedback_validation_every == 0
 
     with pytest.raises(ValueError, match="result_space.*gumbel_concrete_interface"):
         CalculatorHook(

@@ -1896,3 +1896,73 @@ Interpretation:
   result-proj cosine fell below the go threshold.
 - No Stage 1 run was launched from these warmups. Next work should improve
   shadow generalization, not rerun this exact MLP shape.
+
+## 2026-05-28 Online MLP Shadow-Feedback Validation Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-fifteenth-task-Online-MLP-shadow-feedback-validation-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_online_shadow_feedback_validation_gate
+```
+
+Code changes:
+
+- Added `--shadow-feedback-validation-fraction` and
+  `--shadow-feedback-validation-every`.
+- Online MLP warmup can now split the non-test pool into fit and validation
+  subsets, select the best shadow checkpoint by validation
+  `min(result_cosine, upstream_cosine)`, restore that shadow state, and then
+  report the final gate on the untouched heldout test split.
+- The diagnostic records final, selected train, validation, and heldout-test
+  gradient-agreement metrics plus validation history and selection metadata.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+98 passed
+```
+
+Stage 0B validation-selected diagnostic, hidden size `64`:
+
+| Metric | Value |
+| --- | ---: |
+| fit / validation / heldout-test batch | `280 / 40 / 80` |
+| selected step / update | `60 / 60` |
+| selected validation score | `0.47207` |
+| selected train result/upstream cosine | `0.96499 / 0.96796` |
+| selected validation result/upstream cosine | `0.48413 / 0.47207` |
+| selected heldout-test result/upstream cosine | `0.64485 / 0.72658` |
+| selected train-test result/upstream gap | `0.32013 / 0.24138` |
+| validation-test result/upstream gap | `-0.16073 / -0.25451` |
+| selected heldout-test result/upstream relative norm | `1.3604 / 1.2857` |
+| final unselected heldout-test result/upstream cosine | `0.69549 / 0.76165` |
+
+Decision:
+
+```text
+online_mlp_shadow_feedback_validation_selection_negative
+```
+
+Interpretation:
+
+- Validation checkpoint selection did not rescue the simple online MLP shadow
+  module.
+- The selected checkpoint missed the result-proj heldout-test threshold and
+  still had too-large train-test gaps.
+- The unselected final checkpoint was close to the result threshold but still
+  below `0.70` and had large gaps.
+- No Stage 1 run was launched. Next work should change the target/state or add
+  stronger regularization, not rely on validation selection alone.
