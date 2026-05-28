@@ -1004,3 +1004,32 @@ to one result at a time. Next work should not assume refreshed gradient
 agreement is sufficient; it needs a training-dynamics constraint such as
 step-level trust region, entropy/diversity stabilization, or a richer
 target/state.
+
+## Status Update: 2026-05-28, Result-Policy Soft Diversity
+
+The direct-feedback training loop gained a result-space policy stabilization
+term:
+
+```text
+result_policy_soft_diversity_stabilization_stage1_negative
+```
+
+The new `--result-policy-entropy-weight` and
+`--result-policy-batch-diversity-weight` bonuses are non-prescriptive: they
+do not tell the model which result any prompt should use. They only encourage
+per-example entropy and broad batch-marginal result usage.
+
+Three 200-step early-lift smokes were run on top of the refreshed h32
+validation-gradient online shadow module:
+
+| Entropy | Diversity | Clamp | Final exact | Best snapshot | Final hard effective results |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| `0.01` | `1.0` | none | `0.015` | `0.0475` | `1.00` |
+| `0.01` | `1.0` | `10` | `0.005` | `0.0400` | `1.00` |
+| `0.0` | `100.0` | `10` | `0.070` | `0.0800` | `9.14` |
+
+Low soft diversity did not prevent hard single-result collapse. High soft
+diversity did keep broader hard result usage, but still did not connect
+examples to the correct calculator results and remained below the `0.16`
+boundary-feedback baseline. Next work should move to a hard/assignment-style
+usage constraint, a step-level trust region, or a richer target/state.

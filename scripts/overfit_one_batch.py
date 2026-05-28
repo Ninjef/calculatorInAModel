@@ -107,6 +107,10 @@ class TrainConfig:
     result_boundary_target_temperature: float
     result_boundary_target_min_probability_floor: float
     result_boundary_target_chunk_size: int
+    result_policy_entropy_weight: float
+    result_policy_batch_diversity_weight: float
+    result_policy_stabilization_temperature: float
+    result_policy_stabilization_decay_steps: int
     boundary_feedback_weight: float
     boundary_feedback_mode: str
     boundary_feedback_seed: int
@@ -693,6 +697,18 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_boundary_target_effective_results",
         "result_boundary_target_learned_best_fraction",
         "result_boundary_target_hard_learned_calc_accuracy",
+        "result_policy_stabilization_objective",
+        "result_policy_entropy_weight",
+        "result_policy_batch_diversity_weight",
+        "result_policy_stabilization_temperature",
+        "result_policy_entropy",
+        "result_policy_effective_results",
+        "result_policy_marginal_entropy",
+        "result_policy_marginal_effective_results",
+        "result_policy_hard_marginal_entropy",
+        "result_policy_hard_marginal_effective_results",
+        "result_policy_argmax_result_accuracy",
+        "result_policy_top3_result_accuracy",
         "relaxed_calculator_temperature",
         "relaxed_calculator_final_temperature",
         "relaxed_calculator_mode",
@@ -1008,6 +1024,89 @@ def relaxed_calculator_entropy_weight(
     if decay_steps <= 0:
         return initial_weight
     return initial_weight * max(0.0, 1.0 - (step / decay_steps))
+
+
+def result_policy_stabilization_weight(
+    *, initial_weight: float, decay_steps: int, step: int
+) -> float:
+    if initial_weight <= 0:
+        return 0.0
+    if decay_steps <= 0:
+        return initial_weight
+    return initial_weight * max(0.0, 1.0 - (step / decay_steps))
+
+
+def result_policy_stabilization_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    temperature: float,
+    entropy_weight: float,
+    batch_diversity_weight: float,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    if temperature <= 0:
+        raise ValueError("result policy stabilization temperature must be positive")
+    if model.cfg.calculator_action_head != "result_space":
+        raise ValueError("result policy stabilization requires result-space logits")
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    result_probs = torch.softmax(result_logits / temperature, dim=-1)
+    result_entropy = -(
+        result_probs * result_probs.clamp_min(1e-12).log()
+    ).sum(dim=-1)
+    marginal_probs = result_probs.mean(dim=0)
+    marginal_entropy = -(
+        marginal_probs * marginal_probs.clamp_min(1e-12).log()
+    ).sum()
+    result_pred = result_logits.argmax(dim=-1)
+    hard_marginal = torch.nn.functional.one_hot(
+        result_pred,
+        num_classes=result_logits.shape[-1],
+    ).to(result_probs.dtype).mean(dim=0)
+    hard_marginal_entropy = -(
+        hard_marginal * hard_marginal.clamp_min(1e-12).log()
+    ).sum()
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = true_a + true_b
+    topk = min(3, result_probs.shape[-1])
+    topk_results = result_probs.topk(k=topk, dim=-1).indices
+    objective = (
+        -(entropy_weight * result_entropy.mean())
+        - (batch_diversity_weight * marginal_entropy)
+    )
+    metrics = {
+        "result_policy_entropy_weight": float(entropy_weight),
+        "result_policy_batch_diversity_weight": float(batch_diversity_weight),
+        "result_policy_stabilization_temperature": float(temperature),
+        "result_policy_entropy": float(result_entropy.mean().detach().item()),
+        "result_policy_effective_results": float(
+            result_entropy.exp().mean().detach().item()
+        ),
+        "result_policy_marginal_entropy": float(
+            marginal_entropy.detach().item()
+        ),
+        "result_policy_marginal_effective_results": float(
+            marginal_entropy.exp().detach().item()
+        ),
+        "result_policy_hard_marginal_entropy": float(
+            hard_marginal_entropy.detach().item()
+        ),
+        "result_policy_hard_marginal_effective_results": float(
+            hard_marginal_entropy.exp().detach().item()
+        ),
+        "result_policy_argmax_result_accuracy": float(
+            (result_pred == true_sum).float().mean().detach().item()
+        ),
+        "result_policy_top3_result_accuracy": float(
+            (topk_results == true_sum.unsqueeze(1))
+            .any(dim=-1)
+            .float()
+            .mean()
+            .detach()
+            .item()
+        ),
+    }
+    return objective, metrics
 
 
 def relaxed_calculator_policy_metrics(
@@ -5970,6 +6069,16 @@ def run_variant(
             args.result_boundary_target_min_probability_floor
         ),
         result_boundary_target_chunk_size=args.result_boundary_target_chunk_size,
+        result_policy_entropy_weight=args.result_policy_entropy_weight,
+        result_policy_batch_diversity_weight=(
+            args.result_policy_batch_diversity_weight
+        ),
+        result_policy_stabilization_temperature=(
+            args.result_policy_stabilization_temperature
+        ),
+        result_policy_stabilization_decay_steps=(
+            args.result_policy_stabilization_decay_steps
+        ),
         boundary_feedback_weight=args.boundary_feedback_weight,
         boundary_feedback_mode=args.boundary_feedback_mode,
         boundary_feedback_seed=args.boundary_feedback_seed,
@@ -6628,6 +6737,15 @@ def run_variant(
             use_relaxed_calculator
             and args.result_boundary_target_loss_weight > 0
         )
+        use_result_policy_stabilization = (
+            args.variant == "model-c"
+            and args.calculator_action_head == "result_space"
+            and (
+                args.result_policy_entropy_weight > 0
+                or args.result_policy_batch_diversity_weight > 0
+            )
+            and not args.oracle_train
+        )
         current_relaxed_temperature = relaxed_calculator_temperature(
             initial_temperature=args.relaxed_calculator_temperature,
             final_temperature=args.relaxed_calculator_final_temperature,
@@ -6679,6 +6797,8 @@ def run_variant(
         result_boundary_target_loss_value = None
         result_boundary_target_objective_value = None
         result_boundary_target_metrics: dict[str, float] = {}
+        result_policy_stabilization_objective_value = None
+        result_policy_stabilization_metrics: dict[str, float] = {}
         boundary_feedback_loss_value = None
         boundary_feedback_objective_value = None
         boundary_feedback_metrics: dict[str, float | int | str] = {}
@@ -6868,6 +6988,38 @@ def run_variant(
                 result_boundary_objective.item()
             )
             loss = loss + result_boundary_objective
+        if use_result_policy_stabilization:
+            current_result_policy_entropy_weight = (
+                result_policy_stabilization_weight(
+                    initial_weight=args.result_policy_entropy_weight,
+                    decay_steps=args.result_policy_stabilization_decay_steps,
+                    step=step,
+                )
+            )
+            current_result_policy_batch_diversity_weight = (
+                result_policy_stabilization_weight(
+                    initial_weight=args.result_policy_batch_diversity_weight,
+                    decay_steps=args.result_policy_stabilization_decay_steps,
+                    step=step,
+                )
+            )
+            (
+                result_policy_stabilization_objective,
+                result_policy_stabilization_metrics,
+            ) = result_policy_stabilization_loss(
+                model,
+                batch,
+                num_digits=num_digits,
+                temperature=args.result_policy_stabilization_temperature,
+                entropy_weight=current_result_policy_entropy_weight,
+                batch_diversity_weight=(
+                    current_result_policy_batch_diversity_weight
+                ),
+            )
+            result_policy_stabilization_objective_value = float(
+                result_policy_stabilization_objective.item()
+            )
+            loss = loss + result_policy_stabilization_objective
         if use_boundary_feedback:
             (
                 boundary_feedback_loss,
@@ -7041,6 +7193,11 @@ def run_variant(
                     result_boundary_target_objective_value
                 )
                 curve_row.update(result_boundary_target_metrics)
+            if use_result_policy_stabilization:
+                curve_row["result_policy_stabilization_objective"] = (
+                    result_policy_stabilization_objective_value
+                )
+                curve_row.update(result_policy_stabilization_metrics)
             if use_boundary_feedback:
                 curve_row["boundary_feedback_weight"] = (
                     args.boundary_feedback_weight
@@ -7130,6 +7287,14 @@ def run_variant(
                     f" best_true={result_boundary_target_metrics['result_boundary_target_hard_best_equals_true_sum']:.3f}"
                     f" learned_best={result_boundary_target_metrics['result_boundary_target_learned_best_fraction']:.3f}"
                     if use_result_boundary_target
+                    else ""
+                )
+                + (
+                    f" result_policy_entropy={result_policy_stabilization_metrics['result_policy_entropy']:.3f}"
+                    f" result_policy_marg_eff={result_policy_stabilization_metrics['result_policy_marginal_effective_results']:.3f}"
+                    f" result_policy_hard_eff={result_policy_stabilization_metrics['result_policy_hard_marginal_effective_results']:.3f}"
+                    f" result_policy_acc={result_policy_stabilization_metrics['result_policy_argmax_result_accuracy']:.3f}"
+                    if use_result_policy_stabilization
                     else ""
                 )
                 + (
@@ -7347,6 +7512,30 @@ def run_variant(
     )
     metrics["result_boundary_target_chunk_size"] = (
         args.result_boundary_target_chunk_size
+    )
+    metrics["result_policy_entropy_weight"] = args.result_policy_entropy_weight
+    metrics["result_policy_batch_diversity_weight"] = (
+        args.result_policy_batch_diversity_weight
+    )
+    metrics["result_policy_stabilization_temperature"] = (
+        args.result_policy_stabilization_temperature
+    )
+    metrics["result_policy_stabilization_decay_steps"] = (
+        args.result_policy_stabilization_decay_steps
+    )
+    metrics["final_result_policy_entropy_weight"] = (
+        result_policy_stabilization_weight(
+            initial_weight=args.result_policy_entropy_weight,
+            decay_steps=args.result_policy_stabilization_decay_steps,
+            step=args.steps,
+        )
+    )
+    metrics["final_result_policy_batch_diversity_weight"] = (
+        result_policy_stabilization_weight(
+            initial_weight=args.result_policy_batch_diversity_weight,
+            decay_steps=args.result_policy_stabilization_decay_steps,
+            step=args.steps,
+        )
     )
     metrics["boundary_feedback_weight"] = args.boundary_feedback_weight
     metrics["final_boundary_feedback_weight"] = args.boundary_feedback_weight
@@ -7967,6 +8156,39 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=64,
         help="Number of forced result classes to score per decoder chunk.",
+    )
+    parser.add_argument(
+        "--result-policy-entropy-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Non-prescriptive entropy bonus weight for result-space policy "
+            "logits. Useful as a collapse-prevention stabilizer."
+        ),
+    )
+    parser.add_argument(
+        "--result-policy-batch-diversity-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Non-prescriptive batch-marginal diversity bonus weight for "
+            "result-space policy logits."
+        ),
+    )
+    parser.add_argument(
+        "--result-policy-stabilization-temperature",
+        type=float,
+        default=1.0,
+        help="Softmax temperature for result-policy stabilization metrics/loss.",
+    )
+    parser.add_argument(
+        "--result-policy-stabilization-decay-steps",
+        type=int,
+        default=0,
+        help=(
+            "Linearly decay result-policy entropy/diversity weights to zero "
+            "over this many steps; 0 keeps them constant."
+        ),
     )
     parser.add_argument(
         "--boundary-feedback-weight",
@@ -8590,6 +8812,20 @@ def main() -> None:
         )
     if args.result_boundary_target_chunk_size < 1:
         raise ValueError("--result-boundary-target-chunk-size must be positive")
+    if args.result_policy_entropy_weight < 0:
+        raise ValueError("--result-policy-entropy-weight must be non-negative")
+    if args.result_policy_batch_diversity_weight < 0:
+        raise ValueError(
+            "--result-policy-batch-diversity-weight must be non-negative"
+        )
+    if args.result_policy_stabilization_temperature <= 0:
+        raise ValueError(
+            "--result-policy-stabilization-temperature must be positive"
+        )
+    if args.result_policy_stabilization_decay_steps < 0:
+        raise ValueError(
+            "--result-policy-stabilization-decay-steps must be non-negative"
+        )
     if args.boundary_feedback_weight < 0:
         raise ValueError("--boundary-feedback-weight must be non-negative")
     if args.shadow_feedback_ridge < 0:
@@ -8692,6 +8928,17 @@ def main() -> None:
         raise ValueError(
             "--result-boundary-target-loss-weight requires "
             "--calculator-estimator gumbel_concrete_interface"
+        )
+    if (
+        (
+            args.result_policy_entropy_weight > 0
+            or args.result_policy_batch_diversity_weight > 0
+        )
+        and args.calculator_action_head != "result_space"
+    ):
+        raise ValueError(
+            "result-policy stabilization requires "
+            "--calculator-action-head result_space"
         )
     if (
         args.calculator_estimator == "full_enum_expected_answer_loss"
@@ -9060,6 +9307,24 @@ def main() -> None:
                 "rbtfloor"
                 f"{args.result_boundary_target_min_probability_floor:g}"
             )
+        if args.result_policy_entropy_weight > 0:
+            suffix_parts.append(f"rpolent{args.result_policy_entropy_weight:g}")
+        if args.result_policy_batch_diversity_weight > 0:
+            suffix_parts.append(
+                f"rpoldv{args.result_policy_batch_diversity_weight:g}"
+            )
+        if (
+            args.result_policy_entropy_weight > 0
+            or args.result_policy_batch_diversity_weight > 0
+        ):
+            if args.result_policy_stabilization_temperature != 1.0:
+                suffix_parts.append(
+                    f"rpolt{args.result_policy_stabilization_temperature:g}"
+                )
+            if args.result_policy_stabilization_decay_steps > 0:
+                suffix_parts.append(
+                    f"rpoldcy{args.result_policy_stabilization_decay_steps}"
+                )
         if args.calculator_result_head_hidden_size > 0:
             suffix_parts.append(f"rhead{args.calculator_result_head_hidden_size}")
         if args.calculator_estimator == "gumbel_concrete_interface":
@@ -9181,6 +9446,13 @@ def main() -> None:
         f"temperature={args.result_boundary_target_temperature} "
         f"min_probability_floor={args.result_boundary_target_min_probability_floor} "
         f"chunk_size={args.result_boundary_target_chunk_size}"
+    )
+    print(
+        "result policy stabilization: "
+        f"entropy_weight={args.result_policy_entropy_weight} "
+        f"batch_diversity_weight={args.result_policy_batch_diversity_weight} "
+        f"temperature={args.result_policy_stabilization_temperature} "
+        f"decay_steps={args.result_policy_stabilization_decay_steps}"
     )
     print(
         "boundary feedback: "

@@ -2827,3 +2827,63 @@ Interpretation:
   single learned result and stays below the `0.16` baseline.
 - Next work should add step-level trust regions, entropy/diversity
   stabilization, or a richer target/state.
+
+## 2026-05-28 Result-Policy Soft Diversity Stabilization Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-twenty-ninth-task-Result-policy-soft-diversity-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_shadow_refresh_result_policy_diversity_gate
+```
+
+Code changes:
+
+- Added `--result-policy-entropy-weight`.
+- Added `--result-policy-batch-diversity-weight`.
+- Added `--result-policy-stabilization-temperature`.
+- Added `--result-policy-stabilization-decay-steps`.
+- Training curves now record soft entropy/effective results, batch-marginal
+  effective results, hard-marginal effective results, and argmax/top-3 result
+  accuracy.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+103 passed
+```
+
+Stage 1 refreshed h32 validation-gradient online shadow module:
+
+| Entropy | Diversity | Apply clamp | Final exact | Best snapshot | Final hard effective results | Final soft marginal effective results |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `0.01` | `1.0` | none | `0.015` | `0.0475` | `1.00` | `1.00` |
+| `0.01` | `1.0` | `10` | `0.005` | `0.0400` | `1.00` | `1.00` |
+| `0.0` | `100.0` | `10` | `0.070` | `0.0800` | `9.14` | `35.11` |
+
+Decision:
+
+```text
+result_policy_soft_diversity_stabilization_stage1_negative
+```
+
+Interpretation:
+
+- Low soft diversity did not prevent hard single-result collapse.
+- High soft diversity plus feedback clamp mechanically broadened result usage.
+- Broader usage still did not align prompts to useful calculator results, and
+  stayed below the `0.16` output-projection feedback baseline.
+- Next work should use a hard/assignment-style usage constraint, a step-level
+  trust region, Jacobian-conditioned state, or a richer target.

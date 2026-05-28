@@ -3181,11 +3181,23 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "result_space",
             "--boundary-feedback-weight",
             "1.0",
+            "--result-policy-entropy-weight",
+            "0.02",
+            "--result-policy-batch-diversity-weight",
+            "0.3",
+            "--result-policy-stabilization-temperature",
+            "1.5",
+            "--result-policy-stabilization-decay-steps",
+            "40",
         ],
     )
     parsed = overfit_script.parse_args()
     assert parsed.calculator_estimator == "direct_feedback_alignment"
     assert parsed.boundary_feedback_mode == "output_proj_transpose"
+    assert parsed.result_policy_entropy_weight == pytest.approx(0.02)
+    assert parsed.result_policy_batch_diversity_weight == pytest.approx(0.3)
+    assert parsed.result_policy_stabilization_temperature == pytest.approx(1.5)
+    assert parsed.result_policy_stabilization_decay_steps == 40
 
     monkeypatch.setattr(
         sys,
@@ -3314,6 +3326,10 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_loss_mode == "mse"
     assert parsed.shadow_feedback_selection_score_mode == "min_result_upstream_cosine"
     assert parsed.shadow_feedback_selection_gap_penalty == pytest.approx(1.0)
+    assert parsed.result_policy_entropy_weight == pytest.approx(0.0)
+    assert parsed.result_policy_batch_diversity_weight == pytest.approx(0.0)
+    assert parsed.result_policy_stabilization_temperature == pytest.approx(1.0)
+    assert parsed.result_policy_stabilization_decay_steps == 0
 
     cfg_for_feature_dim = GPTConfig(
         vocab_size=20,

@@ -261,6 +261,19 @@ with tiny train-heldout gaps. But Stage 1 still did not lift; final exact
 match was `0.025` and the best snapshot was only `0.0475`. Label:
 `online_mlp_shadow_feedback_on_policy_refresh_alignment_pass_stage1_negative`.
 
+Soft result-policy stabilization was then tested as the first direct
+training-dynamics constraint. The new result-space entropy/batch-diversity
+bonus is non-prescriptive: it does not say which result is correct for any
+example, only discourages collapse of the learned result policy. Low diversity
+weight `1.0` with refresh still collapsed to one hard result, both without a
+feedback clamp (`0.015` final exact, `0.0475` best snapshot) and with clamp
+`10` (`0.005` final, `0.040` best). A high diversity ceiling, weight `100`
+with clamp `10`, kept hard result usage broader (`9.14` effective hard
+results at step `200`) and improved final exact to `0.070`, with best snapshot
+`0.080`, but still remained far below the `0.16` output-projection feedback
+baseline. Label:
+`result_policy_soft_diversity_stabilization_stage1_negative`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -324,12 +337,16 @@ Do not rerun these as next steps unless debugging new code:
 - periodic on-policy refresh every `50` steps with the same h32
   validation-gradient module, `shadow_feedback_weight=1.0`, no apply clamp,
   and 200-step early-lift budget as novelty.
+- soft result-policy entropy/batch-marginal diversity stabilization on top of
+  the same refreshed h32 validation-gradient module, including low diversity
+  weight `1.0` with/without clamp `10` and high diversity weight `100` with
+  clamp `10`, as novelty.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
 becomes useful training dynamics. Plausible branches include a step-level
-trust region on model movement, entropy/diversity constraints that prevent
-single-result collapse while using refreshed shadow gradients,
+trust region on model movement, hard/assignment-style usage constraints that
+tie diversity to per-example improvement rather than soft marginal entropy,
 Jacobian-conditioned state rather than raw activations, or a richer target
 construction that remains valid after upstream movement.
 Keep the exact-grid boundary-ceiling

@@ -225,9 +225,14 @@ A simple fixed-module feedback L2 clamp was tested next: clamps `3.5` and
 so plain output-norm clamping is not enough. Periodic on-policy refresh every
 `50` steps then restored excellent current-model gradient agreement, but the
 model still collapsed to a single result and ended at `0.025` exact match.
-The remaining synthetic-gradient problem is therefore training dynamics, not
-just shadow generalization: use step-level trust regions, entropy/diversity
-stabilization, Jacobian-conditioned state, or richer targets.
+Soft result-policy entropy/batch-diversity stabilization was tested next.
+Low diversity weight did not stop hard collapse, while high diversity weight
+with a feedback clamp kept roughly `9` effective hard results at step `200`
+but reached only `0.070` final exact match. The remaining synthetic-gradient
+problem is therefore not just avoiding one-result collapse; the constraint has
+to connect diverse requests to per-example improvement. Use step-level trust
+regions, hard/assignment-style usage constraints, Jacobian-conditioned state,
+or richer targets.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

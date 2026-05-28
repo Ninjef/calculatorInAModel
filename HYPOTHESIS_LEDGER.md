@@ -129,3 +129,9 @@ Conclusion: Refresh every `50` steps restored excellent current-model heldout gr
 Do not repeat: Same h32 validation-gradient module with refresh every `50`, `shadow_feedback_weight=1.0`, no apply clamp, and 200-step budget as novelty.
 Next allowed test: Add training-dynamics constraints such as step-level trust region, entropy/diversity stabilization, or a target/state that avoids single-result collapse.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-online-shadow-feedback-on-policy-refresh-gate.md`
+
+DISPROVEN: Soft result-policy entropy/batch-diversity stabilization rescues refreshed online-shadow Stage 1.
+Conclusion: Low diversity weight `1.0` still collapsed to one hard result with final exact `0.015` unbounded and `0.005` clamped; high diversity weight `100` plus clamp `10` kept hard usage broader (`9.14` effective hard results) but reached only `0.070` final and `0.080` best snapshot.
+Do not repeat: Same refreshed h32 validation-gradient module with soft result-policy diversity weights `1` or `100`, optional tiny entropy, 200-step budget, and clamp `0/10` as novelty.
+Next allowed test: A hard/assignment-style usage constraint, step-level trust region, Jacobian-conditioned state, or richer target that links diverse requests to per-example improvement.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-result-policy-soft-diversity-gate.md`
