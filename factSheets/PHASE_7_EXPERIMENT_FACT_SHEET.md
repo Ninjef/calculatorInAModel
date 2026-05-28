@@ -3068,3 +3068,69 @@ Interpretation:
 - Step-size repair is not enough; the next branch should construct better
   directions, use hard/assignment-style usage constraints,
   Jacobian-conditioned state, or richer targets.
+
+## 2026-05-28 Output-Jacobian Shadow Feature Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-thirty-third-task-Output-jacobian-shadow-feature-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_output_jacobian_shadow_feature_gate
+```
+
+Code changes:
+
+- Added `injection_grad_logits_output_jacobian` as an online shadow feedback
+  feature mode.
+- The feature appends `J_output^T answer_grad` scores from the calculator
+  output projection, giving one local sensitivity score per result class.
+- Added a unit test that verifies the appended feature slice equals the
+  output-projection transpose applied to the answer-loss injection gradient.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+104 passed
+```
+
+Stage 0B validation-gradient diagnostics:
+
+| Hidden | Feature norm | Heldout result/upstream cosine | Train-heldout gap | Heldout relative norm |
+| ---: | --- | ---: | ---: | ---: |
+| `16` | none | `0.6703 / 0.7245` | `0.1013 / 0.0938` | `1.8176 / 1.7362` |
+| `32` | none | `0.7957 / 0.8237` | `0.0994 / 0.1079` | `1.2553 / 1.1170` |
+| `32` | `fit_zscore_per_feature` | `0.9073 / 0.9011` | `0.0639 / 0.0736` | `1.3044 / 1.2598` |
+
+Stage 1 refreshed h32 feature-normalized smoke:
+
+| Refresh | Clamp | Final exact | Best snapshot | Final learned calc | Final shadow norm |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| `50` | `10` | `0.055` | `0.065` | `0.0475` | `10.00` |
+
+Decision:
+
+```text
+output_jacobian_shadow_feature_stage0b_pass_stage1_negative
+```
+
+Interpretation:
+
+- The output-Jacobian feature is a real Stage 0B improvement once feature
+  z-scored.
+- The refreshed Stage 1 failure persists despite current-model refresh
+  cosines near `0.999`.
+- A state-only Jacobian feature is therefore not enough; next work should use
+  hard assignment-style usage constraints, richer targets, or a learned update
+  path that changes the proposed direction rather than only describing state.

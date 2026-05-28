@@ -1116,3 +1116,30 @@ almost every proposed shadow step was still harmful under hard answer loss.
 The step-size-repair branch is therefore closed for this setup. Next work
 should construct better directions directly, use hard/assignment-style usage
 constraints, add Jacobian-conditioned state, or build richer targets.
+
+## Status Update: 2026-05-28, Output-Jacobian Shadow Feature
+
+The online MLP shadow state gained a local output-Jacobian feature:
+
+```text
+output_jacobian_shadow_feature_stage0b_pass_stage1_negative
+```
+
+The new `injection_grad_logits_output_jacobian` feature mode appends
+`J_output^T answer_grad` scores, where `J_output` is the calculator
+result-signal-to-injection projection. This gives the shadow module a
+per-result local sensitivity vector without forcing a true result label.
+
+Stage 0B diagnostics on the same validation-gradient setup:
+
+| Hidden | Feature norm | Heldout result/upstream cosine | Train-heldout gap |
+| ---: | --- | ---: | ---: |
+| `16` | none | `0.6703 / 0.7245` | `0.1013 / 0.0938` |
+| `32` | none | `0.7957 / 0.8237` | `0.0994 / 0.1079` |
+| `32` | `fit_zscore_per_feature` | `0.9073 / 0.9011` | `0.0639 / 0.0736` |
+
+The feature-normalized h32 module earned a Stage 1 smoke with refresh every
+`50` steps and feedback clamp `10`. It still did not lift: final exact was
+`0.055`, best snapshot `0.065`, and final learned calculator accuracy
+`0.0475`. Refresh agreement stayed excellent through step `200`, so the
+remaining failure is not simply stale local gradient agreement.

@@ -304,6 +304,17 @@ steps were accepted (`2.5%`). Best snapshot improved slightly to `0.0925` at
 step `25`, but final exact was only `0.060`. Label:
 `answer_loss_line_search_step_repair_stage1_negative`.
 
+An output-Jacobian-conditioned shadow state was then added. The new feature
+mode appends the local result-signal-to-injection `J^T` answer-loss scores to
+the answer-gradient/logit state. This is a genuine new state, not another
+schedule tweak. Raw h32 nearly cleared the Stage 0B gate
+(`0.7957/0.8237` heldout result/upstream cosines); with fit-split feature
+z-scoring it cleared strongly (`0.9073/0.9011`, gaps `0.0639/0.0736`).
+However, the refreshed Stage 1 smoke with clamp `10` still failed: final
+exact was `0.055`, best snapshot `0.065`, and final learned calculator
+accuracy `0.0475`. Label:
+`output_jacobian_shadow_feature_stage0b_pass_stage1_negative`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -380,15 +391,20 @@ Do not rerun these as next steps unless debugging new code:
 - hard-path answer-loss line search over scales `1,0.5,0.25,0.1,0` on the same
   refreshed h32 validation-gradient module with feedback clamp `10` and
   200-step early-lift budget as novelty.
+- output-Jacobian shadow feature mode
+  `injection_grad_logits_output_jacobian` with h16/h32 raw features or h32
+  fit-split feature z-scoring, validation-gradient `0.5`, norm `0.1`, refresh
+  every `50`, clamp `10`, and 200-step early-lift budget as novelty.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
 becomes useful training dynamics. Plausible branches include a step-level
 mechanism that constructs better directions rather than selecting from mostly
 bad proposed shadow steps, hard/assignment-style usage constraints that tie
-diversity to per-example improvement rather than soft marginal entropy,
-Jacobian-conditioned state rather than raw activations, or a richer target
-construction that remains valid after upstream movement.
+diversity to per-example improvement rather than soft marginal entropy, a
+Jacobian-conditioned state more substantial than the result-output
+`J^T answer_grad` feature, or a richer target construction that remains valid
+after upstream movement.
 Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`

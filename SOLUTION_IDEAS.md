@@ -237,9 +237,13 @@ hard-path answer-loss acceptance gate was then tested; it accepted only `3%`
 of proposed steps and still ended at `0.050` exact. A hard-answer-loss line
 search over proposed step scales `1,0.5,0.25,0.1,0` accepted only `2.5%` of
 steps; it lifted best snapshot slightly to `0.0925` but finished at only
-`0.060` exact. Use mechanisms that construct useful directions rather than
-selecting among mostly harmful shadow steps, hard/assignment-style usage
-constraints, Jacobian-conditioned state, or richer targets.
+`0.060` exact. A first Jacobian-conditioned state then appended local
+result-output `J^T answer_grad` scores. With feature z-scoring, h32 cleared
+Stage 0B (`0.9073/0.9011` heldout result/upstream), but refreshed Stage 1
+still ended at only `0.055` exact. Use mechanisms that construct useful
+directions rather than selecting among mostly harmful shadow steps,
+hard/assignment-style usage constraints, richer targets, or a more substantial
+Jacobian-conditioned update path than this state-only feature.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

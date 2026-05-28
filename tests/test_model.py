@@ -2446,6 +2446,68 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
         assert torch.allclose(param, before_params[name])
 
 
+def test_shadow_feedback_output_jacobian_feature_mode() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_shadow_output_jacobian_features", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="direct_feedback_alignment",
+        calculator_action_head="result_space",
+        calculator_read_position="operands",
+        calculator_bottleneck_mode="answer_decoder",
+        answer_decoder_interaction="product",
+    )
+    model = TinyGPT(cfg)
+    batch = ArithmeticBatch(
+        x=torch.tensor([[1, PLUS_ID, 2, EQ_ID], [0, PLUS_ID, 3, EQ_ID]]),
+        y=torch.zeros((2, 4), dtype=torch.long),
+        loss_mask=torch.tensor(
+            [[False, False, False, True], [False, False, False, True]]
+        ),
+    )
+
+    features, metrics = overfit_script.shadow_feedback_mlp_features(
+        model,
+        batch,
+        feature_mode="injection_grad_logits_output_jacobian",
+    )
+
+    assert overfit_script.shadow_feedback_feature_dim(
+        model,
+        feature_mode="injection_grad_logits_output_jacobian",
+    ) == 22
+    assert features.shape == (2, 22)
+    output_scores = features[:, 15:]
+    expected_scores = (
+        features[:, :8]
+        @ model.calculator_hook.output_proj.weight[:, :7].to(features.dtype)
+    )
+    assert torch.allclose(output_scores, expected_scores)
+    assert metrics["shadow_feedback_feature_mode"] == (
+        "injection_grad_logits_output_jacobian"
+    )
+    assert metrics["shadow_feedback_feature_output_jacobian_l2"] == pytest.approx(
+        output_scores.norm().item()
+    )
+
+
 def test_shadow_feedback_target_normalizer_uses_fit_statistics_only() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location(

@@ -2297,8 +2297,20 @@ def shadow_feedback_mlp_features(
     result_entropy = -(
         result_probs * result_log_probs
     ).sum(dim=-1, keepdim=True)
+    output_jacobian_scores = (
+        scaled_feedback_input
+        @ model.calculator_hook.output_proj.weight[
+            :, : model.cfg.calculator_result_vocab_size
+        ].to(device=feedback_input.device, dtype=feedback_input.dtype)
+    )
     if feature_mode == "injection_grad_logits":
         feature_chunks = [scaled_feedback_input, result_logits]
+    elif feature_mode == "injection_grad_logits_output_jacobian":
+        feature_chunks = [
+            scaled_feedback_input,
+            result_logits,
+            output_jacobian_scores.detach(),
+        ]
     elif feature_mode == "injection_grad_logits_result_input":
         feature_chunks = [scaled_feedback_input, result_logits, result_input]
     elif feature_mode == "injection_grad_policy_state":
@@ -2312,6 +2324,7 @@ def shadow_feedback_mlp_features(
     else:
         raise ValueError(
             "shadow feedback feature mode must be injection_grad_logits "
+            "injection_grad_logits_output_jacobian, "
             "injection_grad_logits_result_input, or injection_grad_policy_state"
         )
     features = torch.cat(feature_chunks, dim=-1)
@@ -2325,6 +2338,9 @@ def shadow_feedback_mlp_features(
             scaled_feedback_input.norm().item()
         ),
         "shadow_feedback_feature_logits_l2": float(result_logits.norm().item()),
+        "shadow_feedback_feature_output_jacobian_l2": float(
+            output_jacobian_scores.norm().item()
+        ),
         "shadow_feedback_feature_result_input_l2": float(result_input.norm().item()),
         "shadow_feedback_feature_probs_l2": float(result_probs.norm().item()),
         "shadow_feedback_feature_log_probs_l2": float(
@@ -2648,6 +2664,8 @@ def shadow_feedback_prediction_loss(
 def shadow_feedback_feature_dim(model: TinyGPT, *, feature_mode: str) -> int:
     if feature_mode == "injection_grad_logits":
         return model.cfg.n_embd + model.cfg.calculator_result_vocab_size
+    if feature_mode == "injection_grad_logits_output_jacobian":
+        return model.cfg.n_embd + (2 * model.cfg.calculator_result_vocab_size)
     result_input_dim = (
         2 * model.cfg.calculator_read_span_width * model.cfg.n_embd
         if model.cfg.calculator_read_position == "operand_spans"
@@ -2663,6 +2681,7 @@ def shadow_feedback_feature_dim(model: TinyGPT, *, feature_mode: str) -> int:
         return model.cfg.n_embd + (3 * model.cfg.calculator_result_vocab_size) + 1
     raise ValueError(
         "shadow feedback feature mode must be injection_grad_logits "
+        "injection_grad_logits_output_jacobian, "
         "injection_grad_logits_result_input, or injection_grad_policy_state"
     )
 
@@ -3633,11 +3652,13 @@ def run_online_shadow_feedback_gradient_diagnostic(
         )
     if feature_mode not in {
         "injection_grad_logits",
+        "injection_grad_logits_output_jacobian",
         "injection_grad_logits_result_input",
         "injection_grad_policy_state",
     }:
         raise ValueError(
             "shadow feedback feature mode must be injection_grad_logits "
+            "injection_grad_logits_output_jacobian, "
             "injection_grad_logits_result_input, or injection_grad_policy_state"
         )
     if feature_normalization not in {"none", "fit_zscore_per_feature"}:
@@ -8707,14 +8728,17 @@ def parse_args() -> argparse.Namespace:
         "--shadow-feedback-feature-mode",
         choices=[
             "injection_grad_logits",
+            "injection_grad_logits_output_jacobian",
             "injection_grad_logits_result_input",
             "injection_grad_policy_state",
         ],
         default="injection_grad_logits",
         help=(
-            "Feature state for the online MLP shadow module. Result-input mode "
-            "adds the calculator result-projection input; policy-state mode "
-            "adds result probabilities, log-probabilities, and entropy."
+            "Feature state for the online MLP shadow module. Output-jacobian "
+            "mode adds the local result-signal-to-injection J^T answer-loss "
+            "scores; result-input mode adds the calculator result-projection "
+            "input; policy-state mode adds result probabilities, "
+            "log-probabilities, and entropy."
         ),
     )
     parser.add_argument(
