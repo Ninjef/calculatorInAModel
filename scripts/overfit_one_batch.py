@@ -153,6 +153,7 @@ class TrainConfig:
     input_proj_anchor_decay_steps: int
     input_proj_lr: float
     upstream_lr: float
+    optimizer_step_max_delta_norm: float
     freeze_semantic_decoder: bool
     freeze_upstream_encoder: bool
     trainable_parameter_groups: list[dict[str, object]]
@@ -709,6 +710,10 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_policy_hard_marginal_effective_results",
         "result_policy_argmax_result_accuracy",
         "result_policy_top3_result_accuracy",
+        "optimizer_step_delta_l2",
+        "optimizer_step_unclamped_delta_l2",
+        "optimizer_step_trust_scale",
+        "optimizer_step_max_delta_norm",
         "relaxed_calculator_temperature",
         "relaxed_calculator_final_temperature",
         "relaxed_calculator_mode",
@@ -1107,6 +1112,46 @@ def result_policy_stabilization_loss(
         ),
     }
     return objective, metrics
+
+
+def snapshot_trainable_parameters(
+    model: TinyGPT,
+) -> list[tuple[torch.nn.Parameter, torch.Tensor]]:
+    return [
+        (param, param.detach().clone())
+        for param in model.parameters()
+        if param.requires_grad
+    ]
+
+
+def apply_optimizer_step_trust_region(
+    before: list[tuple[torch.nn.Parameter, torch.Tensor]],
+    *,
+    max_delta_norm: float,
+) -> dict[str, float]:
+    if max_delta_norm < 0:
+        raise ValueError("optimizer step max delta norm must be non-negative")
+    delta_sq = 0.0
+    for param, old_value in before:
+        delta = param.detach() - old_value
+        delta_sq += float(delta.pow(2).sum().item())
+    unclamped_delta = math.sqrt(delta_sq)
+    scale = 1.0
+    if max_delta_norm > 0 and unclamped_delta > max_delta_norm:
+        scale = max_delta_norm / max(unclamped_delta, 1e-12)
+        with torch.no_grad():
+            for param, old_value in before:
+                param.copy_(old_value + ((param - old_value) * scale))
+    return {
+        "optimizer_step_delta_l2": float(
+            unclamped_delta * scale
+            if max_delta_norm > 0 and unclamped_delta > max_delta_norm
+            else unclamped_delta
+        ),
+        "optimizer_step_unclamped_delta_l2": float(unclamped_delta),
+        "optimizer_step_trust_scale": float(scale),
+        "optimizer_step_max_delta_norm": float(max_delta_norm),
+    }
 
 
 def relaxed_calculator_policy_metrics(
@@ -6153,6 +6198,7 @@ def run_variant(
             args.lr if args.input_proj_lr is None else args.input_proj_lr
         ),
         upstream_lr=args.lr if args.upstream_lr is None else args.upstream_lr,
+        optimizer_step_max_delta_norm=args.optimizer_step_max_delta_norm,
         freeze_semantic_decoder=args.freeze_semantic_decoder,
         freeze_upstream_encoder=args.freeze_upstream_encoder,
         trainable_parameter_groups=trainable_groups,
@@ -6606,6 +6652,7 @@ def run_variant(
     final_loss = float("nan")
     policy_baseline: float | None = None
     action_loss_replay_cache = ActionLossReplayCache()
+    last_optimizer_step_metrics: dict[str, float] = {}
     model.train()
     for step in range(args.steps + 1):
         if args.operand_max is None:
@@ -7228,6 +7275,8 @@ def run_variant(
             if anchor_loss_value is not None:
                 curve_row["input_proj_anchor_loss"] = anchor_loss_value
                 curve_row["input_proj_anchor_weight"] = anchor_weight
+            if last_optimizer_step_metrics:
+                curve_row.update(last_optimizer_step_metrics)
             curve.append(curve_row)
             print(
                 f"variant={args.variant} digits={num_digits} "
@@ -7373,7 +7422,19 @@ def run_variant(
         optim.zero_grad(set_to_none=True)
         loss.backward()
         torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+        trust_region_before = (
+            snapshot_trainable_parameters(model)
+            if args.optimizer_step_max_delta_norm > 0
+            else []
+        )
         optim.step()
+        if trust_region_before:
+            last_optimizer_step_metrics = apply_optimizer_step_trust_region(
+                trust_region_before,
+                max_delta_norm=args.optimizer_step_max_delta_norm,
+            )
+        else:
+            last_optimizer_step_metrics = {}
         if use_reinforce and args.reinforce_baseline_mode == "global_ema":
             answer_loss_value = float(answer_loss.detach().item())
             if policy_baseline is None:
@@ -7646,8 +7707,13 @@ def run_variant(
         metrics["input_proj_anchor_delta"] = input_proj_anchor_delta_summary(
             model, input_proj_anchor
         )
-    metrics["input_proj_lr"] = args.lr if args.input_proj_lr is None else args.input_proj_lr
+    metrics["input_proj_lr"] = (
+        args.lr if args.input_proj_lr is None else args.input_proj_lr
+    )
     metrics["upstream_lr"] = args.lr if args.upstream_lr is None else args.upstream_lr
+    metrics["optimizer_step_max_delta_norm"] = args.optimizer_step_max_delta_norm
+    if last_optimizer_step_metrics:
+        metrics["final_optimizer_step"] = last_optimizer_step_metrics
     metrics["freeze_semantic_decoder"] = args.freeze_semantic_decoder
     metrics["freeze_upstream_encoder"] = args.freeze_upstream_encoder
     metrics["aux_operand_loss_grad_upstream"] = args.aux_operand_loss_grad_upstream
@@ -7862,6 +7928,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--grad-clip", type=float, default=1.0)
+    parser.add_argument(
+        "--optimizer-step-max-delta-norm",
+        type=float,
+        default=0.0,
+        help=(
+            "Optional trust-region cap on the actual trainable-parameter "
+            "update L2 norm after optimizer.step(). 0 disables."
+        ),
+    )
     parser.add_argument(
         "--oracle-train",
         action="store_true",
@@ -8652,6 +8727,8 @@ def main() -> None:
         raise ValueError("--oracle-warmup-steps requires --variant model-c")
     if args.answer_loss_weight < 0:
         raise ValueError("--answer-loss-weight must be non-negative")
+    if args.optimizer_step_max_delta_norm < 0:
+        raise ValueError("--optimizer-step-max-delta-norm must be non-negative")
     if args.calculator_read_span_width < 1:
         raise ValueError("--calculator-read-span-width must be positive")
     if (
@@ -9348,6 +9425,8 @@ def main() -> None:
             suffix_parts.append(f"inanchor{args.input_proj_anchor_weight:g}")
             if args.input_proj_anchor_decay_steps > 0:
                 suffix_parts.append(f"inanchordecay{args.input_proj_anchor_decay_steps}")
+        if args.optimizer_step_max_delta_norm > 0:
+            suffix_parts.append(f"stepmax{args.optimizer_step_max_delta_norm:g}")
     if args.calculator_injection_mode != "add":
         suffix_parts.append(args.calculator_injection_mode)
     if args.calculator_bottleneck_mode != "none":
@@ -9419,6 +9498,10 @@ def main() -> None:
         f"upstream_lr={args.lr if args.upstream_lr is None else args.upstream_lr} "
         f"input_proj_anchor_weight={args.input_proj_anchor_weight} "
         f"input_proj_anchor_decay_steps={args.input_proj_anchor_decay_steps}"
+    )
+    print(
+        "optimizer trust region: "
+        f"step_max_delta_norm={args.optimizer_step_max_delta_norm}"
     )
     print(
         "action-loss candidates: "

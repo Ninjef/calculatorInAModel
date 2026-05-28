@@ -135,3 +135,9 @@ Conclusion: Low diversity weight `1.0` still collapsed to one hard result with f
 Do not repeat: Same refreshed h32 validation-gradient module with soft result-policy diversity weights `1` or `100`, optional tiny entropy, 200-step budget, and clamp `0/10` as novelty.
 Next allowed test: A hard/assignment-style usage constraint, step-level trust region, Jacobian-conditioned state, or richer target that links diverse requests to per-example improvement.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-result-policy-soft-diversity-gate.md`
+
+DISPROVEN: Bounding actual optimizer parameter-step L2 norm rescues refreshed online-shadow Stage 1.
+Conclusion: Trust caps `0.05` and `0.10` scaled proposed AdamW deltas from about `0.17-0.20`, stabilized shadow norms and refresh agreement, but ended at only `0.075`/`0.040` final exact with best snapshots `0.060`/`0.045`.
+Do not repeat: Same refreshed h32 validation-gradient module with feedback clamp `10`, optimizer step max deltas `0.05` or `0.10`, and 200-step budget as novelty.
+Next allowed test: Trust region that validates per-step improvement, hard assignment-style usage constraints, Jacobian-conditioned state, or richer targets.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-optimizer-step-trust-region-gate.md`

@@ -274,6 +274,17 @@ results at step `200`) and improved final exact to `0.070`, with best snapshot
 baseline. Label:
 `result_policy_soft_diversity_stabilization_stage1_negative`.
 
+An actual optimizer-step trust region was then added. Unlike gradient
+clipping, this snapshots trainable parameters, lets AdamW propose a step, and
+scales the realized parameter delta back to a configured L2 radius. With
+refreshed h32 validation-gradient shadow feedback plus feedback clamp `10`,
+max-delta caps `0.05` and `0.10` both bound every update: proposed deltas were
+roughly `0.17-0.20`, then scaled to the cap. The gate stabilized shadow norms
+and preserved refresh agreement, but did not produce discovery. Cap `0.05`
+ended at `0.075` final exact with best snapshot `0.060`; cap `0.10` ended at
+`0.040` final exact with best snapshot `0.045`. Label:
+`optimizer_step_trust_region_stage1_negative`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -341,14 +352,18 @@ Do not rerun these as next steps unless debugging new code:
   the same refreshed h32 validation-gradient module, including low diversity
   weight `1.0` with/without clamp `10` and high diversity weight `100` with
   clamp `10`, as novelty.
+- actual optimizer-step L2 trust-region caps `0.05` or `0.10` on top of the
+  same refreshed h32 validation-gradient module with feedback clamp `10` and
+  200-step early-lift budget as novelty.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
 becomes useful training dynamics. Plausible branches include a step-level
-trust region on model movement, hard/assignment-style usage constraints that
-tie diversity to per-example improvement rather than soft marginal entropy,
-Jacobian-conditioned state rather than raw activations, or a richer target
-construction that remains valid after upstream movement.
+trust region that validates per-step improvement rather than only bounding
+parameter distance, hard/assignment-style usage constraints that tie diversity
+to per-example improvement rather than soft marginal entropy,
+Jacobian-conditioned state rather than raw activations, or a richer
+target construction that remains valid after upstream movement.
 Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`

@@ -230,9 +230,11 @@ Low diversity weight did not stop hard collapse, while high diversity weight
 with a feedback clamp kept roughly `9` effective hard results at step `200`
 but reached only `0.070` final exact match. The remaining synthetic-gradient
 problem is therefore not just avoiding one-result collapse; the constraint has
-to connect diverse requests to per-example improvement. Use step-level trust
-regions, hard/assignment-style usage constraints, Jacobian-conditioned state,
-or richer targets.
+to connect diverse requests to per-example improvement. A direct optimizer-step
+trust region was also tested: capping realized AdamW parameter deltas at
+`0.05`/`0.10` stabilized norms but still missed the early-lift baseline. Use
+trust regions that validate per-step improvement, hard/assignment-style usage
+constraints, Jacobian-conditioned state, or richer targets.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

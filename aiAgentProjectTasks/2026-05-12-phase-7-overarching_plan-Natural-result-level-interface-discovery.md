@@ -1033,3 +1033,30 @@ diversity did keep broader hard result usage, but still did not connect
 examples to the correct calculator results and remained below the `0.16`
 boundary-feedback baseline. Next work should move to a hard/assignment-style
 usage constraint, a step-level trust region, or a richer target/state.
+
+## Status Update: 2026-05-28, Optimizer Step Trust Region
+
+The training loop gained an actual optimizer-step trust region:
+
+```text
+optimizer_step_trust_region_stage1_negative
+```
+
+The new `--optimizer-step-max-delta-norm` snapshots trainable parameters,
+lets AdamW propose an update, and rescales the realized parameter delta if it
+exceeds the requested L2 radius. This is distinct from gradient clipping,
+because it bounds the actual post-optimizer movement.
+
+Two 200-step early-lift smokes were run on top of refreshed h32
+validation-gradient online shadow feedback plus feedback clamp `10`:
+
+| Max delta | Final exact | Best snapshot | Proposed delta range | Final applied norm |
+| ---: | ---: | ---: | ---: | ---: |
+| `0.05` | `0.075` | `0.060` | about `0.19-0.20` | `0.05` |
+| `0.10` | `0.040` | `0.045` | about `0.17-0.18` | `0.10` |
+
+The trust region stabilized shadow-feedback norms and kept refreshed gradient
+agreement high, but it did not produce calculator-result discovery. Next work
+should use a trust region that validates per-step improvement, a
+hard/assignment-style usage constraint, Jacobian-conditioned state, or richer
+targets.

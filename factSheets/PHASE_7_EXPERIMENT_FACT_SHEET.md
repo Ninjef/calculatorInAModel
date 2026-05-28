@@ -2887,3 +2887,65 @@ Interpretation:
   stayed below the `0.16` output-projection feedback baseline.
 - Next work should use a hard/assignment-style usage constraint, a step-level
   trust region, Jacobian-conditioned state, or a richer target.
+
+## 2026-05-28 Optimizer Step Trust Region Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-thirtieth-task-Optimizer-step-trust-region-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_shadow_refresh_optimizer_trust_region_gate
+```
+
+Code changes:
+
+- Added `--optimizer-step-max-delta-norm`.
+- When enabled, the training loop snapshots trainable parameters before
+  `optimizer.step()`, computes the realized update L2 norm, and rescales the
+  update back to the requested radius.
+- Training curves record `optimizer_step_delta_l2`,
+  `optimizer_step_unclamped_delta_l2`, `optimizer_step_trust_scale`, and
+  `optimizer_step_max_delta_norm`.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+103 passed
+```
+
+Stage 1 refreshed h32 validation-gradient online shadow module,
+`shadow_feedback_weight=1.0`, feedback clamp `10`:
+
+| Max delta | Final exact | Best snapshot | Min/median/last trust scale | Final learned calc | Final shadow norm |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| `0.05` | `0.075` | `0.060` | `0.251 / 0.300 / 0.259` | `0.0475` | `5.70` |
+| `0.10` | `0.040` | `0.045` | `0.550 / 0.624 / 0.594` | `0.0325` | `10.00` |
+
+Decision:
+
+```text
+optimizer_step_trust_region_stage1_negative
+```
+
+Interpretation:
+
+- The trust region mechanically bounded actual AdamW movement.
+- It stabilized shadow-feedback norms and maintained strong refresh
+  agreement.
+- Bounding parameter movement alone still did not lift above the `0.16`
+  boundary-feedback baseline.
+- Next work should use a trust region that validates per-step improvement, a
+  hard/assignment-style usage constraint, Jacobian-conditioned state, or
+  richer targets.
