@@ -201,3 +201,9 @@ Conclusion: Strong source `src2` transferred to additive seeds `2/4` with final 
 Do not repeat: The same frozen 800-step matrix cells `src2_add2`, `src2_add4`, `src4_add2`, `src4_add4`, or `src5_add5` as novelty.
 Next allowed test: Source checkpoint selection/quality metrics, longer or stronger downstream readout adaptation, staged unfreezing, or a less prescriptive source-policy training method.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-transfer-replication.md`
+
+PARTIAL: Longer downstream adaptation helps weak frozen handoffs but does not erase source sensitivity.
+Conclusion: Continuing weak cells for another 800 steps improved `src5_add5` final eval `0.5550 -> 0.8175` and `src4_add2` `0.3025 -> 0.6050`, while injection-zero stayed near chance and learned calc stayed `0.8000/0.8725`.
+Do not repeat: The same `src4_add2` or `src5_add5` one-extra-800-step continuation as novelty.
+Next allowed test: Better source checkpoint selection, stronger readout adaptation, controlled unfreezing, or source-policy training that produces more handoff-friendly representations.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-downstream-adaptation.md`

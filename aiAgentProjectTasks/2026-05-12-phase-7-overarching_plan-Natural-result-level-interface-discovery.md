@@ -1345,3 +1345,26 @@ enough for high downstream accuracy.
 The next handoff task should not repeat these exact frozen 800-step cells. It
 should change source checkpoint selection/quality, downstream adaptation, or
 unfreezing while preserving the action policy.
+
+## Status Update: 2026-05-28, Bottleneck-to-Additive Downstream Adaptation
+
+Longer downstream adaptation for weak-source frozen handoffs produced a
+partial positive:
+
+```text
+bottleneck_to_additive_longer_downstream_adaptation_partial
+```
+
+Continuing `src5_add5` for another 800 steps from the additive final weights
+improved final eval from `0.5550` to `0.8175`. Injection-zero stayed `0.0000`,
+forced-random stayed `0.0425`, oracle was `0.8075`, and learned
+calculator-result accuracy stayed `0.8000`.
+
+Continuing `src4_add2` improved final eval from `0.3025` to `0.6050`.
+Injection-zero stayed `0.0025`, forced-random was `0.0625`, oracle was
+`0.5725`, and learned calculator-result accuracy stayed `0.8725`.
+
+This shows weak-source frozen handoff can improve with more downstream
+optimization while retaining calculator dependence. It does not erase source
+quality sensitivity: after the same total 1600-step adaptation budget, both
+weak-source continuations still trail the strong-source `~0.95` handoff.

@@ -3590,3 +3590,58 @@ Interpretation:
   source checkpoint selection/quality metrics, stronger downstream readout
   adaptation, and controlled unfreezing. Do not repeat these exact matrix cells
   as novelty.
+
+## 2026-05-28 Bottleneck-to-Additive Downstream Adaptation Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-forty-first-task-Bottleneck-to-additive-downstream-adaptation.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_bottleneck_to_additive_transfer_downstream_adaptation
+```
+
+Question:
+
+Do weak-source frozen handoffs fail because the source representation is
+unusable, or because downstream additive adaptation needs more optimization
+time?
+
+Configuration:
+
+- Continued from the additive final weights of weak-source frozen handoffs.
+- Used `--semantic-decoder-checkpoint-load-scope full_model` to resume the
+  additive model.
+- Kept `--freeze-calculator-policy` on.
+- answer loss weight `1`;
+- exact-grid natural `0..19`;
+- 800 additional steps.
+
+Result:
+
+| Run | Final eval before | Final eval after | Best normal after | Last injection-zero | Last forced-random | Last oracle | Last learned calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` continue | `0.3025` | `0.6050` | `0.5725` at `550` | `0.0025` | `0.0625` | `0.5725` | `0.8725` |
+| `src5_add5` continue | `0.5550` | `0.8175` | `0.8150` at `800` | `0.0000` | `0.0425` | `0.8075` | `0.8000` |
+
+Decision:
+
+```text
+bottleneck_to_additive_longer_downstream_adaptation_partial
+```
+
+Interpretation:
+
+- Weak-source handoffs are not hard failures. Longer downstream adaptation can
+  substantially improve answer accuracy while preserving causal calculator
+  dependence.
+- The source-quality issue is still real. After the same total 1600-step
+  additive adaptation budget, the weak sources remained below the strong
+  source handoffs (`~0.95` final eval).
+- Next work should test source checkpoint selection, better downstream
+  adaptation objectives, or controlled unfreezing rather than merely repeating
+  one more longer frozen continuation.

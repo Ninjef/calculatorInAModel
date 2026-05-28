@@ -414,6 +414,20 @@ should test source checkpoint selection/quality metrics, stronger downstream
 readout adaptation, and controlled unfreezing rather than blindly repeating
 frozen transfers.
 
+Longer downstream adaptation then showed that the weak-source handoffs were
+not completely dead, but also not solved:
+`bottleneck_to_additive_longer_downstream_adaptation_partial`. Continuing the
+weak frozen additive runs for another 800 steps from their additive final
+weights preserved the frozen calculator policies and kept causal controls near
+chance. `src5_add5` improved from `0.5550` to `0.8175` final eval, with
+injection-zero `0.0000`, forced-random `0.0425`, oracle `0.8075`, and learned
+calc `0.8000`. `src4_add2` improved from `0.3025` to `0.6050` final eval,
+with injection-zero `0.0025`, forced-random `0.0625`, oracle `0.5725`, and
+learned calc `0.8725`. The result weakens the claim that poor 800-step
+handoffs are hard failures, but source/readout quality still matters because
+neither weak-source continuation matched the strong-source `~0.95` result by
+the same total 1600-step adaptation budget.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -522,6 +536,10 @@ Do not rerun these as next steps unless debugging new code:
   `src2_add2`, `src2_add4`, `src4_add2`, `src4_add4`, or `src5_add5` at
   800 steps as novelty. They established strong-source replication and weak
   source sensitivity.
+- the completed weak-source frozen continuation cells `src4_add2` and
+  `src5_add5` for one extra 800-step continuation as novelty. They established
+  that longer downstream adaptation helps but does not fully erase source
+  quality sensitivity.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -536,9 +554,10 @@ gate only if it adds explicit causal calculator-use pressure or a staged
 bottleneck-to-additive handoff that is stronger than a plain zero-injection
 loss-gap hinge, seed replication/unfreeze schedules for the frozen-policy
 bottleneck-to-additive handoff that specifically changes source checkpoint
-selection, downstream adaptation, or unfreezing, a Jacobian-conditioned state
-more substantial than the result-output `J^T answer_grad` feature, or a richer
-target construction that remains valid after upstream movement.
+selection, downstream adaptation beyond just one longer continuation, or
+unfreezing, a Jacobian-conditioned state more substantial than the result-output
+`J^T answer_grad` feature, or a richer target construction that remains valid
+after upstream movement.
 Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`

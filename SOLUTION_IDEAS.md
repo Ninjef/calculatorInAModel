@@ -296,6 +296,13 @@ learned calculator-result accuracy. So the next handoff work should not just
 repeat frozen transfer; it should select or improve source checkpoints, train
 the downstream readout more robustly, or unfreeze carefully without destroying
 the calculator policy.
+Longer downstream adaptation helped the weaker sources: continuing `src5_add5`
+for another 800 steps improved final eval to `0.8175`, and continuing
+`src4_add2` improved to `0.6050`, with injection-zero still near chance. This
+means weak-source handoff is partly an adaptation problem, but the strong
+source still reached `~0.95` faster and higher. Useful next handoff ideas are
+checkpoint selection, better readout adaptation, and controlled unfreezing
+rather than simply extending every frozen run.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 
