@@ -104,6 +104,16 @@ fixed-random direct-feedback seed failed the Stage 0 result-head gate
 (`result-proj cosine=-0.0036`). Label:
 `boundary_feedback_stage0_output_projection_alignment_pass_stage1_discovery_negative`.
 
+A fit-once linear shadow-feedback module was then tested. It fits a linear map
+from answer-loss injection gradients to boundary result-logit gradients once at
+initialization, freezes that map, and trains without recomputing boundary
+targets. Stage 0 induced gradients were almost perfectly aligned with the
+boundary ceiling (`result-proj cosine=0.9983`, upstream `0.9854`, semantic
+decoder gradient `0.0`), but the 200-step Stage 1 early-lift smoke failed
+badly (`0.070` best snapshot calculator-result accuracy; `0.040` final exact
+match). Label:
+`linear_shadow_feedback_stage0_alignment_pass_stage1_early_lift_negative`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -121,10 +131,12 @@ Do not rerun these as next steps unless debugging new code:
 - plain output-projection boundary feedback with the same Stage 1 objective and
   schedule, or fixed-random DFA long runs that do not first pass result-head
   Stage 0 alignment.
+- frozen fit-once linear shadow feedback with the same exact-grid calibration
+  and weight/schedule.
 
-Next best step: move from plain direct feedback to learned shadow-gradient or
-synthetic-gradient modules. Keep the exact-grid boundary-ceiling diagnostic as
-the Stage 0 gate for any new mechanism, and require early Stage 1 lift above
+Next best step: move from fixed linear shadow feedback to heldout-validated or
+online-trained shadow modules. Keep the exact-grid boundary-ceiling diagnostic
+as the Stage 0 gate for any new mechanism, and require early Stage 1 lift above
 the `0.16` boundary-feedback baseline before long runs. Do not move directly to
 canonical-query/protocol stabilization as if Phase 7 retention had robustly
 replicated, and do not treat ordinary expected-cost/score-function training as

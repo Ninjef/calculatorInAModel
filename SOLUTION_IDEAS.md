@@ -86,10 +86,19 @@ request is representable and teachable, but the next useful branch should
 change the backward signal rather than only reducing score-function variance or
 reshaping the same expected-cost objective.
 
+Phase 7 update after the first biased-backward-channel tests: plain
+output-projection boundary feedback and a fit-once linear shadow-feedback map
+both failed Stage 1 discovery. The linear shadow map produced very strong
+initial alignment with the boundary ceiling (`0.9983` result-proj cosine,
+`0.9854` upstream cosine), but its 200-step frozen-map smoke reached only
+`0.040` final exact match. Future shadow-gradient work should use heldout
+validation and/or online-trained shadow modules, with early Stage 1 lift above
+the `0.16` boundary-feedback baseline before long runs.
+
 Selected next direction:
 
 ```text
-synthetic gradients / direct feedback alignment / learned shadow-gradient modules
+heldout-validated or online-trained shadow-gradient modules
 ```
 
 Rationale: the current result-space action is representable, and one decoder

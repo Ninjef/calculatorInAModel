@@ -27,3 +27,9 @@ Conclusion: Seed `0` fixed-random feedback had result-head cosine `-0.0036` agai
 Do not repeat: Single-seed fixed-random DFA long training without a positive result-head Stage 0 gate.
 Next allowed test: Multi-seed random-feedback screening or learned feedback, but only with Stage 0 gating.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-boundary-feedback-gradient-gate.md`
+
+DISPROVEN: A fit-once linear shadow map from injection gradients to boundary result-logit gradients is enough for early natural result discovery.
+Conclusion: Stage 0 model-update alignment was very high (`0.9983` result-proj, `0.9854` upstream), but 200-step Stage 1 reached only `0.070` best snapshot accuracy and `0.040` final exact match.
+Do not repeat: Frozen fit-once linear shadow feedback with the same exact-grid calibration and weight/schedule.
+Next allowed test: Heldout-validated or online-trained shadow modules with an early-lift gate, not a fixed linear map fit once at initialization.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-linear-shadow-feedback-gate.md`

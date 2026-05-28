@@ -602,3 +602,22 @@ Stage 1 lift requirement
 Do not rerun plain output-projection feedback or fixed-random DFA long runs
 without a genuinely stronger feedback mechanism and a positive result-head
 Stage 0 gate.
+
+## Status Update: 2026-05-28, Linear Shadow Feedback
+
+A fit-once linear shadow-feedback branch was tested after the boundary-feedback
+negative:
+
+```text
+linear_shadow_feedback_stage0_alignment_pass_stage1_early_lift_negative
+```
+
+The Stage 0 diagnostic fit a linear map from answer-loss injection gradients to
+boundary result-logit gradients. It passed at the model-update level
+(`result-proj cosine=0.9983`, upstream `0.9854`, semantic decoder gradient
+`0.0`), but the frozen-map 200-step Stage 1 smoke failed to show early lift
+(`0.070` best snapshot calculator-result accuracy, `0.040` final exact match).
+
+Do not run an 800-step continuation of this exact setup. The next shadow
+branch must improve on this by using heldout validation and/or online training
+of the shadow module, with an early Stage 1 lift gate before long-run budget.

@@ -1668,3 +1668,81 @@ Interpretation:
 - Next work should use a learned shadow-gradient/synthetic-gradient module or
   stronger feedback objective, with the same exact-grid Stage 0 gate and an
   early Stage 1 lift check before long-run budget.
+
+## 2026-05-28 Linear Shadow-Feedback Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-twelfth-task-Linear-shadow-feedback-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_shadow_feedback_gradient_gate
+```
+
+Code changes:
+
+- Split shadow feedback into fit/apply functions.
+- Added `--shadow-feedback-weight`, `--shadow-feedback-ridge`, and
+  `--shadow-feedback-gradient-diagnostic-only`.
+- Stage 1 shadow-feedback training fits the linear map once before training,
+  saves it, and does not recompute boundary targets in the training loop.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+97 passed
+```
+
+Stage 0 linear shadow feedback passed the local model-update alignment gate:
+
+| Metric | Value |
+| --- | ---: |
+| shadow result-proj grad L2 | `0.08958` |
+| shadow upstream grad L2 | `0.03303` |
+| shadow semantic decoder grad L2 | `0.0` |
+| result-proj cosine vs boundary | `0.99834` |
+| upstream cosine vs boundary | `0.98543` |
+| linear feedback fit cosine | `0.46028` |
+
+Decision:
+
+```text
+linear_shadow_feedback_stage0_alignment_pass
+```
+
+The 200-step frozen-map Stage 1 early-lift smoke failed:
+
+| Metric | Value |
+| --- | ---: |
+| best snapshot normal exact / calc-result accuracy | `0.070` at step `75` |
+| final exact match | `0.040` |
+| final learned calc-result accuracy in training curve | `0.045` |
+| best injection-zero exact match | `0.065` |
+| oracle-at-eval exact match | `1.0` |
+
+Decision:
+
+```text
+linear_shadow_feedback_stage0_alignment_pass_stage1_early_lift_negative
+```
+
+Interpretation:
+
+- A fit-once linear shadow map can produce nearly boundary-aligned gradients at
+  initialization, but this is not enough for discovery under a frozen map.
+- The early Stage 1 smoke performed worse than the previous output-projection
+  boundary-feedback baseline (`0.040` final exact vs `0.160`).
+- Do not continue this exact branch to 800 steps. Next work should use a
+  heldout-validated or online-trained shadow module, with early Stage 1 lift
+  required before long-run budget.

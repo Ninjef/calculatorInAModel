@@ -109,6 +109,9 @@ class TrainConfig:
     boundary_feedback_mode: str
     boundary_feedback_seed: int
     boundary_feedback_gradient_diagnostic_only: bool
+    shadow_feedback_ridge: float
+    shadow_feedback_weight: float
+    shadow_feedback_gradient_diagnostic_only: bool
     calculator_result_head_hidden_size: int
     relaxed_calculator_temperature: float
     relaxed_calculator_final_temperature: float
@@ -1728,6 +1731,245 @@ def boundary_feedback_alignment_loss(
     return objective, metrics
 
 
+def _answer_loss_injection_gradient(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if model.cfg.calculator_bottleneck_mode != "answer_decoder":
+        raise ValueError("shadow feedback currently requires answer_decoder bottleneck")
+    model.zero_grad(set_to_none=True)
+    with torch.no_grad():
+        _, diagnostics = model(batch.x, return_diagnostics=True)
+    injection = diagnostics["calculator_injection"].detach().requires_grad_(True)
+    base_logits = injection.new_zeros(
+        (*batch.x.shape, model.cfg.vocab_size),
+    )
+    logits = model._answer_bottleneck_logits(base_logits, injection, batch.x)
+    answer_loss = masked_cross_entropy_per_example(
+        logits,
+        batch.y,
+        batch.loss_mask,
+    ).mean()
+    answer_loss.backward()
+    if injection.grad is None:
+        raise RuntimeError("calculator injection gradient was not populated")
+    feedback_input = _selected_eq_rows(injection.grad.detach(), batch.x)
+    model.zero_grad(set_to_none=True)
+    return feedback_input, answer_loss.detach()
+
+
+def boundary_result_logit_gradient_target(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    target_mode: str,
+    temperature: float,
+    min_probability_floor: float,
+    chunk_size: int,
+) -> tuple[torch.Tensor, dict[str, float | int | str]]:
+    if target_mode not in {"hard_best_result", "soft_result"}:
+        raise ValueError(
+            "shadow feedback target mode must be 'hard_best_result' or 'soft_result'"
+        )
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    full_losses = score_forced_result_classes_chunked(
+        model, batch, chunk_size=chunk_size
+    )
+    target_weights = action_loss_weights_from_losses(
+        full_losses,
+        temperature=temperature,
+        min_probability_floor=min_probability_floor,
+    )
+    best_result = full_losses.argmin(dim=-1)
+    if target_mode == "hard_best_result":
+        target_loss = torch.nn.functional.cross_entropy(result_logits, best_result)
+    else:
+        target_loss = -(
+            target_weights * result_logits.log_softmax(dim=-1)
+        ).sum(dim=-1).mean()
+    (target_grad,) = torch.autograd.grad(target_loss, result_logits)
+
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = true_a + true_b
+    learned_result = result_logits.argmax(dim=-1)
+    metrics: dict[str, float | int | str] = {
+        "shadow_feedback_target_loss": float(target_loss.detach().item()),
+        "shadow_feedback_target_mode": target_mode,
+        "shadow_feedback_target_grad_l2": float(target_grad.detach().norm().item()),
+        "shadow_feedback_target_best_equals_true_sum": float(
+            (best_result == true_sum).float().mean().item()
+        ),
+        "shadow_feedback_target_learned_best_fraction": float(
+            (learned_result == best_result).float().mean().item()
+        ),
+        "shadow_feedback_target_hard_learned_calc_accuracy": float(
+            (learned_result == true_sum).float().mean().item()
+        ),
+    }
+    return target_grad.detach(), metrics
+
+
+def linear_shadow_feedback_alignment_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    ridge: float,
+    result_boundary_target_mode: str,
+    result_boundary_target_temperature: float,
+    result_boundary_target_min_probability_floor: float,
+    result_boundary_target_chunk_size: int,
+) -> tuple[torch.Tensor, dict[str, float | int | str]]:
+    weights, fit_metrics = fit_linear_shadow_feedback_weights(
+        model,
+        batch,
+        num_digits=num_digits,
+        ridge=ridge,
+        result_boundary_target_mode=result_boundary_target_mode,
+        result_boundary_target_temperature=result_boundary_target_temperature,
+        result_boundary_target_min_probability_floor=(
+            result_boundary_target_min_probability_floor
+        ),
+        result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+    )
+    objective, apply_metrics = fixed_linear_shadow_feedback_alignment_loss(
+        model,
+        batch,
+        num_digits=num_digits,
+        weights=weights,
+        ridge=ridge,
+        result_boundary_target_mode=result_boundary_target_mode,
+        result_boundary_target_temperature=result_boundary_target_temperature,
+        result_boundary_target_min_probability_floor=(
+            result_boundary_target_min_probability_floor
+        ),
+        result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+    )
+    metrics = dict(fit_metrics)
+    metrics.update(apply_metrics)
+    return objective, metrics
+
+
+def fit_linear_shadow_feedback_weights(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    ridge: float,
+    result_boundary_target_mode: str,
+    result_boundary_target_temperature: float,
+    result_boundary_target_min_probability_floor: float,
+    result_boundary_target_chunk_size: int,
+) -> tuple[torch.Tensor, dict[str, float | int | str]]:
+    if ridge < 0:
+        raise ValueError("shadow feedback ridge must be non-negative")
+    if model.cfg.calculator_action_head != "result_space":
+        raise ValueError("shadow feedback requires result_space head")
+    if model.calculator_hook is None:
+        raise ValueError("shadow feedback requires a calculator hook")
+
+    feedback_input, answer_loss = _answer_loss_injection_gradient(model, batch)
+    target_grad, target_metrics = boundary_result_logit_gradient_target(
+        model,
+        batch,
+        num_digits=num_digits,
+        target_mode=result_boundary_target_mode,
+        temperature=result_boundary_target_temperature,
+        min_probability_floor=result_boundary_target_min_probability_floor,
+        chunk_size=result_boundary_target_chunk_size,
+    )
+    ones = torch.ones(
+        (feedback_input.shape[0], 1),
+        device=feedback_input.device,
+        dtype=feedback_input.dtype,
+    )
+    features = torch.cat([feedback_input, ones], dim=-1)
+    target = target_grad.to(device=features.device, dtype=features.dtype)
+    xtx = features.transpose(0, 1) @ features
+    eye = torch.eye(xtx.shape[0], device=features.device, dtype=features.dtype)
+    eye[-1, -1] = 0.0
+    rhs = features.transpose(0, 1) @ target
+    weights = torch.linalg.solve(xtx + (ridge * eye), rhs)
+    predicted_feedback = features @ weights
+
+    target_norm = target.reshape(-1).norm()
+    pred_norm = predicted_feedback.reshape(-1).norm()
+    denom = target_norm * pred_norm
+    fit_cosine = (
+        float(torch.dot(target.reshape(-1), predicted_feedback.reshape(-1)).div(denom).item())
+        if float(denom.item()) > 0.0
+        else float("nan")
+    )
+    fit_mse = (predicted_feedback - target).pow(2).mean()
+    metrics: dict[str, float | int | str] = {
+        "shadow_feedback_answer_loss": float(answer_loss.item()),
+        "shadow_feedback_ridge": float(ridge),
+        "shadow_feedback_input_grad_l2": float(feedback_input.norm().item()),
+        "shadow_feedback_predicted_l2": float(predicted_feedback.norm().item()),
+        "shadow_feedback_fit_mse": float(fit_mse.item()),
+        "shadow_feedback_fit_cosine": fit_cosine,
+        "shadow_feedback_weight_l2": float(weights.norm().item()),
+    }
+    metrics.update(target_metrics)
+    return weights.detach(), metrics
+
+
+def fixed_linear_shadow_feedback_alignment_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    weights: torch.Tensor,
+    ridge: float,
+    result_boundary_target_mode: str,
+    result_boundary_target_temperature: float,
+    result_boundary_target_min_probability_floor: float,
+    result_boundary_target_chunk_size: int,
+) -> tuple[torch.Tensor, dict[str, float | int | str]]:
+    if model.cfg.calculator_action_head != "result_space":
+        raise ValueError("shadow feedback requires result_space head")
+    feedback_input, answer_loss = _answer_loss_injection_gradient(model, batch)
+    ones = torch.ones(
+        (feedback_input.shape[0], 1),
+        device=feedback_input.device,
+        dtype=feedback_input.dtype,
+    )
+    features = torch.cat([feedback_input, ones], dim=-1)
+    predicted_feedback = features @ weights.to(
+        device=features.device,
+        dtype=features.dtype,
+    )
+
+    model.zero_grad(set_to_none=True)
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    objective = (result_logits * predicted_feedback.detach()).sum()
+    learned_result = result_logits.argmax(dim=-1)
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = true_a + true_b
+    metrics: dict[str, float | int | str] = {
+        "shadow_feedback_loss": float(objective.detach().item()),
+        "shadow_feedback_answer_loss": float(answer_loss.item()),
+        "shadow_feedback_ridge": float(ridge),
+        "shadow_feedback_target_mode": result_boundary_target_mode,
+        "shadow_feedback_target_temperature": float(
+            result_boundary_target_temperature
+        ),
+        "shadow_feedback_target_min_probability_floor": float(
+            result_boundary_target_min_probability_floor
+        ),
+        "shadow_feedback_target_chunk_size": int(
+            result_boundary_target_chunk_size
+        ),
+        "shadow_feedback_input_grad_l2": float(feedback_input.norm().item()),
+        "shadow_feedback_predicted_l2": float(predicted_feedback.norm().item()),
+        "shadow_feedback_hard_learned_calc_accuracy": float(
+            (learned_result == true_sum).float().mean().item()
+        ),
+    }
+    return objective, metrics
+
+
 def parameter_group_name(name: str) -> str:
     if name.startswith("calculator_hook.result_proj."):
         return "calculator_hook.result_proj"
@@ -2183,6 +2425,97 @@ def run_boundary_feedback_gradient_diagnostic(
         ),
     }
     summary.update(feedback_metrics)
+    for key, value in boundary_metrics.items():
+        summary[f"boundary_{key}"] = value
+    return summary
+
+
+def run_shadow_feedback_gradient_diagnostic(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    ridge: float,
+    result_boundary_target_mode: str,
+    result_boundary_target_temperature: float,
+    result_boundary_target_min_probability_floor: float,
+    result_boundary_target_chunk_size: int,
+) -> dict[str, float | int | str]:
+    if model.cfg.calculator_action_head != "result_space":
+        raise ValueError("shadow feedback diagnostic requires result_space head")
+    model.train()
+
+    shadow_objective, shadow_metrics = linear_shadow_feedback_alignment_loss(
+        model,
+        batch,
+        num_digits=num_digits,
+        ridge=ridge,
+        result_boundary_target_mode=result_boundary_target_mode,
+        result_boundary_target_temperature=result_boundary_target_temperature,
+        result_boundary_target_min_probability_floor=(
+            result_boundary_target_min_probability_floor
+        ),
+        result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+    )
+    shadow_objective.backward()
+    shadow_grads = flattened_group_gradients(model)
+
+    model.zero_grad(set_to_none=True)
+    boundary_loss, boundary_metrics = result_boundary_target_loss(
+        model,
+        batch,
+        num_digits=num_digits,
+        target_mode=result_boundary_target_mode,
+        temperature=result_boundary_target_temperature,
+        min_probability_floor=result_boundary_target_min_probability_floor,
+        chunk_size=result_boundary_target_chunk_size,
+    )
+    boundary_loss.backward()
+    boundary_grads = flattened_group_gradients(model)
+    model.zero_grad(set_to_none=True)
+
+    shadow_result_norm = gradient_l2(shadow_grads, "calculator_hook.result_proj")
+    shadow_upstream_norm = gradient_l2(shadow_grads, "upstream")
+    boundary_result_norm = gradient_l2(boundary_grads, "calculator_hook.result_proj")
+    boundary_upstream_norm = gradient_l2(boundary_grads, "upstream")
+    summary: dict[str, float | int | str] = {
+        "diagnostic": "linear_shadow_feedback_gradient_agreement",
+        "batch_size": int(batch.x.shape[0]),
+        "shadow_feedback_ridge": float(ridge),
+        "shadow_result_proj_grad_l2": shadow_result_norm,
+        "shadow_upstream_grad_l2": shadow_upstream_norm,
+        "shadow_semantic_decoder_grad_l2": gradient_l2(
+            shadow_grads,
+            "semantic_decoder",
+        ),
+        "boundary_result_proj_grad_l2": boundary_result_norm,
+        "boundary_upstream_grad_l2": boundary_upstream_norm,
+        "boundary_semantic_decoder_grad_l2": gradient_l2(
+            boundary_grads,
+            "semantic_decoder",
+        ),
+        "shadow_vs_boundary_result_proj_cosine": gradient_cosine(
+            shadow_grads,
+            boundary_grads,
+            "calculator_hook.result_proj",
+        ),
+        "shadow_vs_boundary_upstream_cosine": gradient_cosine(
+            shadow_grads,
+            boundary_grads,
+            "upstream",
+        ),
+        "shadow_vs_boundary_result_proj_relative_norm": (
+            shadow_result_norm / boundary_result_norm
+            if boundary_result_norm > 0
+            else float("nan")
+        ),
+        "shadow_vs_boundary_upstream_relative_norm": (
+            shadow_upstream_norm / boundary_upstream_norm
+            if boundary_upstream_norm > 0
+            else float("nan")
+        ),
+    }
+    summary.update(shadow_metrics)
     for key, value in boundary_metrics.items():
         summary[f"boundary_{key}"] = value
     return summary
@@ -3705,6 +4038,11 @@ def run_variant(
         boundary_feedback_gradient_diagnostic_only=(
             args.boundary_feedback_gradient_diagnostic_only
         ),
+        shadow_feedback_ridge=args.shadow_feedback_ridge,
+        shadow_feedback_weight=args.shadow_feedback_weight,
+        shadow_feedback_gradient_diagnostic_only=(
+            args.shadow_feedback_gradient_diagnostic_only
+        ),
         calculator_result_head_hidden_size=args.calculator_result_head_hidden_size,
         relaxed_calculator_temperature=args.relaxed_calculator_temperature,
         relaxed_calculator_final_temperature=(
@@ -3891,6 +4229,101 @@ def run_variant(
             "run_dir": str(run_dir),
             "boundary_feedback_gradient_diagnostic": diagnostic_summary,
         }
+    if args.shadow_feedback_gradient_diagnostic_only:
+        if exhaustive_grid_batch is not None:
+            diagnostic_batch = exhaustive_grid_batch
+        else:
+            diagnostic_batch = make_range_batch(
+                batch_size=args.batch_size,
+                num_digits=num_digits,
+                operand_max=operand_max,
+                rng=rng,
+                fixed_width=True,
+                device=device,
+                answer_format=args.answer_format,
+            )
+        diagnostic_summary = run_shadow_feedback_gradient_diagnostic(
+            model,
+            diagnostic_batch,
+            num_digits=num_digits,
+            ridge=args.shadow_feedback_ridge,
+            result_boundary_target_mode=args.result_boundary_target_mode,
+            result_boundary_target_temperature=args.result_boundary_target_temperature,
+            result_boundary_target_min_probability_floor=(
+                args.result_boundary_target_min_probability_floor
+            ),
+            result_boundary_target_chunk_size=args.result_boundary_target_chunk_size,
+        )
+        diagnostic_summary["run_dir"] = str(run_dir)
+        diagnostic_summary["num_digits"] = int(num_digits)
+        (run_dir / "shadow_feedback_gradient_diagnostic_summary.json").write_text(
+            json.dumps(diagnostic_summary, indent=2) + "\n"
+        )
+        print(
+            "shadow-feedback gradient diagnostic: "
+            f"shadow_result_grad={diagnostic_summary['shadow_result_proj_grad_l2']:.6f} "
+            f"result_cos={diagnostic_summary['shadow_vs_boundary_result_proj_cosine']:.6f} "
+            f"upstream_cos={diagnostic_summary['shadow_vs_boundary_upstream_cosine']:.6f} "
+            f"fit_cos={diagnostic_summary['shadow_feedback_fit_cosine']:.6f}"
+        )
+        return {
+            "num_digits": num_digits,
+            "exact_match": float("nan"),
+            "final_loss": float("nan"),
+            "run_dir": str(run_dir),
+            "shadow_feedback_gradient_diagnostic": diagnostic_summary,
+        }
+
+    shadow_feedback_weights: torch.Tensor | None = None
+    shadow_feedback_calibration_metrics: dict[str, float | int | str] = {}
+    if args.shadow_feedback_weight > 0:
+        if exhaustive_grid_batch is not None:
+            shadow_calibration_batch = exhaustive_grid_batch
+        else:
+            shadow_calibration_batch = make_range_batch(
+                batch_size=args.batch_size,
+                num_digits=num_digits,
+                operand_max=operand_max,
+                rng=rng,
+                fixed_width=True,
+                device=device,
+                answer_format=args.answer_format,
+            )
+        shadow_feedback_weights, shadow_feedback_calibration_metrics = (
+            fit_linear_shadow_feedback_weights(
+                model,
+                shadow_calibration_batch,
+                num_digits=num_digits,
+                ridge=args.shadow_feedback_ridge,
+                result_boundary_target_mode=args.result_boundary_target_mode,
+                result_boundary_target_temperature=(
+                    args.result_boundary_target_temperature
+                ),
+                result_boundary_target_min_probability_floor=(
+                    args.result_boundary_target_min_probability_floor
+                ),
+                result_boundary_target_chunk_size=(
+                    args.result_boundary_target_chunk_size
+                ),
+            )
+        )
+        torch.save(
+            {
+                "weights": shadow_feedback_weights.cpu(),
+                "metrics": shadow_feedback_calibration_metrics,
+                "ridge": args.shadow_feedback_ridge,
+            },
+            run_dir / "shadow_feedback_weights.pt",
+        )
+        (run_dir / "shadow_feedback_calibration_summary.json").write_text(
+            json.dumps(shadow_feedback_calibration_metrics, indent=2) + "\n"
+        )
+        print(
+            "shadow feedback calibration: "
+            f"fit_cos={shadow_feedback_calibration_metrics['shadow_feedback_fit_cosine']:.6f} "
+            f"target_grad={shadow_feedback_calibration_metrics['shadow_feedback_target_grad_l2']:.6f} "
+            f"pred_norm={shadow_feedback_calibration_metrics['shadow_feedback_predicted_l2']:.6f}"
+        )
 
     curve: list[dict[str, float | int]] = []
     snapshots: list[dict[str, object]] = []
@@ -3958,6 +4391,15 @@ def run_variant(
         use_boundary_feedback = (
             args.variant == "model-c"
             and args.calculator_estimator == "direct_feedback_alignment"
+            and args.boundary_feedback_weight > 0
+            and shadow_feedback_weights is None
+            and not args.oracle_train
+        )
+        use_shadow_feedback = (
+            args.variant == "model-c"
+            and args.calculator_estimator == "direct_feedback_alignment"
+            and args.shadow_feedback_weight > 0
+            and shadow_feedback_weights is not None
             and not args.oracle_train
         )
         use_relaxed_calculator = (
@@ -4023,6 +4465,9 @@ def run_variant(
         boundary_feedback_loss_value = None
         boundary_feedback_objective_value = None
         boundary_feedback_metrics: dict[str, float | int | str] = {}
+        shadow_feedback_loss_value = None
+        shadow_feedback_objective_value = None
+        shadow_feedback_metrics: dict[str, float | int | str] = {}
         relaxed_calculator_entropy_objective_value = None
         current_relaxed_entropy_weight = 0.0
         relaxed_calculator_metrics: dict[str, float] = {}
@@ -4225,6 +4670,36 @@ def run_variant(
                 boundary_feedback_objective.item()
             )
             loss = loss + boundary_feedback_objective
+        if use_shadow_feedback:
+            assert shadow_feedback_weights is not None
+            (
+                shadow_feedback_loss,
+                shadow_feedback_metrics,
+            ) = fixed_linear_shadow_feedback_alignment_loss(
+                model,
+                batch,
+                num_digits=num_digits,
+                weights=shadow_feedback_weights,
+                ridge=args.shadow_feedback_ridge,
+                result_boundary_target_mode=args.result_boundary_target_mode,
+                result_boundary_target_temperature=(
+                    args.result_boundary_target_temperature
+                ),
+                result_boundary_target_min_probability_floor=(
+                    args.result_boundary_target_min_probability_floor
+                ),
+                result_boundary_target_chunk_size=(
+                    args.result_boundary_target_chunk_size
+                ),
+            )
+            shadow_feedback_loss_value = float(shadow_feedback_loss.item())
+            shadow_feedback_objective = (
+                args.shadow_feedback_weight * shadow_feedback_loss
+            )
+            shadow_feedback_objective_value = float(
+                shadow_feedback_objective.item()
+            )
+            loss = loss + shadow_feedback_objective
         if use_relaxed_calculator:
             current_relaxed_entropy_weight = relaxed_calculator_entropy_weight(
                 initial_weight=args.relaxed_calculator_entropy_weight,
@@ -4337,6 +4812,14 @@ def run_variant(
                     boundary_feedback_objective_value
                 )
                 curve_row.update(boundary_feedback_metrics)
+            if use_shadow_feedback:
+                curve_row["shadow_feedback_weight"] = (
+                    args.shadow_feedback_weight
+                )
+                curve_row["shadow_feedback_objective"] = (
+                    shadow_feedback_objective_value
+                )
+                curve_row.update(shadow_feedback_metrics)
             if use_relaxed_calculator:
                 curve_row["relaxed_calculator_entropy_objective"] = (
                     relaxed_calculator_entropy_objective_value
@@ -4418,6 +4901,14 @@ def run_variant(
                     f" feedback_norm={boundary_feedback_metrics['boundary_feedback_signal_l2']:.3f}"
                     f" learned_calc={boundary_feedback_metrics['boundary_feedback_hard_learned_calc_accuracy']:.3f}"
                     if use_boundary_feedback
+                    else ""
+                )
+                + (
+                    f" shadow_feedback_loss={shadow_feedback_loss_value:.4f}"
+                    f" shadow_feedback_weight={args.shadow_feedback_weight:.4f}"
+                    f" shadow_norm={shadow_feedback_metrics['shadow_feedback_predicted_l2']:.3f}"
+                    f" learned_calc={shadow_feedback_metrics['shadow_feedback_hard_learned_calc_accuracy']:.3f}"
+                    if use_shadow_feedback
                     else ""
                 )
                 + (
@@ -4624,6 +5115,11 @@ def run_variant(
     metrics["final_boundary_feedback_weight"] = args.boundary_feedback_weight
     metrics["boundary_feedback_mode"] = args.boundary_feedback_mode
     metrics["boundary_feedback_seed"] = args.boundary_feedback_seed
+    metrics["shadow_feedback_ridge"] = args.shadow_feedback_ridge
+    metrics["shadow_feedback_weight"] = args.shadow_feedback_weight
+    metrics["final_shadow_feedback_weight"] = args.shadow_feedback_weight
+    if shadow_feedback_calibration_metrics:
+        metrics["shadow_feedback_calibration"] = shadow_feedback_calibration_metrics
     metrics["calculator_result_head_hidden_size"] = (
         args.calculator_result_head_hidden_size
     )
@@ -5223,6 +5719,32 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--shadow-feedback-ridge",
+        type=float,
+        default=1e-3,
+        help=(
+            "Ridge penalty for the diagnostic linear shadow-feedback fit from "
+            "answer-loss injection gradients to boundary result-logit gradients."
+        ),
+    )
+    parser.add_argument(
+        "--shadow-feedback-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Weight for a frozen linear shadow-feedback map fitted once before "
+            "training. Used with --calculator-estimator direct_feedback_alignment."
+        ),
+    )
+    parser.add_argument(
+        "--shadow-feedback-gradient-diagnostic-only",
+        action="store_true",
+        help=(
+            "Run one fixed-batch learned linear shadow-feedback diagnostic "
+            "against the boundary-target ceiling, then exit."
+        ),
+    )
+    parser.add_argument(
         "--calculator-result-head-hidden-size",
         type=int,
         default=0,
@@ -5599,6 +6121,10 @@ def main() -> None:
         raise ValueError("--result-boundary-target-chunk-size must be positive")
     if args.boundary_feedback_weight < 0:
         raise ValueError("--boundary-feedback-weight must be non-negative")
+    if args.shadow_feedback_ridge < 0:
+        raise ValueError("--shadow-feedback-ridge must be non-negative")
+    if args.shadow_feedback_weight < 0:
+        raise ValueError("--shadow-feedback-weight must be non-negative")
     if args.calculator_result_head_hidden_size < 0:
         raise ValueError("--calculator-result-head-hidden-size must be non-negative")
     if args.exhaustive_grid_batch and args.operand_max is None:
@@ -5638,10 +6164,13 @@ def main() -> None:
     if (
         args.calculator_estimator == "direct_feedback_alignment"
         and not args.boundary_feedback_gradient_diagnostic_only
+        and not args.shadow_feedback_gradient_diagnostic_only
         and args.boundary_feedback_weight <= 0
+        and args.shadow_feedback_weight <= 0
     ):
         raise ValueError(
-            "direct_feedback_alignment training requires --boundary-feedback-weight > 0"
+            "direct_feedback_alignment training requires "
+            "--boundary-feedback-weight > 0 or --shadow-feedback-weight > 0"
         )
     if args.relaxed_calculator_temperature <= 0:
         raise ValueError("--relaxed-calculator-temperature must be positive")
@@ -5750,6 +6279,14 @@ def main() -> None:
     ):
         raise ValueError(
             "--boundary-feedback-gradient-diagnostic-only requires "
+            "result_space direct_feedback_alignment"
+        )
+    if args.shadow_feedback_gradient_diagnostic_only and not (
+        args.calculator_estimator == "direct_feedback_alignment"
+        and args.calculator_action_head == "result_space"
+    ):
+        raise ValueError(
+            "--shadow-feedback-gradient-diagnostic-only requires "
             "result_space direct_feedback_alignment"
         )
     if args.reinforce_entropy_weight < 0:
@@ -5878,6 +6415,14 @@ def main() -> None:
                 suffix_parts.append(f"bfseed{args.boundary_feedback_seed}")
             if args.boundary_feedback_gradient_diagnostic_only:
                 suffix_parts.append("bfgraddiag")
+            if args.shadow_feedback_gradient_diagnostic_only:
+                suffix_parts.append(f"shadowridge{args.shadow_feedback_ridge:g}")
+                suffix_parts.append("shadowgraddiag")
+            if args.shadow_feedback_weight > 0:
+                suffix_parts.append(
+                    f"shadow{args.shadow_feedback_weight:g}"
+                    f"-ridge{args.shadow_feedback_ridge:g}"
+                )
         if args.result_boundary_target_loss_weight > 0:
             suffix_parts.append(
                 f"rbt{args.result_boundary_target_loss_weight:g}"
@@ -6018,6 +6563,12 @@ def main() -> None:
         f"mode={args.boundary_feedback_mode} "
         f"seed={args.boundary_feedback_seed} "
         f"gradient_diagnostic_only={args.boundary_feedback_gradient_diagnostic_only}"
+    )
+    print(
+        "shadow feedback: "
+        f"weight={args.shadow_feedback_weight} "
+        f"ridge={args.shadow_feedback_ridge} "
+        f"gradient_diagnostic_only={args.shadow_feedback_gradient_diagnostic_only}"
     )
     print(
         "calculator result head hidden size: "
