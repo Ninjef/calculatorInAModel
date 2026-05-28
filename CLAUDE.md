@@ -198,6 +198,17 @@ failure mode. On the same `cosine` branch, h32 reached heldout
 `0.7650/0.8010`, with gaps `0.1983/0.1546`. Label:
 `online_mlp_shadow_feedback_target_unit_norm_no_go`.
 
+Fit-split result-prototype target stabilization was then added. It averages
+boundary target gradients by the boundary-best result class on the fit split,
+then trains/evaluates the online MLP against those class prototypes while the
+heldout model-gradient gate still compares induced gradients against the
+original boundary ceiling. This improved the tradeoff slightly, but still did
+not clear the gate. h32/`cosine` reached the best heldout result cosine so far
+in this branch (`0.8040/0.8243`) but had gaps `0.1909/0.1557`. h16/`cosine`
+plus prototype gap-penalized selection reached heldout `0.7540/0.7855`, with
+gaps `0.1705/0.1409`; result gap remained above `0.15`. Label:
+`online_mlp_shadow_feedback_target_prototype_partial_no_go`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -241,14 +252,18 @@ Do not rerun these as next steps unless debugging new code:
 - per-example unit-norm target transforms on that same directional-loss
   `injection_grad_logits` setup with h16/h32 and `cosine`/`mse_plus_cosine`
   as novelty.
+- fit-split result-prototype target averaging on that same directional-loss
+  `injection_grad_logits` setup with h16/h32, `cosine`/`mse_plus_cosine`, and
+  gap-selection penalties `3/4/5` as novelty.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient state more substantially, or by adding
 explicit norm/gap training losses rather than simple dropout, checkpoint
-selection, or row-wise target normalization. Plausible branches include
-target averaging/prototype stabilization, Jacobian- or representation-
-conditioned gradient state, or direct training-time gap/norm penalties. Keep
-the exact-grid boundary-ceiling
+selection, row-wise target normalization, or class-prototype averaging.
+Plausible branches include Jacobian- or representation-conditioned gradient
+state, direct training-time gap/norm penalties, or a target construction that
+uses more context than the boundary-best class prototype. Keep the exact-grid
+boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`
 boundary-feedback baseline before long runs. Do not move directly to

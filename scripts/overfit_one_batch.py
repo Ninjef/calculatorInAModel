@@ -1787,6 +1787,30 @@ def boundary_result_logit_gradient_target(
     min_probability_floor: float,
     chunk_size: int,
 ) -> tuple[torch.Tensor, dict[str, float | int | str]]:
+    target_grad, _best_result, metrics = (
+        boundary_result_logit_gradient_target_with_classes(
+            model,
+            batch,
+            num_digits=num_digits,
+            target_mode=target_mode,
+            temperature=temperature,
+            min_probability_floor=min_probability_floor,
+            chunk_size=chunk_size,
+        )
+    )
+    return target_grad, metrics
+
+
+def boundary_result_logit_gradient_target_with_classes(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    target_mode: str,
+    temperature: float,
+    min_probability_floor: float,
+    chunk_size: int,
+) -> tuple[torch.Tensor, torch.Tensor, dict[str, float | int | str]]:
     if target_mode not in {"hard_best_result", "soft_result"}:
         raise ValueError(
             "shadow feedback target mode must be 'hard_best_result' or 'soft_result'"
@@ -1826,7 +1850,7 @@ def boundary_result_logit_gradient_target(
             (learned_result == true_sum).float().mean().item()
         ),
     }
-    return target_grad.detach(), metrics
+    return target_grad.detach(), best_result.detach(), metrics
 
 
 def linear_shadow_feedback_alignment_loss(
@@ -2023,6 +2047,8 @@ def shadow_feedback_mlp_examples(
     num_digits: int,
     feature_mode: str,
     target_transform: str,
+    target_prototypes: torch.Tensor | None = None,
+    target_prototype_counts: torch.Tensor | None = None,
     result_boundary_target_mode: str,
     result_boundary_target_temperature: float,
     result_boundary_target_min_probability_floor: float,
@@ -2031,14 +2057,16 @@ def shadow_feedback_mlp_examples(
     if model.cfg.calculator_action_head != "result_space":
         raise ValueError("shadow feedback requires result_space head")
     feedback_input, answer_loss = _answer_loss_injection_gradient(model, batch)
-    target_grad, target_metrics = boundary_result_logit_gradient_target(
-        model,
-        batch,
-        num_digits=num_digits,
-        target_mode=result_boundary_target_mode,
-        temperature=result_boundary_target_temperature,
-        min_probability_floor=result_boundary_target_min_probability_floor,
-        chunk_size=result_boundary_target_chunk_size,
+    target_grad, target_class_ids, target_metrics = (
+        boundary_result_logit_gradient_target_with_classes(
+            model,
+            batch,
+            num_digits=num_digits,
+            target_mode=result_boundary_target_mode,
+            temperature=result_boundary_target_temperature,
+            min_probability_floor=result_boundary_target_min_probability_floor,
+            chunk_size=result_boundary_target_chunk_size,
+        )
     )
     with torch.no_grad():
         result_logits, _, _, _ = calculator_read_result_logits(model, batch)
@@ -2074,6 +2102,9 @@ def shadow_feedback_mlp_examples(
     target, target_transform_metrics = transform_shadow_feedback_target(
         target,
         mode=target_transform,
+        class_ids=target_class_ids,
+        prototypes=target_prototypes,
+        prototype_counts=target_prototype_counts,
     )
     metrics: dict[str, float | int | str] = {
         "shadow_feedback_feature_mode": feature_mode,
@@ -2101,6 +2132,9 @@ def transform_shadow_feedback_target(
     target: torch.Tensor,
     *,
     mode: str,
+    class_ids: torch.Tensor | None = None,
+    prototypes: torch.Tensor | None = None,
+    prototype_counts: torch.Tensor | None = None,
 ) -> tuple[torch.Tensor, dict[str, float | int | str]]:
     if mode == "none":
         return target, {
@@ -2110,9 +2144,45 @@ def transform_shadow_feedback_target(
             ),
             "shadow_feedback_target_transform_clamped_count": 0,
         }
+    if mode == "fit_result_prototype":
+        if class_ids is None or prototypes is None or prototype_counts is None:
+            raise ValueError(
+                "fit_result_prototype target transform requires class ids, "
+                "prototypes, and prototype counts"
+            )
+        class_ids = class_ids.to(device=target.device, dtype=torch.long)
+        prototypes = prototypes.to(device=target.device, dtype=target.dtype)
+        prototype_counts = prototype_counts.to(device=target.device)
+        transformed = prototypes.index_select(0, class_ids)
+        missing_mask = prototype_counts.index_select(0, class_ids) <= 0
+        if bool(missing_mask.any().item()):
+            transformed = transformed.clone()
+            transformed[missing_mask] = target[missing_mask]
+        return transformed, {
+            "shadow_feedback_target_transform": mode,
+            "shadow_feedback_target_transform_epsilon": (
+                SHADOW_FEEDBACK_TARGET_NORMALIZATION_EPS
+            ),
+            "shadow_feedback_target_transform_missing_class_examples": int(
+                missing_mask.sum().item()
+            ),
+            "shadow_feedback_target_transform_nonempty_classes": int(
+                (prototype_counts > 0).sum().item()
+            ),
+            "shadow_feedback_target_transform_class_count_min": int(
+                prototype_counts[prototype_counts > 0].min().item()
+            )
+            if bool((prototype_counts > 0).any().item())
+            else 0,
+            "shadow_feedback_target_transform_class_count_max": int(
+                prototype_counts.max().item()
+            ),
+            "shadow_feedback_transformed_target_l2": float(transformed.norm().item()),
+        }
     if mode != "unit_norm_per_example":
         raise ValueError(
-            "shadow feedback target transform must be none or unit_norm_per_example"
+            "shadow feedback target transform must be none, "
+            "unit_norm_per_example, or fit_result_prototype"
         )
     raw_norm = target.norm(dim=-1, keepdim=True)
     clamped_count = int(
@@ -2133,6 +2203,50 @@ def transform_shadow_feedback_target(
         "shadow_feedback_target_transform_raw_norm_mean": float(raw_norm.mean().item()),
         "shadow_feedback_target_transform_clamped_count": clamped_count,
         "shadow_feedback_transformed_target_l2": float(transformed.norm().item()),
+    }
+
+
+def fit_shadow_feedback_target_prototypes(
+    target: torch.Tensor,
+    class_ids: torch.Tensor,
+    *,
+    num_classes: int,
+) -> tuple[torch.Tensor, torch.Tensor, dict[str, float | int | str]]:
+    if target.ndim != 2:
+        raise ValueError("shadow feedback prototype target must be rank 2")
+    if class_ids.ndim != 1 or class_ids.shape[0] != target.shape[0]:
+        raise ValueError("shadow feedback prototype class ids must match target rows")
+    if num_classes < 1:
+        raise ValueError("shadow feedback prototype class count must be positive")
+    class_ids = class_ids.to(device=target.device, dtype=torch.long)
+    prototypes = torch.zeros(
+        num_classes,
+        target.shape[-1],
+        device=target.device,
+        dtype=target.dtype,
+    )
+    counts = torch.zeros(num_classes, device=target.device, dtype=target.dtype)
+    prototypes.index_add_(0, class_ids, target)
+    counts.index_add_(0, class_ids, torch.ones_like(class_ids, dtype=target.dtype))
+    nonempty = counts > 0
+    prototypes[nonempty] = prototypes[nonempty] / counts[nonempty].unsqueeze(-1)
+    count_int = counts.to(dtype=torch.long)
+    return prototypes.detach(), count_int.detach(), {
+        "shadow_feedback_target_transform": "fit_result_prototype",
+        "shadow_feedback_target_prototype_classes": int(num_classes),
+        "shadow_feedback_target_prototype_nonempty_classes": int(
+            nonempty.sum().item()
+        ),
+        "shadow_feedback_target_prototype_empty_classes": int(
+            (~nonempty).sum().item()
+        ),
+        "shadow_feedback_target_prototype_count_min": int(
+            count_int[nonempty].min().item()
+        )
+        if bool(nonempty.any().item())
+        else 0,
+        "shadow_feedback_target_prototype_count_max": int(count_int.max().item()),
+        "shadow_feedback_target_prototype_l2": float(prototypes.norm().item()),
     }
 
 
@@ -2298,6 +2412,8 @@ def online_shadow_feedback_alignment_loss(
     num_digits: int,
     feature_mode: str,
     target_transform: str,
+    target_prototypes: torch.Tensor | None = None,
+    target_prototype_counts: torch.Tensor | None = None,
     result_boundary_target_mode: str,
     result_boundary_target_temperature: float,
     result_boundary_target_min_probability_floor: float,
@@ -2313,6 +2429,8 @@ def online_shadow_feedback_alignment_loss(
         num_digits=num_digits,
         feature_mode=feature_mode,
         target_transform=target_transform,
+        target_prototypes=target_prototypes,
+        target_prototype_counts=target_prototype_counts,
         result_boundary_target_mode=result_boundary_target_mode,
         result_boundary_target_temperature=result_boundary_target_temperature,
         result_boundary_target_min_probability_floor=(
@@ -2963,9 +3081,14 @@ def run_online_shadow_feedback_gradient_diagnostic(
         raise ValueError(
             "shadow feedback target normalization must be none or fit_zscore_per_result"
         )
-    if target_transform not in {"none", "unit_norm_per_example"}:
+    if target_transform not in {
+        "none",
+        "unit_norm_per_example",
+        "fit_result_prototype",
+    }:
         raise ValueError(
-            "shadow feedback target transform must be none or unit_norm_per_example"
+            "shadow feedback target transform must be none, "
+            "unit_norm_per_example, or fit_result_prototype"
         )
     if feature_mode not in {
         "injection_grad_logits",
@@ -3025,8 +3148,37 @@ def run_online_shadow_feedback_gradient_diagnostic(
     feature_mean: torch.Tensor | None = None
     feature_scale: torch.Tensor | None = None
     target_normalization_metrics: dict[str, float | int | str] = {}
+    target_transform_metrics: dict[str, float | int | str] = {}
     feature_normalization_metrics: dict[str, float | int | str] = {}
     fit_features_for_normalizer: torch.Tensor | None = None
+    target_prototypes: torch.Tensor | None = None
+    target_prototype_counts: torch.Tensor | None = None
+    if target_transform == "fit_result_prototype":
+        (
+            fit_target_for_prototypes,
+            fit_target_classes,
+            _,
+        ) = boundary_result_logit_gradient_target_with_classes(
+            model,
+            fit_batch,
+            num_digits=num_digits,
+            target_mode=result_boundary_target_mode,
+            temperature=result_boundary_target_temperature,
+            min_probability_floor=result_boundary_target_min_probability_floor,
+            chunk_size=result_boundary_target_chunk_size,
+        )
+        fit_target_for_prototypes = fit_target_for_prototypes.detach().to(
+            device=batch.x.device
+        ) * float(fit_batch.x.shape[0])
+        (
+            target_prototypes,
+            target_prototype_counts,
+            target_transform_metrics,
+        ) = fit_shadow_feedback_target_prototypes(
+            fit_target_for_prototypes,
+            fit_target_classes,
+            num_classes=model.cfg.calculator_result_vocab_size,
+        )
     if target_normalization != "none":
         (
             fit_features_for_normalizer,
@@ -3038,6 +3190,8 @@ def run_online_shadow_feedback_gradient_diagnostic(
             num_digits=num_digits,
             feature_mode=feature_mode,
             target_transform=target_transform,
+            target_prototypes=target_prototypes,
+            target_prototype_counts=target_prototype_counts,
             result_boundary_target_mode=result_boundary_target_mode,
             result_boundary_target_temperature=result_boundary_target_temperature,
             result_boundary_target_min_probability_floor=(
@@ -3070,6 +3224,8 @@ def run_online_shadow_feedback_gradient_diagnostic(
                 num_digits=num_digits,
                 feature_mode=feature_mode,
                 target_transform=target_transform,
+                target_prototypes=target_prototypes,
+                target_prototype_counts=target_prototype_counts,
                 result_boundary_target_mode=result_boundary_target_mode,
                 result_boundary_target_temperature=(
                     result_boundary_target_temperature
@@ -3123,6 +3279,8 @@ def run_online_shadow_feedback_gradient_diagnostic(
             num_digits=num_digits,
             feature_mode=feature_mode,
             target_transform=target_transform,
+            target_prototypes=target_prototypes,
+            target_prototype_counts=target_prototype_counts,
             result_boundary_target_mode=result_boundary_target_mode,
             result_boundary_target_temperature=result_boundary_target_temperature,
             result_boundary_target_min_probability_floor=(
@@ -3145,6 +3303,8 @@ def run_online_shadow_feedback_gradient_diagnostic(
                 num_digits=num_digits,
                 feature_mode=feature_mode,
                 target_transform=target_transform,
+                target_prototypes=target_prototypes,
+                target_prototype_counts=target_prototype_counts,
                 result_boundary_target_mode=result_boundary_target_mode,
                 result_boundary_target_temperature=result_boundary_target_temperature,
                 result_boundary_target_min_probability_floor=(
@@ -3210,6 +3370,8 @@ def run_online_shadow_feedback_gradient_diagnostic(
                 num_digits=num_digits,
                 feature_mode=feature_mode,
                 target_transform=target_transform,
+                target_prototypes=target_prototypes,
+                target_prototype_counts=target_prototype_counts,
                 result_boundary_target_mode=result_boundary_target_mode,
                 result_boundary_target_temperature=(
                     result_boundary_target_temperature
@@ -3277,6 +3439,8 @@ def run_online_shadow_feedback_gradient_diagnostic(
         num_digits=num_digits,
         feature_mode=feature_mode,
         target_transform=target_transform,
+        target_prototypes=target_prototypes,
+        target_prototype_counts=target_prototype_counts,
         result_boundary_target_mode=result_boundary_target_mode,
         result_boundary_target_temperature=result_boundary_target_temperature,
         result_boundary_target_min_probability_floor=(
@@ -3295,6 +3459,8 @@ def run_online_shadow_feedback_gradient_diagnostic(
         num_digits=num_digits,
         feature_mode=feature_mode,
         target_transform=target_transform,
+        target_prototypes=target_prototypes,
+        target_prototype_counts=target_prototype_counts,
         result_boundary_target_mode=result_boundary_target_mode,
         result_boundary_target_temperature=result_boundary_target_temperature,
         result_boundary_target_min_probability_floor=(
@@ -3364,6 +3530,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
         ),
     }
     summary.update(target_normalization_metrics)
+    summary.update(target_transform_metrics)
     summary.update(feature_normalization_metrics)
     if best_state is not None and validation_batch is not None:
         summary["shadow_feedback_best_step"] = int(best_validation_step)
@@ -3392,6 +3559,8 @@ def run_online_shadow_feedback_gradient_diagnostic(
             num_digits=num_digits,
             feature_mode=feature_mode,
             target_transform=target_transform,
+            target_prototypes=target_prototypes,
+            target_prototype_counts=target_prototype_counts,
             result_boundary_target_mode=result_boundary_target_mode,
             result_boundary_target_temperature=result_boundary_target_temperature,
             result_boundary_target_min_probability_floor=(
@@ -3410,6 +3579,8 @@ def run_online_shadow_feedback_gradient_diagnostic(
             num_digits=num_digits,
             feature_mode=feature_mode,
             target_transform=target_transform,
+            target_prototypes=target_prototypes,
+            target_prototype_counts=target_prototype_counts,
             result_boundary_target_mode=result_boundary_target_mode,
             result_boundary_target_temperature=result_boundary_target_temperature,
             result_boundary_target_min_probability_floor=(
@@ -3469,6 +3640,8 @@ def run_online_shadow_feedback_module_gradient_diagnostic(
     num_digits: int,
     feature_mode: str,
     target_transform: str,
+    target_prototypes: torch.Tensor | None = None,
+    target_prototype_counts: torch.Tensor | None = None,
     result_boundary_target_mode: str,
     result_boundary_target_temperature: float,
     result_boundary_target_min_probability_floor: float,
@@ -3486,6 +3659,8 @@ def run_online_shadow_feedback_module_gradient_diagnostic(
         num_digits=num_digits,
         feature_mode=feature_mode,
         target_transform=target_transform,
+        target_prototypes=target_prototypes,
+        target_prototype_counts=target_prototype_counts,
         result_boundary_target_mode=result_boundary_target_mode,
         result_boundary_target_temperature=result_boundary_target_temperature,
         result_boundary_target_min_probability_floor=(
@@ -7260,7 +7435,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--shadow-feedback-target-transform",
-        choices=["none", "unit_norm_per_example"],
+        choices=["none", "unit_norm_per_example", "fit_result_prototype"],
         default="none",
         help=(
             "Optional target-gradient stabilization applied before target "

@@ -843,3 +843,28 @@ h16/cosine reached `0.7650/0.8010`, with gaps `0.1983/0.1546`.
 No Stage 1 early-lift run was launched. Next work should use more structural
 target stabilization, a different learned-gradient state, or explicit
 training-time gap/norm penalties rather than row-wise norm removal.
+
+## Status Update: 2026-05-28, Online MLP Result-Prototype Targets
+
+Fit-split result-prototype target stabilization was added to the online MLP
+shadow-feedback diagnostic:
+
+```text
+online_mlp_shadow_feedback_target_prototype_partial_no_go
+```
+
+The new `--shadow-feedback-target-transform fit_result_prototype` mode fits a
+prototype boundary-gradient target for each boundary-best result class on the
+fit split. Validation and heldout examples use the prototype for their
+boundary-best class, while the final induced model-gradient gate still compares
+against the original boundary target.
+
+This improved the tradeoff slightly but did not clear the full heldout gate.
+h32/`cosine` reached heldout result/upstream cosines `0.8040/0.8243`, the best
+heldout result cosine in the current online MLP branch, but gaps stayed
+`0.1909/0.1557`. h16/`cosine` with gap-penalized selection selected step `80`
+and reached heldout `0.7540/0.7855`, but result gap remained `0.1705`.
+
+No Stage 1 early-lift run was launched. Next work should change learned-
+gradient state or add explicit training-time gap/norm penalties rather than
+more prototype-target or checkpoint-selection variants.

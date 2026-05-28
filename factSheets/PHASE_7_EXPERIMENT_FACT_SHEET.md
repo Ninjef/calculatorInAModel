@@ -2418,3 +2418,76 @@ Interpretation:
 - No Stage 1 run was launched.
 - Next work should use more structural target stabilization, a different
   learned-gradient state, or explicit train-time gap/norm penalties.
+
+## 2026-05-28 Online MLP Shadow-Feedback Result-Prototype Target Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-twenty-third-task-Online-MLP-shadow-feedback-target-prototype-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-28_phase7_online_shadow_feedback_target_prototype_gate
+runs/2026-05-28_phase7_online_shadow_feedback_target_prototype_gap_selection_gate
+```
+
+Code changes:
+
+- Added `fit_result_prototype` to `--shadow-feedback-target-transform`.
+- Added a boundary-target helper that returns the boundary-best result class.
+- Added fit-split target prototypes keyed by boundary-best result class.
+- Heldout diagnostics still compare induced model gradients against the
+  original boundary-target gradients.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+103 passed
+```
+
+Stage 0B diagnostics with target normalization, `fit_result_prototype` target
+transform, `injection_grad_logits` features, no feature normalization, and
+ordinary min-cosine validation selection:
+
+| Loss mode | Hidden | Step | Heldout result/upstream cosine | Train-heldout gap | Heldout relative norm | Decision |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `cosine` | `16` | `90` | `0.77715 / 0.80938` | `0.18232 / 0.14664` | `1.1946 / 1.0812` | result-gap fail |
+| `cosine` | `32` | `80` | `0.80402 / 0.82434` | `0.19088 / 0.15571` | `1.0286 / 1.0208` | gap fail |
+| `mse_plus_cosine` | `16` | `100` | `0.78792 / 0.81720` | `0.19386 / 0.15637` | `1.1355 / 1.0696` | gap fail |
+| `mse_plus_cosine` | `32` | `90` | `0.79237 / 0.82132` | `0.20187 / 0.15964` | `1.0651 / 1.0565` | gap fail |
+
+Narrow gap-selection follow-up:
+
+| Hidden | Loss mode | Gap penalty | Step | Heldout result/upstream cosine | Train-heldout gap | Heldout relative norm | Decision |
+| ---: | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `16` | `cosine` | `3.0` | `80` | `0.75397 / 0.78550` | `0.17047 / 0.14094` | `1.2922 / 1.1240` | result-gap fail |
+| `16` | `cosine` | `4.0` | `80` | `0.75397 / 0.78550` | `0.17047 / 0.14094` | `1.2922 / 1.1240` | result-gap fail |
+| `16` | `cosine` | `5.0` | `80` | `0.75397 / 0.78550` | `0.17047 / 0.14094` | `1.2922 / 1.1240` | result-gap fail |
+| `32` | `cosine` | `4.0` | `80` | `0.80402 / 0.82434` | `0.19088 / 0.15571` | `1.0286 / 1.0208` | gap fail |
+
+Decision:
+
+```text
+online_mlp_shadow_feedback_target_prototype_partial_no_go
+```
+
+Interpretation:
+
+- Result-prototype averaging is the first target-stabilization branch to push
+  heldout result cosine above `0.80`.
+- It still leaves result train-heldout gaps above the `0.15` gate.
+- Gap-penalized selection improves h16 but still misses with result gap
+  `0.1705`.
+- No Stage 1 run was launched.
+- Next work should change learned-gradient state or use explicit train-time
+  gap/norm penalties rather than more prototype/selection variants.

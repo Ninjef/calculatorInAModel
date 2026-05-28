@@ -2571,6 +2571,48 @@ def test_shadow_feedback_target_transform_unit_norm_per_example() -> None:
     assert metrics["shadow_feedback_target_transform_clamped_count"] == 1
 
 
+def test_shadow_feedback_target_transform_fit_result_prototype() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_shadow_target_prototype", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    target = torch.tensor(
+        [
+            [1.0, 3.0],
+            [3.0, 5.0],
+            [10.0, 14.0],
+        ]
+    )
+    class_ids = torch.tensor([0, 0, 2])
+    prototypes, counts, fit_metrics = (
+        overfit_script.fit_shadow_feedback_target_prototypes(
+            target,
+            class_ids,
+            num_classes=4,
+        )
+    )
+    query = torch.tensor([[99.0, 99.0], [7.0, 7.0], [8.0, 8.0]])
+    transformed, metrics = overfit_script.transform_shadow_feedback_target(
+        query,
+        mode="fit_result_prototype",
+        class_ids=torch.tensor([0, 1, 2]),
+        prototypes=prototypes,
+        prototype_counts=counts,
+    )
+
+    assert transformed[0].tolist() == pytest.approx([2.0, 4.0])
+    assert transformed[1].tolist() == pytest.approx([7.0, 7.0])
+    assert transformed[2].tolist() == pytest.approx([10.0, 14.0])
+    assert fit_metrics["shadow_feedback_target_prototype_nonempty_classes"] == 2
+    assert metrics["shadow_feedback_target_transform"] == "fit_result_prototype"
+    assert metrics["shadow_feedback_target_transform_missing_class_examples"] == 1
+
+
 def test_exhaustive_grid_boundary_target_smoke_updates_open_upstream(
     monkeypatch,
 ) -> None:

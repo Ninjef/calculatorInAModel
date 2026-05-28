@@ -200,8 +200,12 @@ learned-gradient state remain the next plausible
 branches. A lightweight target-stabilization attempt, per-example unit-norm
 targets before z-scoring, also reproduced the same overfit profile: h32/cosine
 reached `0.7936/0.8270` heldout with `0.2025/0.1545` gaps. So the next target
-branch needs to be more structural than row-wise norm removal, such as
-prototype/averaged targets or different state conditioning.
+branch needed to be more structural than row-wise norm removal. Fit-split
+result-prototype targets were then tested; h32/cosine improved heldout result
+cosine to `0.8040`, but gaps were still `0.1909/0.1557`, and gap-penalized
+h16 selection still had result gap `0.1705`. Prototype averaging by result
+class is therefore not enough; the remaining plausible branches are different
+state conditioning or explicit train-time gap/norm objectives.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 
