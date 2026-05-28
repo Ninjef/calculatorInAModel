@@ -3258,3 +3258,68 @@ Interpretation:
 - Do not treat hard improvement assignment as solved; next work should test
   longer always-on convergence, seed replication, a stronger handoff bridge,
   and lower-cost assignment approximations.
+
+## 2026-05-28 Hard Improvement Assignment Convergence Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-thirty-sixth-task-Hard-improvement-assignment-convergence-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_hard_improvement_assignment_convergence_gate
+```
+
+Question:
+
+If the hard improvement-assignment objective stays on, does the natural
+result-space calculator interface keep improving, and does that improvement
+replicate across seeds?
+
+Configuration:
+
+- no shadow feedback;
+- assignment weight `10`;
+- assignment min improvement `0`;
+- assignment quota multiplier `1`;
+- answer loss weight `0` for the 1600-step seed sweep;
+- frozen product semantic decoder;
+- exact-grid natural `0..19` batch;
+- 800 or 1600 total steps.
+
+Result:
+
+| CLI seed | Steps | Final eval exact | Best snapshot | Last snapshot | Last result-policy acc | Last injection-zero | Last oracle |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `2` | `800` | `0.860` | `0.8525` at `800` | `0.8525` | `0.8350` | `0.0375` | `1.0000` |
+| `2` | `1600` | `0.915` | `0.9475` at `1300` | `0.9150` | `0.9025` | `0.0375` | `1.0000` |
+| `4` | `1600` | `0.860` | `0.8700` at `1600` | `0.8700` | `0.8450` | `0.0575` | `1.0000` |
+| `5` | `1600` | `0.820` | `0.9200` at `1500` | `0.8325` | `0.8250` | `0.0575` | `1.0000` |
+
+Answer-loss ablation:
+
+The 800-step seed-2 runs with `answer_loss_weight=0` and `1` were numerically
+identical on the reported curve and both ended at `0.860` final eval exact.
+In this setup, the natural answer-loss gradient is not visibly changing the
+discrete result policy while assignment remains on.
+
+Decision:
+
+```text
+hard_improvement_assignment_convergence_seed_replication_mixed_partial
+```
+
+Interpretation:
+
+- Always-on hard improvement assignment can train a learned natural
+  result-space calculator interface from scratch across multiple seeds.
+- The path is not stable enough to call solved: seed `5` peaked high and then
+  drifted down, and the earlier target-off decay run collapsed after the
+  assignment objective reached zero.
+- This is not yet scalable or non-prescriptive. The assignment target scores
+  forced result classes during training, so next work should focus on cheaper
+  assignment approximations, better handoff/retention, stability selection,
+  and the non-bottleneck setting.

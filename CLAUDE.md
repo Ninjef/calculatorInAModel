@@ -333,6 +333,20 @@ was still `0.3475` at the shutoff step `200`, but collapsed to `0.105` by
 step `250` and ended at `0.1075`. Label:
 `hard_improvement_assignment_decay_retention_negative`.
 
+Longer always-on hard improvement assignment then produced a mixed partial
+positive. With no shadow feedback and assignment weight `10` kept on, CLI seed
+`2` reached `0.860` final exact by `800` steps and `0.915` final exact by
+`1600` steps, with a best snapshot of `0.9475` at step `1300`. CLI seed `4`
+ended at `0.860` final exact and `0.870` last snapshot by `1600` steps; CLI
+seed `5` ended lower at `0.820` final exact and `0.8325` last snapshot, but
+peaked at `0.920` around step `1500` before drifting down. Oracle stayed
+`1.000`, injection-zero stayed near chance, and operand exact remained low,
+so the learned result-space calculator path is doing the work. Label:
+`hard_improvement_assignment_convergence_seed_replication_mixed_partial`.
+Do not claim scalable or non-prescriptive success from this: the target still
+scores forced result classes every step, did not retain under plain decay, and
+needs a cheaper assignment approximation plus a stronger handoff.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -420,16 +434,20 @@ Do not rerun these as next steps unless debugging new code:
 - hard improvement-assignment weight `10` decayed linearly to zero over
   `200` steps with `answer_loss_weight=1`, no shadow feedback, and 400-step
   budget as novelty; this failed target-off retention.
+- always-on hard improvement-assignment weight `10` for 800 or 1600 steps on
+  the same exact-grid seeds as novelty. This branch now has a mixed seed
+  replication result: useful convergence lift, but no retention/scaling claim.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
 becomes useful training dynamics. Plausible branches include a step-level
 mechanism that constructs better directions rather than selecting from mostly
 bad proposed shadow steps, longer always-on convergence and seed tests for
-the hard improvement-assignment target, a target-off handoff with a stronger
-natural answer-loss bridge than plain decay, a lower-cost assignment
-approximation that does not enumerate all result classes every step, a
-Jacobian-conditioned state more substantial than the result-output
+the hard improvement-assignment target only if the test changes stability or
+selection, a target-off handoff with a stronger natural answer-loss bridge
+than plain decay, a lower-cost assignment approximation that does not enumerate
+all result classes every step, a non-bottleneck version of the hard-assignment
+gate, a Jacobian-conditioned state more substantial than the result-output
 `J^T answer_grad` feature, or a richer target construction that remains valid
 after upstream movement.
 Keep the exact-grid boundary-ceiling

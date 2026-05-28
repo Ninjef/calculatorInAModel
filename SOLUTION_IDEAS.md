@@ -250,6 +250,16 @@ collapsed to about `0.105` after shutoff. Next work should test longer
 always-on convergence, seed replication, stronger handoff bridges, and cheaper
 assignment approximations rather than more soft diversity or state-only shadow
 features.
+Longer always-on assignment established that this is a real but unfinished
+training path: no-shadow weight `10` reached `0.915` final exact on the
+original 1600-step seed, while two replication seeds ended at `0.860` and
+`0.820` final exact and one peaked at `0.920` before drifting down. This is
+strong evidence that forced-result improvement assignment can teach the
+natural result interface, but it is still prescriptive and expensive because
+it scores forced result classes every step. The next useful ideas are cheaper
+assignment construction, checkpoint/stability selection, a target-off bridge
+stronger than plain decay, and testing whether the same signal works when the
+calculator path is not the only available path.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

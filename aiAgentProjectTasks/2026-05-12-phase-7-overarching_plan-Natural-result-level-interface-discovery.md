@@ -1204,3 +1204,31 @@ Final eval exact was `0.1075`. Plain natural answer loss did not preserve the
 assignment-taught result interface after target-off. Next work should not
 rerun this exact decay schedule; use longer always-on convergence, seed
 replication, a stronger handoff bridge, or cheaper assignment approximations.
+
+## Status Update: 2026-05-28, Hard Assignment Convergence
+
+Longer always-on hard improvement assignment produced a mixed partial positive:
+
+```text
+hard_improvement_assignment_convergence_seed_replication_mixed_partial
+```
+
+With no shadow feedback, frozen semantic decoder, exact-grid natural `0..19`,
+and assignment weight `10` kept on, the original CLI seed `2` run improved
+from `0.860` final exact at `800` steps to `0.915` final exact at `1600`
+steps, with a best snapshot of `0.9475` at step `1300`. Replication seeds
+also learned well above the old early-lift baseline: CLI seed `4` ended at
+`0.860` final exact and seed `5` ended at `0.820`, with seed `5` peaking at
+`0.920` before drifting down.
+
+The causal controls remained consistent with calculator-path use: oracle
+snapshots stayed `1.000`, injection-zero stayed near chance, and operand
+exact remained low. However, this is still not the final Phase 7 answer. The
+target scores forced result classes during training, the plain target-off
+handoff already failed, and the exact full-result scoring is not the scalable
+method wanted for larger models or many calculators.
+
+Next work should not rerun the same 800/1600-step always-on seed set as
+novelty. Useful continuations are cheaper assignment approximations, stronger
+target-off handoff bridges, stability/checkpoint selection to avoid late
+drift, and a non-bottleneck version of the hard-assignment gate.

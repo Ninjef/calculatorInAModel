@@ -171,3 +171,9 @@ Conclusion: Assignment weight `10 -> 0` over 200 steps with `answer_loss_weight=
 Do not repeat: Same seed-2/seed-4 exact-grid no-shadow assignment decay over `200` steps with 400-step budget as novelty.
 Next allowed test: Longer always-on convergence, seed replication, a stronger handoff bridge, or lower-cost assignment approximation.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-retention-gate.md`
+
+PARTIAL: Always-on hard improvement assignment can train a natural result-space calculator interface across seeds.
+Conclusion: With assignment weight `10` kept on, three 1600-step exact-grid seeds ended at `0.915`, `0.860`, and `0.820` final exact; best snapshots reached `0.9475`, `0.870`, and `0.920`.
+Do not repeat: The same no-shadow 800/1600-step always-on assignment runs on CLI seeds `2/4/5` as novelty.
+Next allowed test: Cheaper/scalable assignment construction, stronger target-off handoff, stability/selection to avoid late drift, or a non-bottleneck version of the gate.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-convergence-gate.md`
