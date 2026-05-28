@@ -1253,6 +1253,21 @@ def calculator_read_pair_logits(
 def calculator_read_result_logits(
     model: TinyGPT, batch: ArithmeticBatch
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    result_logits, _, positions = calculator_read_result_logits_and_input(
+        model,
+        batch,
+    )
+    return (
+        result_logits,
+        positions["a"],
+        positions["b"],
+        positions["eq"],
+    )
+
+
+def calculator_read_result_logits_and_input(
+    model: TinyGPT, batch: ArithmeticBatch
+) -> tuple[torch.Tensor, torch.Tensor, dict[str, torch.Tensor]]:
     if model.calculator_hook is None:
         raise ValueError("calculator result logits require a calculator hook")
     if model.cfg.calculator_action_head != "result_space":
@@ -1287,12 +1302,7 @@ def calculator_read_result_logits(
         )
     if model.calculator_hook.result_proj is None:
         raise ValueError("calculator result logits require a result projection")
-    return (
-        model.calculator_hook.result_proj(result_input),
-        positions["a"],
-        positions["b"],
-        positions["eq"],
-    )
+    return model.calculator_hook.result_proj(result_input), result_input, positions
 
 
 def adaptive_interface_loss(
@@ -2069,10 +2079,17 @@ def shadow_feedback_mlp_examples(
         )
     )
     with torch.no_grad():
-        result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+        result_logits, result_input, _ = calculator_read_result_logits_and_input(
+            model,
+            batch,
+        )
     batch_scale = float(batch.x.shape[0])
     scaled_feedback_input = feedback_input.detach() * batch_scale
     result_logits = result_logits.detach().to(
+        device=feedback_input.device,
+        dtype=feedback_input.dtype,
+    )
+    result_input = result_input.detach().to(
         device=feedback_input.device,
         dtype=feedback_input.dtype,
     )
@@ -2083,6 +2100,8 @@ def shadow_feedback_mlp_examples(
     ).sum(dim=-1, keepdim=True)
     if feature_mode == "injection_grad_logits":
         feature_chunks = [scaled_feedback_input, result_logits]
+    elif feature_mode == "injection_grad_logits_result_input":
+        feature_chunks = [scaled_feedback_input, result_logits, result_input]
     elif feature_mode == "injection_grad_policy_state":
         feature_chunks = [
             scaled_feedback_input,
@@ -2094,7 +2113,7 @@ def shadow_feedback_mlp_examples(
     else:
         raise ValueError(
             "shadow feedback feature mode must be injection_grad_logits "
-            "or injection_grad_policy_state"
+            "injection_grad_logits_result_input, or injection_grad_policy_state"
         )
     features = torch.cat(feature_chunks, dim=-1)
     target = target_grad.detach().to(device=features.device, dtype=features.dtype)
@@ -2116,6 +2135,7 @@ def shadow_feedback_mlp_examples(
             scaled_feedback_input.norm().item()
         ),
         "shadow_feedback_feature_logits_l2": float(result_logits.norm().item()),
+        "shadow_feedback_feature_result_input_l2": float(result_input.norm().item()),
         "shadow_feedback_feature_probs_l2": float(result_probs.norm().item()),
         "shadow_feedback_feature_log_probs_l2": float(
             result_log_probs.norm().item()
@@ -2396,11 +2416,22 @@ def shadow_feedback_prediction_loss(
 def shadow_feedback_feature_dim(model: TinyGPT, *, feature_mode: str) -> int:
     if feature_mode == "injection_grad_logits":
         return model.cfg.n_embd + model.cfg.calculator_result_vocab_size
+    result_input_dim = (
+        2 * model.cfg.calculator_read_span_width * model.cfg.n_embd
+        if model.cfg.calculator_read_position == "operand_spans"
+        else 2 * model.cfg.n_embd
+    )
+    if feature_mode == "injection_grad_logits_result_input":
+        return (
+            model.cfg.n_embd
+            + model.cfg.calculator_result_vocab_size
+            + result_input_dim
+        )
     if feature_mode == "injection_grad_policy_state":
         return model.cfg.n_embd + (3 * model.cfg.calculator_result_vocab_size) + 1
     raise ValueError(
         "shadow feedback feature mode must be injection_grad_logits "
-        "or injection_grad_policy_state"
+        "injection_grad_logits_result_input, or injection_grad_policy_state"
     )
 
 
@@ -3092,11 +3123,12 @@ def run_online_shadow_feedback_gradient_diagnostic(
         )
     if feature_mode not in {
         "injection_grad_logits",
+        "injection_grad_logits_result_input",
         "injection_grad_policy_state",
     }:
         raise ValueError(
             "shadow feedback feature mode must be injection_grad_logits "
-            "or injection_grad_policy_state"
+            "injection_grad_logits_result_input, or injection_grad_policy_state"
         )
     if feature_normalization not in {"none", "fit_zscore_per_feature"}:
         raise ValueError(
@@ -7444,12 +7476,16 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--shadow-feedback-feature-mode",
-        choices=["injection_grad_logits", "injection_grad_policy_state"],
+        choices=[
+            "injection_grad_logits",
+            "injection_grad_logits_result_input",
+            "injection_grad_policy_state",
+        ],
         default="injection_grad_logits",
         help=(
-            "Feature state for the online MLP shadow module. The policy-state "
-            "mode appends result probabilities, log-probabilities, and entropy "
-            "to the answer-gradient and result-logit features."
+            "Feature state for the online MLP shadow module. Result-input mode "
+            "adds the calculator result-projection input; policy-state mode "
+            "adds result probabilities, log-probabilities, and entropy."
         ),
     )
     parser.add_argument(

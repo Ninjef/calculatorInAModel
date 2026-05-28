@@ -209,6 +209,17 @@ plus prototype gap-penalized selection reached heldout `0.7540/0.7855`, with
 gaps `0.1705/0.1409`; result gap remained above `0.15`. Label:
 `online_mlp_shadow_feedback_target_prototype_partial_no_go`.
 
+The shadow state was then expanded with the actual calculator result-projection
+input vector (`injection_grad_logits_result_input`). This was a qualitatively
+different learned-gradient state from raw policy statistics: it gives the
+shadow MLP the boundary representation that `result_proj` consumes. It
+improved upstream heldout alignment, but still failed the result-head
+generalization gate. h16/`cosine` reached heldout `0.7676/0.8372`, with gaps
+`0.1958/0.1269`; h32/`cosine` reached `0.7895/0.8294`, with gaps
+`0.2079/0.1533`. Gap-penalized selection on h16 kept step `100` for penalties
+`3/4/5` and did not reduce the result gap. Label:
+`online_mlp_shadow_feedback_result_input_state_negative`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -255,15 +266,19 @@ Do not rerun these as next steps unless debugging new code:
 - fit-split result-prototype target averaging on that same directional-loss
   `injection_grad_logits` setup with h16/h32, `cosine`/`mse_plus_cosine`, and
   gap-selection penalties `3/4/5` as novelty.
+- appending the raw calculator result-projection input to the same
+  target-normalized directional-loss state (`injection_grad_logits_result_input`)
+  with h16/h32, `cosine`/`mse_plus_cosine`, and h16 gap-selection penalties
+  `3/4/5` as novelty.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient state more substantially, or by adding
 explicit norm/gap training losses rather than simple dropout, checkpoint
-selection, row-wise target normalization, or class-prototype averaging.
-Plausible branches include Jacobian- or representation-conditioned gradient
-state, direct training-time gap/norm penalties, or a target construction that
-uses more context than the boundary-best class prototype. Keep the exact-grid
-boundary-ceiling
+selection, row-wise target normalization, class-prototype averaging, or raw
+result-input feature appending. Plausible branches include explicit
+train-time gap/norm penalties, Jacobian-conditioned state rather than raw
+activations, or a target construction that uses more context than the
+boundary-best class prototype. Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`
 boundary-feedback baseline before long runs. Do not move directly to

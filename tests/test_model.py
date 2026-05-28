@@ -3209,7 +3209,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "--shadow-feedback-target-transform",
             "unit_norm_per_example",
             "--shadow-feedback-feature-mode",
-            "injection_grad_policy_state",
+            "injection_grad_logits_result_input",
             "--shadow-feedback-feature-normalization",
             "fit_zscore_per_feature",
             "--shadow-feedback-loss-mode",
@@ -3236,7 +3236,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_validation_every == 5
     assert parsed.shadow_feedback_target_normalization == "fit_zscore_per_result"
     assert parsed.shadow_feedback_target_transform == "unit_norm_per_example"
-    assert parsed.shadow_feedback_feature_mode == "injection_grad_policy_state"
+    assert parsed.shadow_feedback_feature_mode == "injection_grad_logits_result_input"
     assert parsed.shadow_feedback_feature_normalization == "fit_zscore_per_feature"
     assert parsed.shadow_feedback_loss_mode == "mse_plus_cosine"
     assert parsed.shadow_feedback_selection_score_mode == "gap_penalized_min_cosine"
@@ -3275,6 +3275,27 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_loss_mode == "mse"
     assert parsed.shadow_feedback_selection_score_mode == "min_result_upstream_cosine"
     assert parsed.shadow_feedback_selection_gap_penalty == pytest.approx(1.0)
+
+    cfg_for_feature_dim = GPTConfig(
+        vocab_size=20,
+        block_size=8,
+        n_layer=1,
+        n_head=1,
+        n_embd=4,
+        calculator_enabled=True,
+        calculator_hook_after_layer=1,
+        calculator_estimator="direct_feedback_alignment",
+        calculator_action_head="result_space",
+        calculator_read_position="operand_spans",
+        calculator_read_span_width=2,
+        calculator_operand_vocab_size=5,
+        calculator_result_vocab_size=9,
+    )
+    model_for_feature_dim = TinyGPT(cfg_for_feature_dim)
+    assert overfit_script.shadow_feedback_feature_dim(
+        model_for_feature_dim,
+        feature_mode="injection_grad_logits_result_input",
+    ) == 4 + 9 + (2 * 2 * 4)
 
     with pytest.raises(ValueError, match="result_space.*gumbel_concrete_interface"):
         CalculatorHook(

@@ -868,3 +868,28 @@ and reached heldout `0.7540/0.7855`, but result gap remained `0.1705`.
 No Stage 1 early-lift run was launched. Next work should change learned-
 gradient state or add explicit training-time gap/norm penalties rather than
 more prototype-target or checkpoint-selection variants.
+
+## Status Update: 2026-05-28, Online MLP Result-Input State
+
+The online MLP shadow-feedback diagnostic gained a new feature state:
+
+```text
+online_mlp_shadow_feedback_result_input_state_negative
+```
+
+The new `--shadow-feedback-feature-mode injection_grad_logits_result_input`
+mode appends the actual calculator result-projection input vector to the
+answer-gradient and result-logit state. This tests whether the learned
+gradient needs the boundary representation consumed by `result_proj`, rather
+than only policy statistics or class prototypes.
+
+This did not clear the heldout gate. h16/`cosine` reached heldout
+result/upstream cosines `0.7676/0.8372`, but train-heldout gaps were
+`0.1958/0.1269`. h32/`cosine` reached `0.7895/0.8294`, with gaps
+`0.2079/0.1533`. h16 gap-penalized selection with penalties `3/4/5` kept step
+`100` and did not improve the result gap.
+
+No Stage 1 early-lift run was launched. Next work should use explicit
+training-time gap/norm penalties, Jacobian-conditioned state, or a genuinely
+different learned-gradient target/state rather than raw result-input feature
+appending.

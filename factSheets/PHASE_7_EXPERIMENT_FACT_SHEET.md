@@ -2491,3 +2491,74 @@ Interpretation:
 - No Stage 1 run was launched.
 - Next work should change learned-gradient state or use explicit train-time
   gap/norm penalties rather than more prototype/selection variants.
+
+## 2026-05-28 Online MLP Shadow-Feedback Result-Input State Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-twenty-fourth-task-Online-MLP-shadow-feedback-result-input-state-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-28_phase7_online_shadow_feedback_result_input_state_gate
+runs/2026-05-28_phase7_online_shadow_feedback_result_input_gap_selection_gate
+```
+
+Code changes:
+
+- Added `calculator_read_result_logits_and_input`.
+- Added `injection_grad_logits_result_input` to
+  `--shadow-feedback-feature-mode`.
+- The new state appends the calculator result-projection input vector to the
+  answer-gradient plus result-logit shadow features.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+103 passed
+```
+
+Stage 0B diagnostics with target normalization, `injection_grad_logits_result_input`
+features, no feature normalization, and ordinary min-cosine validation
+selection:
+
+| Loss mode | Hidden | Step | Heldout result/upstream cosine | Train-heldout gap | Heldout relative norm | Decision |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `cosine` | `16` | `100` | `0.76756 / 0.83718` | `0.19578 / 0.12689` | `1.1918 / 1.2309` | result-gap fail |
+| `cosine` | `32` | `100` | `0.78949 / 0.82941` | `0.20794 / 0.15326` | `1.0190 / 1.0438` | gap fail |
+| `mse_plus_cosine` | `16` | `100` | `0.74513 / 0.82490` | `0.19641 / 0.12421` | `1.2097 / 1.2548` | result-gap fail |
+| `mse_plus_cosine` | `32` | `100` | `0.77821 / 0.82574` | `0.21862 / 0.15835` | `1.0516 / 1.0729` | gap fail |
+
+Narrow h16/`cosine` gap-selection follow-up:
+
+| Gap penalty | Step | Heldout result/upstream cosine | Train-heldout gap | Heldout relative norm | Decision |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| `3.0` | `100` | `0.76756 / 0.83718` | `0.19578 / 0.12689` | `1.1918 / 1.2309` | result-gap fail |
+| `4.0` | `100` | `0.76756 / 0.83718` | `0.19578 / 0.12689` | `1.1918 / 1.2309` | result-gap fail |
+| `5.0` | `100` | `0.76756 / 0.83718` | `0.19578 / 0.12689` | `1.1918 / 1.2309` | result-gap fail |
+
+Decision:
+
+```text
+online_mlp_shadow_feedback_result_input_state_negative
+```
+
+Interpretation:
+
+- Appending result-projection input improves upstream heldout alignment.
+- It does not improve result-head generalization; result gaps remain near
+  `0.20`.
+- Gap-penalized selection did not move the selected checkpoint.
+- No Stage 1 run was launched.
+- Next work should use explicit train-time gap/norm penalties or a genuinely
+  different learned-gradient state/target.

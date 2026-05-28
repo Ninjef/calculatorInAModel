@@ -205,7 +205,10 @@ result-prototype targets were then tested; h32/cosine improved heldout result
 cosine to `0.8040`, but gaps were still `0.1909/0.1557`, and gap-penalized
 h16 selection still had result gap `0.1705`. Prototype averaging by result
 class is therefore not enough; the remaining plausible branches are different
-state conditioning or explicit train-time gap/norm objectives.
+state conditioning or explicit train-time gap/norm objectives. Appending the
+raw calculator result-projection input as state was tested next; it improved
+upstream heldout cosine to `0.8372` for h16/cosine, but result gap stayed
+`0.1958`, so raw boundary activations alone are also not enough.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 
