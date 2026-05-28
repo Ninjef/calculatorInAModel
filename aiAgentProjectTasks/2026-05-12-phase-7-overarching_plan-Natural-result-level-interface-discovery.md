@@ -703,3 +703,23 @@ train-heldout gaps `0.1723/0.1458`.
 No Stage 1 early-lift run was launched. Next work should change shadow
 input/state or objective more substantially, not rerun this exact
 target-normalized sweep.
+
+## Status Update: 2026-05-28, Online MLP Policy-State Features
+
+Richer raw policy-state features were added to the target-normalized online
+MLP shadow-feedback diagnostic:
+
+```text
+online_mlp_shadow_feedback_policy_state_raw_features_negative
+```
+
+The policy-state feature mode appends result probabilities,
+log-probabilities, and entropy to the existing answer-gradient plus result
+logit state. It did not clear the heldout gate. Hidden size `32` reached
+heldout-test result/upstream cosines `0.7037/0.7611`, but train-heldout gaps
+widened to `0.2853/0.2131`. Hidden size `16` missed the result threshold
+(`0.6862`).
+
+No Stage 1 early-lift run was launched. Next work should address feature
+scaling, regularization, loss shape, or target construction rather than simply
+appending raw policy features.

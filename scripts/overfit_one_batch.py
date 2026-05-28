@@ -121,6 +121,7 @@ class TrainConfig:
     shadow_feedback_validation_fraction: float
     shadow_feedback_validation_every: int
     shadow_feedback_target_normalization: str
+    shadow_feedback_feature_mode: str
     shadow_feedback_gradient_diagnostic_only: bool
     calculator_result_head_hidden_size: int
     relaxed_calculator_temperature: float
@@ -2006,6 +2007,7 @@ def shadow_feedback_mlp_examples(
     batch: ArithmeticBatch,
     *,
     num_digits: int,
+    feature_mode: str,
     result_boundary_target_mode: str,
     result_boundary_target_temperature: float,
     result_boundary_target_min_probability_floor: float,
@@ -2027,22 +2029,49 @@ def shadow_feedback_mlp_examples(
         result_logits, _, _, _ = calculator_read_result_logits(model, batch)
     batch_scale = float(batch.x.shape[0])
     scaled_feedback_input = feedback_input.detach() * batch_scale
-    features = torch.cat(
-        [
-            scaled_feedback_input,
-            result_logits.detach().to(
-                device=feedback_input.device,
-                dtype=feedback_input.dtype,
-            ),
-        ],
-        dim=-1,
+    result_logits = result_logits.detach().to(
+        device=feedback_input.device,
+        dtype=feedback_input.dtype,
     )
+    result_probs = result_logits.softmax(dim=-1)
+    result_log_probs = result_logits.log_softmax(dim=-1)
+    result_entropy = -(
+        result_probs * result_log_probs
+    ).sum(dim=-1, keepdim=True)
+    if feature_mode == "injection_grad_logits":
+        feature_chunks = [scaled_feedback_input, result_logits]
+    elif feature_mode == "injection_grad_policy_state":
+        feature_chunks = [
+            scaled_feedback_input,
+            result_logits,
+            result_probs,
+            result_log_probs,
+            result_entropy,
+        ]
+    else:
+        raise ValueError(
+            "shadow feedback feature mode must be injection_grad_logits "
+            "or injection_grad_policy_state"
+        )
+    features = torch.cat(feature_chunks, dim=-1)
     target = target_grad.detach().to(device=features.device, dtype=features.dtype)
     target = target * batch_scale
     metrics: dict[str, float | int | str] = {
+        "shadow_feedback_feature_mode": feature_mode,
         "shadow_feedback_answer_loss": float(answer_loss.item()),
         "shadow_feedback_input_grad_l2": float(scaled_feedback_input.norm().item()),
         "shadow_feedback_feature_l2": float(features.norm().item()),
+        "shadow_feedback_feature_dim": int(features.shape[-1]),
+        "shadow_feedback_feature_input_grad_l2": float(
+            scaled_feedback_input.norm().item()
+        ),
+        "shadow_feedback_feature_logits_l2": float(result_logits.norm().item()),
+        "shadow_feedback_feature_probs_l2": float(result_probs.norm().item()),
+        "shadow_feedback_feature_log_probs_l2": float(
+            result_log_probs.norm().item()
+        ),
+        "shadow_feedback_feature_entropy_mean": float(result_entropy.mean().item()),
+        "shadow_feedback_feature_entropy_l2": float(result_entropy.norm().item()),
     }
     metrics.update(target_metrics)
     return features, target, metrics
@@ -2115,12 +2144,24 @@ def denormalize_shadow_feedback_prediction(
     )
 
 
+def shadow_feedback_feature_dim(model: TinyGPT, *, feature_mode: str) -> int:
+    if feature_mode == "injection_grad_logits":
+        return model.cfg.n_embd + model.cfg.calculator_result_vocab_size
+    if feature_mode == "injection_grad_policy_state":
+        return model.cfg.n_embd + (3 * model.cfg.calculator_result_vocab_size) + 1
+    raise ValueError(
+        "shadow feedback feature mode must be injection_grad_logits "
+        "or injection_grad_policy_state"
+    )
+
+
 def online_shadow_feedback_alignment_loss(
     model: TinyGPT,
     batch: ArithmeticBatch,
     *,
     shadow_module: ShadowFeedbackMLP,
     num_digits: int,
+    feature_mode: str,
     result_boundary_target_mode: str,
     result_boundary_target_temperature: float,
     result_boundary_target_min_probability_floor: float,
@@ -2132,6 +2173,7 @@ def online_shadow_feedback_alignment_loss(
         model,
         batch,
         num_digits=num_digits,
+        feature_mode=feature_mode,
         result_boundary_target_mode=result_boundary_target_mode,
         result_boundary_target_temperature=result_boundary_target_temperature,
         result_boundary_target_min_probability_floor=(
@@ -2711,6 +2753,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
     validation_fraction: float,
     validation_every: int,
     target_normalization: str,
+    feature_mode: str,
     result_boundary_target_mode: str,
     result_boundary_target_temperature: float,
     result_boundary_target_min_probability_floor: float,
@@ -2744,6 +2787,14 @@ def run_online_shadow_feedback_gradient_diagnostic(
         raise ValueError(
             "shadow feedback target normalization must be none or fit_zscore_per_result"
         )
+    if feature_mode not in {
+        "injection_grad_logits",
+        "injection_grad_policy_state",
+    }:
+        raise ValueError(
+            "shadow feedback feature mode must be injection_grad_logits "
+            "or injection_grad_policy_state"
+        )
     model.train()
 
     fit_batch, heldout_batch = shadow_feedback_heldout_split(
@@ -2758,7 +2809,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
             fit_batch,
             heldout_fraction=validation_within_fit_fraction,
         )
-    feature_dim = model.cfg.n_embd + model.cfg.calculator_result_vocab_size
+    feature_dim = shadow_feedback_feature_dim(model, feature_mode=feature_mode)
     shadow_module = ShadowFeedbackMLP(
         input_dim=feature_dim,
         hidden_size=hidden_size,
@@ -2773,6 +2824,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
             model,
             fit_batch,
             num_digits=num_digits,
+            feature_mode=feature_mode,
             result_boundary_target_mode=result_boundary_target_mode,
             result_boundary_target_temperature=result_boundary_target_temperature,
             result_boundary_target_min_probability_floor=(
@@ -2821,6 +2873,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
             validation_batch,
             shadow_module=shadow_module,
             num_digits=num_digits,
+            feature_mode=feature_mode,
             result_boundary_target_mode=result_boundary_target_mode,
             result_boundary_target_temperature=result_boundary_target_temperature,
             result_boundary_target_min_probability_floor=(
@@ -2861,6 +2914,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
                 model,
                 fit_batch,
                 num_digits=num_digits,
+                feature_mode=feature_mode,
                 result_boundary_target_mode=result_boundary_target_mode,
                 result_boundary_target_temperature=(
                     result_boundary_target_temperature
@@ -2908,6 +2962,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
         fit_batch,
         shadow_module=shadow_module,
         num_digits=num_digits,
+        feature_mode=feature_mode,
         result_boundary_target_mode=result_boundary_target_mode,
         result_boundary_target_temperature=result_boundary_target_temperature,
         result_boundary_target_min_probability_floor=(
@@ -2922,6 +2977,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
         heldout_batch,
         shadow_module=shadow_module,
         num_digits=num_digits,
+        feature_mode=feature_mode,
         result_boundary_target_mode=result_boundary_target_mode,
         result_boundary_target_temperature=result_boundary_target_temperature,
         result_boundary_target_min_probability_floor=(
@@ -2967,6 +3023,8 @@ def run_online_shadow_feedback_gradient_diagnostic(
         "shadow_feedback_validation_history": validation_history,
         "shadow_feedback_best_state_restored": bool(best_state is not None),
         "shadow_feedback_target_normalization": target_normalization,
+        "shadow_feedback_feature_mode": feature_mode,
+        "shadow_feedback_feature_dim": int(feature_dim),
         "shadow_feedback_final_fit_mse": last_train_loss,
         "shadow_feedback_final_fit_prediction_cosine": last_train_cosine,
         "shadow_feedback_final_normalized_fit_mse": last_normalized_train_loss,
@@ -3000,6 +3058,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
             fit_batch,
             shadow_module=shadow_module,
             num_digits=num_digits,
+            feature_mode=feature_mode,
             result_boundary_target_mode=result_boundary_target_mode,
             result_boundary_target_temperature=result_boundary_target_temperature,
             result_boundary_target_min_probability_floor=(
@@ -3014,6 +3073,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
             heldout_batch,
             shadow_module=shadow_module,
             num_digits=num_digits,
+            feature_mode=feature_mode,
             result_boundary_target_mode=result_boundary_target_mode,
             result_boundary_target_temperature=result_boundary_target_temperature,
             result_boundary_target_min_probability_floor=(
@@ -3069,6 +3129,7 @@ def run_online_shadow_feedback_module_gradient_diagnostic(
     *,
     shadow_module: ShadowFeedbackMLP,
     num_digits: int,
+    feature_mode: str,
     result_boundary_target_mode: str,
     result_boundary_target_temperature: float,
     result_boundary_target_min_probability_floor: float,
@@ -3082,6 +3143,7 @@ def run_online_shadow_feedback_module_gradient_diagnostic(
         batch,
         shadow_module=shadow_module,
         num_digits=num_digits,
+        feature_mode=feature_mode,
         result_boundary_target_mode=result_boundary_target_mode,
         result_boundary_target_temperature=result_boundary_target_temperature,
         result_boundary_target_min_probability_floor=(
@@ -4957,6 +5019,7 @@ def run_variant(
         shadow_feedback_target_normalization=(
             args.shadow_feedback_target_normalization
         ),
+        shadow_feedback_feature_mode=args.shadow_feedback_feature_mode,
         shadow_feedback_gradient_diagnostic_only=(
             args.shadow_feedback_gradient_diagnostic_only
         ),
@@ -5172,6 +5235,7 @@ def run_variant(
                 validation_fraction=args.shadow_feedback_validation_fraction,
                 validation_every=args.shadow_feedback_validation_every,
                 target_normalization=args.shadow_feedback_target_normalization,
+                feature_mode=args.shadow_feedback_feature_mode,
                 result_boundary_target_mode=args.result_boundary_target_mode,
                 result_boundary_target_temperature=(
                     args.result_boundary_target_temperature
@@ -6110,6 +6174,7 @@ def run_variant(
     metrics["shadow_feedback_target_normalization"] = (
         args.shadow_feedback_target_normalization
     )
+    metrics["shadow_feedback_feature_mode"] = args.shadow_feedback_feature_mode
     metrics["final_shadow_feedback_weight"] = args.shadow_feedback_weight
     if shadow_feedback_calibration_metrics:
         metrics["shadow_feedback_calibration"] = shadow_feedback_calibration_metrics
@@ -6800,6 +6865,16 @@ def parse_args() -> argparse.Namespace:
             "Normalize online MLP shadow target gradients using statistics "
             "fit on the fit split only; predictions are unnormalized before "
             "model-gradient diagnostics."
+        ),
+    )
+    parser.add_argument(
+        "--shadow-feedback-feature-mode",
+        choices=["injection_grad_logits", "injection_grad_policy_state"],
+        default="injection_grad_logits",
+        help=(
+            "Feature state for the online MLP shadow module. The policy-state "
+            "mode appends result probabilities, log-probabilities, and entropy "
+            "to the answer-gradient and result-logit features."
         ),
     )
     parser.add_argument(
@@ -7548,6 +7623,10 @@ def main() -> None:
                         suffix_parts.append(
                             f"tnorm{args.shadow_feedback_target_normalization}"
                         )
+                    if args.shadow_feedback_feature_mode != "injection_grad_logits":
+                        suffix_parts.append(
+                            f"feat{args.shadow_feedback_feature_mode}"
+                        )
                 else:
                     suffix_parts.append(
                         f"shadowridge{args.shadow_feedback_ridge:g}"
@@ -7716,6 +7795,7 @@ def main() -> None:
         f"validation_fraction={args.shadow_feedback_validation_fraction} "
         f"validation_every={args.shadow_feedback_validation_every} "
         f"target_normalization={args.shadow_feedback_target_normalization} "
+        f"feature_mode={args.shadow_feedback_feature_mode} "
         f"gradient_diagnostic_only={args.shadow_feedback_gradient_diagnostic_only}"
     )
     print(

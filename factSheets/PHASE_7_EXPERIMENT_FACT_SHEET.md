@@ -2036,3 +2036,67 @@ Interpretation:
   (`0.17235 > 0.15`).
 - No Stage 1 run was launched. Next work should change shadow input/state or
   objective more substantially, not rerun this sweep.
+
+## 2026-05-28 Online MLP Shadow-Feedback Policy-State Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-seventeenth-task-Online-MLP-shadow-feedback-policy-state-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_online_shadow_feedback_policy_state_gate
+```
+
+Code changes:
+
+- Added `--shadow-feedback-feature-mode`.
+- Added `injection_grad_policy_state`, which appends result probabilities,
+  result log-probabilities, and result entropy to the existing
+  answer-gradient plus result-logit shadow input.
+- The diagnostic records feature dimension and per-feature-block norms.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+99 passed
+```
+
+Stage 0B validation-selected diagnostics with target normalization:
+
+| Hidden | Heldout result/upstream cosine | Train-heldout gap | Heldout relative norm | Decision |
+| ---: | ---: | ---: | ---: | --- |
+| `16` | `0.68622 / 0.73909` | `0.23942 / 0.20316` | `1.1162 / 0.8952` | result cosine and gap fail |
+| `32` | `0.70372 / 0.76105` | `0.28529 / 0.21305` | `1.3519 / 1.2201` | gap fail |
+
+Feature observations:
+
+- `injection_grad_policy_state` feature dimension was `134` for the natural
+  `0..19` result-space model.
+- Log-probability block norms dominated the raw feature vector
+  (`382.84` fit L2 vs `69.50` input-gradient L2), which likely makes raw
+  appended policy features a poor unnormalized state.
+
+Decision:
+
+```text
+online_mlp_shadow_feedback_policy_state_raw_features_negative
+```
+
+Interpretation:
+
+- Appending raw policy-state features did not improve the target-normalized
+  online MLP gate.
+- No Stage 1 run was launched.
+- Next work should focus on feature scaling/standardization, regularization,
+  a different synthetic-gradient loss, or a more stable target construction.

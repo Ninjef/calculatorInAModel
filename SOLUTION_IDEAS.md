@@ -181,8 +181,10 @@ next with a separate heldout-test split; the selected checkpoint reached only
 `0.6449` heldout-test result-proj cosine. Fit-split per-result z-score target
 normalization improved heldout alignment but still missed the full gate: best
 near miss was `h16` with `0.7259` result-proj cosine, `0.7549` upstream
-cosine, and a `0.1723` result train-heldout gap. Stronger regularization,
-richer state, a different loss, or a more stable target construction remain
+cosine, and a `0.1723` result train-heldout gap. Raw appended policy-state
+features did not fix this; `h32` reached heldout `0.7037/0.7611` but gaps
+widened to `0.2853/0.2131`. Stronger regularization, feature
+standardization, a different loss, or a more stable target construction remain
 the next plausible branches.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
