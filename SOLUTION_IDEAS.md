@@ -212,9 +212,14 @@ upstream heldout cosine to `0.8372` for h16/cosine, but result gap stayed
 validation prediction-loss term was then added to the warmup objective; h32
 kept high heldout cosine but result gaps stayed near `0.199`, while h16/weight
 `1.0` reduced gaps but lost heldout/norm quality. Future synthetic-gradient
-work should therefore use a more direct split-gradient gap/norm objective,
-Jacobian-conditioned state, or a richer target construction rather than more
-ordinary prediction-loss regularization.
+work therefore tried a direct split-gradient objective next. That objective
+finally cleared Stage 0B: h32 with validation-gradient weight `0.5` and norm
+weight `0.1` reached heldout `0.8068/0.8083`, gaps `0.1227/0.1343`, and norms
+`1.1276/1.0736`. But using the calibrated module as a fixed Stage 1 feedback
+source failed at weights `1.0/0.01/0.001`. The useful remaining idea is not
+ordinary prediction regularization; it is on-policy shadow refresh,
+trust-region/norm-clamped feedback, Jacobian-conditioned state, or a richer
+target that survives model movement.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

@@ -2626,3 +2626,80 @@ Interpretation:
 - No Stage 1 run was launched.
 - Next work should use a direct split-gradient gap/norm objective,
   Jacobian-conditioned state, or a richer target construction.
+
+## 2026-05-28 Online MLP Shadow-Feedback Validation-Gradient Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-twenty-sixth-task-Online-MLP-shadow-feedback-validation-gradient-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-28_phase7_online_shadow_feedback_validation_gradient_gate
+runs/2026-05-28_phase7_online_shadow_feedback_validation_gradient_gate/stage1_online_shadow_feedback_early_lift
+runs/2026-05-28_phase7_online_shadow_feedback_validation_gradient_gate/stage1_online_shadow_feedback_weight_sweep
+```
+
+Code changes:
+
+- Added `--shadow-feedback-validation-gradient-loss-weight`.
+- Added `--shadow-feedback-validation-gradient-norm-weight`.
+- Added differentiable validation model-gradient regularization for the online
+  MLP shadow warmup.
+- Split feature extraction from target construction so fixed online shadow
+  feedback can train without recomputing boundary targets inside the training
+  loop.
+- Enabled `--shadow-feedback-mode online_mlp --shadow-feedback-weight > 0` by
+  fitting the module once before Stage 1, saving
+  `online_shadow_feedback_module.pt`, and applying it as fixed feedback.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+103 passed
+```
+
+Stage 0B diagnostics with target normalization, `injection_grad_logits`
+features, `cosine` prediction loss, validation-gradient weight `0.5`, and
+ordinary min-cosine validation selection:
+
+| Hidden | Norm weight | Step | Heldout result/upstream cosine | Train-heldout gap | Heldout relative norm | Decision |
+| ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `16` | `0.0` | `100` | `0.81317 / 0.81645` | `0.07823 / 0.04347` | `1.5099 / 1.3677` | norm concern |
+| `16` | `0.1` | `100` | `0.80523 / 0.81281` | `0.09737 / 0.04914` | `1.3299 / 1.2108` | pass but high norm |
+| `32` | `0.0` | `100` | `0.80489 / 0.80824` | `0.12059 / 0.13201` | `1.1647 / 1.1000` | pass |
+| `32` | `0.1` | `100` | `0.80683 / 0.80826` | `0.12274 / 0.13430` | `1.1276 / 1.0736` | pass |
+
+Stage 1 fixed-module early-lift smoke from the h32/norm `0.1` calibration:
+
+| Shadow weight | Final exact match | Best snapshot exact | Main failure |
+| ---: | ---: | ---: | --- |
+| `1.0` | `0.075` | `0.0525` | feedback norm blow-up |
+| `0.01` | `0.005` | `0.0400` | feedback norm blow-up |
+| `0.001` | `0.035` | `0.0550` | feedback norm blow-up |
+
+Decision:
+
+```text
+online_mlp_shadow_feedback_validation_gradient_stage0b_pass_stage1_fixed_module_negative
+```
+
+Interpretation:
+
+- Direct validation model-gradient regularization solves the immediate Stage
+  0B heldout gap problem for the online shadow module.
+- A fixed calibrated module is not stable enough for Stage 1; model movement
+  pushes the shadow features out of distribution and the feedback norm
+  explodes.
+- Next work should keep the direct gradient objective but make Stage 1
+  feedback on-policy or trust-region constrained.

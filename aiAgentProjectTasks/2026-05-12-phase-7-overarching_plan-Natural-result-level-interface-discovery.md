@@ -919,3 +919,36 @@ No Stage 1 early-lift run was launched. Next work should stop treating
 ordinary prediction-loss regularization as the missing ingredient and move to
 a direct split-gradient gap/norm objective, Jacobian-conditioned state, or a
 richer learned-gradient target.
+
+## Status Update: 2026-05-28, Online MLP Validation-Gradient Regularization
+
+The online MLP shadow-feedback diagnostic gained a direct train-time
+validation model-gradient objective:
+
+```text
+online_mlp_shadow_feedback_validation_gradient_stage0b_pass_stage1_fixed_module_negative
+```
+
+Instead of adding validation prediction loss, the new
+`--shadow-feedback-validation-gradient-loss-weight` regularizer compares the
+actual model gradients induced by the shadow module against boundary-target
+model gradients on the validation split. An optional norm term,
+`--shadow-feedback-validation-gradient-norm-weight`, penalizes relative-norm
+mismatch.
+
+This produced the first clean online-shadow Stage 0B pass. h32 with
+validation-gradient weight `0.5` and norm weight `0.1` reached heldout
+result/upstream cosines `0.8068/0.8083`, train-heldout gaps
+`0.1227/0.1343`, and relative norms `1.1276/1.0736`.
+
+Stage 1 did not lift. A fixed calibrated online MLP shadow module was wired
+for training without recomputing boundary targets inside the training loop,
+but weights `1.0/0.01/0.001` reached final exact match
+`0.075/0.005/0.035`; best snapshots were only `0.0525/0.0400/0.0550`, below
+the `0.16` boundary-feedback baseline. The training curves show shadow norm
+blow-up as the model moves away from the calibrated state.
+
+Next work should preserve the direct validation-gradient signal but make it
+on-policy during Stage 1: periodic shadow refresh, trust-region/norm-clamped
+feedback, Jacobian-conditioned state, or a target/state that remains valid
+under upstream movement.

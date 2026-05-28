@@ -2374,6 +2374,8 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
         validation_fraction=0.25,
         validation_every=1,
         validation_loss_weight=0.5,
+        validation_gradient_loss_weight=0.25,
+        validation_gradient_norm_weight=0.1,
         target_normalization="fit_zscore_per_result",
         target_transform="unit_norm_per_example",
         feature_mode="injection_grad_policy_state",
@@ -2397,6 +2399,12 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
     assert summary["shadow_feedback_dropout"] == pytest.approx(0.1)
     assert summary["shadow_feedback_weight_decay"] == pytest.approx(0.02)
     assert summary["shadow_feedback_validation_loss_weight"] == pytest.approx(0.5)
+    assert summary["shadow_feedback_validation_gradient_loss_weight"] == pytest.approx(
+        0.25
+    )
+    assert summary["shadow_feedback_validation_gradient_norm_weight"] == pytest.approx(
+        0.1
+    )
     assert summary["shadow_feedback_target_normalization"] == "fit_zscore_per_result"
     assert summary["shadow_feedback_target_transform"] == "unit_norm_per_example"
     assert summary["shadow_feedback_feature_mode"] == "injection_grad_policy_state"
@@ -2415,6 +2423,11 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
     assert "heldout_shadow_feedback_normalized_feature_l2" in summary
     assert summary["shadow_feedback_target_scale_clamped_count"] >= 0
     assert "shadow_feedback_final_fit_objective" in summary
+    assert (
+        "shadow_feedback_final_validation_gradient_regularization_objective"
+        in summary
+    )
+    assert "shadow_feedback_validation_gradient_objective" in summary
     assert "shadow_feedback_final_normalized_fit_mse" in summary
     assert summary["shadow_feedback_best_step"] >= 0
     assert summary["shadow_feedback_validation_history"]
@@ -3208,6 +3221,10 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "5",
             "--shadow-feedback-validation-loss-weight",
             "0.5",
+            "--shadow-feedback-validation-gradient-loss-weight",
+            "0.25",
+            "--shadow-feedback-validation-gradient-norm-weight",
+            "0.1",
             "--shadow-feedback-target-normalization",
             "fit_zscore_per_result",
             "--shadow-feedback-target-transform",
@@ -3239,6 +3256,10 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_validation_fraction == pytest.approx(0.1)
     assert parsed.shadow_feedback_validation_every == 5
     assert parsed.shadow_feedback_validation_loss_weight == pytest.approx(0.5)
+    assert parsed.shadow_feedback_validation_gradient_loss_weight == pytest.approx(
+        0.25
+    )
+    assert parsed.shadow_feedback_validation_gradient_norm_weight == pytest.approx(0.1)
     assert parsed.shadow_feedback_target_normalization == "fit_zscore_per_result"
     assert parsed.shadow_feedback_target_transform == "unit_norm_per_example"
     assert parsed.shadow_feedback_feature_mode == "injection_grad_logits_result_input"
@@ -3274,6 +3295,10 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_validation_fraction == pytest.approx(0.0)
     assert parsed.shadow_feedback_validation_every == 0
     assert parsed.shadow_feedback_validation_loss_weight == pytest.approx(0.0)
+    assert parsed.shadow_feedback_validation_gradient_loss_weight == pytest.approx(
+        0.0
+    )
+    assert parsed.shadow_feedback_validation_gradient_norm_weight == pytest.approx(0.0)
     assert parsed.shadow_feedback_target_normalization == "none"
     assert parsed.shadow_feedback_target_transform == "none"
     assert parsed.shadow_feedback_feature_mode == "injection_grad_logits"

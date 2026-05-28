@@ -230,6 +230,19 @@ cosines (`0.7953/0.8233` and `0.7915/0.8195`), but result gaps stayed near
 fell to `0.7274/0.7381` and relative norms rose to `1.3346/1.2494`. Label:
 `online_mlp_shadow_feedback_validation_loss_regularization_no_go`.
 
+Direct validation model-gradient regularization was then added to the online
+MLP shadow warmup. This is the first clean Stage 0B pass in the online shadow
+line: h32 with validation-gradient weight `0.5` and norm weight `0.1` reached
+heldout result/upstream cosines `0.8068/0.8083`, train-heldout gaps
+`0.1227/0.1343`, and relative norms `1.1276/1.0736`. h32 without the norm
+term and h16 variants also cleared the cosine/gap gate, though h16 had
+larger relative norms. However, a fixed calibrated online MLP module did not
+produce Stage 1 early lift. Shadow weights `1.0/0.01/0.001` reached only
+`0.075/0.005/0.035` final exact match, with best snapshots
+`0.0525/0.0400/0.0550`, all below the `0.16` boundary-feedback baseline.
+Label:
+`online_mlp_shadow_feedback_validation_gradient_stage0b_pass_stage1_fixed_module_negative`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -284,14 +297,17 @@ Do not rerun these as next steps unless debugging new code:
   directional-loss `injection_grad_logits` setup with validation-loss weights
   `0.5/1.0`, h16/h32, `lr=1e-3`, `100` steps, and ordinary heldout
   min-cosine selection as novelty.
+- direct validation model-gradient regularization on the same
+  `injection_grad_logits`, target-normalized h16/h32 setup with
+  validation-gradient weight `0.5`, norm weights `0/0.1`, and fixed-module
+  Stage 1 weights `1.0/0.01/0.001` as novelty.
 
 Next best step: improve shadow generalization by changing the target
-construction or learned-gradient state more substantially, or by using a
-split-aware objective that directly optimizes heldout model-gradient
-generalization rather than just adding validation prediction loss. Plausible
-branches include Jacobian-conditioned state rather than raw activations,
-direct train-time gap/norm penalties on split gradient summaries, or a target
-construction that uses more context than the boundary-best class prototype.
+construction or learned-gradient update path so the passed Stage 0B signal
+stays in distribution during model training. Plausible branches include
+on-policy shadow refresh during Stage 1, a trust-region or norm clamp on the
+fixed shadow feedback, Jacobian-conditioned state rather than raw activations,
+or a richer target construction that remains valid after upstream movement.
 Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`
