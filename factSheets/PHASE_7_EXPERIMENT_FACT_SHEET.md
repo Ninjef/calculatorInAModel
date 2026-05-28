@@ -2949,3 +2949,63 @@ Interpretation:
 - Next work should use a trust region that validates per-step improvement, a
   hard/assignment-style usage constraint, Jacobian-conditioned state, or
   richer targets.
+
+## 2026-05-28 Answer-Loss Step Acceptance Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-thirty-first-task-Answer-loss-step-acceptance-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_shadow_refresh_answer_loss_acceptance_gate
+```
+
+Code changes:
+
+- Added `--optimizer-step-acceptance-mode`.
+- Added `--optimizer-step-acceptance-tolerance`.
+- `answer_loss_decrease` snapshots trainable parameters before the optimizer
+  step and restores them if hard-path answer loss worsens beyond tolerance.
+- Training curves now record acceptance before/after answer loss, delta,
+  accepted flag, cumulative attempts, cumulative accepted count, and
+  acceptance rate.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+103 passed
+```
+
+Stage 1 refreshed h32 validation-gradient online shadow module,
+`shadow_feedback_weight=1.0`, feedback clamp `10`:
+
+| Tolerance | Accepted steps | Final exact | Best snapshot | Final learned calc | Final shadow norm |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| `0.0` | `6/200` (`3%`) | `0.050` | `0.070` | `0.0475` | `3.12` |
+| `0.1` | `6/200` (`3%`) | `0.050` | `0.070` | `0.0450` | `3.12` |
+
+Decision:
+
+```text
+answer_loss_step_acceptance_stage1_negative
+```
+
+Interpretation:
+
+- Most refreshed-shadow proposed steps worsen real hard-path answer loss.
+- Reverting those steps stabilizes the run but does not create calculator
+  discovery.
+- Next work needs to repair or construct useful directions, not merely reject
+  bad ones; plausible branches are hard/assignment-style usage constraints,
+  Jacobian-conditioned state, or richer targets.

@@ -141,3 +141,9 @@ Conclusion: Trust caps `0.05` and `0.10` scaled proposed AdamW deltas from about
 Do not repeat: Same refreshed h32 validation-gradient module with feedback clamp `10`, optimizer step max deltas `0.05` or `0.10`, and 200-step budget as novelty.
 Next allowed test: Trust region that validates per-step improvement, hard assignment-style usage constraints, Jacobian-conditioned state, or richer targets.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-optimizer-step-trust-region-gate.md`
+
+DISPROVEN: Hard-path answer-loss step acceptance rescues refreshed online-shadow Stage 1.
+Conclusion: Accept/reject gating with tolerances `0.0` and `0.1` accepted only `6/200` proposed steps (`3%`) and ended at `0.050` final exact with best snapshot `0.070`.
+Do not repeat: Same refreshed h32 validation-gradient module with feedback clamp `10`, answer-loss acceptance tolerance `0.0` or `0.1`, and 200-step budget as novelty.
+Next allowed test: A mechanism that repairs/constructs useful directions rather than simply rejecting most shadow steps, hard assignment-style usage constraints, Jacobian-conditioned state, or richer targets.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-answer-loss-step-acceptance-gate.md`

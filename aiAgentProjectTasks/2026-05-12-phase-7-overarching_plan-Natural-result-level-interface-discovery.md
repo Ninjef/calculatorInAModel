@@ -1060,3 +1060,32 @@ agreement high, but it did not produce calculator-result discovery. Next work
 should use a trust region that validates per-step improvement, a
 hard/assignment-style usage constraint, Jacobian-conditioned state, or richer
 targets.
+
+## Status Update: 2026-05-28, Answer-Loss Step Acceptance
+
+The training loop gained a hard-path answer-loss acceptance gate:
+
+```text
+answer_loss_step_acceptance_stage1_negative
+```
+
+The new `--optimizer-step-acceptance-mode answer_loss_decrease` snapshots
+trainable parameters, lets AdamW propose a step, evaluates hard-path answer
+loss on the current batch, and reverts the step if answer loss worsens beyond
+the configured tolerance. This validates real task movement without providing
+per-example calculator-result labels.
+
+Two 200-step early-lift smokes were run on top of refreshed h32
+validation-gradient online shadow feedback plus feedback clamp `10`:
+
+| Tolerance | Accepted steps | Final exact | Best snapshot | Final learned calc |
+| ---: | ---: | ---: | ---: | ---: |
+| `0.0` | `6/200` (`3%`) | `0.050` | `0.070` | `0.0475` |
+| `0.1` | `6/200` (`3%`) | `0.050` | `0.070` | `0.0450` |
+
+The acceptance gate shows that most refreshed-shadow proposed steps are
+locally harmful under the real hard answer-loss surface. Reverting them
+stabilizes the run, but it does not create useful calculator-result discovery.
+Next work should repair/construct better directions rather than merely reject
+bad ones, or move to hard/assignment-style usage constraints,
+Jacobian-conditioned state, or richer targets.

@@ -154,6 +154,8 @@ class TrainConfig:
     input_proj_lr: float
     upstream_lr: float
     optimizer_step_max_delta_norm: float
+    optimizer_step_acceptance_mode: str
+    optimizer_step_acceptance_tolerance: float
     freeze_semantic_decoder: bool
     freeze_upstream_encoder: bool
     trainable_parameter_groups: list[dict[str, object]]
@@ -714,6 +716,15 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "optimizer_step_unclamped_delta_l2",
         "optimizer_step_trust_scale",
         "optimizer_step_max_delta_norm",
+        "optimizer_step_acceptance_mode",
+        "optimizer_step_acceptance_before_answer_loss",
+        "optimizer_step_acceptance_after_answer_loss",
+        "optimizer_step_acceptance_delta",
+        "optimizer_step_acceptance_tolerance",
+        "optimizer_step_accepted",
+        "optimizer_step_acceptance_attempts",
+        "optimizer_step_acceptance_accepted",
+        "optimizer_step_acceptance_rate",
         "relaxed_calculator_temperature",
         "relaxed_calculator_final_temperature",
         "relaxed_calculator_mode",
@@ -1124,6 +1135,14 @@ def snapshot_trainable_parameters(
     ]
 
 
+def restore_trainable_parameters(
+    before: list[tuple[torch.nn.Parameter, torch.Tensor]]
+) -> None:
+    with torch.no_grad():
+        for param, old_value in before:
+            param.copy_(old_value)
+
+
 def apply_optimizer_step_trust_region(
     before: list[tuple[torch.nn.Parameter, torch.Tensor]],
     *,
@@ -1152,6 +1171,26 @@ def apply_optimizer_step_trust_region(
         "optimizer_step_trust_scale": float(scale),
         "optimizer_step_max_delta_norm": float(max_delta_norm),
     }
+
+
+def hard_path_answer_loss_metric(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    oracle_operands: tuple[torch.Tensor, torch.Tensor] | None = None,
+) -> float:
+    was_training = model.training
+    model.eval()
+    with torch.no_grad():
+        logits = model(batch.x, oracle_operands=oracle_operands)
+        loss = masked_cross_entropy_per_example(
+            logits,
+            batch.y,
+            batch.loss_mask,
+        ).mean()
+    if was_training:
+        model.train()
+    return float(loss.item())
 
 
 def relaxed_calculator_policy_metrics(
@@ -6199,6 +6238,10 @@ def run_variant(
         ),
         upstream_lr=args.lr if args.upstream_lr is None else args.upstream_lr,
         optimizer_step_max_delta_norm=args.optimizer_step_max_delta_norm,
+        optimizer_step_acceptance_mode=args.optimizer_step_acceptance_mode,
+        optimizer_step_acceptance_tolerance=(
+            args.optimizer_step_acceptance_tolerance
+        ),
         freeze_semantic_decoder=args.freeze_semantic_decoder,
         freeze_upstream_encoder=args.freeze_upstream_encoder,
         trainable_parameter_groups=trainable_groups,
@@ -6653,6 +6696,8 @@ def run_variant(
     policy_baseline: float | None = None
     action_loss_replay_cache = ActionLossReplayCache()
     last_optimizer_step_metrics: dict[str, float] = {}
+    optimizer_step_acceptance_attempts = 0
+    optimizer_step_acceptance_accepted = 0
     model.train()
     for step in range(args.steps + 1):
         if args.operand_max is None:
@@ -7424,17 +7469,74 @@ def run_variant(
         torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
         trust_region_before = (
             snapshot_trainable_parameters(model)
-            if args.optimizer_step_max_delta_norm > 0
+            if (
+                args.optimizer_step_max_delta_norm > 0
+                or args.optimizer_step_acceptance_mode != "none"
+            )
             else []
         )
+        optimizer_acceptance_before_answer_loss = None
+        if args.optimizer_step_acceptance_mode == "answer_loss_decrease":
+            optimizer_acceptance_before_answer_loss = hard_path_answer_loss_metric(
+                model,
+                batch,
+                oracle_operands=oracle_operands,
+            )
         optim.step()
-        if trust_region_before:
+        if trust_region_before and args.optimizer_step_max_delta_norm > 0:
             last_optimizer_step_metrics = apply_optimizer_step_trust_region(
                 trust_region_before,
                 max_delta_norm=args.optimizer_step_max_delta_norm,
             )
         else:
             last_optimizer_step_metrics = {}
+        if args.optimizer_step_acceptance_mode == "answer_loss_decrease":
+            assert optimizer_acceptance_before_answer_loss is not None
+            optimizer_acceptance_after_answer_loss = hard_path_answer_loss_metric(
+                model,
+                batch,
+                oracle_operands=oracle_operands,
+            )
+            optimizer_step_accepted = (
+                optimizer_acceptance_after_answer_loss
+                <= optimizer_acceptance_before_answer_loss
+                + args.optimizer_step_acceptance_tolerance
+            )
+            optimizer_step_acceptance_attempts += 1
+            optimizer_step_acceptance_accepted += int(optimizer_step_accepted)
+            if not optimizer_step_accepted:
+                restore_trainable_parameters(trust_region_before)
+            last_optimizer_step_metrics.update(
+                {
+                    "optimizer_step_acceptance_mode": (
+                        args.optimizer_step_acceptance_mode
+                    ),
+                    "optimizer_step_acceptance_before_answer_loss": (
+                        optimizer_acceptance_before_answer_loss
+                    ),
+                    "optimizer_step_acceptance_after_answer_loss": (
+                        optimizer_acceptance_after_answer_loss
+                    ),
+                    "optimizer_step_acceptance_delta": (
+                        optimizer_acceptance_after_answer_loss
+                        - optimizer_acceptance_before_answer_loss
+                    ),
+                    "optimizer_step_acceptance_tolerance": (
+                        args.optimizer_step_acceptance_tolerance
+                    ),
+                    "optimizer_step_accepted": float(optimizer_step_accepted),
+                    "optimizer_step_acceptance_attempts": float(
+                        optimizer_step_acceptance_attempts
+                    ),
+                    "optimizer_step_acceptance_accepted": float(
+                        optimizer_step_acceptance_accepted
+                    ),
+                    "optimizer_step_acceptance_rate": (
+                        optimizer_step_acceptance_accepted
+                        / max(optimizer_step_acceptance_attempts, 1)
+                    ),
+                }
+            )
         if use_reinforce and args.reinforce_baseline_mode == "global_ema":
             answer_loss_value = float(answer_loss.detach().item())
             if policy_baseline is None:
@@ -7712,6 +7814,10 @@ def run_variant(
     )
     metrics["upstream_lr"] = args.lr if args.upstream_lr is None else args.upstream_lr
     metrics["optimizer_step_max_delta_norm"] = args.optimizer_step_max_delta_norm
+    metrics["optimizer_step_acceptance_mode"] = args.optimizer_step_acceptance_mode
+    metrics["optimizer_step_acceptance_tolerance"] = (
+        args.optimizer_step_acceptance_tolerance
+    )
     if last_optimizer_step_metrics:
         metrics["final_optimizer_step"] = last_optimizer_step_metrics
     metrics["freeze_semantic_decoder"] = args.freeze_semantic_decoder
@@ -7935,6 +8041,25 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Optional trust-region cap on the actual trainable-parameter "
             "update L2 norm after optimizer.step(). 0 disables."
+        ),
+    )
+    parser.add_argument(
+        "--optimizer-step-acceptance-mode",
+        choices=["none", "answer_loss_decrease"],
+        default="none",
+        help=(
+            "Optional post-step acceptance test. answer_loss_decrease reverts "
+            "optimizer steps that worsen hard-path answer loss on the current "
+            "batch beyond the configured tolerance."
+        ),
+    )
+    parser.add_argument(
+        "--optimizer-step-acceptance-tolerance",
+        type=float,
+        default=0.0,
+        help=(
+            "Allowed hard-path answer-loss increase for "
+            "--optimizer-step-acceptance-mode answer_loss_decrease."
         ),
     )
     parser.add_argument(
@@ -8729,6 +8854,10 @@ def main() -> None:
         raise ValueError("--answer-loss-weight must be non-negative")
     if args.optimizer_step_max_delta_norm < 0:
         raise ValueError("--optimizer-step-max-delta-norm must be non-negative")
+    if args.optimizer_step_acceptance_tolerance < 0:
+        raise ValueError(
+            "--optimizer-step-acceptance-tolerance must be non-negative"
+        )
     if args.calculator_read_span_width < 1:
         raise ValueError("--calculator-read-span-width must be positive")
     if (
@@ -9427,6 +9556,12 @@ def main() -> None:
                 suffix_parts.append(f"inanchordecay{args.input_proj_anchor_decay_steps}")
         if args.optimizer_step_max_delta_norm > 0:
             suffix_parts.append(f"stepmax{args.optimizer_step_max_delta_norm:g}")
+        if args.optimizer_step_acceptance_mode != "none":
+            suffix_parts.append(f"stepaccept{args.optimizer_step_acceptance_mode}")
+            if args.optimizer_step_acceptance_tolerance > 0:
+                suffix_parts.append(
+                    f"steptol{args.optimizer_step_acceptance_tolerance:g}"
+                )
     if args.calculator_injection_mode != "add":
         suffix_parts.append(args.calculator_injection_mode)
     if args.calculator_bottleneck_mode != "none":
@@ -9501,7 +9636,9 @@ def main() -> None:
     )
     print(
         "optimizer trust region: "
-        f"step_max_delta_norm={args.optimizer_step_max_delta_norm}"
+        f"step_max_delta_norm={args.optimizer_step_max_delta_norm} "
+        f"acceptance_mode={args.optimizer_step_acceptance_mode} "
+        f"acceptance_tolerance={args.optimizer_step_acceptance_tolerance}"
     )
     print(
         "action-loss candidates: "
