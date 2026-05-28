@@ -683,3 +683,23 @@ result/upstream cosines `0.6449/0.7266`, with train-test gaps
 No Stage 1 early-lift run was launched. Next work should change the shadow
 target/state or add stronger regularization rather than relying on validation
 selection alone.
+
+## Status Update: 2026-05-28, Online MLP Target Normalization
+
+Fit-split per-result z-score target normalization was added to the online MLP
+shadow-feedback diagnostic:
+
+```text
+online_mlp_shadow_feedback_target_normalization_partial_no_go
+```
+
+The diagnostic now fits target mean/std on the fit split only, trains the MLP
+on normalized targets, and unnormalizes predictions before raw model-gradient
+agreement checks. This improved heldout-test alignment but still did not clear
+the complete gate. Best near miss was hidden size `16`: heldout-test
+result/upstream cosines `0.7259/0.7549`, relative norms `1.4146/1.1848`, and
+train-heldout gaps `0.1723/0.1458`.
+
+No Stage 1 early-lift run was launched. Next work should change shadow
+input/state or objective more substantially, not rerun this exact
+target-normalized sweep.

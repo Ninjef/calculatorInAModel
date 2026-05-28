@@ -135,6 +135,13 @@ train-test gaps `0.3201/0.2414`; the final unselected checkpoint was also
 below the result-head threshold (`0.6955`). Label:
 `online_mlp_shadow_feedback_validation_selection_negative`.
 
+Fit-split per-result z-score target normalization was then added to the online
+MLP shadow module. It improved raw heldout-test alignment but still did not
+clear the full gate. The best near miss was hidden size `16`, with heldout-test
+result/upstream cosines `0.7259/0.7549`, relative norms `1.4146/1.1848`, and
+train-heldout gaps `0.1723/0.1458`; the result gap remained above `0.15`.
+Label: `online_mlp_shadow_feedback_target_normalization_partial_no_go`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -160,13 +167,15 @@ Do not rerun these as next steps unless debugging new code:
   anti-overfit or target-normalization change.
 - validation-selected early stopping alone on that same simple online MLP
   shadow target/state as a Stage 1 go signal.
+- the same per-result z-score target-normalized `h64/h32/h16/h8`, `lr=1e-3`,
+  `100`-step validation-selected Stage 0B sweep as novelty.
 
-Next best step: improve the learned-gradient target or state before Stage 1,
-e.g. target normalization, explicit regularization, richer policy features, or
-a different synthetic-gradient objective. Keep the exact-grid boundary-ceiling
-diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
-pass before Stage 1, and require early Stage 1 lift above the `0.16`
-boundary-feedback baseline before long runs. Do not move directly to
+Next best step: change the shadow input/state or objective more substantially
+before Stage 1, e.g. richer policy features, explicit regularization, a
+different loss, or a more stable target construction. Keep the exact-grid
+boundary-ceiling diagnostic as the Stage 0 gate for any new mechanism, require
+a heldout warmup pass before Stage 1, and require early Stage 1 lift above the
+`0.16` boundary-feedback baseline before long runs. Do not move directly to
 canonical-query/protocol stabilization as if Phase 7 retention had robustly
 replicated, and do not treat ordinary expected-cost/score-function training as
 rescued by decoder calibration alone.

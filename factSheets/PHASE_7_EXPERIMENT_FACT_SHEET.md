@@ -1966,3 +1966,73 @@ Interpretation:
   below `0.70` and had large gaps.
 - No Stage 1 run was launched. Next work should change the target/state or add
   stronger regularization, not rely on validation selection alone.
+
+## 2026-05-28 Online MLP Shadow-Feedback Target-Normalization Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-sixteenth-task-Online-MLP-shadow-feedback-target-normalization-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_online_shadow_feedback_target_norm_gate
+```
+
+Code changes:
+
+- Added `--shadow-feedback-target-normalization`.
+- Added `fit_zscore_per_result`, which fits per-result target mean/std on the
+  fit split only, trains the online MLP on normalized shadow targets, and
+  unnormalizes predictions before inducing model gradients.
+- The diagnostic records normalization epsilon, target mean/scale summaries,
+  clamped scale count, normalized fit metrics, and raw model-gradient metrics.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+99 passed
+```
+
+Shared target-normalization stats:
+
+| Metric | Value |
+| --- | ---: |
+| target mean L2 | `0.09148` |
+| target scale min / median / max | `0.0000617 / 0.15612 / 0.21795` |
+| target scale mean | `0.14742` |
+| clamped scale count | `0` |
+
+Stage 0B validation-selected diagnostics:
+
+| Hidden | Heldout result/upstream cosine | Train-heldout gap | Heldout relative norm | Decision |
+| ---: | ---: | ---: | ---: | --- |
+| `64` | `0.71287 / 0.77383` | `0.22750 / 0.18105` | `1.1929 / 1.1339` | gap fail |
+| `32` | `0.71194 / 0.75472` | `0.19129 / 0.18739` | `1.2276 / 1.2244` | gap fail |
+| `16` | `0.72595 / 0.75493` | `0.17235 / 0.14584` | `1.4146 / 1.1848` | near miss, result-gap fail |
+| `8` | `0.55824 / 0.58359` | `0.19213 / 0.15603` | `1.5886 / 1.3430` | cosine fail |
+
+Decision:
+
+```text
+online_mlp_shadow_feedback_target_normalization_partial_no_go
+```
+
+Interpretation:
+
+- Target normalization materially improved heldout-test gradient agreement
+  compared with validation selection alone.
+- The best capacity point (`h16`) cleared the heldout cosine thresholds and
+  the upstream gap threshold, but still missed the result gap threshold
+  (`0.17235 > 0.15`).
+- No Stage 1 run was launched. Next work should change shadow input/state or
+  objective more substantially, not rerun this sweep.

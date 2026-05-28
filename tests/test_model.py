@@ -2371,6 +2371,7 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
         updates_per_step=1,
         validation_fraction=0.25,
         validation_every=1,
+        target_normalization="fit_zscore_per_result",
         result_boundary_target_mode="hard_best_result",
         result_boundary_target_temperature=1.0,
         result_boundary_target_min_probability_floor=0.0,
@@ -2384,6 +2385,9 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
     assert summary["shadow_feedback_heldout_batch_size"] == 2
     assert summary["shadow_feedback_validation_batch_size"] == 1
     assert summary["shadow_feedback_best_state_restored"] is True
+    assert summary["shadow_feedback_target_normalization"] == "fit_zscore_per_result"
+    assert summary["shadow_feedback_target_scale_clamped_count"] >= 0
+    assert "shadow_feedback_final_normalized_fit_mse" in summary
     assert summary["shadow_feedback_best_step"] >= 0
     assert summary["shadow_feedback_validation_history"]
     assert summary["heldout_shadow_result_proj_grad_l2"] > 0.0
@@ -2396,6 +2400,49 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
     assert "shadow_feedback_validation_test_result_proj_cosine_gap" in summary
     for name, param in model.named_parameters():
         assert torch.allclose(param, before_params[name])
+
+
+def test_shadow_feedback_target_normalizer_uses_fit_statistics_only() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_shadow_target_norm", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    fit_target = torch.tensor(
+        [
+            [1.0, 2.0, 4.0],
+            [3.0, 2.0, 8.0],
+            [5.0, 2.0, 12.0],
+        ]
+    )
+    heldout_like_target = torch.tensor([[100.0, 100.0, 100.0]])
+    mean, scale, metrics = overfit_script.fit_shadow_feedback_target_normalizer(
+        fit_target,
+        mode="fit_zscore_per_result",
+    )
+    assert mean is not None
+    assert scale is not None
+    assert mean.squeeze(0).tolist() == pytest.approx([3.0, 2.0, 8.0])
+    assert metrics["shadow_feedback_target_scale_clamped_count"] == 1
+
+    normalized_fit = overfit_script.normalize_shadow_feedback_target(
+        fit_target,
+        mean=mean,
+        scale=scale,
+    )
+    normalized_heldout = overfit_script.normalize_shadow_feedback_target(
+        heldout_like_target,
+        mean=mean,
+        scale=scale,
+    )
+    assert normalized_fit[:, 0].mean().item() == pytest.approx(0.0)
+    assert normalized_heldout[0, 0].item() == pytest.approx(
+        (100.0 - 3.0) / scale[0, 0].item()
+    )
 
 
 def test_exhaustive_grid_boundary_target_smoke_updates_open_upstream(
@@ -2985,6 +3032,8 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "0.1",
             "--shadow-feedback-validation-every",
             "5",
+            "--shadow-feedback-target-normalization",
+            "fit_zscore_per_result",
         ],
     )
     parsed = overfit_script.parse_args()
@@ -2999,6 +3048,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_updates_per_step == 2
     assert parsed.shadow_feedback_validation_fraction == pytest.approx(0.1)
     assert parsed.shadow_feedback_validation_every == 5
+    assert parsed.shadow_feedback_target_normalization == "fit_zscore_per_result"
 
     monkeypatch.setattr(
         sys,
@@ -3024,6 +3074,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_warmup_steps == 100
     assert parsed.shadow_feedback_validation_fraction == pytest.approx(0.0)
     assert parsed.shadow_feedback_validation_every == 0
+    assert parsed.shadow_feedback_target_normalization == "none"
 
     with pytest.raises(ValueError, match="result_space.*gumbel_concrete_interface"):
         CalculatorHook(

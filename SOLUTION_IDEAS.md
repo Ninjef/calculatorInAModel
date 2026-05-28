@@ -178,8 +178,11 @@ gap but missed the result-proj threshold (`0.6255`). Do not launch Stage 1
 from this simple form. Next synthetic-gradient attempts should explicitly
 address the target/state itself. Validation early stopping alone was tested
 next with a separate heldout-test split; the selected checkpoint reached only
-`0.6449` heldout-test result-proj cosine. Stronger regularization, target
-normalization, richer state, or a different synthetic-gradient objective remain
+`0.6449` heldout-test result-proj cosine. Fit-split per-result z-score target
+normalization improved heldout alignment but still missed the full gate: best
+near miss was `h16` with `0.7259` result-proj cosine, `0.7549` upstream
+cosine, and a `0.1723` result train-heldout gap. Stronger regularization,
+richer state, a different loss, or a more stable target construction remain
 the next plausible branches.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
