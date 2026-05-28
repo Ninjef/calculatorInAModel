@@ -159,3 +159,9 @@ Conclusion: `injection_grad_logits_output_jacobian` with feature z-scoring clear
 Do not repeat: h16/h32 raw output-Jacobian features or h32 fit-split feature z-scoring with validation-gradient `0.5`, norm `0.1`, refresh every `50`, clamp `10`, and 200-step budget as novelty.
 Next allowed test: Hard assignment-style usage constraints, richer targets, or a more substantial learned-gradient update path; do not treat this state-only Jacobian feature as enough.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-output-jacobian-shadow-feature-gate.md`
+
+PARTIAL: Hard answer-loss improvement assignments can produce Stage 1 lift.
+Conclusion: Assignment weight `10` reached `0.170` final exact with refreshed shadow and `0.400` final exact without shadow at 200 steps; weight `1` collapsed at `0.0475`.
+Do not repeat: Same seed-2/seed-4 exact-grid 200-step assignment weights `1` or `10` as novelty.
+Next allowed test: Longer convergence, target-off retention, seed replication, or cheaper/scalable assignment construction; do not claim final success because this still scores forced result classes during training.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-gate.md`

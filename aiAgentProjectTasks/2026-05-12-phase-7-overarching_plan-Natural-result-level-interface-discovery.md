@@ -1143,3 +1143,32 @@ The feature-normalized h32 module earned a Stage 1 smoke with refresh every
 `0.055`, best snapshot `0.065`, and final learned calculator accuracy
 `0.0475`. Refresh agreement stayed excellent through step `200`, so the
 remaining failure is not simply stale local gradient agreement.
+
+## Status Update: 2026-05-28, Hard Improvement Assignment
+
+The result-policy training loop gained a hard assignment-style improvement
+constraint:
+
+```text
+hard_improvement_assignment_stage1_lift_partial
+```
+
+The target scores forced result classes, assigns an example only to a result
+that improves its current learned forced-answer loss, and caps assignments per
+result. This directly links result diversity to per-example improvement,
+unlike the earlier soft marginal entropy/diversity objective.
+
+Stage 1 200-step exact-grid smokes:
+
+| Setup | Assignment weight | Final exact | Best snapshot | Final hard effective results |
+| --- | ---: | ---: | ---: | ---: |
+| refreshed h32 shadow, clamp `10` | `1` | `0.0475` | `0.0650` | `1.00` |
+| refreshed h32 shadow, clamp `10` | `10` | `0.1700` | `0.2425` | `14.12` |
+| no shadow feedback | `10` | `0.4000` | `0.3500` | `18.85` |
+
+This is the first recent Stage 1 lift above the `0.16` boundary-feedback
+baseline. It is not final success: it is answer-derived, scores all forced
+result classes during training, and has not yet passed retention, seeds, or
+scaling. Next work should test whether the learned interface retains after
+turning the assignment target off, whether the run converges with more steps,
+and whether the assignment construction can be made cheaper.

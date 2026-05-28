@@ -240,10 +240,13 @@ steps; it lifted best snapshot slightly to `0.0925` but finished at only
 `0.060` exact. A first Jacobian-conditioned state then appended local
 result-output `J^T answer_grad` scores. With feature z-scoring, h32 cleared
 Stage 0B (`0.9073/0.9011` heldout result/upstream), but refreshed Stage 1
-still ended at only `0.055` exact. Use mechanisms that construct useful
-directions rather than selecting among mostly harmful shadow steps,
-hard/assignment-style usage constraints, richer targets, or a more substantial
-Jacobian-conditioned update path than this state-only feature.
+still ended at only `0.055` exact. A hard improvement-assignment target then
+finally produced lift: weight `10` reached `0.170` final exact with refreshed
+shadow and `0.400` without shadow by step `200`. This is promising but not
+yet the final scalable method because it scores forced result classes during
+training. Next work should test convergence/retention/seeds and seek cheaper
+assignment approximations rather than more soft diversity or state-only
+shadow features.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

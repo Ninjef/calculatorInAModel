@@ -3088,6 +3088,57 @@ def test_joint_full_enum_interface_loss_updates_pair_projection_only() -> None:
     assert model.tok_emb.weight.grad is None
 
 
+def test_hard_improvement_assignment_targets_respect_quota() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_improvement_assignment", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    full_losses = torch.tensor(
+        [
+            [5.0, 1.0],
+            [4.0, 2.0],
+            [3.0, 0.5],
+            [2.0, 1.9],
+        ]
+    )
+    learned_result = torch.zeros(4, dtype=torch.long)
+
+    targets, metrics = overfit_script.hard_improvement_assignment_targets(
+        full_losses,
+        learned_result,
+        min_improvement=0.5,
+        quota_multiplier=1.0,
+    )
+
+    assert targets.tolist() == [1, -1, 1, -1]
+    assert metrics["result_policy_improvement_assignment_quota"] == 2
+    assert metrics["result_policy_improvement_assignment_fraction"] == pytest.approx(
+        0.5
+    )
+    assert metrics[
+        "result_policy_improvement_assignment_mean_improvement"
+    ] == pytest.approx(3.25)
+    assert metrics["result_policy_improvement_assignment_unique_results"] == 1
+
+    targets, metrics = overfit_script.hard_improvement_assignment_targets(
+        full_losses,
+        learned_result,
+        min_improvement=0.5,
+        quota_multiplier=2.0,
+    )
+
+    assert targets.tolist() == [1, 1, 1, -1]
+    assert metrics["result_policy_improvement_assignment_quota"] == 4
+    assert metrics["result_policy_improvement_assignment_fraction"] == pytest.approx(
+        0.75
+    )
+
+
 def test_joint_pair_relaxed_metrics_report_soft_result_hardening(monkeypatch) -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_relaxed_metrics", script_path)
@@ -3247,6 +3298,12 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "0.02",
             "--result-policy-batch-diversity-weight",
             "0.3",
+            "--result-policy-improvement-assignment-weight",
+            "2.0",
+            "--result-policy-improvement-assignment-min-improvement",
+            "0.25",
+            "--result-policy-improvement-assignment-quota-multiplier",
+            "1.5",
             "--result-policy-stabilization-temperature",
             "1.5",
             "--result-policy-stabilization-decay-steps",
@@ -3266,6 +3323,13 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.boundary_feedback_mode == "output_proj_transpose"
     assert parsed.result_policy_entropy_weight == pytest.approx(0.02)
     assert parsed.result_policy_batch_diversity_weight == pytest.approx(0.3)
+    assert parsed.result_policy_improvement_assignment_weight == pytest.approx(2.0)
+    assert parsed.result_policy_improvement_assignment_min_improvement == pytest.approx(
+        0.25
+    )
+    assert parsed.result_policy_improvement_assignment_quota_multiplier == (
+        pytest.approx(1.5)
+    )
     assert parsed.result_policy_stabilization_temperature == pytest.approx(1.5)
     assert parsed.result_policy_stabilization_decay_steps == 40
     assert parsed.optimizer_step_max_delta_norm == pytest.approx(0.125)
@@ -3402,6 +3466,13 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_selection_gap_penalty == pytest.approx(1.0)
     assert parsed.result_policy_entropy_weight == pytest.approx(0.0)
     assert parsed.result_policy_batch_diversity_weight == pytest.approx(0.0)
+    assert parsed.result_policy_improvement_assignment_weight == pytest.approx(0.0)
+    assert parsed.result_policy_improvement_assignment_min_improvement == (
+        pytest.approx(0.0)
+    )
+    assert parsed.result_policy_improvement_assignment_quota_multiplier == (
+        pytest.approx(1.0)
+    )
     assert parsed.result_policy_stabilization_temperature == pytest.approx(1.0)
     assert parsed.result_policy_stabilization_decay_steps == 0
     assert parsed.optimizer_step_max_delta_norm == pytest.approx(0.0)

@@ -3134,3 +3134,67 @@ Interpretation:
 - A state-only Jacobian feature is therefore not enough; next work should use
   hard assignment-style usage constraints, richer targets, or a learned update
   path that changes the proposed direction rather than only describing state.
+
+## 2026-05-28 Hard Improvement Assignment Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-thirty-fourth-task-Hard-improvement-assignment-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_hard_improvement_assignment_gate
+```
+
+Code changes:
+
+- Added `--result-policy-improvement-assignment-weight`.
+- Added `--result-policy-improvement-assignment-min-improvement`.
+- Added `--result-policy-improvement-assignment-quota-multiplier`.
+- Added a hard assignment target that chooses answer-loss-improving result
+  classes under a per-result quota.
+- Allowed result-policy stabilization weights to serve as a
+  `direct_feedback_alignment` training objective without boundary/shadow
+  feedback.
+- Added unit coverage for quota-respecting assignment construction and CLI
+  parsing.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+105 passed
+```
+
+Stage 1 200-step exact-grid smokes:
+
+| Setup | Assignment weight | Final exact | Best snapshot | Assigned fraction | Target accuracy | Hard effective results |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| refreshed h32 shadow, clamp `10` | `1` | `0.0475` | `0.0650` | `0.9250` | `0.8189` | `1.00` |
+| refreshed h32 shadow, clamp `10` | `10` | `0.1700` | `0.2425` | `0.7925` | `0.9117` | `14.12` |
+| no shadow feedback | `10` | `0.4000` | `0.3500` | `0.6175` | `0.9474` | `18.85` |
+
+Decision:
+
+```text
+hard_improvement_assignment_stage1_lift_partial
+```
+
+Interpretation:
+
+- Hard assignment pressure is mechanically active and can lift Stage 1 above
+  the `0.16` baseline.
+- The no-shadow ablation being stronger means the lift comes primarily from
+  the assignment target, not from refreshed shadow feedback.
+- This is not yet scalable final success: the target scores forced result
+  classes during training and still needs target-off retention, seed
+  replication, longer convergence, and lower-cost approximations.

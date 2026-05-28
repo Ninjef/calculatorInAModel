@@ -315,6 +315,17 @@ exact was `0.055`, best snapshot `0.065`, and final learned calculator
 accuracy `0.0475`. Label:
 `output_jacobian_shadow_feature_stage0b_pass_stage1_negative`.
 
+The first hard assignment-style usage constraint then produced a partial
+positive. The new improvement-assignment target scores forced result classes,
+assigns only answer-loss-improving result targets, and caps per-result
+assignments so the policy cannot satisfy the loss by single-class collapse.
+With refreshed h32 shadow feedback and clamp `10`, assignment weight `1`
+collapsed (`0.0475` final exact), while weight `10` crossed the old `0.16`
+early-lift baseline (`0.170` final, `0.2425` best snapshot). The ablation
+without shadow was much stronger: assignment weight `10` alone reached
+`0.400` final exact by step `200`. Label:
+`hard_improvement_assignment_stage1_lift_partial`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -395,16 +406,20 @@ Do not rerun these as next steps unless debugging new code:
   `injection_grad_logits_output_jacobian` with h16/h32 raw features or h32
   fit-split feature z-scoring, validation-gradient `0.5`, norm `0.1`, refresh
   every `50`, clamp `10`, and 200-step early-lift budget as novelty.
+- hard improvement-assignment weights `1` or `10` on the same exact-grid
+  seed-2/seed-4 run for only 200 steps as novelty. Weight `10` is the first
+  useful Stage 1 lift in this branch; next test retention, longer convergence,
+  seeds, or lower-cost/scalable assignment construction.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
 becomes useful training dynamics. Plausible branches include a step-level
 mechanism that constructs better directions rather than selecting from mostly
-bad proposed shadow steps, hard/assignment-style usage constraints that tie
-diversity to per-example improvement rather than soft marginal entropy, a
-Jacobian-conditioned state more substantial than the result-output
-`J^T answer_grad` feature, or a richer target construction that remains valid
-after upstream movement.
+bad proposed shadow steps, retention and scaling tests for the hard
+improvement-assignment target, a lower-cost assignment approximation that
+does not enumerate all result classes every step, a Jacobian-conditioned state
+more substantial than the result-output `J^T answer_grad` feature, or a richer
+target construction that remains valid after upstream movement.
 Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`

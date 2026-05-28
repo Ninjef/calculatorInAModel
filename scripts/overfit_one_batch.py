@@ -109,6 +109,9 @@ class TrainConfig:
     result_boundary_target_chunk_size: int
     result_policy_entropy_weight: float
     result_policy_batch_diversity_weight: float
+    result_policy_improvement_assignment_weight: float
+    result_policy_improvement_assignment_min_improvement: float
+    result_policy_improvement_assignment_quota_multiplier: float
     result_policy_stabilization_temperature: float
     result_policy_stabilization_decay_steps: int
     boundary_feedback_weight: float
@@ -704,6 +707,16 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_policy_stabilization_objective",
         "result_policy_entropy_weight",
         "result_policy_batch_diversity_weight",
+        "result_policy_improvement_assignment_weight",
+        "result_policy_improvement_assignment_objective",
+        "result_policy_improvement_assignment_min_improvement",
+        "result_policy_improvement_assignment_quota_multiplier",
+        "result_policy_improvement_assignment_quota",
+        "result_policy_improvement_assignment_fraction",
+        "result_policy_improvement_assignment_mean_improvement",
+        "result_policy_improvement_assignment_unique_results",
+        "result_policy_improvement_assignment_target_accuracy",
+        "result_policy_improvement_assignment_learned_target_fraction",
         "result_policy_stabilization_temperature",
         "result_policy_entropy",
         "result_policy_effective_results",
@@ -1055,6 +1068,61 @@ def result_policy_stabilization_weight(
     return initial_weight * max(0.0, 1.0 - (step / decay_steps))
 
 
+def hard_improvement_assignment_targets(
+    full_losses: torch.Tensor,
+    learned_result: torch.Tensor,
+    *,
+    min_improvement: float,
+    quota_multiplier: float,
+) -> tuple[torch.Tensor, dict[str, float | int]]:
+    if min_improvement < 0:
+        raise ValueError("assignment min improvement must be non-negative")
+    if quota_multiplier <= 0:
+        raise ValueError("assignment quota multiplier must be positive")
+    batch_size, result_count = full_losses.shape
+    quota = max(1, math.ceil((batch_size / result_count) * quota_multiplier))
+    learned_losses = full_losses.gather(1, learned_result.unsqueeze(-1)).squeeze(-1)
+    improvements = learned_losses.unsqueeze(-1) - full_losses
+    flat_order = torch.argsort(improvements.reshape(-1), descending=True)
+    targets = learned_result.new_full((batch_size,), -1)
+    result_counts = learned_result.new_zeros((result_count,))
+    assigned_improvements: list[float] = []
+    with torch.no_grad():
+        for flat_index_tensor in flat_order:
+            flat_index = int(flat_index_tensor.item())
+            example_index = flat_index // result_count
+            result_index = flat_index % result_count
+            improvement = float(improvements[example_index, result_index].item())
+            if improvement <= min_improvement:
+                break
+            if int(targets[example_index].item()) >= 0:
+                continue
+            if int(result_counts[result_index].item()) >= quota:
+                continue
+            targets[example_index] = result_index
+            result_counts[result_index] += 1
+            assigned_improvements.append(improvement)
+            if len(assigned_improvements) == batch_size:
+                break
+    assigned_mask = targets >= 0
+    assigned_count = int(assigned_mask.sum().item())
+    metrics: dict[str, float | int] = {
+        "result_policy_improvement_assignment_quota": int(quota),
+        "result_policy_improvement_assignment_fraction": (
+            assigned_count / max(batch_size, 1)
+        ),
+        "result_policy_improvement_assignment_mean_improvement": (
+            float(sum(assigned_improvements) / assigned_count)
+            if assigned_count > 0
+            else 0.0
+        ),
+        "result_policy_improvement_assignment_unique_results": int(
+            result_counts.gt(0).sum().item()
+        ),
+    }
+    return targets, metrics
+
+
 def result_policy_stabilization_loss(
     model: TinyGPT,
     batch: ArithmeticBatch,
@@ -1063,9 +1131,17 @@ def result_policy_stabilization_loss(
     temperature: float,
     entropy_weight: float,
     batch_diversity_weight: float,
+    improvement_assignment_weight: float,
+    improvement_assignment_min_improvement: float,
+    improvement_assignment_quota_multiplier: float,
+    chunk_size: int,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     if temperature <= 0:
         raise ValueError("result policy stabilization temperature must be positive")
+    if improvement_assignment_weight < 0:
+        raise ValueError(
+            "result policy improvement assignment weight must be non-negative"
+        )
     if model.cfg.calculator_action_head != "result_space":
         raise ValueError("result policy stabilization requires result-space logits")
     result_logits, _, _, _ = calculator_read_result_logits(model, batch)
@@ -1093,9 +1169,68 @@ def result_policy_stabilization_loss(
         -(entropy_weight * result_entropy.mean())
         - (batch_diversity_weight * marginal_entropy)
     )
+    assignment_metrics: dict[str, float | int] = {}
+    assignment_objective = result_logits.new_zeros(())
+    if improvement_assignment_weight > 0:
+        full_losses = score_forced_result_classes_chunked(
+            model, batch, chunk_size=chunk_size
+        ).detach()
+        assignment_targets, assignment_metrics = hard_improvement_assignment_targets(
+            full_losses,
+            result_pred.detach(),
+            min_improvement=improvement_assignment_min_improvement,
+            quota_multiplier=improvement_assignment_quota_multiplier,
+        )
+        assignment_mask = assignment_targets >= 0
+        if bool(assignment_mask.any().item()):
+            assignment_objective = torch.nn.functional.cross_entropy(
+                result_logits[assignment_mask] / temperature,
+                assignment_targets[assignment_mask],
+            )
+            objective = objective + (
+                improvement_assignment_weight * assignment_objective
+            )
+            assigned_targets = assignment_targets[assignment_mask]
+            assignment_metrics[
+                "result_policy_improvement_assignment_target_accuracy"
+            ] = float(
+                (assigned_targets == true_sum[assignment_mask])
+                .float()
+                .mean()
+                .detach()
+                .item()
+            )
+            assignment_metrics[
+                "result_policy_improvement_assignment_learned_target_fraction"
+            ] = float(
+                (assigned_targets == result_pred.detach()[assignment_mask])
+                .float()
+                .mean()
+                .detach()
+                .item()
+            )
+        else:
+            assignment_metrics[
+                "result_policy_improvement_assignment_target_accuracy"
+            ] = 0.0
+            assignment_metrics[
+                "result_policy_improvement_assignment_learned_target_fraction"
+            ] = 0.0
     metrics = {
         "result_policy_entropy_weight": float(entropy_weight),
         "result_policy_batch_diversity_weight": float(batch_diversity_weight),
+        "result_policy_improvement_assignment_weight": float(
+            improvement_assignment_weight
+        ),
+        "result_policy_improvement_assignment_objective": float(
+            assignment_objective.detach().item()
+        ),
+        "result_policy_improvement_assignment_min_improvement": float(
+            improvement_assignment_min_improvement
+        ),
+        "result_policy_improvement_assignment_quota_multiplier": float(
+            improvement_assignment_quota_multiplier
+        ),
         "result_policy_stabilization_temperature": float(temperature),
         "result_policy_entropy": float(result_entropy.mean().detach().item()),
         "result_policy_effective_results": float(
@@ -1125,6 +1260,7 @@ def result_policy_stabilization_loss(
             .item()
         ),
     }
+    metrics.update(assignment_metrics)
     return objective, metrics
 
 
@@ -6208,6 +6344,15 @@ def run_variant(
         result_policy_batch_diversity_weight=(
             args.result_policy_batch_diversity_weight
         ),
+        result_policy_improvement_assignment_weight=(
+            args.result_policy_improvement_assignment_weight
+        ),
+        result_policy_improvement_assignment_min_improvement=(
+            args.result_policy_improvement_assignment_min_improvement
+        ),
+        result_policy_improvement_assignment_quota_multiplier=(
+            args.result_policy_improvement_assignment_quota_multiplier
+        ),
         result_policy_stabilization_temperature=(
             args.result_policy_stabilization_temperature
         ),
@@ -6890,6 +7035,7 @@ def run_variant(
             and (
                 args.result_policy_entropy_weight > 0
                 or args.result_policy_batch_diversity_weight > 0
+                or args.result_policy_improvement_assignment_weight > 0
             )
             and not args.oracle_train
         )
@@ -7150,6 +7296,13 @@ def run_variant(
                     step=step,
                 )
             )
+            current_result_policy_improvement_assignment_weight = (
+                result_policy_stabilization_weight(
+                    initial_weight=args.result_policy_improvement_assignment_weight,
+                    decay_steps=args.result_policy_stabilization_decay_steps,
+                    step=step,
+                )
+            )
             (
                 result_policy_stabilization_objective,
                 result_policy_stabilization_metrics,
@@ -7162,6 +7315,16 @@ def run_variant(
                 batch_diversity_weight=(
                     current_result_policy_batch_diversity_weight
                 ),
+                improvement_assignment_weight=(
+                    current_result_policy_improvement_assignment_weight
+                ),
+                improvement_assignment_min_improvement=(
+                    args.result_policy_improvement_assignment_min_improvement
+                ),
+                improvement_assignment_quota_multiplier=(
+                    args.result_policy_improvement_assignment_quota_multiplier
+                ),
+                chunk_size=args.result_boundary_target_chunk_size,
             )
             result_policy_stabilization_objective_value = float(
                 result_policy_stabilization_objective.item()
@@ -7810,6 +7973,15 @@ def run_variant(
     metrics["result_policy_batch_diversity_weight"] = (
         args.result_policy_batch_diversity_weight
     )
+    metrics["result_policy_improvement_assignment_weight"] = (
+        args.result_policy_improvement_assignment_weight
+    )
+    metrics["result_policy_improvement_assignment_min_improvement"] = (
+        args.result_policy_improvement_assignment_min_improvement
+    )
+    metrics["result_policy_improvement_assignment_quota_multiplier"] = (
+        args.result_policy_improvement_assignment_quota_multiplier
+    )
     metrics["result_policy_stabilization_temperature"] = (
         args.result_policy_stabilization_temperature
     )
@@ -7826,6 +7998,13 @@ def run_variant(
     metrics["final_result_policy_batch_diversity_weight"] = (
         result_policy_stabilization_weight(
             initial_weight=args.result_policy_batch_diversity_weight,
+            decay_steps=args.result_policy_stabilization_decay_steps,
+            step=args.steps,
+        )
+    )
+    metrics["final_result_policy_improvement_assignment_weight"] = (
+        result_policy_stabilization_weight(
+            initial_weight=args.result_policy_improvement_assignment_weight,
             decay_steps=args.result_policy_stabilization_decay_steps,
             step=args.steps,
         )
@@ -8519,6 +8698,34 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--result-policy-improvement-assignment-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Hard assignment-style result-policy CE weight. Targets are "
+            "answer-loss-improving result classes selected with a per-result "
+            "quota, tying diversity to per-example improvement."
+        ),
+    )
+    parser.add_argument(
+        "--result-policy-improvement-assignment-min-improvement",
+        type=float,
+        default=0.0,
+        help=(
+            "Minimum forced-answer-loss improvement required before an example "
+            "can receive an improvement-assignment target."
+        ),
+    )
+    parser.add_argument(
+        "--result-policy-improvement-assignment-quota-multiplier",
+        type=float,
+        default=1.0,
+        help=(
+            "Per-result assignment quota multiplier relative to batch/result "
+            "count for the hard improvement-assignment target."
+        ),
+    )
+    parser.add_argument(
         "--result-policy-stabilization-temperature",
         type=float,
         default=1.0,
@@ -9171,6 +9378,20 @@ def main() -> None:
         raise ValueError(
             "--result-policy-batch-diversity-weight must be non-negative"
         )
+    if args.result_policy_improvement_assignment_weight < 0:
+        raise ValueError(
+            "--result-policy-improvement-assignment-weight must be non-negative"
+        )
+    if args.result_policy_improvement_assignment_min_improvement < 0:
+        raise ValueError(
+            "--result-policy-improvement-assignment-min-improvement must be "
+            "non-negative"
+        )
+    if args.result_policy_improvement_assignment_quota_multiplier <= 0:
+        raise ValueError(
+            "--result-policy-improvement-assignment-quota-multiplier must be "
+            "positive"
+        )
     if args.result_policy_stabilization_temperature <= 0:
         raise ValueError(
             "--result-policy-stabilization-temperature must be positive"
@@ -9286,6 +9507,7 @@ def main() -> None:
         (
             args.result_policy_entropy_weight > 0
             or args.result_policy_batch_diversity_weight > 0
+            or args.result_policy_improvement_assignment_weight > 0
         )
         and args.calculator_action_head != "result_space"
     ):
@@ -9315,10 +9537,14 @@ def main() -> None:
         and not args.shadow_feedback_gradient_diagnostic_only
         and args.boundary_feedback_weight <= 0
         and args.shadow_feedback_weight <= 0
+        and args.result_policy_entropy_weight <= 0
+        and args.result_policy_batch_diversity_weight <= 0
+        and args.result_policy_improvement_assignment_weight <= 0
     ):
         raise ValueError(
             "direct_feedback_alignment training requires "
-            "--boundary-feedback-weight > 0 or --shadow-feedback-weight > 0"
+            "--boundary-feedback-weight > 0, --shadow-feedback-weight > 0, "
+            "or a result-policy stabilization weight > 0"
         )
     if args.relaxed_calculator_temperature <= 0:
         raise ValueError("--relaxed-calculator-temperature must be positive")
@@ -9666,9 +9892,23 @@ def main() -> None:
             suffix_parts.append(
                 f"rpoldv{args.result_policy_batch_diversity_weight:g}"
             )
+        if args.result_policy_improvement_assignment_weight > 0:
+            suffix_parts.append(
+                "rpolassign"
+                f"{args.result_policy_improvement_assignment_weight:g}"
+            )
+            suffix_parts.append(
+                "rpolassignmin"
+                f"{args.result_policy_improvement_assignment_min_improvement:g}"
+            )
+            suffix_parts.append(
+                "rpolassignq"
+                f"{args.result_policy_improvement_assignment_quota_multiplier:g}"
+            )
         if (
             args.result_policy_entropy_weight > 0
             or args.result_policy_batch_diversity_weight > 0
+            or args.result_policy_improvement_assignment_weight > 0
         ):
             if args.result_policy_stabilization_temperature != 1.0:
                 suffix_parts.append(
@@ -9824,6 +10064,12 @@ def main() -> None:
         "result policy stabilization: "
         f"entropy_weight={args.result_policy_entropy_weight} "
         f"batch_diversity_weight={args.result_policy_batch_diversity_weight} "
+        "improvement_assignment_weight="
+        f"{args.result_policy_improvement_assignment_weight} "
+        "improvement_assignment_min="
+        f"{args.result_policy_improvement_assignment_min_improvement} "
+        "improvement_assignment_quota_multiplier="
+        f"{args.result_policy_improvement_assignment_quota_multiplier} "
         f"temperature={args.result_policy_stabilization_temperature} "
         f"decay_steps={args.result_policy_stabilization_decay_steps}"
     )
