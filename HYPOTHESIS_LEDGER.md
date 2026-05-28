@@ -147,3 +147,9 @@ Conclusion: Accept/reject gating with tolerances `0.0` and `0.1` accepted only `
 Do not repeat: Same refreshed h32 validation-gradient module with feedback clamp `10`, answer-loss acceptance tolerance `0.0` or `0.1`, and 200-step budget as novelty.
 Next allowed test: A mechanism that repairs/constructs useful directions rather than simply rejecting most shadow steps, hard assignment-style usage constraints, Jacobian-conditioned state, or richer targets.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-answer-loss-step-acceptance-gate.md`
+
+DISPROVEN: Hard-path answer-loss line search over proposed shadow step scales rescues refreshed online-shadow Stage 1.
+Conclusion: Scales `1,0.5,0.25,0.1,0` accepted only `5/200` steps (`2.5%`); best snapshot improved to `0.0925`, but final exact was only `0.060`.
+Do not repeat: Same refreshed h32 validation-gradient module with feedback clamp `10`, answer-loss line-search scales `1,0.5,0.25,0.1,0`, and 200-step budget as novelty.
+Next allowed test: Construct better directions, hard assignment-style usage constraints, Jacobian-conditioned state, or richer targets rather than selecting among mostly harmful proposed shadow steps.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-answer-loss-line-search-gate.md`

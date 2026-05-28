@@ -3192,9 +3192,11 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "--optimizer-step-max-delta-norm",
             "0.125",
             "--optimizer-step-acceptance-mode",
-            "answer_loss_decrease",
+            "answer_loss_line_search",
             "--optimizer-step-acceptance-tolerance",
             "0.01",
+            "--optimizer-step-line-search-scales",
+            "1,0.25,0",
         ],
     )
     parsed = overfit_script.parse_args()
@@ -3205,8 +3207,9 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.result_policy_stabilization_temperature == pytest.approx(1.5)
     assert parsed.result_policy_stabilization_decay_steps == 40
     assert parsed.optimizer_step_max_delta_norm == pytest.approx(0.125)
-    assert parsed.optimizer_step_acceptance_mode == "answer_loss_decrease"
+    assert parsed.optimizer_step_acceptance_mode == "answer_loss_line_search"
     assert parsed.optimizer_step_acceptance_tolerance == pytest.approx(0.01)
+    assert parsed.optimizer_step_line_search_scales == "1,0.25,0"
 
     monkeypatch.setattr(
         sys,
@@ -3342,6 +3345,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.optimizer_step_max_delta_norm == pytest.approx(0.0)
     assert parsed.optimizer_step_acceptance_mode == "none"
     assert parsed.optimizer_step_acceptance_tolerance == pytest.approx(0.0)
+    assert parsed.optimizer_step_line_search_scales == "1,0.5,0.25,0.1,0"
 
     cfg_for_feature_dim = GPTConfig(
         vocab_size=20,

@@ -3009,3 +3009,62 @@ Interpretation:
 - Next work needs to repair or construct useful directions, not merely reject
   bad ones; plausible branches are hard/assignment-style usage constraints,
   Jacobian-conditioned state, or richer targets.
+
+## 2026-05-28 Answer-Loss Line Search Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-thirty-second-task-Answer-loss-line-search-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_shadow_refresh_answer_loss_line_search_gate
+```
+
+Code changes:
+
+- Added `--optimizer-step-line-search-scales`.
+- Added `answer_loss_line_search` as an optimizer step acceptance mode.
+- The line-search mode snapshots the proposed optimizer update, evaluates
+  configured scales of that fixed update under hard-path answer loss, and
+  applies the best improving scale.
+- Training curves now record the configured scales and selected scale.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+git diff --check
+```
+
+Result:
+
+```text
+103 passed
+```
+
+Stage 1 refreshed h32 validation-gradient online shadow module,
+`shadow_feedback_weight=1.0`, feedback clamp `10`:
+
+| Scales | Accepted steps | Final exact | Best snapshot | Final learned calc | Final shadow norm |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `1,0.5,0.25,0.1,0` | `5/200` (`2.5%`) | `0.060` | `0.0925` | `0.0650` | `3.28` |
+
+Decision:
+
+```text
+answer_loss_line_search_step_repair_stage1_negative
+```
+
+Interpretation:
+
+- Hard answer-loss line search is a mild improvement over plain accept/reject,
+  but still far below the `0.16` boundary-feedback baseline.
+- Only `5/200` proposed refreshed-shadow steps had a useful positive scale.
+- Step-size repair is not enough; the next branch should construct better
+  directions, use hard/assignment-style usage constraints,
+  Jacobian-conditioned state, or richer targets.

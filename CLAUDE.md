@@ -296,6 +296,14 @@ run but did not lift: final exact match was `0.050`, best snapshot `0.070`,
 still below the `0.16` boundary-feedback baseline. Label:
 `answer_loss_step_acceptance_stage1_negative`.
 
+A line-search repair gate then tried scaled versions of the proposed
+optimizer step (`1,0.5,0.25,0.1,0`) and kept the scale with the best
+hard-path answer loss. This also remained negative. With the same refreshed
+h32 validation-gradient module and feedback clamp `10`, only `5/200` scaled
+steps were accepted (`2.5%`). Best snapshot improved slightly to `0.0925` at
+step `25`, but final exact was only `0.060`. Label:
+`answer_loss_line_search_step_repair_stage1_negative`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -369,12 +377,15 @@ Do not rerun these as next steps unless debugging new code:
 - hard-path answer-loss step acceptance on the same refreshed h32
   validation-gradient module with feedback clamp `10`, tolerances `0.0/0.1`,
   and 200-step early-lift budget as novelty.
+- hard-path answer-loss line search over scales `1,0.5,0.25,0.1,0` on the same
+  refreshed h32 validation-gradient module with feedback clamp `10` and
+  200-step early-lift budget as novelty.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
 becomes useful training dynamics. Plausible branches include a step-level
-acceptance method that can repair the proposed direction rather than merely
-rejecting most steps, hard/assignment-style usage constraints that tie
+mechanism that constructs better directions rather than selecting from mostly
+bad proposed shadow steps, hard/assignment-style usage constraints that tie
 diversity to per-example improvement rather than soft marginal entropy,
 Jacobian-conditioned state rather than raw activations, or a richer target
 construction that remains valid after upstream movement.

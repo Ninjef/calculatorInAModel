@@ -156,6 +156,7 @@ class TrainConfig:
     optimizer_step_max_delta_norm: float
     optimizer_step_acceptance_mode: str
     optimizer_step_acceptance_tolerance: float
+    optimizer_step_line_search_scales: str
     freeze_semantic_decoder: bool
     freeze_upstream_encoder: bool
     trainable_parameter_groups: list[dict[str, object]]
@@ -725,6 +726,8 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "optimizer_step_acceptance_attempts",
         "optimizer_step_acceptance_accepted",
         "optimizer_step_acceptance_rate",
+        "optimizer_step_line_search_scales",
+        "optimizer_step_selected_scale",
         "relaxed_calculator_temperature",
         "relaxed_calculator_final_temperature",
         "relaxed_calculator_mode",
@@ -1141,6 +1144,33 @@ def restore_trainable_parameters(
     with torch.no_grad():
         for param, old_value in before:
             param.copy_(old_value)
+
+
+def apply_scaled_parameter_delta(
+    before: list[tuple[torch.nn.Parameter, torch.Tensor]],
+    after: list[tuple[torch.nn.Parameter, torch.Tensor]],
+    *,
+    scale: float,
+) -> None:
+    with torch.no_grad():
+        for (param, old_value), (_after_param, proposed_value) in zip(before, after):
+            delta = proposed_value - old_value
+            param.copy_(old_value + (delta * scale))
+
+
+def parse_optimizer_step_line_search_scales(text: str) -> list[float]:
+    values = []
+    for raw_part in text.split(","):
+        part = raw_part.strip()
+        if not part:
+            continue
+        value = float(part)
+        if value < 0:
+            raise ValueError("--optimizer-step-line-search-scales must be non-negative")
+        values.append(value)
+    if not values:
+        raise ValueError("--optimizer-step-line-search-scales must not be empty")
+    return values
 
 
 def apply_optimizer_step_trust_region(
@@ -6242,6 +6272,7 @@ def run_variant(
         optimizer_step_acceptance_tolerance=(
             args.optimizer_step_acceptance_tolerance
         ),
+        optimizer_step_line_search_scales=args.optimizer_step_line_search_scales,
         freeze_semantic_decoder=args.freeze_semantic_decoder,
         freeze_upstream_encoder=args.freeze_upstream_encoder,
         trainable_parameter_groups=trainable_groups,
@@ -6698,6 +6729,9 @@ def run_variant(
     last_optimizer_step_metrics: dict[str, float] = {}
     optimizer_step_acceptance_attempts = 0
     optimizer_step_acceptance_accepted = 0
+    optimizer_step_line_search_scales = parse_optimizer_step_line_search_scales(
+        args.optimizer_step_line_search_scales
+    )
     model.train()
     for step in range(args.steps + 1):
         if args.operand_max is None:
@@ -7476,7 +7510,10 @@ def run_variant(
             else []
         )
         optimizer_acceptance_before_answer_loss = None
-        if args.optimizer_step_acceptance_mode == "answer_loss_decrease":
+        if args.optimizer_step_acceptance_mode in {
+            "answer_loss_decrease",
+            "answer_loss_line_search",
+        }:
             optimizer_acceptance_before_answer_loss = hard_path_answer_loss_metric(
                 model,
                 batch,
@@ -7535,6 +7572,78 @@ def run_variant(
                         optimizer_step_acceptance_accepted
                         / max(optimizer_step_acceptance_attempts, 1)
                     ),
+                }
+            )
+        elif args.optimizer_step_acceptance_mode == "answer_loss_line_search":
+            assert optimizer_acceptance_before_answer_loss is not None
+            best_scale = 0.0
+            best_after_answer_loss = optimizer_acceptance_before_answer_loss
+            line_search_proposed = snapshot_trainable_parameters(model)
+            for candidate_scale in optimizer_step_line_search_scales:
+                apply_scaled_parameter_delta(
+                    trust_region_before,
+                    line_search_proposed,
+                    scale=candidate_scale,
+                )
+                candidate_answer_loss = hard_path_answer_loss_metric(
+                    model,
+                    batch,
+                    oracle_operands=oracle_operands,
+                )
+                if candidate_answer_loss < best_after_answer_loss:
+                    best_after_answer_loss = candidate_answer_loss
+                    best_scale = candidate_scale
+            optimizer_step_accepted = (
+                best_scale > 0
+                and best_after_answer_loss
+                <= optimizer_acceptance_before_answer_loss
+                + args.optimizer_step_acceptance_tolerance
+            )
+            if optimizer_step_accepted:
+                apply_scaled_parameter_delta(
+                    trust_region_before,
+                    line_search_proposed,
+                    scale=best_scale,
+                )
+            else:
+                restore_trainable_parameters(trust_region_before)
+                best_scale = 0.0
+                best_after_answer_loss = optimizer_acceptance_before_answer_loss
+            optimizer_step_acceptance_attempts += 1
+            optimizer_step_acceptance_accepted += int(optimizer_step_accepted)
+            last_optimizer_step_metrics.update(
+                {
+                    "optimizer_step_acceptance_mode": (
+                        args.optimizer_step_acceptance_mode
+                    ),
+                    "optimizer_step_acceptance_before_answer_loss": (
+                        optimizer_acceptance_before_answer_loss
+                    ),
+                    "optimizer_step_acceptance_after_answer_loss": (
+                        best_after_answer_loss
+                    ),
+                    "optimizer_step_acceptance_delta": (
+                        best_after_answer_loss
+                        - optimizer_acceptance_before_answer_loss
+                    ),
+                    "optimizer_step_acceptance_tolerance": (
+                        args.optimizer_step_acceptance_tolerance
+                    ),
+                    "optimizer_step_accepted": float(optimizer_step_accepted),
+                    "optimizer_step_acceptance_attempts": float(
+                        optimizer_step_acceptance_attempts
+                    ),
+                    "optimizer_step_acceptance_accepted": float(
+                        optimizer_step_acceptance_accepted
+                    ),
+                    "optimizer_step_acceptance_rate": (
+                        optimizer_step_acceptance_accepted
+                        / max(optimizer_step_acceptance_attempts, 1)
+                    ),
+                    "optimizer_step_line_search_scales": (
+                        args.optimizer_step_line_search_scales
+                    ),
+                    "optimizer_step_selected_scale": float(best_scale),
                 }
             )
         if use_reinforce and args.reinforce_baseline_mode == "global_ema":
@@ -7818,6 +7927,9 @@ def run_variant(
     metrics["optimizer_step_acceptance_tolerance"] = (
         args.optimizer_step_acceptance_tolerance
     )
+    metrics["optimizer_step_line_search_scales"] = (
+        args.optimizer_step_line_search_scales
+    )
     if last_optimizer_step_metrics:
         metrics["final_optimizer_step"] = last_optimizer_step_metrics
     metrics["freeze_semantic_decoder"] = args.freeze_semantic_decoder
@@ -8045,12 +8157,13 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--optimizer-step-acceptance-mode",
-        choices=["none", "answer_loss_decrease"],
+        choices=["none", "answer_loss_decrease", "answer_loss_line_search"],
         default="none",
         help=(
             "Optional post-step acceptance test. answer_loss_decrease reverts "
             "optimizer steps that worsen hard-path answer loss on the current "
-            "batch beyond the configured tolerance."
+            "batch beyond the configured tolerance; answer_loss_line_search "
+            "tries scaled versions of the proposed update."
         ),
     )
     parser.add_argument(
@@ -8060,6 +8173,15 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Allowed hard-path answer-loss increase for "
             "--optimizer-step-acceptance-mode answer_loss_decrease."
+        ),
+    )
+    parser.add_argument(
+        "--optimizer-step-line-search-scales",
+        type=str,
+        default="1,0.5,0.25,0.1,0",
+        help=(
+            "Comma-separated non-negative update scales for "
+            "--optimizer-step-acceptance-mode answer_loss_line_search."
         ),
     )
     parser.add_argument(
@@ -8858,6 +8980,7 @@ def main() -> None:
         raise ValueError(
             "--optimizer-step-acceptance-tolerance must be non-negative"
         )
+    parse_optimizer_step_line_search_scales(args.optimizer_step_line_search_scales)
     if args.calculator_read_span_width < 1:
         raise ValueError("--calculator-read-span-width must be positive")
     if (
@@ -9562,6 +9685,11 @@ def main() -> None:
                 suffix_parts.append(
                     f"steptol{args.optimizer_step_acceptance_tolerance:g}"
                 )
+            if args.optimizer_step_acceptance_mode == "answer_loss_line_search":
+                suffix_parts.append(
+                    "stepscales"
+                    + args.optimizer_step_line_search_scales.replace(",", "_")
+                )
     if args.calculator_injection_mode != "add":
         suffix_parts.append(args.calculator_injection_mode)
     if args.calculator_bottleneck_mode != "none":
@@ -9638,7 +9766,8 @@ def main() -> None:
         "optimizer trust region: "
         f"step_max_delta_norm={args.optimizer_step_max_delta_norm} "
         f"acceptance_mode={args.optimizer_step_acceptance_mode} "
-        f"acceptance_tolerance={args.optimizer_step_acceptance_tolerance}"
+        f"acceptance_tolerance={args.optimizer_step_acceptance_tolerance} "
+        f"line_search_scales={args.optimizer_step_line_search_scales}"
     )
     print(
         "action-loss candidates: "

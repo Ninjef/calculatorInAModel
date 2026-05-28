@@ -1089,3 +1089,30 @@ stabilizes the run, but it does not create useful calculator-result discovery.
 Next work should repair/construct better directions rather than merely reject
 bad ones, or move to hard/assignment-style usage constraints,
 Jacobian-conditioned state, or richer targets.
+
+## Status Update: 2026-05-28, Answer-Loss Line Search
+
+The training loop gained a hard-path answer-loss line-search gate:
+
+```text
+answer_loss_line_search_step_repair_stage1_negative
+```
+
+The new `--optimizer-step-acceptance-mode answer_loss_line_search` snapshots
+the proposed AdamW step, evaluates scaled versions of that same parameter
+delta, and keeps the scale with the lowest hard-path answer loss on the
+current batch. This is still non-prescriptive: the gate uses real answer loss,
+not forced per-example calculator-result labels.
+
+One 200-step early-lift smoke was run on top of refreshed h32
+validation-gradient online shadow feedback plus feedback clamp `10`:
+
+| Scales | Accepted steps | Final exact | Best snapshot | Final learned calc |
+| --- | ---: | ---: | ---: | ---: |
+| `1,0.5,0.25,0.1,0` | `5/200` (`2.5%`) | `0.060` | `0.0925` | `0.0650` |
+
+Line search improved the best snapshot slightly over plain accept/reject, but
+almost every proposed shadow step was still harmful under hard answer loss.
+The step-size-repair branch is therefore closed for this setup. Next work
+should construct better directions directly, use hard/assignment-style usage
+constraints, add Jacobian-conditioned state, or build richer targets.

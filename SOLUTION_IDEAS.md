@@ -234,10 +234,12 @@ to connect diverse requests to per-example improvement. A direct optimizer-step
 trust region was also tested: capping realized AdamW parameter deltas at
 `0.05`/`0.10` stabilized norms but still missed the early-lift baseline. A
 hard-path answer-loss acceptance gate was then tested; it accepted only `3%`
-of proposed steps and still ended at `0.050` exact. Use mechanisms that
-repair or construct useful directions rather than simply rejecting most shadow
-steps, hard/assignment-style usage constraints, Jacobian-conditioned state,
-or richer targets.
+of proposed steps and still ended at `0.050` exact. A hard-answer-loss line
+search over proposed step scales `1,0.5,0.25,0.1,0` accepted only `2.5%` of
+steps; it lifted best snapshot slightly to `0.0925` but finished at only
+`0.060` exact. Use mechanisms that construct useful directions rather than
+selecting among mostly harmful shadow steps, hard/assignment-style usage
+constraints, Jacobian-conditioned state, or richer targets.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 
