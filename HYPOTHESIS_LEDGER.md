@@ -195,3 +195,9 @@ Conclusion: Compatible checkpoint loading preserved a `0.9125` bottleneck result
 Do not repeat: Same seed/checkpoint compatible transfer without freezing, or same frozen-policy 800-step handoff as novelty.
 Next allowed test: Seed/checkpoint replication, staged unfreezing, or a scalable/non-prescriptive way to acquire and preserve the policy.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-transfer-gate.md`
+
+PARTIAL: Frozen handoff replicates for a strong source checkpoint but is sensitive to source checkpoint quality.
+Conclusion: Strong source `src2` transferred to additive seeds `2/4` with final eval `0.9400/0.9525` and learned calc `0.9200/0.9150`; weaker sources `src4/src5` preserved learned calc around `0.80-0.87` but reached only `0.3025-0.5550` final eval by 800 steps.
+Do not repeat: The same frozen 800-step matrix cells `src2_add2`, `src2_add4`, `src4_add2`, `src4_add4`, or `src5_add5` as novelty.
+Next allowed test: Source checkpoint selection/quality metrics, longer or stronger downstream readout adaptation, staged unfreezing, or a less prescriptive source-policy training method.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-transfer-replication.md`

@@ -289,6 +289,13 @@ non-bottleneck calculator-dependence result, but it is a staged and frozen
 handoff, not from-scratch non-prescriptive discovery. Useful next work:
 replicate seeds, try controlled unfreezing, and replace the prescriptive
 bottleneck policy-creation phase with a cheaper or less supervised mechanism.
+Replication refined that picture: the strong source checkpoint transferred to
+another additive seed with final eval `0.9525`, but weaker source checkpoints
+did not give a high-accuracy additive readout by 800 steps despite preserving
+learned calculator-result accuracy. So the next handoff work should not just
+repeat frozen transfer; it should select or improve source checkpoints, train
+the downstream readout more robustly, or unfreeze carefully without destroying
+the calculator policy.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

@@ -1319,3 +1319,29 @@ This is the first strong non-bottleneck calculator-dependence result in Phase
 bottleneck with a forced-assignment objective and then frozen. Next work should
 replicate across seeds/checkpoints, test controlled unfreezing, and look for a
 more scalable or less prescriptive policy-acquisition method.
+
+## Status Update: 2026-05-28, Bottleneck-to-Additive Transfer Replication
+
+The frozen-policy handoff replication was mixed:
+
+```text
+bottleneck_to_additive_freeze_policy_source_quality_mixed
+```
+
+The strong seed-2 bottleneck source checkpoint replicated across additive
+seeds. `src2_add2` reached `0.9400` final eval and `0.9475` best normal;
+`src2_add4` reached `0.9525` final eval and `0.9325` best normal. Both kept
+injection-zero near chance (`0.0175/0.0200`) and retained learned
+calculator-result accuracy (`0.9200/0.9150`).
+
+Other source checkpoints were weaker handoff sources. `src4_add2` and
+`src4_add4` preserved learned calculator-result accuracy around
+`0.8725/0.8575`, but final eval stayed only `0.3025/0.3375`; `src5_add5`
+ended at `0.5550` final eval with learned calculator-result accuracy
+`0.8000`. The calculator path still mattered causally because injection-zero
+and forced-random stayed near chance, but high action accuracy alone was not
+enough for high downstream accuracy.
+
+The next handoff task should not repeat these exact frozen 800-step cells. It
+should change source checkpoint selection/quality, downstream adaptation, or
+unfreezing while preserving the action policy.

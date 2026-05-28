@@ -3528,3 +3528,65 @@ Interpretation:
   bottleneck-trained, forced-assignment phase and then frozen. Next work should
   replicate across seeds/checkpoints, test staged unfreezing, and find a
   scalable or less prescriptive way to acquire and preserve the policy.
+
+## 2026-05-28 Bottleneck-to-Additive Transfer Replication
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-fortieth-task-Bottleneck-to-additive-transfer-replication.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_bottleneck_to_additive_transfer_replication
+```
+
+Question:
+
+Does the frozen-policy bottleneck-to-additive handoff replicate across additive
+seeds and source bottleneck checkpoints?
+
+Configuration:
+
+- additive path: `calculator_bottleneck_mode=none`;
+- `calculator_estimator=ste`;
+- `calculator_action_head=result_space`;
+- compatible load from bottleneck hard-assignment checkpoints;
+- `--freeze-calculator-policy`;
+- answer loss weight `1`;
+- no assignment target;
+- exact-grid natural `0..19`;
+- 800 steps.
+
+Result:
+
+| Cell | Final eval | Best normal | Last injection-zero | Last forced-random | Last oracle | Step 0 learned calc | Last learned calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src2_add2` | `0.9400` | `0.9475` at `800` | `0.0175` | `0.0500` | `0.9600` | `0.9125` | `0.9200` |
+| `src2_add4` | `0.9525` | `0.9325` at `750` | `0.0200` | `0.0425` | `0.9600` | `0.9000` | `0.9150` |
+| `src4_add2` | `0.3025` | `0.3150` at `800` | `0.0000` | `0.0375` | `0.3125` | `0.8650` | `0.8725` |
+| `src4_add4` | `0.3375` | `0.3200` at `750` | `0.0000` | `0.0375` | `0.3075` | `0.8325` | `0.8575` |
+| `src5_add5` | `0.5550` | `0.5725` at `800` | `0.0125` | `0.0425` | `0.5600` | `0.8475` | `0.8000` |
+
+Decision:
+
+```text
+bottleneck_to_additive_freeze_policy_source_quality_mixed
+```
+
+Interpretation:
+
+- The strong source checkpoint from the seed-2 1600-step bottleneck run
+  replicated across additive seeds. This strengthens the claim that frozen
+  handoff can create real non-bottleneck calculator dependence.
+- Weaker source checkpoints preserved action accuracy after freezing but did
+  not produce high answer accuracy by step `800`. For `src4`, oracle stayed
+  near normal around `0.31`, suggesting the downstream/readout side did not
+  acquire a broadly useful result representation even when the frozen action
+  policy often selected the correct result.
+- Frozen handoff is therefore source-quality sensitive. Next work should test
+  source checkpoint selection/quality metrics, stronger downstream readout
+  adaptation, and controlled unfreezing. Do not repeat these exact matrix cells
+  as novelty.

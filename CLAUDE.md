@@ -397,6 +397,23 @@ inherits a bottleneck-trained policy, and freezes that policy during handoff.
 Next work should replicate seeds, test unfreezing schedules, and search for a
 more scalable/non-prescriptive way to create or preserve the policy.
 
+Frozen handoff replication then produced a useful mixed result:
+`bottleneck_to_additive_freeze_policy_source_quality_mixed`. The strong
+source checkpoint from the seed-2 1600-step bottleneck run replicated across a
+new additive seed: `src2_add2` reached `0.9400` final eval and `0.9475` best
+normal, while `src2_add4` reached `0.9525` final eval and `0.9325` best
+normal; both kept injection-zero near chance (`0.0175/0.0200`) and learned
+calculator-result accuracy high (`0.9200/0.9150`). But weaker source
+checkpoints did not yield high downstream accuracy even though their frozen
+action policies stayed high: `src4_add2/src4_add4` ended at only
+`0.3025/0.3375` final eval with learned calc `0.8725/0.8575`, and
+`src5_add5` ended at `0.5550` with learned calc `0.8000`. The handoff is
+therefore robust for a good source policy/representation, but source
+checkpoint quality and/or result-embedding geometry still matter. Next work
+should test source checkpoint selection/quality metrics, stronger downstream
+readout adaptation, and controlled unfreezing rather than blindly repeating
+frozen transfers.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -501,6 +518,10 @@ Do not rerun these as next steps unless debugging new code:
 - frozen-policy bottleneck-to-additive handoff on the same seed/checkpoint as
   novelty. This is now a partial positive; next tests should vary seeds,
   checkpoints, unfreeze schedules, or the way the policy is acquired.
+- the completed frozen-policy handoff replication matrix cells
+  `src2_add2`, `src2_add4`, `src4_add2`, `src4_add4`, or `src5_add5` at
+  800 steps as novelty. They established strong-source replication and weak
+  source sensitivity.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -514,9 +535,10 @@ all result classes every step, a non-bottleneck version of the hard-assignment
 gate only if it adds explicit causal calculator-use pressure or a staged
 bottleneck-to-additive handoff that is stronger than a plain zero-injection
 loss-gap hinge, seed replication/unfreeze schedules for the frozen-policy
-bottleneck-to-additive handoff, a Jacobian-conditioned state more substantial
-than the result-output `J^T answer_grad` feature, or a richer target
-construction that remains valid after upstream movement.
+bottleneck-to-additive handoff that specifically changes source checkpoint
+selection, downstream adaptation, or unfreezing, a Jacobian-conditioned state
+more substantial than the result-output `J^T answer_grad` feature, or a richer
+target construction that remains valid after upstream movement.
 Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`
