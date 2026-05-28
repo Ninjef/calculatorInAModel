@@ -2359,3 +2359,62 @@ Interpretation:
 - No Stage 1 run was launched.
 - Next work should change target construction or learned-gradient state, or
   add explicit training-time gap/norm penalties instead of ordinary dropout.
+
+## 2026-05-28 Online MLP Shadow-Feedback Target Transform Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-twenty-second-task-Online-MLP-shadow-feedback-target-transform-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_online_shadow_feedback_target_transform_gate
+```
+
+Code changes:
+
+- Added `--shadow-feedback-target-transform`.
+- Added `unit_norm_per_example`, which normalizes each shadow target row before
+  fit-split target normalization.
+- Recorded target-transform metrics in the online MLP diagnostic summaries.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+102 passed
+```
+
+Stage 0B diagnostics with target normalization, `unit_norm_per_example` target
+transform, `injection_grad_logits` features, no feature normalization, and
+ordinary min-cosine validation selection:
+
+| Loss mode | Hidden | Step | Heldout result/upstream cosine | Train-heldout gap | Heldout relative norm | Decision |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `cosine` | `16` | `90` | `0.76497 / 0.80097` | `0.19828 / 0.15457` | `1.2043 / 1.1108` | gap fail |
+| `cosine` | `32` | `90` | `0.79363 / 0.82695` | `0.20246 / 0.15451` | `1.0244 / 1.0309` | gap fail |
+| `mse_plus_cosine` | `16` | `100` | `0.77871 / 0.81139` | `0.20433 / 0.16068` | `1.1510 / 1.1032` | gap fail |
+| `mse_plus_cosine` | `32` | `90` | `0.78550 / 0.81756` | `0.20889 / 0.16350` | `1.0733 / 1.0784` | gap fail |
+
+Decision:
+
+```text
+online_mlp_shadow_feedback_target_unit_norm_no_go
+```
+
+Interpretation:
+
+- Row-wise target normalization did not change the core overfit mode.
+- Heldout cosines stayed useful, but result gaps remained near `0.20`.
+- No Stage 1 run was launched.
+- Next work should use more structural target stabilization, a different
+  learned-gradient state, or explicit train-time gap/norm penalties.

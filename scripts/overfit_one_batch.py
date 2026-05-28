@@ -124,6 +124,7 @@ class TrainConfig:
     shadow_feedback_validation_fraction: float
     shadow_feedback_validation_every: int
     shadow_feedback_target_normalization: str
+    shadow_feedback_target_transform: str
     shadow_feedback_feature_mode: str
     shadow_feedback_feature_normalization: str
     shadow_feedback_loss_mode: str
@@ -2021,6 +2022,7 @@ def shadow_feedback_mlp_examples(
     *,
     num_digits: int,
     feature_mode: str,
+    target_transform: str,
     result_boundary_target_mode: str,
     result_boundary_target_temperature: float,
     result_boundary_target_min_probability_floor: float,
@@ -2069,6 +2071,10 @@ def shadow_feedback_mlp_examples(
     features = torch.cat(feature_chunks, dim=-1)
     target = target_grad.detach().to(device=features.device, dtype=features.dtype)
     target = target * batch_scale
+    target, target_transform_metrics = transform_shadow_feedback_target(
+        target,
+        mode=target_transform,
+    )
     metrics: dict[str, float | int | str] = {
         "shadow_feedback_feature_mode": feature_mode,
         "shadow_feedback_answer_loss": float(answer_loss.item()),
@@ -2087,7 +2093,47 @@ def shadow_feedback_mlp_examples(
         "shadow_feedback_feature_entropy_l2": float(result_entropy.norm().item()),
     }
     metrics.update(target_metrics)
+    metrics.update(target_transform_metrics)
     return features, target, metrics
+
+
+def transform_shadow_feedback_target(
+    target: torch.Tensor,
+    *,
+    mode: str,
+) -> tuple[torch.Tensor, dict[str, float | int | str]]:
+    if mode == "none":
+        return target, {
+            "shadow_feedback_target_transform": mode,
+            "shadow_feedback_target_transform_epsilon": (
+                SHADOW_FEEDBACK_TARGET_NORMALIZATION_EPS
+            ),
+            "shadow_feedback_target_transform_clamped_count": 0,
+        }
+    if mode != "unit_norm_per_example":
+        raise ValueError(
+            "shadow feedback target transform must be none or unit_norm_per_example"
+        )
+    raw_norm = target.norm(dim=-1, keepdim=True)
+    clamped_count = int(
+        (raw_norm < SHADOW_FEEDBACK_TARGET_NORMALIZATION_EPS).sum().item()
+    )
+    scale = raw_norm.clamp_min(SHADOW_FEEDBACK_TARGET_NORMALIZATION_EPS)
+    transformed = target / scale
+    return transformed, {
+        "shadow_feedback_target_transform": mode,
+        "shadow_feedback_target_transform_epsilon": (
+            SHADOW_FEEDBACK_TARGET_NORMALIZATION_EPS
+        ),
+        "shadow_feedback_target_transform_raw_norm_min": float(raw_norm.min().item()),
+        "shadow_feedback_target_transform_raw_norm_median": float(
+            raw_norm.median().item()
+        ),
+        "shadow_feedback_target_transform_raw_norm_max": float(raw_norm.max().item()),
+        "shadow_feedback_target_transform_raw_norm_mean": float(raw_norm.mean().item()),
+        "shadow_feedback_target_transform_clamped_count": clamped_count,
+        "shadow_feedback_transformed_target_l2": float(transformed.norm().item()),
+    }
 
 
 def fit_shadow_feedback_target_normalizer(
@@ -2251,6 +2297,7 @@ def online_shadow_feedback_alignment_loss(
     shadow_module: ShadowFeedbackMLP,
     num_digits: int,
     feature_mode: str,
+    target_transform: str,
     result_boundary_target_mode: str,
     result_boundary_target_temperature: float,
     result_boundary_target_min_probability_floor: float,
@@ -2265,6 +2312,7 @@ def online_shadow_feedback_alignment_loss(
         batch,
         num_digits=num_digits,
         feature_mode=feature_mode,
+        target_transform=target_transform,
         result_boundary_target_mode=result_boundary_target_mode,
         result_boundary_target_temperature=result_boundary_target_temperature,
         result_boundary_target_min_probability_floor=(
@@ -2872,6 +2920,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
     validation_fraction: float,
     validation_every: int,
     target_normalization: str,
+    target_transform: str,
     feature_mode: str,
     feature_normalization: str,
     loss_mode: str,
@@ -2913,6 +2962,10 @@ def run_online_shadow_feedback_gradient_diagnostic(
     if target_normalization not in {"none", "fit_zscore_per_result"}:
         raise ValueError(
             "shadow feedback target normalization must be none or fit_zscore_per_result"
+        )
+    if target_transform not in {"none", "unit_norm_per_example"}:
+        raise ValueError(
+            "shadow feedback target transform must be none or unit_norm_per_example"
         )
     if feature_mode not in {
         "injection_grad_logits",
@@ -2984,6 +3037,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
             fit_batch,
             num_digits=num_digits,
             feature_mode=feature_mode,
+            target_transform=target_transform,
             result_boundary_target_mode=result_boundary_target_mode,
             result_boundary_target_temperature=result_boundary_target_temperature,
             result_boundary_target_min_probability_floor=(
@@ -3015,6 +3069,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
                 fit_batch,
                 num_digits=num_digits,
                 feature_mode=feature_mode,
+                target_transform=target_transform,
                 result_boundary_target_mode=result_boundary_target_mode,
                 result_boundary_target_temperature=(
                     result_boundary_target_temperature
@@ -3067,6 +3122,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
             shadow_module=shadow_module,
             num_digits=num_digits,
             feature_mode=feature_mode,
+            target_transform=target_transform,
             result_boundary_target_mode=result_boundary_target_mode,
             result_boundary_target_temperature=result_boundary_target_temperature,
             result_boundary_target_min_probability_floor=(
@@ -3088,6 +3144,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
                 shadow_module=shadow_module,
                 num_digits=num_digits,
                 feature_mode=feature_mode,
+                target_transform=target_transform,
                 result_boundary_target_mode=result_boundary_target_mode,
                 result_boundary_target_temperature=result_boundary_target_temperature,
                 result_boundary_target_min_probability_floor=(
@@ -3152,6 +3209,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
                 fit_batch,
                 num_digits=num_digits,
                 feature_mode=feature_mode,
+                target_transform=target_transform,
                 result_boundary_target_mode=result_boundary_target_mode,
                 result_boundary_target_temperature=(
                     result_boundary_target_temperature
@@ -3218,6 +3276,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
         shadow_module=shadow_module,
         num_digits=num_digits,
         feature_mode=feature_mode,
+        target_transform=target_transform,
         result_boundary_target_mode=result_boundary_target_mode,
         result_boundary_target_temperature=result_boundary_target_temperature,
         result_boundary_target_min_probability_floor=(
@@ -3235,6 +3294,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
         shadow_module=shadow_module,
         num_digits=num_digits,
         feature_mode=feature_mode,
+        target_transform=target_transform,
         result_boundary_target_mode=result_boundary_target_mode,
         result_boundary_target_temperature=result_boundary_target_temperature,
         result_boundary_target_min_probability_floor=(
@@ -3290,6 +3350,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
         "shadow_feedback_validation_history": validation_history,
         "shadow_feedback_best_state_restored": bool(best_state is not None),
         "shadow_feedback_target_normalization": target_normalization,
+        "shadow_feedback_target_transform": target_transform,
         "shadow_feedback_feature_mode": feature_mode,
         "shadow_feedback_feature_normalization": feature_normalization,
         "shadow_feedback_loss_mode": loss_mode,
@@ -3330,6 +3391,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
             shadow_module=shadow_module,
             num_digits=num_digits,
             feature_mode=feature_mode,
+            target_transform=target_transform,
             result_boundary_target_mode=result_boundary_target_mode,
             result_boundary_target_temperature=result_boundary_target_temperature,
             result_boundary_target_min_probability_floor=(
@@ -3347,6 +3409,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
             shadow_module=shadow_module,
             num_digits=num_digits,
             feature_mode=feature_mode,
+            target_transform=target_transform,
             result_boundary_target_mode=result_boundary_target_mode,
             result_boundary_target_temperature=result_boundary_target_temperature,
             result_boundary_target_min_probability_floor=(
@@ -3405,6 +3468,7 @@ def run_online_shadow_feedback_module_gradient_diagnostic(
     shadow_module: ShadowFeedbackMLP,
     num_digits: int,
     feature_mode: str,
+    target_transform: str,
     result_boundary_target_mode: str,
     result_boundary_target_temperature: float,
     result_boundary_target_min_probability_floor: float,
@@ -3421,6 +3485,7 @@ def run_online_shadow_feedback_module_gradient_diagnostic(
         shadow_module=shadow_module,
         num_digits=num_digits,
         feature_mode=feature_mode,
+        target_transform=target_transform,
         result_boundary_target_mode=result_boundary_target_mode,
         result_boundary_target_temperature=result_boundary_target_temperature,
         result_boundary_target_min_probability_floor=(
@@ -5300,6 +5365,7 @@ def run_variant(
         shadow_feedback_target_normalization=(
             args.shadow_feedback_target_normalization
         ),
+        shadow_feedback_target_transform=args.shadow_feedback_target_transform,
         shadow_feedback_feature_mode=args.shadow_feedback_feature_mode,
         shadow_feedback_feature_normalization=(
             args.shadow_feedback_feature_normalization
@@ -5528,6 +5594,7 @@ def run_variant(
                 validation_fraction=args.shadow_feedback_validation_fraction,
                 validation_every=args.shadow_feedback_validation_every,
                 target_normalization=args.shadow_feedback_target_normalization,
+                target_transform=args.shadow_feedback_target_transform,
                 feature_mode=args.shadow_feedback_feature_mode,
                 feature_normalization=args.shadow_feedback_feature_normalization,
                 loss_mode=args.shadow_feedback_loss_mode,
@@ -6473,6 +6540,9 @@ def run_variant(
     metrics["shadow_feedback_target_normalization"] = (
         args.shadow_feedback_target_normalization
     )
+    metrics["shadow_feedback_target_transform"] = (
+        args.shadow_feedback_target_transform
+    )
     metrics["shadow_feedback_feature_mode"] = args.shadow_feedback_feature_mode
     metrics["shadow_feedback_feature_normalization"] = (
         args.shadow_feedback_feature_normalization
@@ -7186,6 +7256,15 @@ def parse_args() -> argparse.Namespace:
             "Normalize online MLP shadow target gradients using statistics "
             "fit on the fit split only; predictions are unnormalized before "
             "model-gradient diagnostics."
+        ),
+    )
+    parser.add_argument(
+        "--shadow-feedback-target-transform",
+        choices=["none", "unit_norm_per_example"],
+        default="none",
+        help=(
+            "Optional target-gradient stabilization applied before target "
+            "normalization in the online MLP shadow-feedback diagnostic."
         ),
     )
     parser.add_argument(
@@ -7984,6 +8063,10 @@ def main() -> None:
                         suffix_parts.append(
                             f"tnorm{args.shadow_feedback_target_normalization}"
                         )
+                    if args.shadow_feedback_target_transform != "none":
+                        suffix_parts.append(
+                            f"ttrans{args.shadow_feedback_target_transform}"
+                        )
                     if args.shadow_feedback_feature_mode != "injection_grad_logits":
                         suffix_parts.append(
                             f"feat{args.shadow_feedback_feature_mode}"
@@ -8174,6 +8257,7 @@ def main() -> None:
         f"validation_fraction={args.shadow_feedback_validation_fraction} "
         f"validation_every={args.shadow_feedback_validation_every} "
         f"target_normalization={args.shadow_feedback_target_normalization} "
+        f"target_transform={args.shadow_feedback_target_transform} "
         f"feature_mode={args.shadow_feedback_feature_mode} "
         f"feature_normalization={args.shadow_feedback_feature_normalization} "
         f"loss_mode={args.shadow_feedback_loss_mode} "

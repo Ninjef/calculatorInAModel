@@ -189,6 +189,15 @@ not close the generalization gap. The best heldout cosine was h32/dropout
 reached `0.7642/0.7983`, with gaps `0.1977/0.1530`. Label:
 `online_mlp_shadow_feedback_dropout_regularization_no_go`.
 
+Per-example target-direction normalization was then added as a lightweight
+target-stabilization test before fit-split target z-scoring. It made the
+target rows unit-norm before the online MLP warmup, then evaluated induced
+model gradients against the original boundary target. This did not change the
+failure mode. On the same `cosine` branch, h32 reached heldout
+`0.7936/0.8270`, with gaps `0.2025/0.1545`; h16 reached
+`0.7650/0.8010`, with gaps `0.1983/0.1546`. Label:
+`online_mlp_shadow_feedback_target_unit_norm_no_go`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -229,11 +238,15 @@ Do not rerun these as next steps unless debugging new code:
 - simple dropout-only regularization on that same directional-loss
   `injection_grad_logits` setup with dropout `0.1/0.2`, h16/h32, and
   `weight_decay=0.01` as novelty.
+- per-example unit-norm target transforms on that same directional-loss
+  `injection_grad_logits` setup with h16/h32 and `cosine`/`mse_plus_cosine`
+  as novelty.
 
 Next best step: improve shadow generalization by changing the target
-construction or learned-gradient state, or by adding explicit norm/gap
-training losses rather than simple dropout or checkpoint selection. Plausible
-branches include target stabilization/averaging, Jacobian- or representation-
+construction or learned-gradient state more substantially, or by adding
+explicit norm/gap training losses rather than simple dropout, checkpoint
+selection, or row-wise target normalization. Plausible branches include
+target averaging/prototype stabilization, Jacobian- or representation-
 conditioned gradient state, or direct training-time gap/norm penalties. Keep
 the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup

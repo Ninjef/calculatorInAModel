@@ -197,7 +197,11 @@ reached heldout `0.7920/0.8248`, but gaps stayed `0.2039/0.1564`; h16/dropout
 `0.2` reached `0.7642/0.7983`, but gaps stayed `0.1977/0.1530`. A more
 stable target construction, explicit gap/norm training loss, or a different
 learned-gradient state remain the next plausible
-branches.
+branches. A lightweight target-stabilization attempt, per-example unit-norm
+targets before z-scoring, also reproduced the same overfit profile: h32/cosine
+reached `0.7936/0.8270` heldout with `0.2025/0.1545` gaps. So the next target
+branch needs to be more structural than row-wise norm removal, such as
+prototype/averaged targets or different state conditioning.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

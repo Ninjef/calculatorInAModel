@@ -819,3 +819,27 @@ h32/dropout `0.1` run reached heldout result/upstream cosines
 No Stage 1 early-lift run was launched. Next work should change target
 construction or learned-gradient state, or add explicit training-time gap/norm
 penalties, rather than relying on ordinary dropout.
+
+## Status Update: 2026-05-28, Online MLP Target Transform
+
+Per-example target-direction normalization was added to the online MLP
+shadow-feedback diagnostic:
+
+```text
+online_mlp_shadow_feedback_target_unit_norm_no_go
+```
+
+The new `--shadow-feedback-target-transform unit_norm_per_example` mode makes
+each boundary target row unit-norm before fit-split target z-scoring. The
+diagnostic then denormalizes predictions and compares induced model gradients
+against the original boundary-target gradients.
+
+This did not clear the heldout gate. On the same target-normalized
+`injection_grad_logits` setup, h32/cosine reached heldout result/upstream
+cosines `0.7936/0.8270`, but train-heldout gaps stayed `0.2025/0.1545`.
+h16/cosine reached `0.7650/0.8010`, with gaps `0.1983/0.1546`.
+`mse_plus_cosine` behaved similarly.
+
+No Stage 1 early-lift run was launched. Next work should use more structural
+target stabilization, a different learned-gradient state, or explicit
+training-time gap/norm penalties rather than row-wise norm removal.
