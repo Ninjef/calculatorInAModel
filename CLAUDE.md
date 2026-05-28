@@ -180,6 +180,15 @@ step `60` and reduced gaps to `0.1511/0.1220`, but heldout fell to
 `0.6872/0.6979`. Label:
 `online_mlp_shadow_feedback_gap_penalized_selection_tradeoff_no_go`.
 
+Training-time dropout regularization was then added to the online MLP shadow
+module, with explicit `AdamW` weight decay exposed in the diagnostic config.
+On the useful target-normalized `cosine` + `injection_grad_logits` branch,
+dropout `0.1/0.2` at h16/h32 preserved the heldout direction signal but did
+not close the generalization gap. The best heldout cosine was h32/dropout
+`0.1` at `0.7920/0.8248`, with gaps `0.2039/0.1564`; h16/dropout `0.2`
+reached `0.7642/0.7983`, with gaps `0.1977/0.1530`. Label:
+`online_mlp_shadow_feedback_dropout_regularization_no_go`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -217,12 +226,16 @@ Do not rerun these as next steps unless debugging new code:
   `lr=1e-3`, `100` steps as novelty.
 - gap-penalized validation selection on that same directional-loss
   `injection_grad_logits` setup with penalties `1/3/4/5` as novelty.
+- simple dropout-only regularization on that same directional-loss
+  `injection_grad_logits` setup with dropout `0.1/0.2`, h16/h32, and
+  `weight_decay=0.01` as novelty.
 
-Next best step: improve shadow generalization by changing the objective or
-regularization beyond checkpoint selection, not by simple feature appending or
-plain fit-split z-scoring. Plausible branches include explicit training-time
-norm/gap regularization, a more stable target construction, or a qualitatively
-different learned-gradient state. Keep the exact-grid boundary-ceiling
+Next best step: improve shadow generalization by changing the target
+construction or learned-gradient state, or by adding explicit norm/gap
+training losses rather than simple dropout or checkpoint selection. Plausible
+branches include target stabilization/averaging, Jacobian- or representation-
+conditioned gradient state, or direct training-time gap/norm penalties. Keep
+the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`
 boundary-feedback baseline before long runs. Do not move directly to

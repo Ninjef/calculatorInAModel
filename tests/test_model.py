@@ -2366,7 +2366,9 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
         num_digits=1,
         heldout_fraction=0.5,
         hidden_size=8,
+        dropout=0.1,
         learning_rate=1e-3,
+        weight_decay=0.02,
         warmup_steps=3,
         updates_per_step=1,
         validation_fraction=0.25,
@@ -2390,6 +2392,8 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
     assert summary["shadow_feedback_heldout_batch_size"] == 2
     assert summary["shadow_feedback_validation_batch_size"] == 1
     assert summary["shadow_feedback_best_state_restored"] is True
+    assert summary["shadow_feedback_dropout"] == pytest.approx(0.1)
+    assert summary["shadow_feedback_weight_decay"] == pytest.approx(0.02)
     assert summary["shadow_feedback_target_normalization"] == "fit_zscore_per_result"
     assert summary["shadow_feedback_feature_mode"] == "injection_grad_policy_state"
     assert summary["shadow_feedback_feature_normalization"] == (
@@ -3119,8 +3123,12 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "0.2",
             "--shadow-feedback-hidden-size",
             "32",
+            "--shadow-feedback-dropout",
+            "0.1",
             "--shadow-feedback-online-lr",
             "0.002",
+            "--shadow-feedback-weight-decay",
+            "0.02",
             "--shadow-feedback-warmup-steps",
             "7",
             "--shadow-feedback-updates-per-step",
@@ -3150,7 +3158,9 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_weight == pytest.approx(0.5)
     assert parsed.shadow_feedback_heldout_fraction == pytest.approx(0.2)
     assert parsed.shadow_feedback_hidden_size == 32
+    assert parsed.shadow_feedback_dropout == pytest.approx(0.1)
     assert parsed.shadow_feedback_online_lr == pytest.approx(0.002)
+    assert parsed.shadow_feedback_weight_decay == pytest.approx(0.02)
     assert parsed.shadow_feedback_warmup_steps == 7
     assert parsed.shadow_feedback_updates_per_step == 2
     assert parsed.shadow_feedback_validation_fraction == pytest.approx(0.1)
@@ -3183,6 +3193,8 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     parsed = overfit_script.parse_args()
     assert parsed.shadow_feedback_mode == "online_mlp"
     assert parsed.shadow_feedback_hidden_size == 64
+    assert parsed.shadow_feedback_dropout == pytest.approx(0.0)
+    assert parsed.shadow_feedback_weight_decay == pytest.approx(1e-2)
     assert parsed.shadow_feedback_warmup_steps == 100
     assert parsed.shadow_feedback_validation_fraction == pytest.approx(0.0)
     assert parsed.shadow_feedback_validation_every == 0

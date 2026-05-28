@@ -116,7 +116,9 @@ class TrainConfig:
     shadow_feedback_weight: float
     shadow_feedback_heldout_fraction: float
     shadow_feedback_hidden_size: int
+    shadow_feedback_dropout: float
     shadow_feedback_online_lr: float
+    shadow_feedback_weight_decay: float
     shadow_feedback_warmup_steps: int
     shadow_feedback_updates_per_step: int
     shadow_feedback_validation_fraction: float
@@ -1993,15 +1995,21 @@ class ShadowFeedbackMLP(torch.nn.Module):
         input_dim: int,
         hidden_size: int,
         output_dim: int,
+        dropout: float = 0.0,
     ) -> None:
         super().__init__()
         if hidden_size < 1:
             raise ValueError("shadow feedback hidden size must be positive")
-        self.net = torch.nn.Sequential(
+        if dropout < 0 or dropout >= 1:
+            raise ValueError("shadow feedback dropout must be in [0, 1)")
+        layers: list[torch.nn.Module] = [
             torch.nn.Linear(input_dim, hidden_size),
             torch.nn.GELU(),
-            torch.nn.Linear(hidden_size, output_dim),
-        )
+        ]
+        if dropout > 0:
+            layers.append(torch.nn.Dropout(dropout))
+        layers.append(torch.nn.Linear(hidden_size, output_dim))
+        self.net = torch.nn.Sequential(*layers)
 
     def forward(self, features: torch.Tensor) -> torch.Tensor:
         return self.net(features)
@@ -2856,7 +2864,9 @@ def run_online_shadow_feedback_gradient_diagnostic(
     num_digits: int,
     heldout_fraction: float,
     hidden_size: int,
+    dropout: float,
     learning_rate: float,
+    weight_decay: float,
     warmup_steps: int,
     updates_per_step: int,
     validation_fraction: float,
@@ -2878,8 +2888,12 @@ def run_online_shadow_feedback_gradient_diagnostic(
         raise ValueError("online shadow feedback diagnostic requires heldout fraction in (0, 1)")
     if hidden_size < 1:
         raise ValueError("shadow feedback hidden size must be positive")
+    if dropout < 0 or dropout >= 1:
+        raise ValueError("shadow feedback dropout must be in [0, 1)")
     if learning_rate <= 0:
         raise ValueError("shadow feedback online lr must be positive")
+    if weight_decay < 0:
+        raise ValueError("shadow feedback weight decay must be non-negative")
     if warmup_steps < 1:
         raise ValueError("shadow feedback warmup steps must be positive")
     if updates_per_step < 1:
@@ -2946,8 +2960,13 @@ def run_online_shadow_feedback_gradient_diagnostic(
         input_dim=feature_dim,
         hidden_size=hidden_size,
         output_dim=model.cfg.calculator_result_vocab_size,
+        dropout=dropout,
     ).to(device=batch.x.device)
-    optimizer = torch.optim.AdamW(shadow_module.parameters(), lr=learning_rate)
+    optimizer = torch.optim.AdamW(
+        shadow_module.parameters(),
+        lr=learning_rate,
+        weight_decay=weight_decay,
+    )
     target_mean: torch.Tensor | None = None
     target_scale: torch.Tensor | None = None
     feature_mean: torch.Tensor | None = None
@@ -3243,7 +3262,9 @@ def run_online_shadow_feedback_gradient_diagnostic(
         "shadow_feedback_fit_batch_size": int(fit_batch.x.shape[0]),
         "shadow_feedback_heldout_batch_size": int(heldout_batch.x.shape[0]),
         "shadow_feedback_hidden_size": int(hidden_size),
+        "shadow_feedback_dropout": float(dropout),
         "shadow_feedback_online_lr": float(learning_rate),
+        "shadow_feedback_weight_decay": float(weight_decay),
         "shadow_feedback_warmup_steps": int(warmup_steps),
         "shadow_feedback_updates_per_step": int(updates_per_step),
         "shadow_feedback_validation_fraction": float(validation_fraction),
@@ -5267,7 +5288,9 @@ def run_variant(
         shadow_feedback_weight=args.shadow_feedback_weight,
         shadow_feedback_heldout_fraction=args.shadow_feedback_heldout_fraction,
         shadow_feedback_hidden_size=args.shadow_feedback_hidden_size,
+        shadow_feedback_dropout=args.shadow_feedback_dropout,
         shadow_feedback_online_lr=args.shadow_feedback_online_lr,
+        shadow_feedback_weight_decay=args.shadow_feedback_weight_decay,
         shadow_feedback_warmup_steps=args.shadow_feedback_warmup_steps,
         shadow_feedback_updates_per_step=args.shadow_feedback_updates_per_step,
         shadow_feedback_validation_fraction=(
@@ -5497,7 +5520,9 @@ def run_variant(
                 num_digits=num_digits,
                 heldout_fraction=args.shadow_feedback_heldout_fraction,
                 hidden_size=args.shadow_feedback_hidden_size,
+                dropout=args.shadow_feedback_dropout,
                 learning_rate=args.shadow_feedback_online_lr,
+                weight_decay=args.shadow_feedback_weight_decay,
                 warmup_steps=args.shadow_feedback_warmup_steps,
                 updates_per_step=args.shadow_feedback_updates_per_step,
                 validation_fraction=args.shadow_feedback_validation_fraction,
@@ -6432,7 +6457,9 @@ def run_variant(
         args.shadow_feedback_heldout_fraction
     )
     metrics["shadow_feedback_hidden_size"] = args.shadow_feedback_hidden_size
+    metrics["shadow_feedback_dropout"] = args.shadow_feedback_dropout
     metrics["shadow_feedback_online_lr"] = args.shadow_feedback_online_lr
+    metrics["shadow_feedback_weight_decay"] = args.shadow_feedback_weight_decay
     metrics["shadow_feedback_warmup_steps"] = args.shadow_feedback_warmup_steps
     metrics["shadow_feedback_updates_per_step"] = (
         args.shadow_feedback_updates_per_step
@@ -7102,10 +7129,22 @@ def parse_args() -> argparse.Namespace:
         help="Hidden size for the online MLP shadow-feedback diagnostic.",
     )
     parser.add_argument(
+        "--shadow-feedback-dropout",
+        type=float,
+        default=0.0,
+        help="Dropout probability inside the online MLP shadow-feedback module.",
+    )
+    parser.add_argument(
         "--shadow-feedback-online-lr",
         type=float,
         default=1e-3,
         help="Learning rate for the online MLP shadow-feedback warmup.",
+    )
+    parser.add_argument(
+        "--shadow-feedback-weight-decay",
+        type=float,
+        default=1e-2,
+        help="AdamW weight decay for the online MLP shadow-feedback warmup.",
     )
     parser.add_argument(
         "--shadow-feedback-warmup-steps",
@@ -7924,7 +7963,13 @@ def main() -> None:
                 suffix_parts.append(args.shadow_feedback_mode)
                 if args.shadow_feedback_mode == "online_mlp":
                     suffix_parts.append(f"h{args.shadow_feedback_hidden_size}")
+                    if args.shadow_feedback_dropout > 0:
+                        suffix_parts.append(f"sdrop{args.shadow_feedback_dropout:g}")
                     suffix_parts.append(f"slr{args.shadow_feedback_online_lr:g}")
+                    if args.shadow_feedback_weight_decay != 1e-2:
+                        suffix_parts.append(
+                            f"swd{args.shadow_feedback_weight_decay:g}"
+                        )
                     suffix_parts.append(
                         f"warm{args.shadow_feedback_warmup_steps}"
                     )
@@ -8121,7 +8166,9 @@ def main() -> None:
         f"ridge={args.shadow_feedback_ridge} "
         f"heldout_fraction={args.shadow_feedback_heldout_fraction} "
         f"hidden_size={args.shadow_feedback_hidden_size} "
+        f"dropout={args.shadow_feedback_dropout} "
         f"online_lr={args.shadow_feedback_online_lr} "
+        f"weight_decay={args.shadow_feedback_weight_decay} "
         f"warmup_steps={args.shadow_feedback_warmup_steps} "
         f"updates_per_step={args.shadow_feedback_updates_per_step} "
         f"validation_fraction={args.shadow_feedback_validation_fraction} "

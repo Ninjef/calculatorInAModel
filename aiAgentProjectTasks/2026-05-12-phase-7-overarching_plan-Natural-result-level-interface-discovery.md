@@ -795,3 +795,27 @@ fell below threshold (`0.6872/0.6979`).
 No Stage 1 early-lift run was launched. Next work should use training-time
 regularization, target stabilization, or a different learned-gradient state
 rather than checkpoint selection alone.
+
+## Status Update: 2026-05-28, Online MLP Dropout Regularization
+
+Training-time dropout and explicit `AdamW` weight decay were added to the
+online MLP shadow-feedback diagnostic:
+
+```text
+online_mlp_shadow_feedback_dropout_regularization_no_go
+```
+
+This tested whether ordinary MLP regularization could preserve the directional
+loss heldout signal while reducing fit-split overfit. The diagnostic exposed
+`--shadow-feedback-dropout` and `--shadow-feedback-weight-decay`, and applied
+dropout between the hidden activation and output layer when requested.
+
+On the useful target-normalized `cosine` + `injection_grad_logits` branch,
+dropout `0.1/0.2` with h16/h32 did not clear the heldout warmup gate. The best
+h32/dropout `0.1` run reached heldout result/upstream cosines
+`0.7920/0.8248`, but train-heldout gaps stayed `0.2039/0.1564`. h16/dropout
+`0.2` reached `0.7642/0.7983`, with gaps `0.1977/0.1530`.
+
+No Stage 1 early-lift run was launched. Next work should change target
+construction or learned-gradient state, or add explicit training-time gap/norm
+penalties, rather than relying on ordinary dropout.

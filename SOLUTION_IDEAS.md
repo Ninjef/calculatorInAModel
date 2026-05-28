@@ -192,7 +192,11 @@ missed the full gate: `cosine` h16/h32 reached `0.7646/0.8007` and
 Gap-penalized validation selection exposed the tradeoff but did not solve it:
 penalty `4` kept heldout above threshold but gap stayed `0.1673`, while
 penalty `5` lowered gap to `0.1511` and lost heldout cosine. Training-time
-regularization or a more stable target construction remain the next plausible
+dropout regularization also failed to close the gap: h32/dropout `0.1`
+reached heldout `0.7920/0.8248`, but gaps stayed `0.2039/0.1564`; h16/dropout
+`0.2` reached `0.7642/0.7983`, but gaps stayed `0.1977/0.1530`. A more
+stable target construction, explicit gap/norm training loss, or a different
+learned-gradient state remain the next plausible
 branches.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
