@@ -1809,3 +1809,90 @@ Interpretation:
 - Do not run more fit-once linear shadow training variants from this setup.
 - Next work should add an online MLP shadow-feedback module with result-policy
   state, heldout warmup validation, and only then a 200-step early-lift smoke.
+
+## 2026-05-28 Online MLP Shadow-Feedback Warmup Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-fourteenth-task-Online-MLP-shadow-feedback-warmup-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_online_shadow_feedback_gate
+```
+
+Code changes:
+
+- Added `--shadow-feedback-mode {fit_once_linear,online_mlp}`.
+- Added online MLP shadow-feedback warmup flags:
+  `--shadow-feedback-hidden-size`, `--shadow-feedback-online-lr`,
+  `--shadow-feedback-warmup-steps`, and
+  `--shadow-feedback-updates-per-step`.
+- The online MLP diagnostic trains only the shadow module while the main model
+  is frozen, uses per-example-scaled answer injection gradients plus current
+  result logits as inputs, and evaluates induced model-gradient agreement on a
+  deterministic heldout split.
+- `online_mlp` is diagnostic-only for now; `--shadow-feedback-weight > 0` is
+  rejected in that mode.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+98 passed
+```
+
+Stage 0B heldout diagnostic, hidden size `64`:
+
+| Metric | Value |
+| --- | ---: |
+| fit batch / heldout batch | `320 / 80` |
+| final fit MSE / prediction cosine | `0.01747 / 0.55395` |
+| train result-proj cosine vs boundary | `0.98498` |
+| heldout result-proj cosine vs boundary | `0.71673` |
+| train upstream cosine vs boundary | `0.98030` |
+| heldout upstream cosine vs boundary | `0.76010` |
+| train-heldout result-proj cosine gap | `0.26825` |
+| train-heldout upstream cosine gap | `0.22020` |
+| heldout result/upstream relative norm | `1.2678 / 1.2188` |
+| heldout semantic decoder grad L2 | `0.0` |
+
+Stage 0B anti-overfit variant, hidden size `16`:
+
+| Metric | Value |
+| --- | ---: |
+| final fit MSE / prediction cosine | `0.02372 / 0.24175` |
+| train result-proj cosine vs boundary | `0.61852` |
+| heldout result-proj cosine vs boundary | `0.62555` |
+| train upstream cosine vs boundary | `0.50238` |
+| heldout upstream cosine vs boundary | `0.66675` |
+| train-heldout result-proj cosine gap | `-0.00703` |
+| train-heldout upstream cosine gap | `-0.16437` |
+| heldout result/upstream relative norm | `1.5462 / 1.1396` |
+
+Decision:
+
+```text
+online_mlp_shadow_feedback_stage0b_partial_alignment_no_clean_gate
+```
+
+Interpretation:
+
+- The online MLP shadow module is a materially better direction than fit-once
+  linear shadow feedback: hidden size `64` crossed the headline heldout
+  cosine thresholds (`result >= 0.70`, `upstream >= 0.60`).
+- It did not clear the full go gate because the train-heldout gaps remained
+  above the planned `0.15` limit.
+- Reducing capacity to hidden size `16` reduced overfit, but the heldout
+  result-proj cosine fell below the go threshold.
+- No Stage 1 run was launched from these warmups. Next work should improve
+  shadow generalization, not rerun this exact MLP shape.

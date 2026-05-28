@@ -2293,6 +2293,103 @@ def test_linear_shadow_feedback_diagnostic_matches_boundary_gradient(
     assert "heldout_shadow_vs_boundary_result_proj_cosine" in heldout_summary
 
 
+def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
+    monkeypatch,
+) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_online_shadow_feedback_diag", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="direct_feedback_alignment",
+        calculator_action_head="result_space",
+        calculator_read_position="operands",
+        calculator_bottleneck_mode="answer_decoder",
+        answer_decoder_interaction="product",
+    )
+    model = TinyGPT(cfg)
+    overfit_script.freeze_semantic_decoder_parameters(model)
+    batch = ArithmeticBatch(
+        x=torch.tensor(
+            [
+                [1, PLUS_ID, 2, EQ_ID],
+                [0, PLUS_ID, 3, EQ_ID],
+                [2, PLUS_ID, 1, EQ_ID],
+                [1, PLUS_ID, 3, EQ_ID],
+            ]
+        ),
+        y=torch.zeros((4, 4), dtype=torch.long),
+        loss_mask=torch.tensor(
+            [
+                [False, False, False, True],
+                [False, False, False, True],
+                [False, False, False, True],
+                [False, False, False, True],
+            ]
+        ),
+    )
+
+    def fake_online_forced_losses(model_arg, batch_arg, *, chunk_size):
+        del model_arg, chunk_size
+        result_ids = torch.arange(7, dtype=torch.float).unsqueeze(0)
+        target = (batch_arg.x[:, 0] + batch_arg.x[:, 2]).float().unsqueeze(1)
+        return (result_ids - target).abs()
+
+    monkeypatch.setattr(
+        overfit_script,
+        "score_forced_result_classes_chunked",
+        fake_online_forced_losses,
+    )
+    before_params = {
+        name: param.detach().clone() for name, param in model.named_parameters()
+    }
+
+    summary = overfit_script.run_online_shadow_feedback_gradient_diagnostic(
+        model,
+        batch,
+        num_digits=1,
+        heldout_fraction=0.5,
+        hidden_size=8,
+        learning_rate=1e-3,
+        warmup_steps=3,
+        updates_per_step=1,
+        result_boundary_target_mode="hard_best_result",
+        result_boundary_target_temperature=1.0,
+        result_boundary_target_min_probability_floor=0.0,
+        result_boundary_target_chunk_size=4,
+    )
+
+    assert summary["diagnostic"] == (
+        "online_mlp_shadow_feedback_heldout_gradient_agreement"
+    )
+    assert summary["shadow_feedback_fit_batch_size"] == 2
+    assert summary["shadow_feedback_heldout_batch_size"] == 2
+    assert summary["heldout_shadow_result_proj_grad_l2"] > 0.0
+    assert summary["heldout_shadow_upstream_grad_l2"] > 0.0
+    assert summary["heldout_shadow_semantic_decoder_grad_l2"] == pytest.approx(0.0)
+    assert "heldout_shadow_vs_boundary_result_proj_cosine" in summary
+    assert "heldout_shadow_vs_boundary_upstream_cosine" in summary
+    assert "shadow_feedback_train_heldout_result_proj_cosine_gap" in summary
+    for name, param in model.named_parameters():
+        assert torch.allclose(param, before_params[name])
+
+
 def test_exhaustive_grid_boundary_target_smoke_updates_open_upstream(
     monkeypatch,
 ) -> None:
@@ -2868,13 +2965,49 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "0.5",
             "--shadow-feedback-heldout-fraction",
             "0.2",
+            "--shadow-feedback-hidden-size",
+            "32",
+            "--shadow-feedback-online-lr",
+            "0.002",
+            "--shadow-feedback-warmup-steps",
+            "7",
+            "--shadow-feedback-updates-per-step",
+            "2",
         ],
     )
     parsed = overfit_script.parse_args()
     assert parsed.shadow_feedback_gradient_diagnostic_only
+    assert parsed.shadow_feedback_mode == "fit_once_linear"
     assert parsed.shadow_feedback_ridge == pytest.approx(1e-3)
     assert parsed.shadow_feedback_weight == pytest.approx(0.5)
     assert parsed.shadow_feedback_heldout_fraction == pytest.approx(0.2)
+    assert parsed.shadow_feedback_hidden_size == 32
+    assert parsed.shadow_feedback_online_lr == pytest.approx(0.002)
+    assert parsed.shadow_feedback_warmup_steps == 7
+    assert parsed.shadow_feedback_updates_per_step == 2
+
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(script_path),
+            "--variant",
+            "model-c",
+            "--calculator-estimator",
+            "direct_feedback_alignment",
+            "--calculator-action-head",
+            "result_space",
+            "--shadow-feedback-gradient-diagnostic-only",
+            "--shadow-feedback-mode",
+            "online_mlp",
+            "--shadow-feedback-heldout-fraction",
+            "0.5",
+        ],
+    )
+    parsed = overfit_script.parse_args()
+    assert parsed.shadow_feedback_mode == "online_mlp"
+    assert parsed.shadow_feedback_hidden_size == 64
+    assert parsed.shadow_feedback_warmup_steps == 100
 
     with pytest.raises(ValueError, match="result_space.*gumbel_concrete_interface"):
         CalculatorHook(

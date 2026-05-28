@@ -121,6 +121,13 @@ still aligned almost perfectly (`result-proj cosine=0.9981`, upstream
 train-heldout result-cosine gap. Label:
 `heldout_linear_shadow_feedback_stage0_generalization_negative`.
 
+The first online MLP shadow-feedback warmup used per-example-scaled answer
+injection gradients plus current result logits as shadow inputs. Hidden size
+`64` reached heldout result/upstream cosines `0.7167/0.7601`, but train-heldout
+gaps were too large (`0.2683/0.2202`). Hidden size `16` reduced the result
+gap, but heldout result cosine fell to `0.6255`. Label:
+`online_mlp_shadow_feedback_stage0b_partial_alignment_no_clean_gate`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -141,15 +148,19 @@ Do not rerun these as next steps unless debugging new code:
 - frozen fit-once linear shadow feedback with the same exact-grid calibration
   and weight/schedule.
 - same-batch linear shadow alignment as a sufficient Stage 0 gate.
+- simple online MLP shadow warmups with only injection-gradient plus result-logit
+  state at `h64` or `h16`, `lr=1e-3`, `100` steps, unless adding a real
+  anti-overfit or target-normalization change.
 
-Next best step: move from linear shadow maps to online MLP shadow modules that
-include result-policy state, pass heldout warmup, and only then get a 200-step
-early-lift Stage 1 smoke. Keep the exact-grid boundary-ceiling diagnostic as
-the Stage 0 gate for any new mechanism, and require early Stage 1 lift above
-the `0.16` boundary-feedback baseline before long runs. Do not move directly to
-canonical-query/protocol stabilization as if Phase 7 retention had robustly
-replicated, and do not treat ordinary expected-cost/score-function training as
-rescued by decoder calibration alone.
+Next best step: improve shadow-gradient generalization before Stage 1, e.g.
+validation early stopping, explicit regularization, target normalization,
+richer policy state, or a different synthetic-gradient objective. Keep the
+exact-grid boundary-ceiling diagnostic as the Stage 0 gate for any new
+mechanism, require a heldout warmup pass before Stage 1, and require early
+Stage 1 lift above the `0.16` boundary-feedback baseline before long runs. Do
+not move directly to canonical-query/protocol stabilization as if Phase 7
+retention had robustly replicated, and do not treat ordinary
+expected-cost/score-function training as rescued by decoder calibration alone.
 
 For details, see `factSheets/PHASE_7_EXPERIMENT_FACT_SHEET.md`.
 

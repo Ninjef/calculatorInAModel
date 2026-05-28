@@ -109,9 +109,14 @@ class TrainConfig:
     boundary_feedback_mode: str
     boundary_feedback_seed: int
     boundary_feedback_gradient_diagnostic_only: bool
+    shadow_feedback_mode: str
     shadow_feedback_ridge: float
     shadow_feedback_weight: float
     shadow_feedback_heldout_fraction: float
+    shadow_feedback_hidden_size: int
+    shadow_feedback_online_lr: float
+    shadow_feedback_warmup_steps: int
+    shadow_feedback_updates_per_step: int
     shadow_feedback_gradient_diagnostic_only: bool
     calculator_result_head_hidden_size: int
     relaxed_calculator_temperature: float
@@ -1971,6 +1976,134 @@ def fixed_linear_shadow_feedback_alignment_loss(
     return objective, metrics
 
 
+class ShadowFeedbackMLP(torch.nn.Module):
+    def __init__(
+        self,
+        *,
+        input_dim: int,
+        hidden_size: int,
+        output_dim: int,
+    ) -> None:
+        super().__init__()
+        if hidden_size < 1:
+            raise ValueError("shadow feedback hidden size must be positive")
+        self.net = torch.nn.Sequential(
+            torch.nn.Linear(input_dim, hidden_size),
+            torch.nn.GELU(),
+            torch.nn.Linear(hidden_size, output_dim),
+        )
+
+    def forward(self, features: torch.Tensor) -> torch.Tensor:
+        return self.net(features)
+
+
+def shadow_feedback_mlp_examples(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    result_boundary_target_mode: str,
+    result_boundary_target_temperature: float,
+    result_boundary_target_min_probability_floor: float,
+    result_boundary_target_chunk_size: int,
+) -> tuple[torch.Tensor, torch.Tensor, dict[str, float | int | str]]:
+    if model.cfg.calculator_action_head != "result_space":
+        raise ValueError("shadow feedback requires result_space head")
+    feedback_input, answer_loss = _answer_loss_injection_gradient(model, batch)
+    target_grad, target_metrics = boundary_result_logit_gradient_target(
+        model,
+        batch,
+        num_digits=num_digits,
+        target_mode=result_boundary_target_mode,
+        temperature=result_boundary_target_temperature,
+        min_probability_floor=result_boundary_target_min_probability_floor,
+        chunk_size=result_boundary_target_chunk_size,
+    )
+    with torch.no_grad():
+        result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    batch_scale = float(batch.x.shape[0])
+    scaled_feedback_input = feedback_input.detach() * batch_scale
+    features = torch.cat(
+        [
+            scaled_feedback_input,
+            result_logits.detach().to(
+                device=feedback_input.device,
+                dtype=feedback_input.dtype,
+            ),
+        ],
+        dim=-1,
+    )
+    target = target_grad.detach().to(device=features.device, dtype=features.dtype)
+    target = target * batch_scale
+    metrics: dict[str, float | int | str] = {
+        "shadow_feedback_answer_loss": float(answer_loss.item()),
+        "shadow_feedback_input_grad_l2": float(scaled_feedback_input.norm().item()),
+        "shadow_feedback_feature_l2": float(features.norm().item()),
+    }
+    metrics.update(target_metrics)
+    return features, target, metrics
+
+
+def online_shadow_feedback_alignment_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    shadow_module: ShadowFeedbackMLP,
+    num_digits: int,
+    result_boundary_target_mode: str,
+    result_boundary_target_temperature: float,
+    result_boundary_target_min_probability_floor: float,
+    result_boundary_target_chunk_size: int,
+) -> tuple[torch.Tensor, dict[str, float | int | str]]:
+    features, target, example_metrics = shadow_feedback_mlp_examples(
+        model,
+        batch,
+        num_digits=num_digits,
+        result_boundary_target_mode=result_boundary_target_mode,
+        result_boundary_target_temperature=result_boundary_target_temperature,
+        result_boundary_target_min_probability_floor=(
+            result_boundary_target_min_probability_floor
+        ),
+        result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+    )
+    shadow_module.eval()
+    with torch.no_grad():
+        predicted_feedback = shadow_module(features).detach()
+
+    model.zero_grad(set_to_none=True)
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    objective = (result_logits * predicted_feedback).sum(dim=-1).mean()
+    learned_result = result_logits.argmax(dim=-1)
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = true_a + true_b
+    pred_norm = predicted_feedback.reshape(-1).norm()
+    target_norm = target.reshape(-1).norm()
+    denom = pred_norm * target_norm
+    pred_cosine = (
+        float(
+            torch.dot(predicted_feedback.reshape(-1), target.reshape(-1))
+            .div(denom)
+            .item()
+        )
+        if float(denom.item()) > 0.0
+        else float("nan")
+    )
+    metrics: dict[str, float | int | str] = {
+        "shadow_feedback_mode": "online_mlp",
+        "shadow_feedback_loss": float(objective.detach().item()),
+        "shadow_feedback_predicted_l2": float(predicted_feedback.norm().item()),
+        "shadow_feedback_prediction_mse": float(
+            (predicted_feedback - target).pow(2).mean().item()
+        ),
+        "shadow_feedback_prediction_cosine": pred_cosine,
+        "shadow_feedback_hard_learned_calc_accuracy": float(
+            (learned_result == true_sum).float().mean().item()
+        ),
+    }
+    metrics.update(example_metrics)
+    return objective, metrics
+
+
 def parameter_group_name(name: str) -> str:
     if name.startswith("calculator_hook.result_proj."):
         return "calculator_hook.result_proj"
@@ -2426,6 +2559,267 @@ def run_boundary_feedback_gradient_diagnostic(
         ),
     }
     summary.update(feedback_metrics)
+    for key, value in boundary_metrics.items():
+        summary[f"boundary_{key}"] = value
+    return summary
+
+
+def shadow_feedback_heldout_split(
+    batch: ArithmeticBatch,
+    *,
+    heldout_fraction: float,
+) -> tuple[ArithmeticBatch, ArithmeticBatch]:
+    if heldout_fraction <= 0 or heldout_fraction >= 1:
+        raise ValueError("shadow feedback heldout fraction must be in (0, 1)")
+    total = int(batch.x.shape[0])
+    heldout_count = max(1, int(round(total * heldout_fraction)))
+    if heldout_count >= total:
+        raise ValueError("shadow feedback heldout split leaves no fit examples")
+    stride = max(1, int(round(1.0 / heldout_fraction)))
+    all_indices = torch.arange(total, device=batch.x.device)
+    heldout_mask = (all_indices % stride) == 0
+    if int(heldout_mask.sum().item()) != heldout_count:
+        heldout_mask = torch.zeros(total, dtype=torch.bool, device=batch.x.device)
+        heldout_positions = (
+            torch.linspace(0, total - 1, steps=heldout_count, device=batch.x.device)
+            .round()
+            .long()
+            .unique()
+        )
+        heldout_mask[heldout_positions] = True
+    if int(heldout_mask.sum().item()) >= total:
+        raise ValueError("shadow feedback heldout split leaves no fit examples")
+    return (
+        subset_arithmetic_batch(batch, all_indices[~heldout_mask]),
+        subset_arithmetic_batch(batch, all_indices[heldout_mask]),
+    )
+
+
+def _shadow_prediction_cosine(
+    predicted: torch.Tensor,
+    target: torch.Tensor,
+) -> float:
+    pred_flat = predicted.reshape(-1)
+    target_flat = target.reshape(-1)
+    denom = pred_flat.norm() * target_flat.norm()
+    if float(denom.item()) == 0.0:
+        return float("nan")
+    return float(torch.dot(pred_flat, target_flat).div(denom).item())
+
+
+def run_online_shadow_feedback_gradient_diagnostic(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    heldout_fraction: float,
+    hidden_size: int,
+    learning_rate: float,
+    warmup_steps: int,
+    updates_per_step: int,
+    result_boundary_target_mode: str,
+    result_boundary_target_temperature: float,
+    result_boundary_target_min_probability_floor: float,
+    result_boundary_target_chunk_size: int,
+) -> dict[str, float | int | str]:
+    if model.cfg.calculator_action_head != "result_space":
+        raise ValueError("online shadow feedback diagnostic requires result_space head")
+    if heldout_fraction <= 0 or heldout_fraction >= 1:
+        raise ValueError("online shadow feedback diagnostic requires heldout fraction in (0, 1)")
+    if hidden_size < 1:
+        raise ValueError("shadow feedback hidden size must be positive")
+    if learning_rate <= 0:
+        raise ValueError("shadow feedback online lr must be positive")
+    if warmup_steps < 1:
+        raise ValueError("shadow feedback warmup steps must be positive")
+    if updates_per_step < 1:
+        raise ValueError("shadow feedback updates per step must be positive")
+    model.train()
+
+    fit_batch, heldout_batch = shadow_feedback_heldout_split(
+        batch,
+        heldout_fraction=heldout_fraction,
+    )
+    feature_dim = model.cfg.n_embd + model.cfg.calculator_result_vocab_size
+    shadow_module = ShadowFeedbackMLP(
+        input_dim=feature_dim,
+        hidden_size=hidden_size,
+        output_dim=model.cfg.calculator_result_vocab_size,
+    ).to(device=batch.x.device)
+    optimizer = torch.optim.AdamW(shadow_module.parameters(), lr=learning_rate)
+
+    last_train_metrics: dict[str, float | int | str] = {}
+    last_train_loss = float("nan")
+    last_train_cosine = float("nan")
+    for _ in range(warmup_steps):
+        for _update in range(updates_per_step):
+            shadow_module.train()
+            features, target, train_metrics = shadow_feedback_mlp_examples(
+                model,
+                fit_batch,
+                num_digits=num_digits,
+                result_boundary_target_mode=result_boundary_target_mode,
+                result_boundary_target_temperature=(
+                    result_boundary_target_temperature
+                ),
+                result_boundary_target_min_probability_floor=(
+                    result_boundary_target_min_probability_floor
+                ),
+                result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+            )
+            predicted = shadow_module(features)
+            fit_loss = torch.nn.functional.mse_loss(predicted, target)
+            optimizer.zero_grad(set_to_none=True)
+            fit_loss.backward()
+            optimizer.step()
+            last_train_loss = float(fit_loss.detach().item())
+            last_train_cosine = _shadow_prediction_cosine(
+                predicted.detach(),
+                target.detach(),
+            )
+            last_train_metrics = train_metrics
+
+    train_summary = run_online_shadow_feedback_module_gradient_diagnostic(
+        model,
+        fit_batch,
+        shadow_module=shadow_module,
+        num_digits=num_digits,
+        result_boundary_target_mode=result_boundary_target_mode,
+        result_boundary_target_temperature=result_boundary_target_temperature,
+        result_boundary_target_min_probability_floor=(
+            result_boundary_target_min_probability_floor
+        ),
+        result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+    )
+    heldout_summary = run_online_shadow_feedback_module_gradient_diagnostic(
+        model,
+        heldout_batch,
+        shadow_module=shadow_module,
+        num_digits=num_digits,
+        result_boundary_target_mode=result_boundary_target_mode,
+        result_boundary_target_temperature=result_boundary_target_temperature,
+        result_boundary_target_min_probability_floor=(
+            result_boundary_target_min_probability_floor
+        ),
+        result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+    )
+    result_gap = (
+        float(train_summary["shadow_vs_boundary_result_proj_cosine"])
+        - float(heldout_summary["shadow_vs_boundary_result_proj_cosine"])
+    )
+    upstream_gap = (
+        float(train_summary["shadow_vs_boundary_upstream_cosine"])
+        - float(heldout_summary["shadow_vs_boundary_upstream_cosine"])
+    )
+    summary: dict[str, float | int | str] = {
+        "diagnostic": "online_mlp_shadow_feedback_heldout_gradient_agreement",
+        "batch_size": int(batch.x.shape[0]),
+        "shadow_feedback_mode": "online_mlp",
+        "shadow_feedback_heldout_fraction": float(heldout_fraction),
+        "shadow_feedback_fit_batch_size": int(fit_batch.x.shape[0]),
+        "shadow_feedback_heldout_batch_size": int(heldout_batch.x.shape[0]),
+        "shadow_feedback_hidden_size": int(hidden_size),
+        "shadow_feedback_online_lr": float(learning_rate),
+        "shadow_feedback_warmup_steps": int(warmup_steps),
+        "shadow_feedback_updates_per_step": int(updates_per_step),
+        "shadow_feedback_final_fit_mse": last_train_loss,
+        "shadow_feedback_final_fit_prediction_cosine": last_train_cosine,
+    }
+    for key, value in last_train_metrics.items():
+        summary[f"fit_{key}"] = value
+    for key, value in train_summary.items():
+        if key != "diagnostic":
+            summary[f"train_{key}"] = value
+    for key, value in heldout_summary.items():
+        if key != "diagnostic":
+            summary[f"heldout_{key}"] = value
+    summary["shadow_feedback_train_heldout_result_proj_cosine_gap"] = result_gap
+    summary["shadow_feedback_train_heldout_upstream_cosine_gap"] = upstream_gap
+    return summary
+
+
+def run_online_shadow_feedback_module_gradient_diagnostic(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    shadow_module: ShadowFeedbackMLP,
+    num_digits: int,
+    result_boundary_target_mode: str,
+    result_boundary_target_temperature: float,
+    result_boundary_target_min_probability_floor: float,
+    result_boundary_target_chunk_size: int,
+) -> dict[str, float | int | str]:
+    model.train()
+    shadow_objective, shadow_metrics = online_shadow_feedback_alignment_loss(
+        model,
+        batch,
+        shadow_module=shadow_module,
+        num_digits=num_digits,
+        result_boundary_target_mode=result_boundary_target_mode,
+        result_boundary_target_temperature=result_boundary_target_temperature,
+        result_boundary_target_min_probability_floor=(
+            result_boundary_target_min_probability_floor
+        ),
+        result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+    )
+    shadow_objective.backward()
+    shadow_grads = flattened_group_gradients(model)
+
+    model.zero_grad(set_to_none=True)
+    boundary_loss, boundary_metrics = result_boundary_target_loss(
+        model,
+        batch,
+        num_digits=num_digits,
+        target_mode=result_boundary_target_mode,
+        temperature=result_boundary_target_temperature,
+        min_probability_floor=result_boundary_target_min_probability_floor,
+        chunk_size=result_boundary_target_chunk_size,
+    )
+    boundary_loss.backward()
+    boundary_grads = flattened_group_gradients(model)
+    model.zero_grad(set_to_none=True)
+
+    shadow_result_norm = gradient_l2(shadow_grads, "calculator_hook.result_proj")
+    shadow_upstream_norm = gradient_l2(shadow_grads, "upstream")
+    boundary_result_norm = gradient_l2(boundary_grads, "calculator_hook.result_proj")
+    boundary_upstream_norm = gradient_l2(boundary_grads, "upstream")
+    summary: dict[str, float | int | str] = {
+        "diagnostic": "online_mlp_shadow_feedback_gradient_agreement",
+        "batch_size": int(batch.x.shape[0]),
+        "shadow_result_proj_grad_l2": shadow_result_norm,
+        "shadow_upstream_grad_l2": shadow_upstream_norm,
+        "shadow_semantic_decoder_grad_l2": gradient_l2(
+            shadow_grads,
+            "semantic_decoder",
+        ),
+        "boundary_result_proj_grad_l2": boundary_result_norm,
+        "boundary_upstream_grad_l2": boundary_upstream_norm,
+        "boundary_semantic_decoder_grad_l2": gradient_l2(
+            boundary_grads,
+            "semantic_decoder",
+        ),
+        "shadow_vs_boundary_result_proj_cosine": gradient_cosine(
+            shadow_grads,
+            boundary_grads,
+            "calculator_hook.result_proj",
+        ),
+        "shadow_vs_boundary_upstream_cosine": gradient_cosine(
+            shadow_grads,
+            boundary_grads,
+            "upstream",
+        ),
+        "shadow_vs_boundary_result_proj_relative_norm": (
+            shadow_result_norm / boundary_result_norm
+            if boundary_result_norm > 0
+            else float("nan")
+        ),
+        "shadow_vs_boundary_upstream_relative_norm": (
+            shadow_upstream_norm / boundary_upstream_norm
+            if boundary_upstream_norm > 0
+            else float("nan")
+        ),
+    }
+    summary.update(shadow_metrics)
     for key, value in boundary_metrics.items():
         summary[f"boundary_{key}"] = value
     return summary
@@ -4219,9 +4613,14 @@ def run_variant(
         boundary_feedback_gradient_diagnostic_only=(
             args.boundary_feedback_gradient_diagnostic_only
         ),
+        shadow_feedback_mode=args.shadow_feedback_mode,
         shadow_feedback_ridge=args.shadow_feedback_ridge,
         shadow_feedback_weight=args.shadow_feedback_weight,
         shadow_feedback_heldout_fraction=args.shadow_feedback_heldout_fraction,
+        shadow_feedback_hidden_size=args.shadow_feedback_hidden_size,
+        shadow_feedback_online_lr=args.shadow_feedback_online_lr,
+        shadow_feedback_warmup_steps=args.shadow_feedback_warmup_steps,
+        shadow_feedback_updates_per_step=args.shadow_feedback_updates_per_step,
         shadow_feedback_gradient_diagnostic_only=(
             args.shadow_feedback_gradient_diagnostic_only
         ),
@@ -4424,19 +4823,45 @@ def run_variant(
                 device=device,
                 answer_format=args.answer_format,
             )
-        diagnostic_summary = run_shadow_feedback_gradient_diagnostic(
-            model,
-            diagnostic_batch,
-            num_digits=num_digits,
-            ridge=args.shadow_feedback_ridge,
-            heldout_fraction=args.shadow_feedback_heldout_fraction,
-            result_boundary_target_mode=args.result_boundary_target_mode,
-            result_boundary_target_temperature=args.result_boundary_target_temperature,
-            result_boundary_target_min_probability_floor=(
-                args.result_boundary_target_min_probability_floor
-            ),
-            result_boundary_target_chunk_size=args.result_boundary_target_chunk_size,
-        )
+        if args.shadow_feedback_mode == "online_mlp":
+            diagnostic_summary = run_online_shadow_feedback_gradient_diagnostic(
+                model,
+                diagnostic_batch,
+                num_digits=num_digits,
+                heldout_fraction=args.shadow_feedback_heldout_fraction,
+                hidden_size=args.shadow_feedback_hidden_size,
+                learning_rate=args.shadow_feedback_online_lr,
+                warmup_steps=args.shadow_feedback_warmup_steps,
+                updates_per_step=args.shadow_feedback_updates_per_step,
+                result_boundary_target_mode=args.result_boundary_target_mode,
+                result_boundary_target_temperature=(
+                    args.result_boundary_target_temperature
+                ),
+                result_boundary_target_min_probability_floor=(
+                    args.result_boundary_target_min_probability_floor
+                ),
+                result_boundary_target_chunk_size=(
+                    args.result_boundary_target_chunk_size
+                ),
+            )
+        else:
+            diagnostic_summary = run_shadow_feedback_gradient_diagnostic(
+                model,
+                diagnostic_batch,
+                num_digits=num_digits,
+                ridge=args.shadow_feedback_ridge,
+                heldout_fraction=args.shadow_feedback_heldout_fraction,
+                result_boundary_target_mode=args.result_boundary_target_mode,
+                result_boundary_target_temperature=(
+                    args.result_boundary_target_temperature
+                ),
+                result_boundary_target_min_probability_floor=(
+                    args.result_boundary_target_min_probability_floor
+                ),
+                result_boundary_target_chunk_size=(
+                    args.result_boundary_target_chunk_size
+                ),
+            )
         diagnostic_summary["run_dir"] = str(run_dir)
         diagnostic_summary["num_digits"] = int(num_digits)
         (run_dir / "shadow_feedback_gradient_diagnostic_summary.json").write_text(
@@ -4458,12 +4883,15 @@ def run_variant(
             else "shadow_vs_boundary_upstream_cosine"
         )
         shadow_fit_cosine_key = (
-            "fit_shadow_feedback_fit_cosine"
+            "shadow_feedback_final_fit_prediction_cosine"
+            if args.shadow_feedback_mode == "online_mlp"
+            else "fit_shadow_feedback_fit_cosine"
             if args.shadow_feedback_heldout_fraction > 0
             else "shadow_feedback_fit_cosine"
         )
         print(
             "shadow-feedback gradient diagnostic: "
+            f"mode={args.shadow_feedback_mode} "
             f"shadow_result_grad={diagnostic_summary[shadow_result_key]:.6f} "
             f"result_cos={diagnostic_summary[shadow_result_cosine_key]:.6f} "
             f"upstream_cos={diagnostic_summary[shadow_upstream_cosine_key]:.6f} "
@@ -4479,7 +4907,10 @@ def run_variant(
 
     shadow_feedback_weights: torch.Tensor | None = None
     shadow_feedback_calibration_metrics: dict[str, float | int | str] = {}
-    if args.shadow_feedback_weight > 0:
+    if (
+        args.shadow_feedback_weight > 0
+        and args.shadow_feedback_mode == "fit_once_linear"
+    ):
         if exhaustive_grid_batch is not None:
             shadow_calibration_batch = exhaustive_grid_batch
         else:
@@ -4602,6 +5033,7 @@ def run_variant(
             args.variant == "model-c"
             and args.calculator_estimator == "direct_feedback_alignment"
             and args.shadow_feedback_weight > 0
+            and args.shadow_feedback_mode == "fit_once_linear"
             and shadow_feedback_weights is not None
             and not args.oracle_train
         )
@@ -5318,10 +5750,17 @@ def run_variant(
     metrics["final_boundary_feedback_weight"] = args.boundary_feedback_weight
     metrics["boundary_feedback_mode"] = args.boundary_feedback_mode
     metrics["boundary_feedback_seed"] = args.boundary_feedback_seed
+    metrics["shadow_feedback_mode"] = args.shadow_feedback_mode
     metrics["shadow_feedback_ridge"] = args.shadow_feedback_ridge
     metrics["shadow_feedback_weight"] = args.shadow_feedback_weight
     metrics["shadow_feedback_heldout_fraction"] = (
         args.shadow_feedback_heldout_fraction
+    )
+    metrics["shadow_feedback_hidden_size"] = args.shadow_feedback_hidden_size
+    metrics["shadow_feedback_online_lr"] = args.shadow_feedback_online_lr
+    metrics["shadow_feedback_warmup_steps"] = args.shadow_feedback_warmup_steps
+    metrics["shadow_feedback_updates_per_step"] = (
+        args.shadow_feedback_updates_per_step
     )
     metrics["final_shadow_feedback_weight"] = args.shadow_feedback_weight
     if shadow_feedback_calibration_metrics:
@@ -5925,6 +6364,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--shadow-feedback-mode",
+        choices=["fit_once_linear", "online_mlp"],
+        default="fit_once_linear",
+        help=(
+            "Shadow-feedback estimator. fit_once_linear preserves the frozen "
+            "linear map path; online_mlp runs the heldout warmup diagnostic."
+        ),
+    )
+    parser.add_argument(
         "--shadow-feedback-ridge",
         type=float,
         default=1e-3,
@@ -5953,11 +6401,35 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--shadow-feedback-hidden-size",
+        type=int,
+        default=64,
+        help="Hidden size for the online MLP shadow-feedback diagnostic.",
+    )
+    parser.add_argument(
+        "--shadow-feedback-online-lr",
+        type=float,
+        default=1e-3,
+        help="Learning rate for the online MLP shadow-feedback warmup.",
+    )
+    parser.add_argument(
+        "--shadow-feedback-warmup-steps",
+        type=int,
+        default=100,
+        help="Number of frozen-main-model warmup steps for online shadow feedback.",
+    )
+    parser.add_argument(
+        "--shadow-feedback-updates-per-step",
+        type=int,
+        default=1,
+        help="Shadow module optimizer updates per warmup step.",
+    )
+    parser.add_argument(
         "--shadow-feedback-gradient-diagnostic-only",
         action="store_true",
         help=(
-            "Run one fixed-batch learned linear shadow-feedback diagnostic "
-            "against the boundary-target ceiling, then exit."
+            "Run one fixed-batch shadow-feedback diagnostic against the "
+            "boundary-target ceiling, then exit."
         ),
     )
     parser.add_argument(
@@ -6343,6 +6815,31 @@ def main() -> None:
         raise ValueError("--shadow-feedback-weight must be non-negative")
     if not 0 <= args.shadow_feedback_heldout_fraction < 1:
         raise ValueError("--shadow-feedback-heldout-fraction must be in [0, 1)")
+    if args.shadow_feedback_hidden_size < 1:
+        raise ValueError("--shadow-feedback-hidden-size must be positive")
+    if args.shadow_feedback_online_lr <= 0:
+        raise ValueError("--shadow-feedback-online-lr must be positive")
+    if args.shadow_feedback_warmup_steps < 1:
+        raise ValueError("--shadow-feedback-warmup-steps must be positive")
+    if args.shadow_feedback_updates_per_step < 1:
+        raise ValueError("--shadow-feedback-updates-per-step must be positive")
+    if (
+        args.shadow_feedback_mode == "online_mlp"
+        and args.shadow_feedback_weight > 0
+    ):
+        raise ValueError(
+            "--shadow-feedback-mode online_mlp currently supports "
+            "diagnostic-only warmup; do not set --shadow-feedback-weight"
+        )
+    if (
+        args.shadow_feedback_mode == "online_mlp"
+        and args.shadow_feedback_gradient_diagnostic_only
+        and args.shadow_feedback_heldout_fraction <= 0
+    ):
+        raise ValueError(
+            "--shadow-feedback-mode online_mlp diagnostic requires "
+            "--shadow-feedback-heldout-fraction > 0"
+        )
     if args.calculator_result_head_hidden_size < 0:
         raise ValueError("--calculator-result-head-hidden-size must be non-negative")
     if args.exhaustive_grid_batch and args.operand_max is None:
@@ -6634,7 +7131,17 @@ def main() -> None:
             if args.boundary_feedback_gradient_diagnostic_only:
                 suffix_parts.append("bfgraddiag")
             if args.shadow_feedback_gradient_diagnostic_only:
-                suffix_parts.append(f"shadowridge{args.shadow_feedback_ridge:g}")
+                suffix_parts.append(args.shadow_feedback_mode)
+                if args.shadow_feedback_mode == "online_mlp":
+                    suffix_parts.append(f"h{args.shadow_feedback_hidden_size}")
+                    suffix_parts.append(f"slr{args.shadow_feedback_online_lr:g}")
+                    suffix_parts.append(
+                        f"warm{args.shadow_feedback_warmup_steps}"
+                    )
+                else:
+                    suffix_parts.append(
+                        f"shadowridge{args.shadow_feedback_ridge:g}"
+                    )
                 if args.shadow_feedback_heldout_fraction > 0:
                     suffix_parts.append(
                         f"shadowheld{args.shadow_feedback_heldout_fraction:g}"
@@ -6788,9 +7295,14 @@ def main() -> None:
     )
     print(
         "shadow feedback: "
+        f"mode={args.shadow_feedback_mode} "
         f"weight={args.shadow_feedback_weight} "
         f"ridge={args.shadow_feedback_ridge} "
         f"heldout_fraction={args.shadow_feedback_heldout_fraction} "
+        f"hidden_size={args.shadow_feedback_hidden_size} "
+        f"online_lr={args.shadow_feedback_online_lr} "
+        f"warmup_steps={args.shadow_feedback_warmup_steps} "
+        f"updates_per_step={args.shadow_feedback_updates_per_step} "
         f"gradient_diagnostic_only={args.shadow_feedback_gradient_diagnostic_only}"
     )
     print(

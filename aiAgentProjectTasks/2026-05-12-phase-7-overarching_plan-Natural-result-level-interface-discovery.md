@@ -639,3 +639,26 @@ semantic decoder gradient remained `0.0`.
 Do not use same-batch linear shadow alignment as a go gate. The next task
 should be online MLP shadow feedback with result-policy state, heldout warmup
 validation, and a 200-step early-lift gate before any long run.
+
+## Status Update: 2026-05-28, Online MLP Shadow Feedback
+
+The first online MLP shadow-feedback warmup gate was implemented and tested:
+
+```text
+online_mlp_shadow_feedback_stage0b_partial_alignment_no_clean_gate
+```
+
+The online MLP uses per-example-scaled answer injection gradients plus current
+result logits as input state, trains only the shadow module during warmup, and
+then compares the induced model gradients with the boundary-target ceiling on
+train and heldout splits.
+
+Hidden size `64` produced promising heldout alignment (`0.7167` result-proj
+cosine, `0.7601` upstream cosine), but train-heldout gaps were too large
+(`0.2683` result, `0.2202` upstream). Hidden size `16` reduced the result gap
+but missed the result-proj threshold (`0.6255` heldout cosine).
+
+No Stage 1 early-lift run was launched. The next shadow-gradient task should
+add a real generalization improvement such as validation early stopping,
+regularization, target normalization, richer policy state, or a different
+synthetic-gradient objective before spending Stage 1 budget.

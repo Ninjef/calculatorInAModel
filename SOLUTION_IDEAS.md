@@ -169,6 +169,16 @@ Take this seriously: a calculator wired into the network is structurally identic
 
 Train a small auxiliary network to *predict* what the gradient at the calculator boundary should be, given the upstream activations. The encoder gets fed this predicted gradient instead of a real one. Jaderberg et al. showed this allows asynchronous training and works through non-differentiable modules. Conceptually: you're learning the gradient itself.
 
+Phase 7 update: a simple online MLP shadow-gradient module is now implemented
+as a heldout warmup diagnostic. It uses per-example-scaled answer injection
+gradients plus current result logits as state. Hidden size `64` produced useful
+heldout alignment (`0.7167` result-proj, `0.7601` upstream) but overfit the
+fit split (`0.2683/0.2202` train-heldout gaps); hidden size `16` reduced the
+gap but missed the result-proj threshold (`0.6255`). Do not launch Stage 1
+from this simple form. Next synthetic-gradient attempts should explicitly
+address generalization, for example validation early stopping, stronger
+regularization, target normalization, or richer state.
+
 ### 7. **Target propagation (and Difference Target Propagation)**
 
 Instead of propagating *gradients* backward, propagate *target activations*. The layer above the calculator computes "the activation I would have wanted from the calculator's output," and the upstream encoder is trained to map onto an inverse of that target. No gradients need to flow through the calculator at all. Bengio and collaborators developed this as a biologically-plausible alternative to backprop, but it's natural fit for non-differentiable modules.
