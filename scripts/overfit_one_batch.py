@@ -121,6 +121,7 @@ class TrainConfig:
     shadow_feedback_weight_decay: float
     shadow_feedback_warmup_steps: int
     shadow_feedback_updates_per_step: int
+    shadow_feedback_apply_max_norm: float
     shadow_feedback_validation_fraction: float
     shadow_feedback_validation_every: int
     shadow_feedback_validation_loss_weight: float
@@ -2551,7 +2552,10 @@ def online_shadow_feedback_fixed_module_loss(
     target_scale: torch.Tensor | None = None,
     feature_mean: torch.Tensor | None = None,
     feature_scale: torch.Tensor | None = None,
+    max_predicted_norm: float = 0.0,
 ) -> tuple[torch.Tensor, dict[str, float | int | str]]:
+    if max_predicted_norm < 0:
+        raise ValueError("shadow feedback apply max norm must be non-negative")
     features, feature_metrics = shadow_feedback_mlp_features(
         model,
         batch,
@@ -2570,6 +2574,14 @@ def online_shadow_feedback_fixed_module_loss(
             mean=target_mean,
             scale=target_scale,
         )
+        unclamped_predicted_feedback_l2 = float(predicted_feedback.norm().item())
+        predicted_feedback_scale = 1.0
+        if max_predicted_norm > 0:
+            predicted_norm = predicted_feedback.norm()
+            if float(predicted_norm.item()) > max_predicted_norm:
+                scale = predicted_norm.new_tensor(max_predicted_norm) / predicted_norm
+                predicted_feedback = predicted_feedback * scale
+                predicted_feedback_scale = float(scale.item())
 
     model.zero_grad(set_to_none=True)
     result_logits, _, _, _ = calculator_read_result_logits(model, batch)
@@ -2584,6 +2596,9 @@ def online_shadow_feedback_fixed_module_loss(
             normalized_prediction.norm().item()
         ),
         "shadow_feedback_predicted_l2": float(predicted_feedback.norm().item()),
+        "shadow_feedback_unclamped_predicted_l2": unclamped_predicted_feedback_l2,
+        "shadow_feedback_apply_max_norm": float(max_predicted_norm),
+        "shadow_feedback_apply_norm_scale": predicted_feedback_scale,
         "shadow_feedback_normalized_feature_l2": float(
             normalized_features.norm().item()
         ),
@@ -5970,6 +5985,7 @@ def run_variant(
         shadow_feedback_weight_decay=args.shadow_feedback_weight_decay,
         shadow_feedback_warmup_steps=args.shadow_feedback_warmup_steps,
         shadow_feedback_updates_per_step=args.shadow_feedback_updates_per_step,
+        shadow_feedback_apply_max_norm=args.shadow_feedback_apply_max_norm,
         shadow_feedback_validation_fraction=(
             args.shadow_feedback_validation_fraction
         ),
@@ -6831,6 +6847,7 @@ def run_variant(
                     target_scale=online_shadow_feedback_artifacts["target_scale"],
                     feature_mean=online_shadow_feedback_artifacts["feature_mean"],
                     feature_scale=online_shadow_feedback_artifacts["feature_scale"],
+                    max_predicted_norm=args.shadow_feedback_apply_max_norm,
                 )
             shadow_feedback_loss_value = float(shadow_feedback_loss.item())
             shadow_feedback_objective = (
@@ -7269,6 +7286,7 @@ def run_variant(
     metrics["shadow_feedback_updates_per_step"] = (
         args.shadow_feedback_updates_per_step
     )
+    metrics["shadow_feedback_apply_max_norm"] = args.shadow_feedback_apply_max_norm
     metrics["shadow_feedback_validation_fraction"] = (
         args.shadow_feedback_validation_fraction
     )
@@ -7976,6 +7994,15 @@ def parse_args() -> argparse.Namespace:
         help="Shadow module optimizer updates per warmup step.",
     )
     parser.add_argument(
+        "--shadow-feedback-apply-max-norm",
+        type=float,
+        default=0.0,
+        help=(
+            "Optional maximum L2 norm for fixed online MLP shadow feedback "
+            "during Stage 1 apply. 0 disables clamping."
+        ),
+    )
+    parser.add_argument(
         "--shadow-feedback-validation-fraction",
         type=float,
         default=0.0,
@@ -8489,6 +8516,8 @@ def main() -> None:
         raise ValueError("--shadow-feedback-warmup-steps must be positive")
     if args.shadow_feedback_updates_per_step < 1:
         raise ValueError("--shadow-feedback-updates-per-step must be positive")
+    if args.shadow_feedback_apply_max_norm < 0:
+        raise ValueError("--shadow-feedback-apply-max-norm must be non-negative")
     if not 0 <= args.shadow_feedback_validation_fraction < 1:
         raise ValueError("--shadow-feedback-validation-fraction must be in [0, 1)")
     if (
@@ -8856,6 +8885,10 @@ def main() -> None:
                     suffix_parts.append(
                         f"warm{args.shadow_feedback_warmup_steps}"
                     )
+                    if args.shadow_feedback_apply_max_norm > 0:
+                        suffix_parts.append(
+                            f"swapplymax{args.shadow_feedback_apply_max_norm:g}"
+                        )
                     if args.shadow_feedback_validation_fraction > 0:
                         suffix_parts.append(
                             f"val{args.shadow_feedback_validation_fraction:g}"
@@ -9072,6 +9105,7 @@ def main() -> None:
         f"weight_decay={args.shadow_feedback_weight_decay} "
         f"warmup_steps={args.shadow_feedback_warmup_steps} "
         f"updates_per_step={args.shadow_feedback_updates_per_step} "
+        f"apply_max_norm={args.shadow_feedback_apply_max_norm} "
         f"validation_fraction={args.shadow_feedback_validation_fraction} "
         f"validation_every={args.shadow_feedback_validation_every} "
         f"validation_loss_weight={args.shadow_feedback_validation_loss_weight} "

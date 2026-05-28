@@ -117,3 +117,9 @@ Conclusion: h32/validation-gradient `0.5`/norm `0.1` reached heldout `0.8068/0.8
 Do not repeat: The same h16/h32 validation-gradient `0.5`, norm `0/0.1` Stage 0B grid or fixed-module Stage 1 weights `1.0/0.01/0.001` as novelty.
 Next allowed test: Keep the direct gradient objective, but refresh the shadow module on-policy, add trust-region/norm clamps, or condition on state that remains valid after model movement.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-online-shadow-feedback-validation-gradient-gate.md`
+
+DISPROVEN: Simple fixed-module feedback L2 clamping rescues validation-gradient online shadow Stage 1.
+Conclusion: Apply clamps `3.5` and `10` kept feedback norm bounded, but both runs ended at `0.075` final exact match with best snapshot `0.0525`, unchanged from unclamped weight `1.0`.
+Do not repeat: The same fixed h32 validation-gradient module with simple apply max-norm clamps `3.5` or `10` as novelty.
+Next allowed test: On-policy shadow refresh or a trust region that refreshes gradient agreement, not only output-vector norm.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-online-shadow-feedback-apply-norm-clamp-gate.md`

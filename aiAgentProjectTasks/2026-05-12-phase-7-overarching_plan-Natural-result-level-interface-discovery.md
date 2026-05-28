@@ -952,3 +952,27 @@ Next work should preserve the direct validation-gradient signal but make it
 on-policy during Stage 1: periodic shadow refresh, trust-region/norm-clamped
 feedback, Jacobian-conditioned state, or a target/state that remains valid
 under upstream movement.
+
+## Status Update: 2026-05-28, Online MLP Apply-Norm Clamp
+
+The fixed online MLP shadow-feedback Stage 1 path gained an optional apply
+feedback norm clamp:
+
+```text
+online_mlp_shadow_feedback_apply_norm_clamp_stage1_negative
+```
+
+The new `--shadow-feedback-apply-max-norm` scales the fixed online shadow
+module's predicted feedback vector during Stage 1 apply. This tested whether
+the previous Stage 1 failure was merely caused by feedback norm blow-up.
+
+The clamp worked mechanically but did not produce learning. With clamp `3.5`,
+the applied feedback norm stayed near `3.5`; with clamp `10`, it stayed near
+`10`. Both runs still ended at `0.075` final exact match and best snapshot
+`0.0525`, the same as the unclamped h32/validation-gradient weight-`1.0`
+run.
+
+Next work should move past fixed-module scalar/norm controls. The useful
+Stage 0B signal likely needs periodic on-policy shadow refresh or a trust
+region that checks refreshed gradient agreement rather than only constraining
+the output-vector norm.

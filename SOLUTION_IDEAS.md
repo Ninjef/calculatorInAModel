@@ -218,8 +218,11 @@ weight `0.1` reached heldout `0.8068/0.8083`, gaps `0.1227/0.1343`, and norms
 `1.1276/1.0736`. But using the calibrated module as a fixed Stage 1 feedback
 source failed at weights `1.0/0.01/0.001`. The useful remaining idea is not
 ordinary prediction regularization; it is on-policy shadow refresh,
-trust-region/norm-clamped feedback, Jacobian-conditioned state, or a richer
-target that survives model movement.
+trust-region feedback that checks refreshed gradient agreement,
+Jacobian-conditioned state, or a richer target that survives model movement.
+A simple fixed-module feedback L2 clamp was tested next: clamps `3.5` and
+`10` stopped the feedback norm explosion but did not improve Stage 1 accuracy,
+so plain output-norm clamping is not enough.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

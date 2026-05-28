@@ -243,6 +243,15 @@ produce Stage 1 early lift. Shadow weights `1.0/0.01/0.001` reached only
 Label:
 `online_mlp_shadow_feedback_validation_gradient_stage0b_pass_stage1_fixed_module_negative`.
 
+A fixed-module feedback norm clamp was then added for Stage 1 apply. This
+tested whether the validation-gradient module failed only because its feedback
+norm exploded as the model moved. The clamp worked mechanically: with
+`--shadow-feedback-apply-max-norm 3.5` and `10`, applied feedback stayed at
+the requested norm instead of growing to tens of thousands. But Stage 1 still
+did not lift: both clamped runs ended at `0.075` final exact match with best
+snapshot `0.0525`, unchanged from the unclamped weight-`1.0` run. Label:
+`online_mlp_shadow_feedback_apply_norm_clamp_stage1_negative`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -301,13 +310,16 @@ Do not rerun these as next steps unless debugging new code:
   `injection_grad_logits`, target-normalized h16/h32 setup with
   validation-gradient weight `0.5`, norm weights `0/0.1`, and fixed-module
   Stage 1 weights `1.0/0.01/0.001` as novelty.
+- fixed calibrated online-MLP shadow feedback with simple apply feedback L2
+  clamps `3.5` or `10` on the same h32 validation-gradient module as novelty.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so the passed Stage 0B signal
 stays in distribution during model training. Plausible branches include
-on-policy shadow refresh during Stage 1, a trust-region or norm clamp on the
-fixed shadow feedback, Jacobian-conditioned state rather than raw activations,
-or a richer target construction that remains valid after upstream movement.
+on-policy shadow refresh during Stage 1, a directional trust region that
+checks refreshed gradient agreement rather than only feedback L2,
+Jacobian-conditioned state rather than raw activations, or a richer target
+construction that remains valid after upstream movement.
 Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`

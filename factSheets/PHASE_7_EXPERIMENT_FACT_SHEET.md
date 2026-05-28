@@ -2703,3 +2703,59 @@ Interpretation:
   explodes.
 - Next work should keep the direct gradient objective but make Stage 1
   feedback on-policy or trust-region constrained.
+
+## 2026-05-28 Online MLP Shadow-Feedback Apply-Norm Clamp Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-twenty-seventh-task-Online-MLP-shadow-feedback-apply-norm-clamp-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_online_shadow_feedback_apply_norm_clamp_gate
+```
+
+Code changes:
+
+- Added `--shadow-feedback-apply-max-norm`.
+- Fixed online MLP shadow Stage 1 apply can now scale predicted feedback down
+  to a maximum L2 norm.
+- Training metrics now report applied feedback norm, unclamped feedback norm,
+  and the apply scale.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+103 passed
+```
+
+Stage 1 fixed h32 validation-gradient module with `shadow_feedback_weight=1.0`:
+
+| Apply max norm | Final exact match | Best snapshot exact | Final applied norm | Final unclamped norm | Decision |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| `3.5` | `0.075` | `0.0525` | `3.5` | `77802.8` | no lift |
+| `10` | `0.075` | `0.0525` | `10.0` | `79123.9` | no lift |
+
+Decision:
+
+```text
+online_mlp_shadow_feedback_apply_norm_clamp_stage1_negative
+```
+
+Interpretation:
+
+- Simple output-vector L2 clamping prevents the obvious feedback norm blow-up.
+- It does not fix stale fixed-module direction; Stage 1 remains below the
+  `0.16` output-projection boundary-feedback baseline.
+- Next work should use on-policy refresh or a trust-region gate that checks
+  refreshed gradient agreement under model movement.

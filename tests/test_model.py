@@ -3215,6 +3215,8 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "7",
             "--shadow-feedback-updates-per-step",
             "2",
+            "--shadow-feedback-apply-max-norm",
+            "3.5",
             "--shadow-feedback-validation-fraction",
             "0.1",
             "--shadow-feedback-validation-every",
@@ -3253,6 +3255,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_weight_decay == pytest.approx(0.02)
     assert parsed.shadow_feedback_warmup_steps == 7
     assert parsed.shadow_feedback_updates_per_step == 2
+    assert parsed.shadow_feedback_apply_max_norm == pytest.approx(3.5)
     assert parsed.shadow_feedback_validation_fraction == pytest.approx(0.1)
     assert parsed.shadow_feedback_validation_every == 5
     assert parsed.shadow_feedback_validation_loss_weight == pytest.approx(0.5)
@@ -3292,6 +3295,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_dropout == pytest.approx(0.0)
     assert parsed.shadow_feedback_weight_decay == pytest.approx(1e-2)
     assert parsed.shadow_feedback_warmup_steps == 100
+    assert parsed.shadow_feedback_apply_max_norm == pytest.approx(0.0)
     assert parsed.shadow_feedback_validation_fraction == pytest.approx(0.0)
     assert parsed.shadow_feedback_validation_every == 0
     assert parsed.shadow_feedback_validation_loss_weight == pytest.approx(0.0)
