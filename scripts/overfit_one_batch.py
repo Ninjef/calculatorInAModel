@@ -9589,6 +9589,7 @@ def main() -> None:
         args.calculator_action_head == "result_space"
         and args.calculator_estimator
         not in {
+            "ste",
             "gumbel_concrete_interface",
             "reinforce",
             "full_enum_expected_answer_loss",
@@ -9597,8 +9598,8 @@ def main() -> None:
     ):
         raise ValueError(
             "--calculator-action-head result_space is currently supported only with "
-            "gumbel_concrete_interface, reinforce, full_enum_expected_answer_loss, "
-            "or direct_feedback_alignment"
+            "ste, gumbel_concrete_interface, reinforce, "
+            "full_enum_expected_answer_loss, or direct_feedback_alignment"
         )
     if (
         args.calculator_action_head == "result_space"

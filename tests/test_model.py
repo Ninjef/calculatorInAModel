@@ -3501,15 +3501,15 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
         feature_mode="injection_grad_logits_result_input",
     ) == 4 + 9 + (2 * 2 * 4)
 
-    with pytest.raises(ValueError, match="result_space.*gumbel_concrete_interface"):
-        CalculatorHook(
-            GPTConfig(
-                calculator_enabled=True,
-                calculator_mode="add",
-                calculator_estimator="ste",
-                calculator_action_head="result_space",
-            )
+    ste_result_hook = CalculatorHook(
+        GPTConfig(
+            calculator_enabled=True,
+            calculator_mode="add",
+            calculator_estimator="ste",
+            calculator_action_head="result_space",
         )
+    )
+    assert ste_result_hook.action_head == "result_space"
     with pytest.raises(ValueError, match="result_space.*calculator_output_format"):
         CalculatorHook(
             GPTConfig(
@@ -4236,3 +4236,88 @@ def test_training_cli_supports_oracle_warmup_and_snapshots(
     assert metrics["trainable_parameter_groups"] == config["trainable_parameter_groups"]
     curve_rows = list(csv.DictReader((run_dir / "training_curve.csv").open()))
     assert curve_rows[-1]["adaptive_interface_loss_weight"] == "0.0"
+
+
+def test_training_cli_supports_non_bottleneck_result_space_assignment(
+    tmp_path, monkeypatch
+) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_cli", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            str(script_path),
+            "--variant",
+            "model-c",
+            "--digits",
+            "1",
+            "--operand-max",
+            "2",
+            "--exhaustive-grid-batch",
+            "--calculator-operand-vocab-size",
+            "3",
+            "--batch-size",
+            "9",
+            "--eval-samples",
+            "9",
+            "--steps",
+            "1",
+            "--snapshot-every",
+            "1",
+            "--snapshot-samples",
+            "9",
+            "--n-layer",
+            "1",
+            "--n-head",
+            "1",
+            "--n-embd",
+            "8",
+            "--mlp-expansion",
+            "1",
+            "--calculator-hook-after-layer",
+            "1",
+            "--calculator-estimator",
+            "ste",
+            "--calculator-action-head",
+            "result_space",
+            "--calculator-read-position",
+            "operand_spans",
+            "--calculator-read-span-width",
+            "1",
+            "--calculator-bottleneck-mode",
+            "none",
+            "--calculator-output-format",
+            "sum",
+            "--answer-loss-weight",
+            "1",
+            "--result-policy-improvement-assignment-weight",
+            "1",
+            "--result-boundary-target-chunk-size",
+            "5",
+            "--run-root",
+            str(tmp_path),
+        ],
+    )
+
+    overfit_script.main()
+
+    run_dirs = [path for path in tmp_path.glob("*") if path.is_dir()]
+    assert len(run_dirs) == 1
+    child_dirs = list(run_dirs[0].glob("model-c-1digit-seed1"))
+    assert len(child_dirs) == 1
+    run_dir = child_dirs[0]
+    config = json.loads((run_dir / "config.json").read_text())
+    metrics = json.loads((run_dir / "metrics.json").read_text())
+    assert config["calculator_estimator"] == "ste"
+    assert config["calculator_action_head"] == "result_space"
+    assert config["calculator_bottleneck_mode"] == "none"
+    assert config["result_policy_improvement_assignment_weight"] == 1.0
+    assert metrics["calculator_action_head"] == "result_space"
+    assert metrics["calculator_bottleneck_mode"] == "none"
+    assert metrics["result_policy_improvement_assignment_weight"] == 1.0
+    assert (run_dir / "diagnostic_snapshots.csv").exists()

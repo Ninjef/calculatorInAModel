@@ -260,6 +260,15 @@ it scores forced result classes every step. The next useful ideas are cheaper
 assignment construction, checkpoint/stability selection, a target-off bridge
 stronger than plain decay, and testing whether the same signal works when the
 calculator path is not the only available path.
+That direct non-bottleneck transfer test is now negative. In additive
+`calculator_bottleneck_mode=none`, answer loss can improve through the normal
+residual path while the learned result request stays near chance. Hard
+assignment weight `10` did not fix that: final exact was `0.700`, but final
+calculator-result accuracy was only `0.0325`, result-policy accuracy was
+`0.0275`, and assignment targets were almost never the true sum by step `800`.
+Future non-bottleneck ideas need an explicit causal-use pressure, staged
+bottleneck-to-additive handoff, or a way to compute improvement targets that
+does not get corrupted by the bypass path.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

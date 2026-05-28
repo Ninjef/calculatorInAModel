@@ -3323,3 +3323,65 @@ Interpretation:
   forced result classes during training, so next work should focus on cheaper
   assignment approximations, better handoff/retention, stability selection,
   and the non-bottleneck setting.
+
+## 2026-05-28 Non-Bottleneck Hard Assignment Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-thirty-seventh-task-Non-bottleneck-hard-assignment-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_non_bottleneck_hard_assignment_gate
+```
+
+Code change:
+
+- Allowed `calculator_action_head=result_space` with `calculator_estimator=ste`
+  so additive non-bottleneck result-space runs can use answer loss and
+  result-policy stabilization without the strict answer decoder.
+
+Question:
+
+Does the hard improvement-assignment signal that works in the answer-decoder
+bottleneck transfer to an additive non-bottleneck model, where a normal neuron
+path can also solve the task?
+
+Configuration:
+
+- additive path: `calculator_bottleneck_mode=none`;
+- `calculator_estimator=ste`;
+- `calculator_action_head=result_space`;
+- answer loss weight `1`;
+- exact-grid natural `0..19`;
+- CLI seed `2`, 800 steps.
+
+Result:
+
+| Setup | Final eval exact | Best normal snapshot | Best/last injection-zero | Last learned calc | Best result-policy acc | Last assignment target acc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| answer loss only | `0.615` | `0.9725` at `600` | `0.560 / 0.3575` | `0.0250` | n/a | n/a |
+| answer loss + assignment `10` | `0.700` | `0.8200` at `650` | `0.740 / 0.6500` | `0.0325` | `0.0575` | `0.0033` |
+
+Decision:
+
+```text
+non_bottleneck_hard_assignment_transfer_negative
+```
+
+Interpretation:
+
+- The additive model can improve answer accuracy through the normal path, as
+  shown by high injection-zero accuracy and near-chance calculator-result
+  accuracy.
+- Hard assignment does not rescue calculator use in this setting. The forced
+  result-class landscape becomes a bad teacher when the neuron path can
+  bypass the calculator: assignment target accuracy fell to `0.0033` by step
+  `800`.
+- Do not treat the bottleneck assignment result as a non-bottleneck result.
+  Future non-bottleneck work needs explicit causal calculator-use pressure,
+  staged bottleneck-to-additive handoff, or a target construction that remains
+  valid under bypass.

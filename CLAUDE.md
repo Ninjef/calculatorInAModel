@@ -347,6 +347,22 @@ Do not claim scalable or non-prescriptive success from this: the target still
 scores forced result classes every step, did not retain under plain decay, and
 needs a cheaper assignment approximation plus a stronger handoff.
 
+The first non-bottleneck transfer gate for hard improvement assignment was
+negative. A small code change allowed `calculator_action_head=result_space`
+with the ordinary `ste` estimator so the additive path
+(`calculator_bottleneck_mode=none`) can be tested without the strict answer
+decoder. On the natural exact grid, the answer-only additive baseline reached
+`0.615` final exact and a best snapshot of `0.9725`, but injection-zero was
+also high (`0.560` at the best snapshot) and calculator-result accuracy stayed
+near chance. Adding assignment weight `10` reached `0.700` final exact and
+`0.820` best snapshot, but learned calculator-result accuracy stayed near
+chance (`0.0275` final, `0.0575` best training-curve result-policy accuracy)
+and assignment target accuracy collapsed to `0.0033` by step `800`. Label:
+`non_bottleneck_hard_assignment_transfer_negative`. The bottleneck assignment
+signal does not transfer as-is when a neuron path can solve around the
+calculator; future non-bottleneck work needs a causal calculator-use pressure
+or staged handoff, not just the bottleneck assignment objective.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -437,6 +453,10 @@ Do not rerun these as next steps unless debugging new code:
 - always-on hard improvement-assignment weight `10` for 800 or 1600 steps on
   the same exact-grid seeds as novelty. This branch now has a mixed seed
   replication result: useful convergence lift, but no retention/scaling claim.
+- non-bottleneck additive result-space `ste` with answer loss plus hard
+  improvement-assignment weight `10` for 800 steps on the same seed as novelty.
+  It learned answer accuracy mostly through the neuron path while calculator
+  result accuracy stayed near chance.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -447,9 +467,10 @@ the hard improvement-assignment target only if the test changes stability or
 selection, a target-off handoff with a stronger natural answer-loss bridge
 than plain decay, a lower-cost assignment approximation that does not enumerate
 all result classes every step, a non-bottleneck version of the hard-assignment
-gate, a Jacobian-conditioned state more substantial than the result-output
-`J^T answer_grad` feature, or a richer target construction that remains valid
-after upstream movement.
+gate only if it adds explicit causal calculator-use pressure or a staged
+bottleneck-to-additive handoff, a Jacobian-conditioned state more substantial
+than the result-output `J^T answer_grad` feature, or a richer target
+construction that remains valid after upstream movement.
 Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`

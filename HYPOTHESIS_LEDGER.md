@@ -177,3 +177,9 @@ Conclusion: With assignment weight `10` kept on, three 1600-step exact-grid seed
 Do not repeat: The same no-shadow 800/1600-step always-on assignment runs on CLI seeds `2/4/5` as novelty.
 Next allowed test: Cheaper/scalable assignment construction, stronger target-off handoff, stability/selection to avoid late drift, or a non-bottleneck version of the gate.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-convergence-gate.md`
+
+DISPROVEN: The bottleneck hard-assignment signal transfers directly to an additive non-bottleneck model.
+Conclusion: Non-bottleneck answer+assignment reached `0.700` final exact, but calculator-result accuracy stayed near chance (`0.0275` final) and assignment target accuracy fell to `0.0033`; the answer-only baseline also solved substantially with high injection-zero.
+Do not repeat: Same additive result-space `ste`, answer-loss `1`, assignment weight `10`, 800-step seed-2 exact-grid gate as novelty.
+Next allowed test: Add causal calculator-use pressure, staged bottleneck-to-additive handoff, or a target that remains tied to true calculator utility when the neuron path can bypass.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-non-bottleneck-hard-assignment-gate.md`

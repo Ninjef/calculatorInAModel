@@ -1232,3 +1232,32 @@ Next work should not rerun the same 800/1600-step always-on seed set as
 novelty. Useful continuations are cheaper assignment approximations, stronger
 target-off handoff bridges, stability/checkpoint selection to avoid late
 drift, and a non-bottleneck version of the hard-assignment gate.
+
+## Status Update: 2026-05-28, Non-Bottleneck Hard Assignment
+
+The direct non-bottleneck transfer gate for hard improvement assignment was
+negative:
+
+```text
+non_bottleneck_hard_assignment_transfer_negative
+```
+
+A code guardrail was relaxed so `calculator_action_head=result_space` can run
+with the ordinary `ste` estimator. This enables additive
+`calculator_bottleneck_mode=none` result-space tests without the strict answer
+decoder.
+
+On the exact-grid natural `0..19` task, the additive answer-only baseline
+reached `0.615` final exact and a best snapshot of `0.9725`, but injection-zero
+was high (`0.560` at the best snapshot) and learned calculator-result accuracy
+stayed near chance. Adding hard improvement assignment weight `10` did not
+make the model use the calculator: final exact was `0.700`, best normal
+snapshot was `0.820`, final learned calculator-result accuracy was `0.0325`,
+and best result-policy accuracy in the training curve was only `0.0575`.
+Assignment target accuracy dropped to `0.0033` by step `800`.
+
+This shows the bottleneck hard-assignment signal does not transfer as-is when
+the model has a neuron bypass. Future non-bottleneck tests should add explicit
+causal calculator-use pressure, use a staged bottleneck-to-additive handoff, or
+construct improvement targets that stay tied to true calculator utility despite
+the bypass path.

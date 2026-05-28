@@ -130,6 +130,7 @@ class CalculatorHook(nn.Module):
             cfg.calculator_action_head == "result_space"
             and cfg.calculator_estimator
             not in {
+                "ste",
                 "gumbel_concrete_interface",
                 "reinforce",
                 "full_enum_expected_answer_loss",
@@ -138,8 +139,9 @@ class CalculatorHook(nn.Module):
         ):
             raise ValueError(
                 "calculator_action_head='result_space' is currently supported "
-                "only with calculator_estimator='gumbel_concrete_interface', "
-                "'reinforce', 'full_enum_expected_answer_loss', or "
+                "only with calculator_estimator='ste', "
+                "'gumbel_concrete_interface', 'reinforce', "
+                "'full_enum_expected_answer_loss', or "
                 "'direct_feedback_alignment'"
             )
         if (
