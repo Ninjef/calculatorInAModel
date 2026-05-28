@@ -2373,6 +2373,7 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
         updates_per_step=1,
         validation_fraction=0.25,
         validation_every=1,
+        validation_loss_weight=0.5,
         target_normalization="fit_zscore_per_result",
         target_transform="unit_norm_per_example",
         feature_mode="injection_grad_policy_state",
@@ -2395,6 +2396,7 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
     assert summary["shadow_feedback_best_state_restored"] is True
     assert summary["shadow_feedback_dropout"] == pytest.approx(0.1)
     assert summary["shadow_feedback_weight_decay"] == pytest.approx(0.02)
+    assert summary["shadow_feedback_validation_loss_weight"] == pytest.approx(0.5)
     assert summary["shadow_feedback_target_normalization"] == "fit_zscore_per_result"
     assert summary["shadow_feedback_target_transform"] == "unit_norm_per_example"
     assert summary["shadow_feedback_feature_mode"] == "injection_grad_policy_state"
@@ -3204,6 +3206,8 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "0.1",
             "--shadow-feedback-validation-every",
             "5",
+            "--shadow-feedback-validation-loss-weight",
+            "0.5",
             "--shadow-feedback-target-normalization",
             "fit_zscore_per_result",
             "--shadow-feedback-target-transform",
@@ -3234,6 +3238,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_updates_per_step == 2
     assert parsed.shadow_feedback_validation_fraction == pytest.approx(0.1)
     assert parsed.shadow_feedback_validation_every == 5
+    assert parsed.shadow_feedback_validation_loss_weight == pytest.approx(0.5)
     assert parsed.shadow_feedback_target_normalization == "fit_zscore_per_result"
     assert parsed.shadow_feedback_target_transform == "unit_norm_per_example"
     assert parsed.shadow_feedback_feature_mode == "injection_grad_logits_result_input"
@@ -3268,6 +3273,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_warmup_steps == 100
     assert parsed.shadow_feedback_validation_fraction == pytest.approx(0.0)
     assert parsed.shadow_feedback_validation_every == 0
+    assert parsed.shadow_feedback_validation_loss_weight == pytest.approx(0.0)
     assert parsed.shadow_feedback_target_normalization == "none"
     assert parsed.shadow_feedback_target_transform == "none"
     assert parsed.shadow_feedback_feature_mode == "injection_grad_logits"

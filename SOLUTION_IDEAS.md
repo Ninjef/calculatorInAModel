@@ -208,7 +208,13 @@ class is therefore not enough; the remaining plausible branches are different
 state conditioning or explicit train-time gap/norm objectives. Appending the
 raw calculator result-projection input as state was tested next; it improved
 upstream heldout cosine to `0.8372` for h16/cosine, but result gap stayed
-`0.1958`, so raw boundary activations alone are also not enough.
+`0.1958`, so raw boundary activations alone are also not enough. A train-time
+validation prediction-loss term was then added to the warmup objective; h32
+kept high heldout cosine but result gaps stayed near `0.199`, while h16/weight
+`1.0` reduced gaps but lost heldout/norm quality. Future synthetic-gradient
+work should therefore use a more direct split-gradient gap/norm objective,
+Jacobian-conditioned state, or a richer target construction rather than more
+ordinary prediction-loss regularization.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

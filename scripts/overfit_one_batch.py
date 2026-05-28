@@ -123,6 +123,7 @@ class TrainConfig:
     shadow_feedback_updates_per_step: int
     shadow_feedback_validation_fraction: float
     shadow_feedback_validation_every: int
+    shadow_feedback_validation_loss_weight: float
     shadow_feedback_target_normalization: str
     shadow_feedback_target_transform: str
     shadow_feedback_feature_mode: str
@@ -3068,6 +3069,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
     updates_per_step: int,
     validation_fraction: float,
     validation_every: int,
+    validation_loss_weight: float,
     target_normalization: str,
     target_transform: str,
     feature_mode: str,
@@ -3108,6 +3110,8 @@ def run_online_shadow_feedback_gradient_diagnostic(
         raise ValueError(
             "shadow feedback validation fraction requires validation_every > 0"
         )
+    if validation_loss_weight < 0:
+        raise ValueError("shadow feedback validation loss weight must be non-negative")
     if target_normalization not in {"none", "fit_zscore_per_result"}:
         raise ValueError(
             "shadow feedback target normalization must be none or fit_zscore_per_result"
@@ -3162,6 +3166,10 @@ def run_online_shadow_feedback_gradient_diagnostic(
         fit_batch, validation_batch = shadow_feedback_heldout_split(
             fit_batch,
             heldout_fraction=validation_within_fit_fraction,
+        )
+    if validation_loss_weight > 0 and validation_batch is None:
+        raise ValueError(
+            "shadow feedback validation loss weight requires validation_fraction > 0"
         )
     feature_dim = shadow_feedback_feature_dim(model, feature_mode=feature_mode)
     shadow_module = ShadowFeedbackMLP(
@@ -3291,6 +3299,8 @@ def run_online_shadow_feedback_gradient_diagnostic(
     last_train_cosine = float("nan")
     last_normalized_train_loss = float("nan")
     last_normalized_train_cosine = float("nan")
+    last_validation_regularization_objective = float("nan")
+    last_total_train_objective = float("nan")
     best_state: dict[str, torch.Tensor] | None = None
     best_validation_summary: dict[str, float | int | str] = {}
     best_validation_step = -1
@@ -3429,8 +3439,52 @@ def run_online_shadow_feedback_gradient_diagnostic(
                 normalized_target,
                 mode=loss_mode,
             )
+            total_loss = fit_loss
+            if validation_loss_weight > 0 and validation_batch is not None:
+                val_features, val_target, _ = shadow_feedback_mlp_examples(
+                    model,
+                    validation_batch,
+                    num_digits=num_digits,
+                    feature_mode=feature_mode,
+                    target_transform=target_transform,
+                    target_prototypes=target_prototypes,
+                    target_prototype_counts=target_prototype_counts,
+                    result_boundary_target_mode=result_boundary_target_mode,
+                    result_boundary_target_temperature=(
+                        result_boundary_target_temperature
+                    ),
+                    result_boundary_target_min_probability_floor=(
+                        result_boundary_target_min_probability_floor
+                    ),
+                    result_boundary_target_chunk_size=(
+                        result_boundary_target_chunk_size
+                    ),
+                )
+                val_predicted = shadow_module(
+                    normalize_shadow_feedback_features(
+                        val_features,
+                        mean=feature_mean,
+                        scale=feature_scale,
+                    )
+                )
+                val_normalized_target = normalize_shadow_feedback_target(
+                    val_target,
+                    mean=target_mean,
+                    scale=target_scale,
+                )
+                validation_regularization_loss = shadow_feedback_prediction_loss(
+                    val_predicted,
+                    val_normalized_target,
+                    mode=loss_mode,
+                )
+                total_loss = (
+                    fit_loss + validation_loss_weight * validation_regularization_loss
+                )
+                last_validation_regularization_objective = float(
+                    validation_regularization_loss.detach().item()
+                )
             optimizer.zero_grad(set_to_none=True)
-            fit_loss.backward()
+            total_loss.backward()
             optimizer.step()
             denormalized_prediction = denormalize_shadow_feedback_prediction(
                 predicted.detach(),
@@ -3445,6 +3499,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
                 target.detach(),
             )
             last_train_objective = float(fit_loss.detach().item())
+            last_total_train_objective = float(total_loss.detach().item())
             last_normalized_train_loss = float(
                 torch.nn.functional.mse_loss(
                     predicted.detach(),
@@ -3528,6 +3583,7 @@ def run_online_shadow_feedback_gradient_diagnostic(
         "shadow_feedback_validation_fraction": float(validation_fraction),
         "shadow_feedback_test_fraction": float(heldout_fraction),
         "shadow_feedback_validation_every": int(validation_every),
+        "shadow_feedback_validation_loss_weight": float(validation_loss_weight),
         "shadow_feedback_validation_batch_size": (
             int(validation_batch.x.shape[0]) if validation_batch is not None else 0
         ),
@@ -3555,6 +3611,10 @@ def run_online_shadow_feedback_gradient_diagnostic(
         "shadow_feedback_feature_dim": int(feature_dim),
         "shadow_feedback_final_fit_mse": last_train_loss,
         "shadow_feedback_final_fit_objective": last_train_objective,
+        "shadow_feedback_final_total_objective": last_total_train_objective,
+        "shadow_feedback_final_validation_regularization_objective": (
+            last_validation_regularization_objective
+        ),
         "shadow_feedback_final_fit_prediction_cosine": last_train_cosine,
         "shadow_feedback_final_normalized_fit_mse": last_normalized_train_loss,
         "shadow_feedback_final_normalized_fit_prediction_cosine": (
@@ -5569,6 +5629,9 @@ def run_variant(
             args.shadow_feedback_validation_fraction
         ),
         shadow_feedback_validation_every=args.shadow_feedback_validation_every,
+        shadow_feedback_validation_loss_weight=(
+            args.shadow_feedback_validation_loss_weight
+        ),
         shadow_feedback_target_normalization=(
             args.shadow_feedback_target_normalization
         ),
@@ -5800,6 +5863,7 @@ def run_variant(
                 updates_per_step=args.shadow_feedback_updates_per_step,
                 validation_fraction=args.shadow_feedback_validation_fraction,
                 validation_every=args.shadow_feedback_validation_every,
+                validation_loss_weight=args.shadow_feedback_validation_loss_weight,
                 target_normalization=args.shadow_feedback_target_normalization,
                 target_transform=args.shadow_feedback_target_transform,
                 feature_mode=args.shadow_feedback_feature_mode,
@@ -6744,6 +6808,9 @@ def run_variant(
     metrics["shadow_feedback_validation_every"] = (
         args.shadow_feedback_validation_every
     )
+    metrics["shadow_feedback_validation_loss_weight"] = (
+        args.shadow_feedback_validation_loss_weight
+    )
     metrics["shadow_feedback_target_normalization"] = (
         args.shadow_feedback_target_normalization
     )
@@ -7456,6 +7523,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--shadow-feedback-validation-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Optional train-time validation split prediction-loss weight for "
+            "online MLP shadow feedback. Heldout test split remains untouched."
+        ),
+    )
+    parser.add_argument(
         "--shadow-feedback-target-normalization",
         choices=["none", "fit_zscore_per_result"],
         default="none",
@@ -7934,6 +8010,10 @@ def main() -> None:
         )
     if args.shadow_feedback_validation_every < 0:
         raise ValueError("--shadow-feedback-validation-every must be non-negative")
+    if args.shadow_feedback_validation_loss_weight < 0:
+        raise ValueError(
+            "--shadow-feedback-validation-loss-weight must be non-negative"
+        )
     if (
         args.shadow_feedback_validation_fraction > 0
         and args.shadow_feedback_validation_every < 1
@@ -7941,6 +8021,14 @@ def main() -> None:
         raise ValueError(
             "--shadow-feedback-validation-fraction requires "
             "--shadow-feedback-validation-every > 0"
+        )
+    if (
+        args.shadow_feedback_validation_loss_weight > 0
+        and args.shadow_feedback_validation_fraction <= 0
+    ):
+        raise ValueError(
+            "--shadow-feedback-validation-loss-weight requires "
+            "--shadow-feedback-validation-fraction > 0"
         )
     if (
         args.shadow_feedback_mode == "online_mlp"
@@ -8270,6 +8358,10 @@ def main() -> None:
                         suffix_parts.append(
                             f"valevery{args.shadow_feedback_validation_every}"
                         )
+                    if args.shadow_feedback_validation_loss_weight > 0:
+                        suffix_parts.append(
+                            f"valloss{args.shadow_feedback_validation_loss_weight:g}"
+                        )
                     if args.shadow_feedback_target_normalization != "none":
                         suffix_parts.append(
                             f"tnorm{args.shadow_feedback_target_normalization}"
@@ -8467,6 +8559,7 @@ def main() -> None:
         f"updates_per_step={args.shadow_feedback_updates_per_step} "
         f"validation_fraction={args.shadow_feedback_validation_fraction} "
         f"validation_every={args.shadow_feedback_validation_every} "
+        f"validation_loss_weight={args.shadow_feedback_validation_loss_weight} "
         f"target_normalization={args.shadow_feedback_target_normalization} "
         f"target_transform={args.shadow_feedback_target_transform} "
         f"feature_mode={args.shadow_feedback_feature_mode} "

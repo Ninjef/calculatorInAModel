@@ -220,6 +220,16 @@ generalization gate. h16/`cosine` reached heldout `0.7676/0.8372`, with gaps
 `3/4/5` and did not reduce the result gap. Label:
 `online_mlp_shadow_feedback_result_input_state_negative`.
 
+Train-time validation prediction-loss regularization was then added to the
+online MLP shadow warmup. The module now can add a separate validation-split
+shadow prediction loss to each fit update while preserving the untouched
+heldout-test split for the final Stage 0B gate. This produced another useful
+negative. h32 with validation-loss weight `0.5/1.0` preserved high heldout
+cosines (`0.7953/0.8233` and `0.7915/0.8195`), but result gaps stayed near
+`0.199`. h16 with weight `1.0` reduced gaps to `0.1595/0.1150`, but heldout
+fell to `0.7274/0.7381` and relative norms rose to `1.3346/1.2494`. Label:
+`online_mlp_shadow_feedback_validation_loss_regularization_no_go`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -270,15 +280,19 @@ Do not rerun these as next steps unless debugging new code:
   target-normalized directional-loss state (`injection_grad_logits_result_input`)
   with h16/h32, `cosine`/`mse_plus_cosine`, and h16 gap-selection penalties
   `3/4/5` as novelty.
+- train-time validation prediction-loss regularization on the same
+  directional-loss `injection_grad_logits` setup with validation-loss weights
+  `0.5/1.0`, h16/h32, `lr=1e-3`, `100` steps, and ordinary heldout
+  min-cosine selection as novelty.
 
 Next best step: improve shadow generalization by changing the target
-construction or learned-gradient state more substantially, or by adding
-explicit norm/gap training losses rather than simple dropout, checkpoint
-selection, row-wise target normalization, class-prototype averaging, or raw
-result-input feature appending. Plausible branches include explicit
-train-time gap/norm penalties, Jacobian-conditioned state rather than raw
-activations, or a target construction that uses more context than the
-boundary-best class prototype. Keep the exact-grid boundary-ceiling
+construction or learned-gradient state more substantially, or by using a
+split-aware objective that directly optimizes heldout model-gradient
+generalization rather than just adding validation prediction loss. Plausible
+branches include Jacobian-conditioned state rather than raw activations,
+direct train-time gap/norm penalties on split gradient summaries, or a target
+construction that uses more context than the boundary-best class prototype.
+Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`
 boundary-feedback baseline before long runs. Do not move directly to

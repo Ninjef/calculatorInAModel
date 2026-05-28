@@ -2562,3 +2562,67 @@ Interpretation:
 - No Stage 1 run was launched.
 - Next work should use explicit train-time gap/norm penalties or a genuinely
   different learned-gradient state/target.
+
+## 2026-05-28 Online MLP Shadow-Feedback Validation-Loss Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-twenty-fifth-task-Online-MLP-shadow-feedback-validation-loss-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_online_shadow_feedback_validation_loss_gate
+```
+
+Code changes:
+
+- Added `--shadow-feedback-validation-loss-weight`.
+- The online MLP shadow warmup can now add a validation-split prediction loss
+  into each fit update.
+- The heldout split remains untouched for final Stage 0B evaluation.
+- Diagnostic summaries now record the validation-loss weight, final total
+  objective, and final validation regularization objective.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+103 passed
+```
+
+Stage 0B diagnostics with target normalization, `injection_grad_logits`
+features, `cosine` loss, validation fraction `0.1`, and validation-loss
+regularization:
+
+| Hidden | Validation-loss weight | Step | Heldout result/upstream cosine | Train-heldout gap | Heldout relative norm | Decision |
+| ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `16` | `0.5` | `70` | `0.74678 / 0.76350` | `0.17935 / 0.13529` | `1.2700 / 1.1495` | result-gap fail |
+| `16` | `1.0` | `60` | `0.72741 / 0.73810` | `0.15953 / 0.11499` | `1.3346 / 1.2494` | tradeoff fail |
+| `32` | `0.5` | `100` | `0.79530 / 0.82329` | `0.19874 / 0.15688` | `0.9644 / 0.9768` | gap fail |
+| `32` | `1.0` | `100` | `0.79154 / 0.81952` | `0.19886 / 0.15922` | `0.9613 / 0.9919` | gap fail |
+
+Decision:
+
+```text
+online_mlp_shadow_feedback_validation_loss_regularization_no_go
+```
+
+Interpretation:
+
+- Ordinary train-time validation prediction loss does not close the persistent
+  result-head generalization gap.
+- h32 preserves the useful heldout direction signal, but result gaps stay near
+  `0.199`.
+- h16/weight `1.0` reduces gaps somewhat, but loses heldout/norm quality.
+- No Stage 1 run was launched.
+- Next work should use a direct split-gradient gap/norm objective,
+  Jacobian-conditioned state, or a richer target construction.

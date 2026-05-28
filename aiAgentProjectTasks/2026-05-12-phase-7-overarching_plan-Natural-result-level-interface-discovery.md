@@ -893,3 +893,29 @@ No Stage 1 early-lift run was launched. Next work should use explicit
 training-time gap/norm penalties, Jacobian-conditioned state, or a genuinely
 different learned-gradient target/state rather than raw result-input feature
 appending.
+
+## Status Update: 2026-05-28, Online MLP Validation-Loss Regularization
+
+The online MLP shadow-feedback diagnostic gained an optional train-time
+validation prediction-loss term:
+
+```text
+online_mlp_shadow_feedback_validation_loss_regularization_no_go
+```
+
+The new `--shadow-feedback-validation-loss-weight` adds prediction loss from
+the validation split into each shadow warmup update, while the heldout split
+remains untouched for the final Stage 0B diagnostic. This tested whether
+ordinary split-loss regularization can close the persistent train-heldout
+gradient gap.
+
+It did not clear the heldout gate. h32 with validation-loss weight `0.5`
+reached heldout result/upstream cosines `0.7953/0.8233`, but gaps were
+`0.1987/0.1569`; h32 with weight `1.0` reached `0.7915/0.8195`, with gaps
+`0.1989/0.1592`. h16 with weight `1.0` reduced gaps to `0.1595/0.1150`, but
+heldout fell to `0.7274/0.7381` and relative norms rose to `1.3346/1.2494`.
+
+No Stage 1 early-lift run was launched. Next work should stop treating
+ordinary prediction-loss regularization as the missing ingredient and move to
+a direct split-gradient gap/norm objective, Jacobian-conditioned state, or a
+richer learned-gradient target.
