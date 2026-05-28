@@ -1746,3 +1746,66 @@ Interpretation:
 - Do not continue this exact branch to 800 steps. Next work should use a
   heldout-validated or online-trained shadow module, with early Stage 1 lift
   required before long-run budget.
+
+## 2026-05-28 Heldout Linear Shadow-Feedback Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-thirteenth-task-Heldout-linear-shadow-feedback-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_shadow_feedback_heldout_gate
+```
+
+Code changes:
+
+- Added `--shadow-feedback-heldout-fraction`.
+- The shadow-feedback diagnostic can now fit on one deterministic split and
+  report train/heldout gradient agreement separately.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+97 passed
+```
+
+Stage 0 heldout diagnostic:
+
+| Metric | Value |
+| --- | ---: |
+| fit batch / heldout batch | `320 / 80` |
+| fit linear feedback cosine | `0.46857` |
+| train result-proj cosine vs boundary | `0.99813` |
+| heldout result-proj cosine vs boundary | `0.26221` |
+| train upstream cosine vs boundary | `0.98449` |
+| heldout upstream cosine vs boundary | `0.51012` |
+| train-heldout result-proj cosine gap | `0.73591` |
+| train-heldout upstream cosine gap | `0.47437` |
+| heldout result/upstream relative norm | `1.1164 / 1.0291` |
+| heldout semantic decoder grad L2 | `0.0` |
+
+Decision:
+
+```text
+heldout_linear_shadow_feedback_stage0_generalization_negative
+```
+
+Interpretation:
+
+- The prior same-batch linear shadow Stage 0 pass was over-optimistic.
+- The heldout result-proj cosine is below the proposed online-shadow go
+  threshold, and the train-heldout gap is too large.
+- Do not run more fit-once linear shadow training variants from this setup.
+- Next work should add an online MLP shadow-feedback module with result-policy
+  state, heldout warmup validation, and only then a 200-step early-lift smoke.

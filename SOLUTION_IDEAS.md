@@ -95,6 +95,12 @@ initial alignment with the boundary ceiling (`0.9983` result-proj cosine,
 validation and/or online-trained shadow modules, with early Stage 1 lift above
 the `0.16` boundary-feedback baseline before long runs.
 
+Heldout validation has now shown that same-batch linear shadow alignment is
+not a reliable gate: a deterministic `320/80` split kept train result-proj
+cosine near `0.9981`, but heldout result-proj cosine fell to `0.2622`. Next
+shadow-gradient work should add result-policy state and online training rather
+than reusing a fixed linear map.
+
 Selected next direction:
 
 ```text

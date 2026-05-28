@@ -33,3 +33,9 @@ Conclusion: Stage 0 model-update alignment was very high (`0.9983` result-proj, 
 Do not repeat: Frozen fit-once linear shadow feedback with the same exact-grid calibration and weight/schedule.
 Next allowed test: Heldout-validated or online-trained shadow modules with an early-lift gate, not a fixed linear map fit once at initialization.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-linear-shadow-feedback-gate.md`
+
+DISPROVEN: Same-batch fit-once linear shadow alignment is a reliable Stage 0 gate.
+Conclusion: With a deterministic `320/80` split, train result-proj cosine was `0.9981` but heldout result-proj cosine fell to `0.2622`, with a `0.7359` train-heldout gap.
+Do not repeat: Treating same-batch linear shadow alignment as sufficient for training budget.
+Next allowed test: Online MLP shadow feedback that includes result-policy state and must pass heldout warmup before Stage 1.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-heldout-linear-shadow-feedback-gate.md`

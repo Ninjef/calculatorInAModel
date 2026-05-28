@@ -621,3 +621,21 @@ boundary result-logit gradients. It passed at the model-update level
 Do not run an 800-step continuation of this exact setup. The next shadow
 branch must improve on this by using heldout validation and/or online training
 of the shadow module, with an early Stage 1 lift gate before long-run budget.
+
+## Status Update: 2026-05-28, Heldout Linear Shadow Feedback
+
+The same-batch linear shadow-feedback Stage 0 gate was tested under a
+deterministic `320/80` exact-grid fit/heldout split:
+
+```text
+heldout_linear_shadow_feedback_stage0_generalization_negative
+```
+
+Train result-proj cosine remained near perfect (`0.9981`), but heldout
+result-proj cosine fell to `0.2622`, with a `0.7359` train-heldout gap.
+Heldout upstream cosine was `0.5101`, relative norms were close to `1.0`, and
+semantic decoder gradient remained `0.0`.
+
+Do not use same-batch linear shadow alignment as a go gate. The next task
+should be online MLP shadow feedback with result-policy state, heldout warmup
+validation, and a 200-step early-lift gate before any long run.

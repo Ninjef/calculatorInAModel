@@ -114,6 +114,13 @@ badly (`0.070` best snapshot calculator-result accuracy; `0.040` final exact
 match). Label:
 `linear_shadow_feedback_stage0_alignment_pass_stage1_early_lift_negative`.
 
+A heldout split then showed why same-batch linear shadow alignment was too
+weak as a gate. With a deterministic `320/80` exact-grid split, the fit split
+still aligned almost perfectly (`result-proj cosine=0.9981`, upstream
+`0.9845`), but heldout result-proj cosine fell to `0.2622` with a `0.7359`
+train-heldout result-cosine gap. Label:
+`heldout_linear_shadow_feedback_stage0_generalization_negative`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -133,10 +140,12 @@ Do not rerun these as next steps unless debugging new code:
   Stage 0 alignment.
 - frozen fit-once linear shadow feedback with the same exact-grid calibration
   and weight/schedule.
+- same-batch linear shadow alignment as a sufficient Stage 0 gate.
 
-Next best step: move from fixed linear shadow feedback to heldout-validated or
-online-trained shadow modules. Keep the exact-grid boundary-ceiling diagnostic
-as the Stage 0 gate for any new mechanism, and require early Stage 1 lift above
+Next best step: move from linear shadow maps to online MLP shadow modules that
+include result-policy state, pass heldout warmup, and only then get a 200-step
+early-lift Stage 1 smoke. Keep the exact-grid boundary-ceiling diagnostic as
+the Stage 0 gate for any new mechanism, and require early Stage 1 lift above
 the `0.16` boundary-feedback baseline before long runs. Do not move directly to
 canonical-query/protocol stabilization as if Phase 7 retention had robustly
 replicated, and do not treat ordinary expected-cost/score-function training as

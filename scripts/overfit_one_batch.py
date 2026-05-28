@@ -111,6 +111,7 @@ class TrainConfig:
     boundary_feedback_gradient_diagnostic_only: bool
     shadow_feedback_ridge: float
     shadow_feedback_weight: float
+    shadow_feedback_heldout_fraction: float
     shadow_feedback_gradient_diagnostic_only: bool
     calculator_result_head_hidden_size: int
     relaxed_calculator_temperature: float
@@ -2436,6 +2437,7 @@ def run_shadow_feedback_gradient_diagnostic(
     *,
     num_digits: int,
     ridge: float,
+    heldout_fraction: float,
     result_boundary_target_mode: str,
     result_boundary_target_temperature: float,
     result_boundary_target_min_probability_floor: float,
@@ -2444,6 +2446,95 @@ def run_shadow_feedback_gradient_diagnostic(
     if model.cfg.calculator_action_head != "result_space":
         raise ValueError("shadow feedback diagnostic requires result_space head")
     model.train()
+    if heldout_fraction < 0 or heldout_fraction >= 1:
+        raise ValueError("shadow feedback heldout fraction must be in [0, 1)")
+
+    if heldout_fraction > 0:
+        total = int(batch.x.shape[0])
+        heldout_count = max(1, int(round(total * heldout_fraction)))
+        if heldout_count >= total:
+            raise ValueError("shadow feedback heldout split leaves no fit examples")
+        stride = max(1, int(round(1.0 / heldout_fraction)))
+        all_indices = torch.arange(total, device=batch.x.device)
+        heldout_mask = (all_indices % stride) == 0
+        if int(heldout_mask.sum().item()) != heldout_count:
+            heldout_mask = torch.zeros(total, dtype=torch.bool, device=batch.x.device)
+            heldout_positions = torch.linspace(
+                0,
+                total - 1,
+                steps=heldout_count,
+                device=batch.x.device,
+            ).round().long().unique()
+            heldout_mask[heldout_positions] = True
+        if int(heldout_mask.sum().item()) >= total:
+            raise ValueError("shadow feedback heldout split leaves no fit examples")
+        fit_batch = subset_arithmetic_batch(batch, all_indices[~heldout_mask])
+        heldout_batch = subset_arithmetic_batch(batch, all_indices[heldout_mask])
+        weights, fit_metrics = fit_linear_shadow_feedback_weights(
+            model,
+            fit_batch,
+            num_digits=num_digits,
+            ridge=ridge,
+            result_boundary_target_mode=result_boundary_target_mode,
+            result_boundary_target_temperature=result_boundary_target_temperature,
+            result_boundary_target_min_probability_floor=(
+                result_boundary_target_min_probability_floor
+            ),
+            result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+        )
+        train_summary = run_fixed_shadow_feedback_gradient_diagnostic(
+            model,
+            fit_batch,
+            num_digits=num_digits,
+            ridge=ridge,
+            weights=weights,
+            result_boundary_target_mode=result_boundary_target_mode,
+            result_boundary_target_temperature=result_boundary_target_temperature,
+            result_boundary_target_min_probability_floor=(
+                result_boundary_target_min_probability_floor
+            ),
+            result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+        )
+        heldout_summary = run_fixed_shadow_feedback_gradient_diagnostic(
+            model,
+            heldout_batch,
+            num_digits=num_digits,
+            ridge=ridge,
+            weights=weights,
+            result_boundary_target_mode=result_boundary_target_mode,
+            result_boundary_target_temperature=result_boundary_target_temperature,
+            result_boundary_target_min_probability_floor=(
+                result_boundary_target_min_probability_floor
+            ),
+            result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+        )
+        summary: dict[str, float | int | str] = {
+            "diagnostic": "linear_shadow_feedback_heldout_gradient_agreement",
+            "batch_size": total,
+            "shadow_feedback_ridge": float(ridge),
+            "shadow_feedback_heldout_fraction": float(heldout_fraction),
+            "shadow_feedback_fit_batch_size": int(fit_batch.x.shape[0]),
+            "shadow_feedback_heldout_batch_size": int(heldout_batch.x.shape[0]),
+        }
+        for key, value in fit_metrics.items():
+            summary[f"fit_{key}"] = value
+        for key, value in train_summary.items():
+            if key not in {"diagnostic"}:
+                summary[f"train_{key}"] = value
+        for key, value in heldout_summary.items():
+            if key not in {"diagnostic"}:
+                summary[f"heldout_{key}"] = value
+        result_gap = (
+            float(train_summary["shadow_vs_boundary_result_proj_cosine"])
+            - float(heldout_summary["shadow_vs_boundary_result_proj_cosine"])
+        )
+        upstream_gap = (
+            float(train_summary["shadow_vs_boundary_upstream_cosine"])
+            - float(heldout_summary["shadow_vs_boundary_upstream_cosine"])
+        )
+        summary["shadow_feedback_train_heldout_result_proj_cosine_gap"] = result_gap
+        summary["shadow_feedback_train_heldout_upstream_cosine_gap"] = upstream_gap
+        return summary
 
     shadow_objective, shadow_metrics = linear_shadow_feedback_alignment_loss(
         model,
@@ -2480,6 +2571,96 @@ def run_shadow_feedback_gradient_diagnostic(
     boundary_upstream_norm = gradient_l2(boundary_grads, "upstream")
     summary: dict[str, float | int | str] = {
         "diagnostic": "linear_shadow_feedback_gradient_agreement",
+        "batch_size": int(batch.x.shape[0]),
+        "shadow_feedback_ridge": float(ridge),
+        "shadow_result_proj_grad_l2": shadow_result_norm,
+        "shadow_upstream_grad_l2": shadow_upstream_norm,
+        "shadow_semantic_decoder_grad_l2": gradient_l2(
+            shadow_grads,
+            "semantic_decoder",
+        ),
+        "boundary_result_proj_grad_l2": boundary_result_norm,
+        "boundary_upstream_grad_l2": boundary_upstream_norm,
+        "boundary_semantic_decoder_grad_l2": gradient_l2(
+            boundary_grads,
+            "semantic_decoder",
+        ),
+        "shadow_vs_boundary_result_proj_cosine": gradient_cosine(
+            shadow_grads,
+            boundary_grads,
+            "calculator_hook.result_proj",
+        ),
+        "shadow_vs_boundary_upstream_cosine": gradient_cosine(
+            shadow_grads,
+            boundary_grads,
+            "upstream",
+        ),
+        "shadow_vs_boundary_result_proj_relative_norm": (
+            shadow_result_norm / boundary_result_norm
+            if boundary_result_norm > 0
+            else float("nan")
+        ),
+        "shadow_vs_boundary_upstream_relative_norm": (
+            shadow_upstream_norm / boundary_upstream_norm
+            if boundary_upstream_norm > 0
+            else float("nan")
+        ),
+    }
+    summary.update(shadow_metrics)
+    for key, value in boundary_metrics.items():
+        summary[f"boundary_{key}"] = value
+    return summary
+
+
+def run_fixed_shadow_feedback_gradient_diagnostic(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    ridge: float,
+    weights: torch.Tensor,
+    result_boundary_target_mode: str,
+    result_boundary_target_temperature: float,
+    result_boundary_target_min_probability_floor: float,
+    result_boundary_target_chunk_size: int,
+) -> dict[str, float | int | str]:
+    model.train()
+    shadow_objective, shadow_metrics = fixed_linear_shadow_feedback_alignment_loss(
+        model,
+        batch,
+        num_digits=num_digits,
+        weights=weights,
+        ridge=ridge,
+        result_boundary_target_mode=result_boundary_target_mode,
+        result_boundary_target_temperature=result_boundary_target_temperature,
+        result_boundary_target_min_probability_floor=(
+            result_boundary_target_min_probability_floor
+        ),
+        result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+    )
+    shadow_objective.backward()
+    shadow_grads = flattened_group_gradients(model)
+
+    model.zero_grad(set_to_none=True)
+    boundary_loss, boundary_metrics = result_boundary_target_loss(
+        model,
+        batch,
+        num_digits=num_digits,
+        target_mode=result_boundary_target_mode,
+        temperature=result_boundary_target_temperature,
+        min_probability_floor=result_boundary_target_min_probability_floor,
+        chunk_size=result_boundary_target_chunk_size,
+    )
+    boundary_loss.backward()
+    boundary_grads = flattened_group_gradients(model)
+    model.zero_grad(set_to_none=True)
+
+    shadow_result_norm = gradient_l2(shadow_grads, "calculator_hook.result_proj")
+    shadow_upstream_norm = gradient_l2(shadow_grads, "upstream")
+    boundary_result_norm = gradient_l2(boundary_grads, "calculator_hook.result_proj")
+    boundary_upstream_norm = gradient_l2(boundary_grads, "upstream")
+    summary: dict[str, float | int | str] = {
+        "diagnostic": "fixed_linear_shadow_feedback_gradient_agreement",
         "batch_size": int(batch.x.shape[0]),
         "shadow_feedback_ridge": float(ridge),
         "shadow_result_proj_grad_l2": shadow_result_norm,
@@ -4040,6 +4221,7 @@ def run_variant(
         ),
         shadow_feedback_ridge=args.shadow_feedback_ridge,
         shadow_feedback_weight=args.shadow_feedback_weight,
+        shadow_feedback_heldout_fraction=args.shadow_feedback_heldout_fraction,
         shadow_feedback_gradient_diagnostic_only=(
             args.shadow_feedback_gradient_diagnostic_only
         ),
@@ -4247,6 +4429,7 @@ def run_variant(
             diagnostic_batch,
             num_digits=num_digits,
             ridge=args.shadow_feedback_ridge,
+            heldout_fraction=args.shadow_feedback_heldout_fraction,
             result_boundary_target_mode=args.result_boundary_target_mode,
             result_boundary_target_temperature=args.result_boundary_target_temperature,
             result_boundary_target_min_probability_floor=(
@@ -4259,12 +4442,32 @@ def run_variant(
         (run_dir / "shadow_feedback_gradient_diagnostic_summary.json").write_text(
             json.dumps(diagnostic_summary, indent=2) + "\n"
         )
+        shadow_result_key = (
+            "heldout_shadow_result_proj_grad_l2"
+            if args.shadow_feedback_heldout_fraction > 0
+            else "shadow_result_proj_grad_l2"
+        )
+        shadow_result_cosine_key = (
+            "heldout_shadow_vs_boundary_result_proj_cosine"
+            if args.shadow_feedback_heldout_fraction > 0
+            else "shadow_vs_boundary_result_proj_cosine"
+        )
+        shadow_upstream_cosine_key = (
+            "heldout_shadow_vs_boundary_upstream_cosine"
+            if args.shadow_feedback_heldout_fraction > 0
+            else "shadow_vs_boundary_upstream_cosine"
+        )
+        shadow_fit_cosine_key = (
+            "fit_shadow_feedback_fit_cosine"
+            if args.shadow_feedback_heldout_fraction > 0
+            else "shadow_feedback_fit_cosine"
+        )
         print(
             "shadow-feedback gradient diagnostic: "
-            f"shadow_result_grad={diagnostic_summary['shadow_result_proj_grad_l2']:.6f} "
-            f"result_cos={diagnostic_summary['shadow_vs_boundary_result_proj_cosine']:.6f} "
-            f"upstream_cos={diagnostic_summary['shadow_vs_boundary_upstream_cosine']:.6f} "
-            f"fit_cos={diagnostic_summary['shadow_feedback_fit_cosine']:.6f}"
+            f"shadow_result_grad={diagnostic_summary[shadow_result_key]:.6f} "
+            f"result_cos={diagnostic_summary[shadow_result_cosine_key]:.6f} "
+            f"upstream_cos={diagnostic_summary[shadow_upstream_cosine_key]:.6f} "
+            f"fit_cos={diagnostic_summary[shadow_fit_cosine_key]:.6f}"
         )
         return {
             "num_digits": num_digits,
@@ -5117,6 +5320,9 @@ def run_variant(
     metrics["boundary_feedback_seed"] = args.boundary_feedback_seed
     metrics["shadow_feedback_ridge"] = args.shadow_feedback_ridge
     metrics["shadow_feedback_weight"] = args.shadow_feedback_weight
+    metrics["shadow_feedback_heldout_fraction"] = (
+        args.shadow_feedback_heldout_fraction
+    )
     metrics["final_shadow_feedback_weight"] = args.shadow_feedback_weight
     if shadow_feedback_calibration_metrics:
         metrics["shadow_feedback_calibration"] = shadow_feedback_calibration_metrics
@@ -5737,6 +5943,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--shadow-feedback-heldout-fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "Optional deterministic heldout fraction for the shadow-feedback "
+            "diagnostic. When positive, fit the shadow map on the remaining "
+            "examples and report train/heldout gradient agreement separately."
+        ),
+    )
+    parser.add_argument(
         "--shadow-feedback-gradient-diagnostic-only",
         action="store_true",
         help=(
@@ -6125,6 +6341,8 @@ def main() -> None:
         raise ValueError("--shadow-feedback-ridge must be non-negative")
     if args.shadow_feedback_weight < 0:
         raise ValueError("--shadow-feedback-weight must be non-negative")
+    if not 0 <= args.shadow_feedback_heldout_fraction < 1:
+        raise ValueError("--shadow-feedback-heldout-fraction must be in [0, 1)")
     if args.calculator_result_head_hidden_size < 0:
         raise ValueError("--calculator-result-head-hidden-size must be non-negative")
     if args.exhaustive_grid_batch and args.operand_max is None:
@@ -6417,6 +6635,10 @@ def main() -> None:
                 suffix_parts.append("bfgraddiag")
             if args.shadow_feedback_gradient_diagnostic_only:
                 suffix_parts.append(f"shadowridge{args.shadow_feedback_ridge:g}")
+                if args.shadow_feedback_heldout_fraction > 0:
+                    suffix_parts.append(
+                        f"shadowheld{args.shadow_feedback_heldout_fraction:g}"
+                    )
                 suffix_parts.append("shadowgraddiag")
             if args.shadow_feedback_weight > 0:
                 suffix_parts.append(
@@ -6568,6 +6790,7 @@ def main() -> None:
         "shadow feedback: "
         f"weight={args.shadow_feedback_weight} "
         f"ridge={args.shadow_feedback_ridge} "
+        f"heldout_fraction={args.shadow_feedback_heldout_fraction} "
         f"gradient_diagnostic_only={args.shadow_feedback_gradient_diagnostic_only}"
     )
     print(

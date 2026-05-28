@@ -1831,7 +1831,9 @@ def test_result_boundary_target_uses_lowest_nll_result(monkeypatch) -> None:
     monkeypatch.setattr(
         overfit_script,
         "score_forced_result_classes_chunked",
-        lambda model_arg, batch_arg, *, chunk_size: forced_losses,
+        lambda model_arg, batch_arg, *, chunk_size: forced_losses[
+            : batch_arg.x.shape[0]
+        ],
     )
 
     loss, metrics = overfit_script.result_boundary_target_loss(
@@ -1902,7 +1904,9 @@ def test_result_boundary_target_updates_result_projection_only(monkeypatch) -> N
     monkeypatch.setattr(
         overfit_script,
         "score_forced_result_classes_chunked",
-        lambda model_arg, batch_arg, *, chunk_size: forced_losses,
+        lambda model_arg, batch_arg, *, chunk_size: forced_losses[
+            : batch_arg.x.shape[0]
+        ],
     )
 
     loss, _ = overfit_script.result_boundary_target_loss(
@@ -1973,7 +1977,9 @@ def test_result_space_expected_answer_loss_uses_result_marginal(monkeypatch) -> 
     monkeypatch.setattr(
         overfit_script,
         "score_forced_result_classes_chunked",
-        lambda model_arg, batch_arg, *, chunk_size: forced_losses,
+        lambda model_arg, batch_arg, *, chunk_size: forced_losses[
+            : batch_arg.x.shape[0]
+        ],
     )
 
     loss, metrics = overfit_script.full_enum_expected_answer_loss(
@@ -2041,10 +2047,13 @@ def test_result_space_expected_answer_loss_updates_result_projection_only(
             [7.0, 6.0, 5.0, 0.25, 4.0, 3.0, 2.0],
         ]
     )
+    def fake_forced_losses(model_arg, batch_arg, *, chunk_size):
+        return forced_losses[: batch_arg.x.shape[0]]
+
     monkeypatch.setattr(
         overfit_script,
         "score_forced_result_classes_chunked",
-        lambda model_arg, batch_arg, *, chunk_size: forced_losses,
+        fake_forced_losses,
     )
 
     loss, _ = overfit_script.full_enum_expected_answer_loss(
@@ -2241,10 +2250,13 @@ def test_linear_shadow_feedback_diagnostic_matches_boundary_gradient(
             [7.0, 6.0, 5.0, 0.25, 4.0, 3.0, 2.0],
         ]
     )
+    def fake_shadow_forced_losses(model_arg, batch_arg, *, chunk_size):
+        return forced_losses[: batch_arg.x.shape[0]]
+
     monkeypatch.setattr(
         overfit_script,
         "score_forced_result_classes_chunked",
-        lambda model_arg, batch_arg, *, chunk_size: forced_losses,
+        fake_shadow_forced_losses,
     )
 
     summary = overfit_script.run_shadow_feedback_gradient_diagnostic(
@@ -2252,6 +2264,7 @@ def test_linear_shadow_feedback_diagnostic_matches_boundary_gradient(
         batch,
         num_digits=1,
         ridge=1e-3,
+        heldout_fraction=0.0,
         result_boundary_target_mode="hard_best_result",
         result_boundary_target_temperature=1.0,
         result_boundary_target_min_probability_floor=0.0,
@@ -2263,6 +2276,21 @@ def test_linear_shadow_feedback_diagnostic_matches_boundary_gradient(
     assert summary["shadow_upstream_grad_l2"] > 0.0
     assert summary["shadow_semantic_decoder_grad_l2"] == pytest.approx(0.0)
     assert summary["shadow_vs_boundary_result_proj_cosine"] > 0.99
+
+    heldout_summary = overfit_script.run_shadow_feedback_gradient_diagnostic(
+        model,
+        batch,
+        num_digits=1,
+        ridge=1e-3,
+        heldout_fraction=0.5,
+        result_boundary_target_mode="hard_best_result",
+        result_boundary_target_temperature=1.0,
+        result_boundary_target_min_probability_floor=0.0,
+        result_boundary_target_chunk_size=4,
+    )
+    assert heldout_summary["shadow_feedback_fit_batch_size"] == 1
+    assert heldout_summary["shadow_feedback_heldout_batch_size"] == 1
+    assert "heldout_shadow_vs_boundary_result_proj_cosine" in heldout_summary
 
 
 def test_exhaustive_grid_boundary_target_smoke_updates_open_upstream(
@@ -2838,12 +2866,15 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "--shadow-feedback-gradient-diagnostic-only",
             "--shadow-feedback-weight",
             "0.5",
+            "--shadow-feedback-heldout-fraction",
+            "0.2",
         ],
     )
     parsed = overfit_script.parse_args()
     assert parsed.shadow_feedback_gradient_diagnostic_only
     assert parsed.shadow_feedback_ridge == pytest.approx(1e-3)
     assert parsed.shadow_feedback_weight == pytest.approx(0.5)
+    assert parsed.shadow_feedback_heldout_fraction == pytest.approx(0.2)
 
     with pytest.raises(ValueError, match="result_space.*gumbel_concrete_interface"):
         CalculatorHook(
