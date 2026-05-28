@@ -244,9 +244,12 @@ still ended at only `0.055` exact. A hard improvement-assignment target then
 finally produced lift: weight `10` reached `0.170` final exact with refreshed
 shadow and `0.400` without shadow by step `200`. This is promising but not
 yet the final scalable method because it scores forced result classes during
-training. Next work should test convergence/retention/seeds and seek cheaper
-assignment approximations rather than more soft diversity or state-only
-shadow features.
+training. A plain target-off handoff failed: decaying assignment weight
+`10 -> 0` over `200` steps with natural answer loss on peaked at `0.370`, then
+collapsed to about `0.105` after shutoff. Next work should test longer
+always-on convergence, seed replication, stronger handoff bridges, and cheaper
+assignment approximations rather than more soft diversity or state-only shadow
+features.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

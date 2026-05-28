@@ -1172,3 +1172,35 @@ result classes during training, and has not yet passed retention, seeds, or
 scaling. Next work should test whether the learned interface retains after
 turning the assignment target off, whether the run converges with more steps,
 and whether the assignment construction can be made cheaper.
+
+## Status Update: 2026-05-28, Hard Assignment Target-Off Retention
+
+The first target-off handoff for hard improvement assignment was negative:
+
+```text
+hard_improvement_assignment_decay_retention_negative
+```
+
+Configuration:
+
+- no shadow feedback;
+- assignment weight `10`;
+- `result_policy_stabilization_decay_steps=200`;
+- `answer_loss_weight=1`;
+- 400 total steps.
+
+The run learned while the assignment target was present, but did not retain
+after it decayed away:
+
+| Step | Assignment weight | Snapshot exact | Result-policy accuracy | Hard effective results |
+| ---: | ---: | ---: | ---: | ---: |
+| `100` | `5.0` | `0.2700` | `0.2650` | `18.30` |
+| `175` | `1.25` | `0.3700` | n/a | n/a |
+| `200` | `0.0` | `0.3475` | `0.3575` | `18.54` |
+| `250` | `0.0` | `0.1050` | `0.0975` | `8.78` |
+| `400` | `0.0` | `0.1050` | `0.0975` | `8.73` |
+
+Final eval exact was `0.1075`. Plain natural answer loss did not preserve the
+assignment-taught result interface after target-off. Next work should not
+rerun this exact decay schedule; use longer always-on convergence, seed
+replication, a stronger handoff bridge, or cheaper assignment approximations.

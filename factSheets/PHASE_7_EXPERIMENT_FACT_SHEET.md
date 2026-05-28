@@ -3198,3 +3198,63 @@ Interpretation:
 - This is not yet scalable final success: the target scores forced result
   classes during training and still needs target-off retention, seed
   replication, longer convergence, and lower-cost approximations.
+
+## 2026-05-28 Hard Improvement Assignment Retention Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-thirty-fifth-task-Hard-improvement-assignment-retention-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_hard_improvement_assignment_retention_gate
+```
+
+Question:
+
+Can natural answer loss retain a result interface taught by hard improvement
+assignment after the assignment weight decays to zero?
+
+Configuration:
+
+- no shadow feedback;
+- assignment weight `10`;
+- assignment min improvement `0`;
+- assignment quota multiplier `1`;
+- assignment decay steps `200`;
+- answer loss weight `1`;
+- 400 total steps.
+
+Result:
+
+| Step | Assignment weight | Snapshot exact | Result-policy accuracy | Hard effective results |
+| ---: | ---: | ---: | ---: | ---: |
+| `100` | `5.0` | `0.2700` | `0.2650` | `18.30` |
+| `175` | `1.25` | `0.3700` | n/a | n/a |
+| `200` | `0.0` | `0.3475` | `0.3575` | `18.54` |
+| `250` | `0.0` | `0.1050` | `0.0975` | `8.78` |
+| `400` | `0.0` | `0.1050` | `0.0975` | `8.73` |
+
+Final eval exact:
+
+```text
+0.1075
+```
+
+Decision:
+
+```text
+hard_improvement_assignment_decay_retention_negative
+```
+
+Interpretation:
+
+- Assignment pressure still teaches the interface during the first 200 steps.
+- Plain answer loss does not retain that interface after the assignment target
+  decays away.
+- Do not treat hard improvement assignment as solved; next work should test
+  longer always-on convergence, seed replication, a stronger handoff bridge,
+  and lower-cost assignment approximations.

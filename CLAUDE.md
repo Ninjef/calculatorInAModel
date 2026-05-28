@@ -326,6 +326,13 @@ without shadow was much stronger: assignment weight `10` alone reached
 `0.400` final exact by step `200`. Label:
 `hard_improvement_assignment_stage1_lift_partial`.
 
+A target-off retention gate then decayed assignment weight `10 -> 0` over
+`200` steps while keeping natural answer loss on, and continued to step `400`.
+The interface did not retain. Exact match peaked at `0.370` around step `175`,
+was still `0.3475` at the shutoff step `200`, but collapsed to `0.105` by
+step `250` and ended at `0.1075`. Label:
+`hard_improvement_assignment_decay_retention_negative`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -410,16 +417,21 @@ Do not rerun these as next steps unless debugging new code:
   seed-2/seed-4 run for only 200 steps as novelty. Weight `10` is the first
   useful Stage 1 lift in this branch; next test retention, longer convergence,
   seeds, or lower-cost/scalable assignment construction.
+- hard improvement-assignment weight `10` decayed linearly to zero over
+  `200` steps with `answer_loss_weight=1`, no shadow feedback, and 400-step
+  budget as novelty; this failed target-off retention.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
 becomes useful training dynamics. Plausible branches include a step-level
 mechanism that constructs better directions rather than selecting from mostly
-bad proposed shadow steps, retention and scaling tests for the hard
-improvement-assignment target, a lower-cost assignment approximation that
-does not enumerate all result classes every step, a Jacobian-conditioned state
-more substantial than the result-output `J^T answer_grad` feature, or a richer
-target construction that remains valid after upstream movement.
+bad proposed shadow steps, longer always-on convergence and seed tests for
+the hard improvement-assignment target, a target-off handoff with a stronger
+natural answer-loss bridge than plain decay, a lower-cost assignment
+approximation that does not enumerate all result classes every step, a
+Jacobian-conditioned state more substantial than the result-output
+`J^T answer_grad` feature, or a richer target construction that remains valid
+after upstream movement.
 Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`
