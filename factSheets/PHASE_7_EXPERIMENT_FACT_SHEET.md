@@ -2759,3 +2759,71 @@ Interpretation:
   `0.16` output-projection boundary-feedback baseline.
 - Next work should use on-policy refresh or a trust-region gate that checks
   refreshed gradient agreement under model movement.
+
+## 2026-05-28 Online MLP Shadow-Feedback On-Policy Refresh Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-twenty-eighth-task-Online-MLP-shadow-feedback-on-policy-refresh-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_online_shadow_feedback_on_policy_refresh_gate
+```
+
+Code changes:
+
+- Added `--shadow-feedback-refresh-every`.
+- Online MLP shadow Stage 1 can now periodically refit the shadow module
+  against the current model.
+- Refresh summaries are saved in
+  `online_shadow_feedback_refresh_history.json`.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+103 passed
+```
+
+Stage 1 h32 validation-gradient module, `shadow_feedback_weight=1.0`, refresh
+every `50`, no apply clamp:
+
+| Refresh step | Heldout result/upstream cosine | Train-heldout gap |
+| ---: | ---: | ---: |
+| `0` | `0.8068 / 0.8083` | `0.1227 / 0.1343` |
+| `50` | `0.9820 / 1.0000` | `0.0034 / 0.0000` |
+| `100` | `0.9971 / 0.9999` | `0.0029 / 0.0001` |
+| `150` | `0.9978 / 0.9991` | `0.0013 / 0.0008` |
+| `200` | `0.9716 / 0.9997` | `0.0017 / 0.0001` |
+
+Stage 1 result:
+
+| Metric | Value |
+| --- | ---: |
+| final exact match | `0.025` |
+| best snapshot exact match | `0.0475` |
+| final shadow feedback norm | `27.627` |
+
+Decision:
+
+```text
+online_mlp_shadow_feedback_on_policy_refresh_alignment_pass_stage1_negative
+```
+
+Interpretation:
+
+- On-policy refresh solves stale gradient agreement.
+- It does not solve the training dynamics; the model still collapses to a
+  single learned result and stays below the `0.16` baseline.
+- Next work should add step-level trust regions, entropy/diversity
+  stabilization, or a richer target/state.

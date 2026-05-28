@@ -976,3 +976,31 @@ Next work should move past fixed-module scalar/norm controls. The useful
 Stage 0B signal likely needs periodic on-policy shadow refresh or a trust
 region that checks refreshed gradient agreement rather than only constraining
 the output-vector norm.
+
+## Status Update: 2026-05-28, Online MLP On-Policy Refresh
+
+The fixed online MLP shadow-feedback Stage 1 path gained periodic refresh:
+
+```text
+online_mlp_shadow_feedback_on_policy_refresh_alignment_pass_stage1_negative
+```
+
+The new `--shadow-feedback-refresh-every` refits the online shadow module
+against the current model every N training steps. With refresh every `50`
+steps, the h32 validation-gradient module recovered excellent current-model
+heldout gradient agreement at each refresh:
+
+| Step | Heldout result/upstream cosine | Train-heldout gap |
+| ---: | ---: | ---: |
+| `0` | `0.8068 / 0.8083` | `0.1227 / 0.1343` |
+| `50` | `0.9820 / 1.0000` | `0.0034 / 0.0000` |
+| `100` | `0.9971 / 0.9999` | `0.0029 / 0.0001` |
+| `150` | `0.9978 / 0.9991` | `0.0013 / 0.0008` |
+| `200` | `0.9716 / 0.9997` | `0.0017 / 0.0001` |
+
+Despite that, Stage 1 did not lift. Final exact match was `0.025`, and the
+best snapshot was `0.0475`. The learned result distribution still collapsed
+to one result at a time. Next work should not assume refreshed gradient
+agreement is sufficient; it needs a training-dynamics constraint such as
+step-level trust region, entropy/diversity stabilization, or a richer
+target/state.

@@ -222,7 +222,12 @@ trust-region feedback that checks refreshed gradient agreement,
 Jacobian-conditioned state, or a richer target that survives model movement.
 A simple fixed-module feedback L2 clamp was tested next: clamps `3.5` and
 `10` stopped the feedback norm explosion but did not improve Stage 1 accuracy,
-so plain output-norm clamping is not enough.
+so plain output-norm clamping is not enough. Periodic on-policy refresh every
+`50` steps then restored excellent current-model gradient agreement, but the
+model still collapsed to a single result and ended at `0.025` exact match.
+The remaining synthetic-gradient problem is therefore training dynamics, not
+just shadow generalization: use step-level trust regions, entropy/diversity
+stabilization, Jacobian-conditioned state, or richer targets.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

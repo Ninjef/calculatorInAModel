@@ -252,6 +252,15 @@ did not lift: both clamped runs ended at `0.075` final exact match with best
 snapshot `0.0525`, unchanged from the unclamped weight-`1.0` run. Label:
 `online_mlp_shadow_feedback_apply_norm_clamp_stage1_negative`.
 
+Periodic on-policy online-shadow refresh was then added for Stage 1. With
+`--shadow-feedback-refresh-every 50`, the h32 validation-gradient module was
+refit against the current model at steps `50/100/150/200`. Refresh worked as
+a gradient-alignment mechanism: heldout result/upstream cosines after refresh
+were `0.9820/1.0000`, `0.9971/0.9999`, `0.9978/0.9991`, and `0.9716/0.9997`,
+with tiny train-heldout gaps. But Stage 1 still did not lift; final exact
+match was `0.025` and the best snapshot was only `0.0475`. Label:
+`online_mlp_shadow_feedback_on_policy_refresh_alignment_pass_stage1_negative`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -312,12 +321,15 @@ Do not rerun these as next steps unless debugging new code:
   Stage 1 weights `1.0/0.01/0.001` as novelty.
 - fixed calibrated online-MLP shadow feedback with simple apply feedback L2
   clamps `3.5` or `10` on the same h32 validation-gradient module as novelty.
+- periodic on-policy refresh every `50` steps with the same h32
+  validation-gradient module, `shadow_feedback_weight=1.0`, no apply clamp,
+  and 200-step early-lift budget as novelty.
 
 Next best step: improve shadow generalization by changing the target
-construction or learned-gradient update path so the passed Stage 0B signal
-stays in distribution during model training. Plausible branches include
-on-policy shadow refresh during Stage 1, a directional trust region that
-checks refreshed gradient agreement rather than only feedback L2,
+construction or learned-gradient update path so local gradient agreement
+becomes useful training dynamics. Plausible branches include a step-level
+trust region on model movement, entropy/diversity constraints that prevent
+single-result collapse while using refreshed shadow gradients,
 Jacobian-conditioned state rather than raw activations, or a richer target
 construction that remains valid after upstream movement.
 Keep the exact-grid boundary-ceiling

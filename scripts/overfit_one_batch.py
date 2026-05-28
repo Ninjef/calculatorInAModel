@@ -122,6 +122,7 @@ class TrainConfig:
     shadow_feedback_warmup_steps: int
     shadow_feedback_updates_per_step: int
     shadow_feedback_apply_max_norm: float
+    shadow_feedback_refresh_every: int
     shadow_feedback_validation_fraction: float
     shadow_feedback_validation_every: int
     shadow_feedback_validation_loss_weight: float
@@ -5986,6 +5987,7 @@ def run_variant(
         shadow_feedback_warmup_steps=args.shadow_feedback_warmup_steps,
         shadow_feedback_updates_per_step=args.shadow_feedback_updates_per_step,
         shadow_feedback_apply_max_norm=args.shadow_feedback_apply_max_norm,
+        shadow_feedback_refresh_every=args.shadow_feedback_refresh_every,
         shadow_feedback_validation_fraction=(
             args.shadow_feedback_validation_fraction
         ),
@@ -6319,6 +6321,76 @@ def run_variant(
     shadow_feedback_weights: torch.Tensor | None = None
     online_shadow_feedback_artifacts: dict[str, object] | None = None
     shadow_feedback_calibration_metrics: dict[str, float | int | str] = {}
+    online_shadow_feedback_refresh_history: list[dict[str, float | int | str]] = []
+
+    def fit_online_shadow_feedback_artifacts(
+        shadow_calibration_batch: ArithmeticBatch,
+        *,
+        refresh_step: int,
+    ) -> tuple[dict[str, float | int | str], dict[str, object]]:
+        diagnostic_result = run_online_shadow_feedback_gradient_diagnostic(
+            model,
+            shadow_calibration_batch,
+            num_digits=num_digits,
+            heldout_fraction=args.shadow_feedback_heldout_fraction,
+            hidden_size=args.shadow_feedback_hidden_size,
+            dropout=args.shadow_feedback_dropout,
+            learning_rate=args.shadow_feedback_online_lr,
+            weight_decay=args.shadow_feedback_weight_decay,
+            warmup_steps=args.shadow_feedback_warmup_steps,
+            updates_per_step=args.shadow_feedback_updates_per_step,
+            validation_fraction=args.shadow_feedback_validation_fraction,
+            validation_every=args.shadow_feedback_validation_every,
+            validation_loss_weight=args.shadow_feedback_validation_loss_weight,
+            validation_gradient_loss_weight=(
+                args.shadow_feedback_validation_gradient_loss_weight
+            ),
+            validation_gradient_norm_weight=(
+                args.shadow_feedback_validation_gradient_norm_weight
+            ),
+            target_normalization=args.shadow_feedback_target_normalization,
+            target_transform=args.shadow_feedback_target_transform,
+            feature_mode=args.shadow_feedback_feature_mode,
+            feature_normalization=args.shadow_feedback_feature_normalization,
+            loss_mode=args.shadow_feedback_loss_mode,
+            selection_score_mode=args.shadow_feedback_selection_score_mode,
+            selection_gap_penalty=args.shadow_feedback_selection_gap_penalty,
+            result_boundary_target_mode=args.result_boundary_target_mode,
+            result_boundary_target_temperature=(
+                args.result_boundary_target_temperature
+            ),
+            result_boundary_target_min_probability_floor=(
+                args.result_boundary_target_min_probability_floor
+            ),
+            result_boundary_target_chunk_size=(
+                args.result_boundary_target_chunk_size
+            ),
+            return_artifacts=True,
+        )
+        summary, artifacts = diagnostic_result
+        summary["shadow_feedback_refresh_step"] = int(refresh_step)
+        online_shadow_feedback_refresh_history.append(
+            {
+                "step": int(refresh_step),
+                "heldout_result_cosine": float(
+                    summary["heldout_shadow_vs_boundary_result_proj_cosine"]
+                ),
+                "heldout_upstream_cosine": float(
+                    summary["heldout_shadow_vs_boundary_upstream_cosine"]
+                ),
+                "train_heldout_result_gap": float(
+                    summary[
+                        "shadow_feedback_train_heldout_result_proj_cosine_gap"
+                    ]
+                ),
+                "train_heldout_upstream_gap": float(
+                    summary["shadow_feedback_train_heldout_upstream_cosine_gap"]
+                ),
+                "best_step": int(summary.get("shadow_feedback_best_step", -1)),
+            }
+        )
+        return summary, artifacts
+
     if (
         args.shadow_feedback_weight > 0
         and args.shadow_feedback_mode == "fit_once_linear"
@@ -6386,49 +6458,13 @@ def run_variant(
                 device=device,
                 answer_format=args.answer_format,
             )
-        diagnostic_result = run_online_shadow_feedback_gradient_diagnostic(
-            model,
-            shadow_calibration_batch,
-            num_digits=num_digits,
-            heldout_fraction=args.shadow_feedback_heldout_fraction,
-            hidden_size=args.shadow_feedback_hidden_size,
-            dropout=args.shadow_feedback_dropout,
-            learning_rate=args.shadow_feedback_online_lr,
-            weight_decay=args.shadow_feedback_weight_decay,
-            warmup_steps=args.shadow_feedback_warmup_steps,
-            updates_per_step=args.shadow_feedback_updates_per_step,
-            validation_fraction=args.shadow_feedback_validation_fraction,
-            validation_every=args.shadow_feedback_validation_every,
-            validation_loss_weight=args.shadow_feedback_validation_loss_weight,
-            validation_gradient_loss_weight=(
-                args.shadow_feedback_validation_gradient_loss_weight
-            ),
-            validation_gradient_norm_weight=(
-                args.shadow_feedback_validation_gradient_norm_weight
-            ),
-            target_normalization=args.shadow_feedback_target_normalization,
-            target_transform=args.shadow_feedback_target_transform,
-            feature_mode=args.shadow_feedback_feature_mode,
-            feature_normalization=args.shadow_feedback_feature_normalization,
-            loss_mode=args.shadow_feedback_loss_mode,
-            selection_score_mode=args.shadow_feedback_selection_score_mode,
-            selection_gap_penalty=args.shadow_feedback_selection_gap_penalty,
-            result_boundary_target_mode=args.result_boundary_target_mode,
-            result_boundary_target_temperature=(
-                args.result_boundary_target_temperature
-            ),
-            result_boundary_target_min_probability_floor=(
-                args.result_boundary_target_min_probability_floor
-            ),
-            result_boundary_target_chunk_size=(
-                args.result_boundary_target_chunk_size
-            ),
-            return_artifacts=True,
-        )
         (
             shadow_feedback_calibration_metrics,
             online_shadow_feedback_artifacts,
-        ) = diagnostic_result
+        ) = fit_online_shadow_feedback_artifacts(
+            shadow_calibration_batch,
+            refresh_step=0,
+        )
         shadow_module = online_shadow_feedback_artifacts["shadow_module"]
         assert isinstance(shadow_module, ShadowFeedbackMLP)
         torch.save(
@@ -6445,6 +6481,9 @@ def run_variant(
         )
         (run_dir / "online_shadow_feedback_calibration_summary.json").write_text(
             json.dumps(shadow_feedback_calibration_metrics, indent=2) + "\n"
+        )
+        (run_dir / "online_shadow_feedback_refresh_history.json").write_text(
+            json.dumps(online_shadow_feedback_refresh_history, indent=2) + "\n"
         )
         print(
             "online shadow feedback calibration: "
@@ -6480,6 +6519,47 @@ def run_variant(
                 fixed_width=True,
                 device=device,
                 answer_format=args.answer_format,
+            )
+        if (
+            args.shadow_feedback_mode == "online_mlp"
+            and args.shadow_feedback_weight > 0
+            and args.shadow_feedback_refresh_every > 0
+            and step > 0
+            and step % args.shadow_feedback_refresh_every == 0
+        ):
+            (
+                shadow_feedback_calibration_metrics,
+                online_shadow_feedback_artifacts,
+            ) = fit_online_shadow_feedback_artifacts(
+                shadow_calibration_batch,
+                refresh_step=step,
+            )
+            shadow_module = online_shadow_feedback_artifacts["shadow_module"]
+            assert isinstance(shadow_module, ShadowFeedbackMLP)
+            torch.save(
+                {
+                    "state_dict": shadow_module.state_dict(),
+                    "metrics": shadow_feedback_calibration_metrics,
+                    "feature_mode": args.shadow_feedback_feature_mode,
+                    "target_mean": online_shadow_feedback_artifacts["target_mean"],
+                    "target_scale": online_shadow_feedback_artifacts["target_scale"],
+                    "feature_mean": online_shadow_feedback_artifacts["feature_mean"],
+                    "feature_scale": online_shadow_feedback_artifacts["feature_scale"],
+                },
+                run_dir / f"online_shadow_feedback_module_step_{step:05d}.pt",
+            )
+            (
+                run_dir / "online_shadow_feedback_refresh_history.json"
+            ).write_text(
+                json.dumps(online_shadow_feedback_refresh_history, indent=2)
+                + "\n"
+            )
+            print(
+                "online shadow feedback refresh: "
+                f"step={step} "
+                f"result_cos={shadow_feedback_calibration_metrics['heldout_shadow_vs_boundary_result_proj_cosine']:.6f} "
+                f"upstream_cos={shadow_feedback_calibration_metrics['heldout_shadow_vs_boundary_upstream_cosine']:.6f} "
+                f"result_gap={shadow_feedback_calibration_metrics['shadow_feedback_train_heldout_result_proj_cosine_gap']:.6f}"
             )
         oracle_operands = None
         use_oracle_for_step = args.oracle_train or (
@@ -7287,6 +7367,7 @@ def run_variant(
         args.shadow_feedback_updates_per_step
     )
     metrics["shadow_feedback_apply_max_norm"] = args.shadow_feedback_apply_max_norm
+    metrics["shadow_feedback_refresh_every"] = args.shadow_feedback_refresh_every
     metrics["shadow_feedback_validation_fraction"] = (
         args.shadow_feedback_validation_fraction
     )
@@ -8003,6 +8084,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--shadow-feedback-refresh-every",
+        type=int,
+        default=0,
+        help=(
+            "For online MLP shadow Stage 1, refit the shadow module every N "
+            "training steps using the current model. 0 disables refresh."
+        ),
+    )
+    parser.add_argument(
         "--shadow-feedback-validation-fraction",
         type=float,
         default=0.0,
@@ -8518,6 +8608,8 @@ def main() -> None:
         raise ValueError("--shadow-feedback-updates-per-step must be positive")
     if args.shadow_feedback_apply_max_norm < 0:
         raise ValueError("--shadow-feedback-apply-max-norm must be non-negative")
+    if args.shadow_feedback_refresh_every < 0:
+        raise ValueError("--shadow-feedback-refresh-every must be non-negative")
     if not 0 <= args.shadow_feedback_validation_fraction < 1:
         raise ValueError("--shadow-feedback-validation-fraction must be in [0, 1)")
     if (
@@ -8889,6 +8981,10 @@ def main() -> None:
                         suffix_parts.append(
                             f"swapplymax{args.shadow_feedback_apply_max_norm:g}"
                         )
+                    if args.shadow_feedback_refresh_every > 0:
+                        suffix_parts.append(
+                            f"swrefresh{args.shadow_feedback_refresh_every}"
+                        )
                     if args.shadow_feedback_validation_fraction > 0:
                         suffix_parts.append(
                             f"val{args.shadow_feedback_validation_fraction:g}"
@@ -9106,6 +9202,7 @@ def main() -> None:
         f"warmup_steps={args.shadow_feedback_warmup_steps} "
         f"updates_per_step={args.shadow_feedback_updates_per_step} "
         f"apply_max_norm={args.shadow_feedback_apply_max_norm} "
+        f"refresh_every={args.shadow_feedback_refresh_every} "
         f"validation_fraction={args.shadow_feedback_validation_fraction} "
         f"validation_every={args.shadow_feedback_validation_every} "
         f"validation_loss_weight={args.shadow_feedback_validation_loss_weight} "

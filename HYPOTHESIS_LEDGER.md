@@ -123,3 +123,9 @@ Conclusion: Apply clamps `3.5` and `10` kept feedback norm bounded, but both run
 Do not repeat: The same fixed h32 validation-gradient module with simple apply max-norm clamps `3.5` or `10` as novelty.
 Next allowed test: On-policy shadow refresh or a trust region that refreshes gradient agreement, not only output-vector norm.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-online-shadow-feedback-apply-norm-clamp-gate.md`
+
+DISPROVEN: Periodic on-policy shadow refresh alone rescues validation-gradient online shadow Stage 1.
+Conclusion: Refresh every `50` steps restored excellent current-model heldout gradient agreement (`0.982-0.998` result cosine, ~`1.0` upstream), but Stage 1 ended at `0.025` final exact match with best snapshot `0.0475`.
+Do not repeat: Same h32 validation-gradient module with refresh every `50`, `shadow_feedback_weight=1.0`, no apply clamp, and 200-step budget as novelty.
+Next allowed test: Add training-dynamics constraints such as step-level trust region, entropy/diversity stabilization, or a target/state that avoids single-result collapse.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-online-shadow-feedback-on-policy-refresh-gate.md`
