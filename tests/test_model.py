@@ -2373,6 +2373,7 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
         validation_every=1,
         target_normalization="fit_zscore_per_result",
         feature_mode="injection_grad_policy_state",
+        feature_normalization="fit_zscore_per_feature",
         result_boundary_target_mode="hard_best_result",
         result_boundary_target_temperature=1.0,
         result_boundary_target_min_probability_floor=0.0,
@@ -2388,9 +2389,14 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
     assert summary["shadow_feedback_best_state_restored"] is True
     assert summary["shadow_feedback_target_normalization"] == "fit_zscore_per_result"
     assert summary["shadow_feedback_feature_mode"] == "injection_grad_policy_state"
+    assert summary["shadow_feedback_feature_normalization"] == (
+        "fit_zscore_per_feature"
+    )
     assert summary["shadow_feedback_feature_dim"] == 30
+    assert summary["shadow_feedback_feature_scale_clamped_count"] >= 0
     assert "heldout_shadow_feedback_feature_probs_l2" in summary
     assert "heldout_shadow_feedback_feature_entropy_mean" in summary
+    assert "heldout_shadow_feedback_normalized_feature_l2" in summary
     assert summary["shadow_feedback_target_scale_clamped_count"] >= 0
     assert "shadow_feedback_final_normalized_fit_mse" in summary
     assert summary["shadow_feedback_best_step"] >= 0
@@ -2441,6 +2447,49 @@ def test_shadow_feedback_target_normalizer_uses_fit_statistics_only() -> None:
     )
     normalized_heldout = overfit_script.normalize_shadow_feedback_target(
         heldout_like_target,
+        mean=mean,
+        scale=scale,
+    )
+    assert normalized_fit[:, 0].mean().item() == pytest.approx(0.0)
+    assert normalized_heldout[0, 0].item() == pytest.approx(
+        (100.0 - 3.0) / scale[0, 0].item()
+    )
+
+
+def test_shadow_feedback_feature_normalizer_uses_fit_statistics_only() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_shadow_feature_norm", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    fit_features = torch.tensor(
+        [
+            [1.0, 2.0, 4.0],
+            [3.0, 2.0, 8.0],
+            [5.0, 2.0, 12.0],
+        ]
+    )
+    heldout_like_features = torch.tensor([[100.0, 100.0, 100.0]])
+    mean, scale, metrics = overfit_script.fit_shadow_feedback_feature_normalizer(
+        fit_features,
+        mode="fit_zscore_per_feature",
+    )
+    assert mean is not None
+    assert scale is not None
+    assert mean.squeeze(0).tolist() == pytest.approx([3.0, 2.0, 8.0])
+    assert metrics["shadow_feedback_feature_scale_clamped_count"] == 1
+
+    normalized_fit = overfit_script.normalize_shadow_feedback_features(
+        fit_features,
+        mean=mean,
+        scale=scale,
+    )
+    normalized_heldout = overfit_script.normalize_shadow_feedback_features(
+        heldout_like_features,
         mean=mean,
         scale=scale,
     )
@@ -3041,6 +3090,8 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "fit_zscore_per_result",
             "--shadow-feedback-feature-mode",
             "injection_grad_policy_state",
+            "--shadow-feedback-feature-normalization",
+            "fit_zscore_per_feature",
         ],
     )
     parsed = overfit_script.parse_args()
@@ -3057,6 +3108,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_validation_every == 5
     assert parsed.shadow_feedback_target_normalization == "fit_zscore_per_result"
     assert parsed.shadow_feedback_feature_mode == "injection_grad_policy_state"
+    assert parsed.shadow_feedback_feature_normalization == "fit_zscore_per_feature"
 
     monkeypatch.setattr(
         sys,
@@ -3084,6 +3136,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_validation_every == 0
     assert parsed.shadow_feedback_target_normalization == "none"
     assert parsed.shadow_feedback_feature_mode == "injection_grad_logits"
+    assert parsed.shadow_feedback_feature_normalization == "none"
 
     with pytest.raises(ValueError, match="result_space.*gumbel_concrete_interface"):
         CalculatorHook(

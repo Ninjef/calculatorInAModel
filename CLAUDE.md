@@ -150,6 +150,16 @@ train-heldout gaps widened to `0.2853/0.2131`; hidden size `16` missed the
 result threshold (`0.6862`). Label:
 `online_mlp_shadow_feedback_policy_state_raw_features_negative`.
 
+Fit-split per-feature z-score normalization was then added for the online MLP
+shadow input. It fits feature statistics only on the fit split and applies
+them to train/validation/heldout features before the shadow MLP. It did not
+rescue either feature state. With raw policy-state features, hidden sizes
+`16/32` reached only `0.5942/0.3997` and `0.4340/0.4023` heldout
+result/upstream cosines. With the simpler answer-gradient plus result-logit
+state, `h32` reached `0.6691/0.7028` with gaps `0.2830/0.2658`; `h16` had a
+small result gap but missed upstream badly (`0.6436/0.4763`). Label:
+`online_mlp_shadow_feedback_feature_standardization_negative`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -179,11 +189,15 @@ Do not rerun these as next steps unless debugging new code:
   `100`-step validation-selected Stage 0B sweep as novelty.
 - raw appended `injection_grad_policy_state` features with per-result target
   z-score, `h16/h32`, `lr=1e-3`, `100` steps as novelty.
+- fit-split per-feature z-score standardization on either
+  `injection_grad_logits` or `injection_grad_policy_state` with the same
+  target-normalized `h16/h32`, `lr=1e-3`, `100`-step Stage 0B gate as novelty.
 
-Next best step: improve shadow generalization by changing scaling or the loss,
-not simply appending raw policy features. Plausible branches include feature
-standardization, explicit regularization, a different synthetic-gradient loss,
-or a more stable target construction. Keep the exact-grid boundary-ceiling
+Next best step: improve shadow generalization by changing the objective or
+regularization, not by simple feature appending or plain fit-split z-scoring.
+Plausible branches include explicit regularization, a different
+synthetic-gradient loss, a more stable target construction, or a qualitatively
+different learned-gradient state. Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`
 boundary-feedback baseline before long runs. Do not move directly to

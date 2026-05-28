@@ -2100,3 +2100,73 @@ Interpretation:
 - No Stage 1 run was launched.
 - Next work should focus on feature scaling/standardization, regularization,
   a different synthetic-gradient loss, or a more stable target construction.
+
+## 2026-05-28 Online MLP Shadow-Feedback Feature-Standardization Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-eighteenth-task-Online-MLP-shadow-feedback-feature-standardization-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_online_shadow_feedback_feature_norm_gate
+```
+
+Code changes:
+
+- Added `--shadow-feedback-feature-normalization`.
+- Added `fit_zscore_per_feature`, which fits shadow input feature mean/std on
+  the fit split only and applies that transform before the online MLP.
+- Model-gradient diagnostics still compare denormalized predictions against
+  the raw boundary-target gradient ceiling.
+- Added tests for fit-only feature-normalizer statistics and CLI defaults.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+100 passed
+```
+
+Stage 0B validation-selected diagnostics with target normalization and feature
+standardization:
+
+| Feature mode | Hidden | Heldout result/upstream cosine | Train-heldout gap | Heldout relative norm | Decision |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `injection_grad_policy_state` | `16` | `0.59421 / 0.39967` | `0.28987 / 0.46921` | `1.7669 / 1.1802` | cosine and gap fail |
+| `injection_grad_policy_state` | `32` | `0.43401 / 0.40230` | `0.53978 / 0.57451` | `1.8823 / 1.6198` | cosine and gap fail |
+| `injection_grad_logits` | `16` | `0.64364 / 0.47630` | `0.07113 / 0.18319` | `1.6959 / 1.3566` | cosine fail |
+| `injection_grad_logits` | `32` | `0.66913 / 0.70278` | `0.28301 / 0.26578` | `1.7016 / 1.4895` | result cosine and gap fail |
+
+Feature-normalization observations:
+
+- Policy-state feature scales were extremely uneven even before normalization:
+  fit scale min/median/mean/max was
+  `0.00000182 / 0.002204 / 0.1171 / 1.5177`.
+- Simple logits feature scales were less extreme but still small in the median:
+  `0.001190 / 0.002598 / 0.2836 / 1.5177`.
+- Z-scoring did not improve heldout model-gradient agreement; it generally
+  increased relative norms and widened overfit gaps.
+
+Decision:
+
+```text
+online_mlp_shadow_feedback_feature_standardization_negative
+```
+
+Interpretation:
+
+- Plain fit-split feature z-scoring is not enough to rescue the online MLP
+  shadow-feedback gate.
+- No Stage 1 run was launched.
+- Next work should change objective, regularization, or target construction
+  rather than rerunning feature scaling alone.

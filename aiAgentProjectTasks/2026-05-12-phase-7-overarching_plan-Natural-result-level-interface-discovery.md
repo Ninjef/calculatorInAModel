@@ -723,3 +723,27 @@ widened to `0.2853/0.2131`. Hidden size `16` missed the result threshold
 No Stage 1 early-lift run was launched. Next work should address feature
 scaling, regularization, loss shape, or target construction rather than simply
 appending raw policy features.
+
+## Status Update: 2026-05-28, Online MLP Feature Standardization
+
+Fit-split per-feature z-score standardization was added to the online MLP
+shadow-feedback diagnostic:
+
+```text
+online_mlp_shadow_feedback_feature_standardization_negative
+```
+
+The diagnostic now fits shadow input feature mean/std on the fit split only,
+then applies that transform to train, validation, and heldout features before
+the shadow MLP. Raw-space target denormalization and model-gradient agreement
+checks are unchanged.
+
+This did not clear the heldout gate. With policy-state features, hidden sizes
+`16/32` reached only `0.5942/0.3997` and `0.4340/0.4023` heldout
+result/upstream cosines. With the simpler answer-gradient plus result-logit
+state, `h32` reached `0.6691/0.7028`, but gaps were `0.2830/0.2658`; `h16`
+had a smaller result gap but missed upstream (`0.6436/0.4763`).
+
+No Stage 1 early-lift run was launched. Next work should change objective,
+regularization, or target construction rather than rerunning plain feature
+z-scoring.

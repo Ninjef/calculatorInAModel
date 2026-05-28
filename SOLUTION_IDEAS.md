@@ -183,9 +183,11 @@ normalization improved heldout alignment but still missed the full gate: best
 near miss was `h16` with `0.7259` result-proj cosine, `0.7549` upstream
 cosine, and a `0.1723` result train-heldout gap. Raw appended policy-state
 features did not fix this; `h32` reached heldout `0.7037/0.7611` but gaps
-widened to `0.2853/0.2131`. Stronger regularization, feature
-standardization, a different loss, or a more stable target construction remain
-the next plausible branches.
+widened to `0.2853/0.2131`. Fit-split per-feature z-score standardization
+also failed: the best simpler-state `h32` run reached only `0.6691/0.7028`
+heldout with large gaps, while policy-state standardization was worse.
+Stronger regularization, a different loss, or a more stable target
+construction remain the next plausible branches.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 
