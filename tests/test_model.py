@@ -2375,6 +2375,8 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
         feature_mode="injection_grad_policy_state",
         feature_normalization="fit_zscore_per_feature",
         loss_mode="mse_plus_cosine",
+        selection_score_mode="gap_penalized_min_cosine",
+        selection_gap_penalty=0.5,
         result_boundary_target_mode="hard_best_result",
         result_boundary_target_temperature=1.0,
         result_boundary_target_min_probability_floor=0.0,
@@ -2394,6 +2396,10 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
         "fit_zscore_per_feature"
     )
     assert summary["shadow_feedback_loss_mode"] == "mse_plus_cosine"
+    assert summary["shadow_feedback_selection_metric"] == (
+        "gap_penalized_min_cosine"
+    )
+    assert summary["shadow_feedback_selection_gap_penalty"] == pytest.approx(0.5)
     assert summary["shadow_feedback_feature_dim"] == 30
     assert summary["shadow_feedback_feature_scale_clamped_count"] >= 0
     assert "heldout_shadow_feedback_feature_probs_l2" in summary
@@ -2404,6 +2410,9 @@ def test_online_shadow_feedback_diagnostic_uses_heldout_model_gradients(
     assert "shadow_feedback_final_normalized_fit_mse" in summary
     assert summary["shadow_feedback_best_step"] >= 0
     assert summary["shadow_feedback_validation_history"]
+    assert "train_validation_result_proj_cosine_gap" in (
+        summary["shadow_feedback_validation_history"][0]
+    )
     assert summary["heldout_shadow_result_proj_grad_l2"] > 0.0
     assert summary["heldout_shadow_upstream_grad_l2"] > 0.0
     assert summary["heldout_shadow_semantic_decoder_grad_l2"] == pytest.approx(0.0)
@@ -3128,6 +3137,10 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "fit_zscore_per_feature",
             "--shadow-feedback-loss-mode",
             "mse_plus_cosine",
+            "--shadow-feedback-selection-score-mode",
+            "gap_penalized_min_cosine",
+            "--shadow-feedback-selection-gap-penalty",
+            "0.75",
         ],
     )
     parsed = overfit_script.parse_args()
@@ -3146,6 +3159,8 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_feature_mode == "injection_grad_policy_state"
     assert parsed.shadow_feedback_feature_normalization == "fit_zscore_per_feature"
     assert parsed.shadow_feedback_loss_mode == "mse_plus_cosine"
+    assert parsed.shadow_feedback_selection_score_mode == "gap_penalized_min_cosine"
+    assert parsed.shadow_feedback_selection_gap_penalty == pytest.approx(0.75)
 
     monkeypatch.setattr(
         sys,
@@ -3175,6 +3190,8 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.shadow_feedback_feature_mode == "injection_grad_logits"
     assert parsed.shadow_feedback_feature_normalization == "none"
     assert parsed.shadow_feedback_loss_mode == "mse"
+    assert parsed.shadow_feedback_selection_score_mode == "min_result_upstream_cosine"
+    assert parsed.shadow_feedback_selection_gap_penalty == pytest.approx(1.0)
 
     with pytest.raises(ValueError, match="result_space.*gumbel_concrete_interface"):
         CalculatorHook(

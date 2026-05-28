@@ -125,6 +125,8 @@ class TrainConfig:
     shadow_feedback_feature_mode: str
     shadow_feedback_feature_normalization: str
     shadow_feedback_loss_mode: str
+    shadow_feedback_selection_score_mode: str
+    shadow_feedback_selection_gap_penalty: float
     shadow_feedback_gradient_diagnostic_only: bool
     calculator_result_head_hidden_size: int
     relaxed_calculator_temperature: float
@@ -2820,13 +2822,31 @@ def _shadow_prediction_cosine(
 
 
 def online_shadow_feedback_selection_score(
-    summary: dict[str, float | int | str],
+    validation_summary: dict[str, float | int | str],
+    *,
+    train_summary: dict[str, float | int | str] | None = None,
+    mode: str,
+    gap_penalty: float,
 ) -> float:
-    result_cosine = float(summary["shadow_vs_boundary_result_proj_cosine"])
-    upstream_cosine = float(summary["shadow_vs_boundary_upstream_cosine"])
+    result_cosine = float(validation_summary["shadow_vs_boundary_result_proj_cosine"])
+    upstream_cosine = float(validation_summary["shadow_vs_boundary_upstream_cosine"])
     if math.isnan(result_cosine) or math.isnan(upstream_cosine):
         return float("-inf")
-    return min(result_cosine, upstream_cosine)
+    base_score = min(result_cosine, upstream_cosine)
+    if mode == "min_result_upstream_cosine":
+        return base_score
+    if mode != "gap_penalized_min_cosine":
+        raise ValueError(
+            "shadow feedback selection score mode must be "
+            "min_result_upstream_cosine or gap_penalized_min_cosine"
+        )
+    if train_summary is None:
+        return float("-inf")
+    train_result = float(train_summary["shadow_vs_boundary_result_proj_cosine"])
+    train_upstream = float(train_summary["shadow_vs_boundary_upstream_cosine"])
+    result_gap = max(0.0, train_result - result_cosine)
+    upstream_gap = max(0.0, train_upstream - upstream_cosine)
+    return base_score - (gap_penalty * max(result_gap, upstream_gap))
 
 
 def run_online_shadow_feedback_gradient_diagnostic(
@@ -2845,6 +2865,8 @@ def run_online_shadow_feedback_gradient_diagnostic(
     feature_mode: str,
     feature_normalization: str,
     loss_mode: str,
+    selection_score_mode: str,
+    selection_gap_penalty: float,
     result_boundary_target_mode: str,
     result_boundary_target_temperature: float,
     result_boundary_target_min_probability_floor: float,
@@ -2895,6 +2917,16 @@ def run_online_shadow_feedback_gradient_diagnostic(
         raise ValueError(
             "shadow feedback loss mode must be mse, cosine, or mse_plus_cosine"
         )
+    if selection_score_mode not in {
+        "min_result_upstream_cosine",
+        "gap_penalized_min_cosine",
+    }:
+        raise ValueError(
+            "shadow feedback selection score mode must be "
+            "min_result_upstream_cosine or gap_penalized_min_cosine"
+        )
+    if selection_gap_penalty < 0:
+        raise ValueError("shadow feedback selection gap penalty must be non-negative")
     model.train()
 
     fit_batch, heldout_batch = shadow_feedback_heldout_split(
@@ -3027,7 +3059,47 @@ def run_online_shadow_feedback_gradient_diagnostic(
             feature_mean=feature_mean,
             feature_scale=feature_scale,
         )
-        score = online_shadow_feedback_selection_score(validation_summary)
+        selection_train_summary: dict[str, float | int | str] | None = None
+        result_gap = float("nan")
+        upstream_gap = float("nan")
+        if selection_score_mode == "gap_penalized_min_cosine":
+            selection_train_summary = run_online_shadow_feedback_module_gradient_diagnostic(
+                model,
+                fit_batch,
+                shadow_module=shadow_module,
+                num_digits=num_digits,
+                feature_mode=feature_mode,
+                result_boundary_target_mode=result_boundary_target_mode,
+                result_boundary_target_temperature=result_boundary_target_temperature,
+                result_boundary_target_min_probability_floor=(
+                    result_boundary_target_min_probability_floor
+                ),
+                result_boundary_target_chunk_size=result_boundary_target_chunk_size,
+                target_mean=target_mean,
+                target_scale=target_scale,
+                feature_mean=feature_mean,
+                feature_scale=feature_scale,
+            )
+            result_gap = max(
+                0.0,
+                float(
+                    selection_train_summary[
+                        "shadow_vs_boundary_result_proj_cosine"
+                    ]
+                )
+                - float(validation_summary["shadow_vs_boundary_result_proj_cosine"]),
+            )
+            upstream_gap = max(
+                0.0,
+                float(selection_train_summary["shadow_vs_boundary_upstream_cosine"])
+                - float(validation_summary["shadow_vs_boundary_upstream_cosine"]),
+            )
+        score = online_shadow_feedback_selection_score(
+            validation_summary,
+            train_summary=selection_train_summary,
+            mode=selection_score_mode,
+            gap_penalty=selection_gap_penalty,
+        )
         validation_history.append(
             {
                 "step": int(step),
@@ -3039,6 +3111,8 @@ def run_online_shadow_feedback_gradient_diagnostic(
                 "upstream_cosine": float(
                     validation_summary["shadow_vs_boundary_upstream_cosine"]
                 ),
+                "train_validation_result_proj_cosine_gap": float(result_gap),
+                "train_validation_upstream_cosine_gap": float(upstream_gap),
             }
         )
         if score > best_validation_score:
@@ -3181,11 +3255,17 @@ def run_online_shadow_feedback_gradient_diagnostic(
         "shadow_feedback_selection_mode": (
             "validation_best_checkpoint" if validation_batch is not None else "final"
         ),
-        "shadow_feedback_selection_metric": "min_result_upstream_cosine",
+        "shadow_feedback_selection_metric": selection_score_mode,
         "shadow_feedback_selection_metric_formula": (
-            "min(shadow_vs_boundary_result_proj_cosine, "
-            "shadow_vs_boundary_upstream_cosine)"
+            "min(validation_result_cosine, validation_upstream_cosine)"
+            if selection_score_mode == "min_result_upstream_cosine"
+            else (
+                "min(validation_result_cosine, validation_upstream_cosine) - "
+                "gap_penalty * max(train_validation_result_gap, "
+                "train_validation_upstream_gap)"
+            )
         ),
+        "shadow_feedback_selection_gap_penalty": float(selection_gap_penalty),
         "shadow_feedback_validation_history": validation_history,
         "shadow_feedback_best_state_restored": bool(best_state is not None),
         "shadow_feedback_target_normalization": target_normalization,
@@ -5202,6 +5282,12 @@ def run_variant(
             args.shadow_feedback_feature_normalization
         ),
         shadow_feedback_loss_mode=args.shadow_feedback_loss_mode,
+        shadow_feedback_selection_score_mode=(
+            args.shadow_feedback_selection_score_mode
+        ),
+        shadow_feedback_selection_gap_penalty=(
+            args.shadow_feedback_selection_gap_penalty
+        ),
         shadow_feedback_gradient_diagnostic_only=(
             args.shadow_feedback_gradient_diagnostic_only
         ),
@@ -5420,6 +5506,8 @@ def run_variant(
                 feature_mode=args.shadow_feedback_feature_mode,
                 feature_normalization=args.shadow_feedback_feature_normalization,
                 loss_mode=args.shadow_feedback_loss_mode,
+                selection_score_mode=args.shadow_feedback_selection_score_mode,
+                selection_gap_penalty=args.shadow_feedback_selection_gap_penalty,
                 result_boundary_target_mode=args.result_boundary_target_mode,
                 result_boundary_target_temperature=(
                     args.result_boundary_target_temperature
@@ -6363,6 +6451,12 @@ def run_variant(
         args.shadow_feedback_feature_normalization
     )
     metrics["shadow_feedback_loss_mode"] = args.shadow_feedback_loss_mode
+    metrics["shadow_feedback_selection_score_mode"] = (
+        args.shadow_feedback_selection_score_mode
+    )
+    metrics["shadow_feedback_selection_gap_penalty"] = (
+        args.shadow_feedback_selection_gap_penalty
+    )
     metrics["final_shadow_feedback_weight"] = args.shadow_feedback_weight
     if shadow_feedback_calibration_metrics:
         metrics["shadow_feedback_calibration"] = shadow_feedback_calibration_metrics
@@ -7082,6 +7176,22 @@ def parse_args() -> argparse.Namespace:
             "Training loss for the online MLP shadow module. Cosine modes "
             "optimize normalized-target direction instead of plain MSE alone."
         ),
+    )
+    parser.add_argument(
+        "--shadow-feedback-selection-score-mode",
+        choices=["min_result_upstream_cosine", "gap_penalized_min_cosine"],
+        default="min_result_upstream_cosine",
+        help=(
+            "Validation checkpoint selection score for online MLP shadow "
+            "feedback. Gap-penalized mode subtracts a train-validation "
+            "cosine-gap penalty from the validation min-cosine score."
+        ),
+    )
+    parser.add_argument(
+        "--shadow-feedback-selection-gap-penalty",
+        type=float,
+        default=1.0,
+        help="Penalty weight for gap-penalized online shadow checkpoint selection.",
     )
     parser.add_argument(
         "--shadow-feedback-gradient-diagnostic-only",
@@ -7839,6 +7949,16 @@ def main() -> None:
                         )
                     if args.shadow_feedback_loss_mode != "mse":
                         suffix_parts.append(f"sloss{args.shadow_feedback_loss_mode}")
+                    if (
+                        args.shadow_feedback_selection_score_mode
+                        != "min_result_upstream_cosine"
+                    ):
+                        suffix_parts.append(
+                            f"sel{args.shadow_feedback_selection_score_mode}"
+                        )
+                        suffix_parts.append(
+                            f"selgap{args.shadow_feedback_selection_gap_penalty:g}"
+                        )
                 else:
                     suffix_parts.append(
                         f"shadowridge{args.shadow_feedback_ridge:g}"
@@ -8010,6 +8130,8 @@ def main() -> None:
         f"feature_mode={args.shadow_feedback_feature_mode} "
         f"feature_normalization={args.shadow_feedback_feature_normalization} "
         f"loss_mode={args.shadow_feedback_loss_mode} "
+        f"selection_score_mode={args.shadow_feedback_selection_score_mode} "
+        f"selection_gap_penalty={args.shadow_feedback_selection_gap_penalty} "
         f"gradient_diagnostic_only={args.shadow_feedback_gradient_diagnostic_only}"
     )
     print(

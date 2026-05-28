@@ -2234,3 +2234,68 @@ Interpretation:
   above `0.15`.
 - Next work should combine the directional signal with explicit norm/gap
   regularization or a more stable target construction.
+
+## 2026-05-28 Online MLP Shadow-Feedback Gap-Penalized Selection Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-twentieth-task-Online-MLP-shadow-feedback-gap-penalized-selection-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_online_shadow_feedback_gap_penalized_selection_gate
+```
+
+Code changes:
+
+- Added `--shadow-feedback-selection-score-mode`.
+- Added `gap_penalized_min_cosine`, which subtracts a train-validation
+  cosine-gap penalty from the validation min-cosine score during checkpoint
+  selection.
+- Added `--shadow-feedback-selection-gap-penalty`.
+- Validation history now records train-validation result/upstream cosine gaps.
+- The heldout test split remains untouched for final gate reporting.
+
+Validation:
+
+```bash
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one_batch.py src/model.py
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m pytest tests/test_model.py -q
+```
+
+Result:
+
+```text
+101 passed
+```
+
+Stage 0B diagnostics with target normalization, `injection_grad_logits`
+features, no feature normalization, and directional losses:
+
+| Loss mode | Hidden | Gap penalty | Step | Heldout result/upstream cosine | Train-heldout gap | Heldout relative norm | Decision |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `cosine` | `16` | `1.0` | `90` | `0.76465 / 0.80065` | `0.19855 / 0.15470` | `1.1896 / 1.0965` | gap fail |
+| `cosine` | `16` | `3.0` | `80` | `0.74504 / 0.78002` | `0.18433 / 0.14696` | `1.2853 / 1.1359` | result-gap fail |
+| `cosine` | `16` | `4.0` | `70` | `0.71652 / 0.74394` | `0.16727 / 0.13527` | `1.4029 / 1.1966` | result-gap fail |
+| `cosine` | `16` | `5.0` | `60` | `0.68723 / 0.69794` | `0.15107 / 0.12203` | `1.5371 / 1.2740` | cosine fail |
+| `cosine` | `32` | `1.0` | `90` | `0.79370 / 0.82697` | `0.20239 / 0.15449` | `1.0114 / 1.0177` | gap fail |
+| `mse_plus_cosine` | `16` | `1.0` | `90` | `0.76966 / 0.80241` | `0.19924 / 0.15997` | `1.1803 / 1.0974` | gap fail |
+| `mse_plus_cosine` | `32` | `1.0` | `90` | `0.78528 / 0.81739` | `0.20909 / 0.16364` | `1.0599 / 1.0650` | gap fail |
+
+Decision:
+
+```text
+online_mlp_shadow_feedback_gap_penalized_selection_tradeoff_no_go
+```
+
+Interpretation:
+
+- Gap-penalized selection exposes a smooth tradeoff between heldout cosine and
+  train-heldout gap.
+- Checkpoint selection alone does not cross both gates simultaneously.
+- No Stage 1 run was launched.
+- Next work should use training-time regularization, a more stable target
+  construction, or a different learned-gradient state.

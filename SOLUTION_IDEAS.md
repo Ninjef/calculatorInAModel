@@ -189,8 +189,11 @@ heldout with large gaps, while policy-state standardization was worse.
 Directional shadow losses then improved the heldout direction signal but still
 missed the full gate: `cosine` h16/h32 reached `0.7646/0.8007` and
 `0.7937/0.8270`, but result train-heldout gaps stayed around `0.20`.
-Stronger norm/gap regularization or a more stable target construction remain
-the next plausible branches.
+Gap-penalized validation selection exposed the tradeoff but did not solve it:
+penalty `4` kept heldout above threshold but gap stayed `0.1673`, while
+penalty `5` lowered gap to `0.1511` and lost heldout cosine. Training-time
+regularization or a more stable target construction remain the next plausible
+branches.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

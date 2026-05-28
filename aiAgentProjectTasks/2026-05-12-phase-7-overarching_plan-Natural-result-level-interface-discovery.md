@@ -771,3 +771,27 @@ heldout cosine threshold (`0.5990/0.5859` for `cosine`).
 No Stage 1 early-lift run was launched. Next work should add explicit norm/gap
 regularization, a more stable target construction, or a qualitatively
 different learned-gradient state.
+
+## Status Update: 2026-05-28, Online MLP Gap-Penalized Selection
+
+Gap-penalized validation selection was added to the directional-loss online
+MLP shadow-feedback diagnostic:
+
+```text
+online_mlp_shadow_feedback_gap_penalized_selection_tradeoff_no_go
+```
+
+The new selection score subtracts a train-validation cosine-gap penalty from
+the validation min-cosine checkpoint score. The heldout test split remains
+untouched for final reporting.
+
+This did not clear the full gate. On the useful `cosine` h16 branch, penalty
+`1.0` kept step `90` and reproduced the directional-loss result
+(`0.7646/0.8007`, gaps `0.1985/0.1547`). Penalty `4.0` selected step `70`,
+with heldout `0.7165/0.7439`, but result gap remained `0.1673`. Penalty
+`5.0` selected step `60` and reduced gaps to `0.1511/0.1220`, but heldout
+fell below threshold (`0.6872/0.6979`).
+
+No Stage 1 early-lift run was launched. Next work should use training-time
+regularization, target stabilization, or a different learned-gradient state
+rather than checkpoint selection alone.

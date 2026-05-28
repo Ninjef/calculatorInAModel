@@ -170,6 +170,16 @@ result train-heldout gaps stayed around `0.20`; h8 reduced capacity but missed
 the heldout cosine threshold (`0.5990/0.5859`). Label:
 `online_mlp_shadow_feedback_directional_loss_partial_no_go`.
 
+Gap-penalized validation selection was then added to the directional-loss
+online MLP gate. It subtracts a train-validation cosine-gap penalty from the
+validation min-cosine checkpoint score while keeping the heldout split
+untouched. It exposed a sharp tradeoff, but did not clear the gate. For
+`cosine` h16, gap penalty `4.0` selected step `70` with heldout
+`0.7165/0.7439`, but result gap was still `0.1673`; penalty `5.0` selected
+step `60` and reduced gaps to `0.1511/0.1220`, but heldout fell to
+`0.6872/0.6979`. Label:
+`online_mlp_shadow_feedback_gap_penalized_selection_tradeoff_no_go`.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -205,11 +215,13 @@ Do not rerun these as next steps unless debugging new code:
 - plain `cosine` or `mse_plus_cosine` online MLP shadow losses on
   `injection_grad_logits` with per-result target normalization, h8/h16/h32,
   `lr=1e-3`, `100` steps as novelty.
+- gap-penalized validation selection on that same directional-loss
+  `injection_grad_logits` setup with penalties `1/3/4/5` as novelty.
 
 Next best step: improve shadow generalization by changing the objective or
-regularization beyond plain directional loss, not by simple feature appending
-or plain fit-split z-scoring. Plausible branches include explicit norm/gap
-regularization, a more stable target construction, or a qualitatively
+regularization beyond checkpoint selection, not by simple feature appending or
+plain fit-split z-scoring. Plausible branches include explicit training-time
+norm/gap regularization, a more stable target construction, or a qualitatively
 different learned-gradient state. Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`
