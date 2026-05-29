@@ -6602,3 +6602,83 @@ Interpretation:
 - Next test should extend scheduled source acquisition to longer horizons
   around `400/600/800` and verify selected checkpoints with the standalone
   600-step handoff gate.
+
+## 2026-05-29 Additive Forced-True Long Source Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-long-source-gate.md
+```
+
+Review:
+
+```text
+researchReviews/2026-05-29-scheduled-source-geometry-review.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_additive_forced_true_schedule/op19_long
+```
+
+Question:
+
+Does scheduled source acquisition continue improving additive handoff geometry
+through `400/600/800` source steps, or does it drift like prior high-accuracy
+source branches?
+
+Source setup:
+
+- `operand_max=19`, seed `13`.
+- Same no-decay stabilization and scheduled forced-true auxiliary as the
+  200-step Op19 gate.
+- Checkpoints every `200` steps.
+
+Source snapshots:
+
+| Step | Source normal/calc | Injection-zero | Oracle | Forced-true additive loss |
+| ---: | ---: | ---: | ---: | ---: |
+| `200` | `0.2575` | `0.0425` | `1.0000` | `1.1805` |
+| `400` | `0.2900` | `0.0525` | `1.0000` | `0.6094` |
+| `600` | `0.5825` | `0.0375` | `1.0000` | `0.0268` |
+| `800` | `0.5800` | `0.0525` | `1.0000` | `0.0009` |
+
+Geometry probe:
+
+| Step | Forced best=true | Forced top3=true | 50-step slope final loss |
+| ---: | ---: | ---: | ---: |
+| `200` | `0.2125` | `0.4025` | `1.0360` |
+| `400` | `0.4925` | `0.8225` | `0.7940` |
+| `600` | `0.9800` | `0.9975` | `0.4719` |
+| `800` | `1.0000` | `1.0000` | `0.5535` |
+
+Standalone 600-step handoff verification:
+
+```text
+runs/2026-05-29_phase7_additive_forced_true_schedule/op19_long/handoff600_step600
+runs/2026-05-29_phase7_additive_forced_true_schedule/op19_long/handoff600_step800
+```
+
+| Source checkpoint | Handoff step 0 | Best logged handoff | Handoff step 600 | Final eval | Injection-zero final | Oracle final | Learned calc final |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| step `600` | `0.5775` | `0.7150` @ step `500` | `0.6975` | `0.7725` | `0.0469` | `0.7344` | `0.5391` |
+| step `800` | `0.5300` | `0.7225` @ step `400` | `0.6700` | `0.6750` | `0.0156` | `0.5938` | `0.4219` |
+
+Decision:
+
+```text
+additive_forced_true_schedule_long_source_positive_step600_best
+```
+
+Interpretation:
+
+- Longer scheduled source training compounds transfer-relevant geometry through
+  step `600`.
+- Step `600` is a much stronger handoff source than the previous 200-step
+  scheduled checkpoint (`0.7725` final eval vs `0.4150`).
+- Step `800` shows why final source checkpoint and forced-result geometry alone
+  cannot replace handoff verification.
+- Next work should run continuation/readout from the step-600 handoff lineage
+  to test whether this scheduled source can clear the high non-bottleneck gate.

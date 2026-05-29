@@ -96,8 +96,9 @@ Active directions:
   forced-true additive readout auxiliary shows this can shape transfer
   geometry. The naive always-on version competes with source policy
   acquisition, but a delayed start fixed that tradeoff in a small gate and
-  improved a full-grid 600-step handoff from `0.2525` to `0.4150` at matched
-  200-step source checkpoints.
+  improved full-grid 600-step handoff from `0.2525` to `0.4150` at matched
+  200-step source checkpoints; extending scheduled source training to step
+  `600` raised final handoff to `0.7725`.
 - A genuinely different credit-assignment family such as target propagation,
   local targets, or another mechanism that constructs useful calculator-query
   targets without backpropagating through the calculator. The first
@@ -135,11 +136,11 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Extend the scheduled forced-true additive source objective to longer
-   full-grid source horizons. The 200-step `operand_max=19` gate improved
-   standalone 600-step handoff (`0.4150` vs baseline `0.2525`) despite nearly
-   tied source accuracy. Next test checkpoints around `400/600/800`; add a
-   policy-retention anchor only if source accuracy drifts.
+1. Run continuation/readout from the scheduled step-600 source/handoff
+   lineage. Longer scheduled source training compounded geometry through step
+   `600` and produced `0.7725` standalone handoff, but step `800` was worse
+   despite perfect forced-result geometry. Keep verifying checkpoints with the
+   600-step handoff gate.
 2. Prototype a target-propagation/local-target style credit-assignment path
    beyond the current exact-grid local-target gates: naive uniform/top-k sparse
    sampling and simple loss-neighborhood expansion are not enough, so the next

@@ -199,10 +199,14 @@ Memory:
   `operand_max=19` source checkpoints, scheduled aux nearly tied source
   accuracy but improved forced-result geometry (`forced_best_true=0.2125` vs
   `0.0000`) and standalone 600-step handoff (`0.4150` final eval vs `0.2525`).
-- The promising next direction is not another checkpoint selector; extend the
-  scheduled geometry objective to longer full-grid source horizons
-  (`400/600/800`) and verify with the standalone 600-step handoff gate. If
-  larger runs drift late, add a behavior gate or policy-retention anchor.
+- Longer scheduled source training compounded through source step `600`: the
+  step-600 checkpoint reached `forced_best_true=0.9800` and standalone
+  600-step handoff final eval `0.7725`. Step `800` had perfect forced-result
+  geometry but worse handoff (`0.6750`), so final source checkpoint is not
+  automatically best.
+- The promising next direction is continuation/readout from the scheduled
+  step-600 handoff lineage. Keep standalone 600-step handoff verification in
+  the loop; forced-result geometry alone remains a triage signal.
 
 Representative evidence:
 
@@ -214,6 +218,8 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-source-aux-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-schedule-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-op19-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-long-source-gate.md`
+- `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 
 ## Direction: Target Propagation / Local Targets
 

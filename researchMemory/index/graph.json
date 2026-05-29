@@ -436,6 +436,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/088-longer-scheduled-forced-true-source-acquisition-compounds-handoff-geometry-through-step-60",
+      "target": "researchMemory/hypotheses/phase7/088-longer-scheduled-forced-true-source-acquisition-compounds-handoff-geometry-through-step-60.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -638,6 +643,16 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-op19-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-long-source-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "researchReviews/2026-05-29-scheduled-source-geometry-review.md",
       "type": "supported_by"
     },
     {
@@ -1300,6 +1315,13 @@
       "source_path": "researchMemory/hypotheses/phase7/087-the-scheduled-forced-true-additive-source-objective-improves-full-grid-standalone-handoff.md",
       "status": "POSITIVE",
       "title": "The scheduled forced-true additive source objective improves full-grid standalone handoff."
+    },
+    {
+      "id": "doc/088-longer-scheduled-forced-true-source-acquisition-compounds-handoff-geometry-through-step-60",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/088-longer-scheduled-forced-true-source-acquisition-compounds-handoff-geometry-through-step-60.md",
+      "status": "POSITIVE",
+      "title": "Longer scheduled forced-true source acquisition compounds handoff geometry through step 600."
     },
     {
       "id": "doc/phase7-direction-memory",
