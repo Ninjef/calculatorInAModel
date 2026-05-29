@@ -5180,3 +5180,67 @@ Interpretation:
 - The major gaps remain: post-hoc selection, prescriptive bottleneck source
   acquisition, the weak-source 800-step continuation cost, and no proof yet for
   many calculators or much larger models.
+
+## 2026-05-29 New-Source 500-Step Selector Validation
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-seventy-first-task-New-source-500-selector-validation.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_new_source_500_selector_validation
+```
+
+Question:
+
+Does the shortened 500-step handoff selector generalize to a newly acquired
+source family?
+
+Setup:
+
+- Trained fresh bottleneck `src6` with the existing direct-feedback source
+  recipe and checkpoint snapshots every 100 steps.
+- Compared source step `1200`, step `1500`, and final in additive seed `6`.
+- Ran each candidate for 800 frozen-policy handoff steps so the 500-step
+  selector score could be checked against full handoff performance.
+
+Source diagnostics:
+
+| Source checkpoint | Source normal | Injection-zero | Oracle | Learned calc |
+| --- | ---: | ---: | ---: | ---: |
+| step `1200` | `0.8350` | `0.0500` | `1.0000` | `0.8350` |
+| step `1500` | `0.8625` | `0.0450` | `1.0000` | `0.8625` |
+| step `1600` snapshot | `0.8650` | `0.0325` | `1.0000` | `0.8650` |
+| final eval | `0.8850` | `0.0391` | `1.0000` | `0.8594` |
+
+Additive handoff results:
+
+| Candidate | Source normal | Normal @ 400 | Normal @ 500 | Normal @ 600 | Normal @ 800 | Final eval | Final injection-zero | Final forced-random | Final oracle | Final calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| step `1200` | `0.8350` | `0.4025` | `0.6025` | `0.7075` | `0.8025` | `0.8450` | `0.0000` | `0.0703` | `0.8438` | `0.7422` |
+| step `1500` | `0.8625` | `0.5450` | `0.7200` | `0.7800` | `0.8500` | `0.8875` | `0.0000` | `0.0469` | `0.8438` | `0.8359` |
+| final | `0.8850` | `0.5950` | `0.6850` | `0.8050` | `0.8975` | `0.8975` | `0.0469` | `0.0703` | `0.9063` | `0.8594` |
+
+Decision:
+
+```text
+new_source_500_step_selector_generalization_negative
+```
+
+Interpretation:
+
+- The 500-step selector would choose step `1500`, but the full 800-step handoff
+  was better from the final source checkpoint.
+- The 600-step selector would choose the final checkpoint and matches the
+  full-handoff winner.
+- The 500-step shortcut should not be treated as a general selector for newly
+  acquired source families. Use the 600-step selector or full confirmation
+  until a cheaper proxy is validated.
+- The fresh final-source handoff is near the non-bottleneck gate (`0.8975`) but
+  does not cleanly pass `0.90`; next useful work is continuation/readout from
+  this near-gate source or source acquisition optimized for 600-step
+  handoff/continuation slope.

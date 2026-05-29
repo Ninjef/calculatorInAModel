@@ -375,3 +375,9 @@ Conclusion: Recent work moved from disproving source-accuracy selection to valid
 Do not repeat: Existing source-accuracy selector tests, existing `src4/src5` 200/600 readout cuts, existing 600-step continuation cut, or existing `src2` 500-step selector trace as novelty.
 Next allowed test: Validate the 500-step selector on newly acquired source checkpoints, or train source acquisition directly for early handoff and continuation slope.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-periodic-review-selected-source-recipe.md`
+
+MIXED-NEGATIVE: The 500-step selector does not generalize cleanly to fresh `src6`.
+Conclusion: Fresh `src6` 500-step handoff scores pick step `1500` (`0.7200`) over final (`0.6850`), but full 800-step handoff is better from final (`0.8975` vs `0.8875`); 600-step scores would pick final (`0.8050` vs `0.7800`).
+Do not repeat: Same `src6` step-1200/step-1500/final additive seed-6 frozen-policy 800-step comparison as novelty.
+Next allowed test: Use 600-step selection for fresh sources, run continuation/readout from fresh `src6` final, or optimize source acquisition for 600-step handoff/continuation slope.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-new-source-500-selector-validation.md`
