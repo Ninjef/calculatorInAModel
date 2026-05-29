@@ -501,6 +501,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/101-finite-reset-windows-expose-replay-memory-s-fixed-grid-transductive-dependence",
+      "target": "researchMemory/hypotheses/phase7/101-finite-reset-windows-expose-replay-memory-s-fixed-grid-transductive-dependence.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -818,6 +823,11 @@
     {
       "source": "direction/target-propagation-local-targets",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-replay-memory-rescore-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-replay-memory-reset-stress-gate.md",
       "type": "supported_by"
     },
     {
@@ -1526,6 +1536,13 @@
       "source_path": "researchMemory/hypotheses/phase7/100-simple-top-cached-candidate-rescoring-does-not-improve-replay-memory-local-target-retentio.md",
       "status": "MIXED-NEGATIVE",
       "title": "Simple top-cached-candidate rescoring does not improve replay-memory local-target retention."
+    },
+    {
+      "id": "doc/101-finite-reset-windows-expose-replay-memory-s-fixed-grid-transductive-dependence",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/101-finite-reset-windows-expose-replay-memory-s-fixed-grid-transductive-dependence.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Finite reset windows expose replay-memory's fixed-grid transductive dependence."
     },
     {
       "id": "doc/phase7-direction-memory",

@@ -317,10 +317,15 @@ Memory:
 - Simple cached-candidate rescoring did not improve that retention weakness:
   `u2_m30_r2` tied no-rescore in both 200-step and 800+200 gates, while
   heavier `r4/r8` rescoring hurt short-gate learning.
+- Finite reset windows exposed a transductive dependency: at 199 steps,
+  no-reset `u2_m30` reached `0.5925` exact calc / `0.5938` sampled normal,
+  while `reset100` reached only `0.4575` / `0.4453` and `reset50` only
+  `0.2575` / `0.2812`, even though target true-candidate coverage mostly
+  recovered between resets.
 - The result is promising but still transductive: on the fixed exhaustive grid
-  the memory eventually observes all `39` result classes. Next work should test
-  memory reset, streaming/non-exhaustive prompts, or learned/generalized
-  proposal memory before claiming scalability.
+  the memory eventually observes all `39` result classes. Reset/rescore tweaks
+  are not enough; next work should test streaming/non-exhaustive prompts or
+  learned/generalized proposal memory before claiming scalability.
 
 Representative evidence:
 
@@ -335,3 +340,4 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-local-target-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-lower-budget-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-rescore-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-reset-stress-gate.md`

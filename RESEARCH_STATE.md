@@ -129,7 +129,9 @@ Active directions:
   lower-budget `u2_m30` point improves the 200-step gate to `0.6025` calc /
   `0.6016` sampled normal, but retains less strongly (`0.7850` calc /
   `0.7656` normal). Light cached-candidate rescoring ties `u2_m30`; heavier
-  rescoring hurts.
+  rescoring hurts. Reset memory exposes the transductive dependency: at 199
+  steps, `reset100` fell to `0.4575` calc / `0.4453` normal and `reset50` to
+  `0.2575` / `0.2812` despite mostly restored target coverage.
 - Lower-cost assignment is useful only when it changes scalability, not merely
   proxy selection.
 
@@ -160,9 +162,9 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Stress-test replay-memory beyond fixed-grid transduction: reset/age memory,
-   streaming/non-exhaustive prompts, or generalized proposals. Simple cached
-   rescoring did not fix retention.
+1. Stress-test replay-memory beyond fixed-grid transduction with streaming
+   prompts or learned/generalized proposals. Rescoring did not help and resets
+   hurt.
 2. In parallel, keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. If trying to reduce hard-assignment cost, state the scalability hypothesis
@@ -189,11 +191,8 @@ against fresh-family 600-step handoff outcomes.
 
 ## Review Cadence
 
-Write or update a `researchReviews/` memo after any of the following:
-
-- 5-10 new experiments.
-- A branch produces a clear family-level negative.
-- A branch produces a result that changes the active strategic bet.
-- The next proposed task feels like another local variant of a paused family.
-
-The review must answer what changed, what should stop, what deserves compute, and whether the project is closer to the overarching goal.
+Write or update a `researchReviews/` memo after 5-10 new experiments, a clear
+family-level negative, a strategic-bet change, or when the next task feels like
+another local variant of a paused family. The review must answer what changed,
+what should stop, what deserves compute, and whether the project is closer to
+the overarching goal.

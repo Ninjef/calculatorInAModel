@@ -199,3 +199,26 @@ Updated steering: stale-cache rescoring by itself is not the missing piece.
 Do not spend more turns tuning rescore counts. The next replay-memory work
 should target the transductive assumption directly: finite/reset memory,
 streaming/non-exhaustive prompts, or learned/generalized candidate memory.
+
+## Addendum: Finite Reset Memory Stress
+
+Resetting the replay-memory cache exposed that the positive depends heavily on
+persistent prompt-identity memory:
+
+- Added optional `_resetN` syntax, e.g.
+  `memory_policy_reweighted_t1_u2_m30_reset50`, which clears cached losses
+  every `N` target-loss calls.
+- In the 200-step reset stress, no-reset `u2_m30` reached `0.6025` exact calc /
+  `0.6016` sampled normal. `reset50` fell to `0.2500` / `0.2578`, `reset25`
+  to `0.1650` / `0.2188`, and `reset10` to `0.0950` / `0.1406`.
+- A 199-step boundary check avoided ending exactly on a reset: no-reset reached
+  `0.5925` / `0.5938`, `reset100` reached only `0.4575` / `0.4453`, and
+  `reset50` only `0.2575` / `0.2812`.
+- The boundary check is especially important because `reset100` had nearly
+  full final target coverage (`0.9925` true-candidate coverage) yet still
+  underperformed, so the damage is not just a final empty-cache snapshot.
+
+Updated steering: do not tune reset intervals as the next local fix. Treat
+plain replay memory as a useful but transductive approximation. The next
+local-target scalability test should use streaming/non-exhaustive prompts or a
+learned/generalized proposal that cannot rely on a durable per-prompt cache.

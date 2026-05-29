@@ -109,26 +109,38 @@ def parse_adaptive_policy_reweighted_branch(branch: str) -> tuple[float, int, in
     return temperature, uniform_samples, beam, radius
 
 
-def parse_memory_policy_reweighted_branch(branch: str) -> tuple[float, int, int, int]:
+def parse_memory_policy_reweighted_branch(
+    branch: str,
+) -> tuple[float, int, int, int, int]:
     prefix = "memory_policy_reweighted_t"
     if not branch.startswith(prefix):
         raise ValueError(f"not a memory policy-reweighted branch: {branch!r}")
     parts = branch.removeprefix(prefix).split("_")
-    if (
-        len(parts) not in (3, 4)
-        or not parts[1].startswith("u")
-        or not parts[2].startswith("m")
-        or (len(parts) == 4 and not parts[3].startswith("r"))
-    ):
+    if len(parts) < 3 or not parts[1].startswith("u") or not parts[2].startswith("m"):
         raise ValueError(
             "memory policy-reweighted branch must look like "
             "'memory_policy_reweighted_t1_u8_m24' or "
-            "'memory_policy_reweighted_t1_u2_m30_r4'"
+            "'memory_policy_reweighted_t1_u2_m30_r4' or "
+            "'memory_policy_reweighted_t1_u2_m30_reset50'"
         )
     temperature = float(parts[0].replace("p", "."))
     uniform_samples = int(parts[1].removeprefix("u"))
     memory_candidates = int(parts[2].removeprefix("m"))
-    rescore_candidates = int(parts[3].removeprefix("r")) if len(parts) == 4 else 0
+    rescore_candidates = 0
+    reset_interval = 0
+    for suffix in parts[3:]:
+        if suffix.startswith("reset"):
+            if reset_interval != 0:
+                raise ValueError("memory reset interval specified more than once")
+            reset_interval = int(suffix.removeprefix("reset"))
+        elif suffix.startswith("r"):
+            if rescore_candidates != 0:
+                raise ValueError("memory rescore count specified more than once")
+            rescore_candidates = int(suffix.removeprefix("r"))
+        else:
+            raise ValueError(
+                "memory policy-reweighted branch suffixes must be rN or resetN"
+            )
     if temperature <= 0:
         raise ValueError("memory policy-reweighted temperature must be positive")
     if uniform_samples < 1:
@@ -139,7 +151,15 @@ def parse_memory_policy_reweighted_branch(branch: str) -> tuple[float, int, int,
         raise ValueError("memory rescore count must be non-negative")
     if rescore_candidates > memory_candidates:
         raise ValueError("memory rescore count cannot exceed memory candidate count")
-    return temperature, uniform_samples, memory_candidates, rescore_candidates
+    if reset_interval < 0:
+        raise ValueError("memory reset interval must be non-negative")
+    return (
+        temperature,
+        uniform_samples,
+        memory_candidates,
+        rescore_candidates,
+        reset_interval,
+    )
 
 
 def sample_uniform_result_candidates(
@@ -443,9 +463,13 @@ def memory_policy_reweighted_loss(
     args: argparse.Namespace,
     state: dict[str, Any],
 ) -> tuple[torch.Tensor, dict[str, float | str]]:
-    temperature, uniform_samples, memory_candidates, rescore_candidates = (
-        parse_memory_policy_reweighted_branch(branch)
-    )
+    (
+        temperature,
+        uniform_samples,
+        memory_candidates,
+        rescore_candidates,
+        reset_interval,
+    ) = parse_memory_policy_reweighted_branch(branch)
     result_logits, _, _, _ = calculator_read_result_logits(model, batch)
     result_vocab_size = result_logits.shape[-1]
     batch_size = batch.x.shape[0]
@@ -462,6 +486,17 @@ def memory_policy_reweighted_loss(
     seen_table: torch.Tensor = state["seen_table"]
     if loss_table.shape != (batch_size, result_vocab_size):
         raise ValueError("memory branch state shape changed across batches")
+
+    call_index = int(state.get("target_loss_calls", 0))
+    reset_count = int(state.get("reset_count", 0))
+    did_reset = False
+    if reset_interval > 0 and call_index > 0 and call_index % reset_interval == 0:
+        loss_table.fill_(float("inf"))
+        seen_table.zero_()
+        reset_count += 1
+        state["reset_count"] = reset_count
+        did_reset = True
+    state["target_loss_calls"] = call_index + 1
 
     fresh_candidates = sample_uniform_result_candidates(
         batch_size=batch_size,
@@ -528,6 +563,9 @@ def memory_policy_reweighted_loss(
             "target_temperature": float(temperature),
             "target_uniform_samples": int(uniform_samples),
             "target_memory_candidates": int(memory_candidates),
+            "target_memory_reset_interval": int(reset_interval),
+            "target_memory_reset_count": int(reset_count),
+            "target_memory_did_reset": float(did_reset),
             "target_fresh_scored_results": int(fresh_candidates.shape[1]),
             "target_rescored_results": int(rescore_count),
             "target_forced_scores_per_step": int(

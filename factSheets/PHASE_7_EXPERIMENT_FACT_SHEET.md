@@ -7316,3 +7316,66 @@ Interpretation:
 - Simple top-cached-candidate rescoring is not the fix for the retention
   tradeoff; next replay-memory work should use finite/reset memory,
   streaming/non-exhaustive prompts, or learned/generalized candidate memory.
+
+## 2026-05-29 Replay-Memory Reset Stress Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-replay-memory-reset-stress-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_local_target_gate/smoke_reset_op3
+runs/2026-05-29_phase7_local_target_gate/memory_reset_200
+runs/2026-05-29_phase7_local_target_gate/memory_reset_boundary_check_199
+```
+
+Question:
+
+Does replay memory still train with finite per-prompt caches, or does the
+positive depend on persistent fixed-grid transductive memory?
+
+Tooling:
+
+- Added optional `_resetN` replay-memory branch syntax, e.g.
+  `memory_policy_reweighted_t1_u2_m30_reset50`.
+- A reset branch clears cached loss/seen tables every `N` target-loss calls and
+  logs reset interval/count and whether the current step reset.
+
+200-step comparison:
+
+| Branch | Reset calls | Exact-grid calc | Sampled normal | Final observed results | Final true coverage | Final target argmax |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `memory_policy_reweighted_t1_u2_m30` | `0` | `0.6025` | `0.6016` | `38.7925` | `0.9925` | `0.9600` |
+| `memory_policy_reweighted_t1_u2_m30_reset50` | `4` | `0.2500` | `0.2578` | `2.0000` | `0.0525` | `0.0525` |
+| `memory_policy_reweighted_t1_u2_m30_reset25` | `8` | `0.1650` | `0.2188` | `2.0000` | `0.0525` | `0.0525` |
+| `memory_policy_reweighted_t1_u2_m30_reset10` | `20` | `0.0950` | `0.1406` | `2.0000` | `0.0525` | `0.0525` |
+| `memory_policy_reweighted_t1_u8_m24` | `0` | `0.5900` | `0.5391` | `39.0000` | `1.0000` | `0.9850` |
+
+199-step boundary check:
+
+| Branch | Reset calls | Exact-grid calc | Sampled normal | Final observed results | Final true coverage | Final target argmax |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `memory_policy_reweighted_t1_u2_m30` | `0` | `0.5925` | `0.5938` | `38.7925` | `0.9925` | `0.9600` |
+| `memory_policy_reweighted_t1_u2_m30_reset100` | `1` | `0.4575` | `0.4453` | `38.7800` | `0.9925` | `0.9650` |
+| `memory_policy_reweighted_t1_u2_m30_reset50` | `3` | `0.2575` | `0.2812` | `36.3025` | `0.9525` | `0.9075` |
+
+Decision:
+
+```text
+finite_reset_replay_memory_exposes_transductive_dependency
+```
+
+Interpretation:
+
+- Persistent per-prompt cache is a major contributor to the replay-memory
+  positive.
+- The 199-step boundary check removes the concern that the negative is only a
+  final empty-cache snapshot: `reset100` still underperformed no-reset despite
+  nearly identical final target coverage.
+- Do not tune reset intervals as the next fix. The next local-target
+  scalability test should use streaming/non-exhaustive prompts or
+  learned/generalized proposal memory.
