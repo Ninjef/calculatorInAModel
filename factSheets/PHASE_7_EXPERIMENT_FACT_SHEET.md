@@ -1,5 +1,56 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-29 Adaptive Local-Target Proposal Gate
+
+Task/work log:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-adaptive-local-target-proposal-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_adaptive_local_target_gate/adaptive_neighbor_200
+```
+
+Code:
+
+```text
+scripts/run_phase7_local_target_stage1_lift_gate.py
+```
+
+Result:
+
+```text
+adaptive_local_target_neighbor_expansion_negative
+```
+
+The runner now includes `adaptive_policy_reweighted_t<T>_u<U>_b<B>_r<R>`
+branches. These sample a small uniform seed set, score answer loss for those
+forced-result classes, expand around the lowest-loss sampled results, and
+build a unique-candidate policy-reweighted target. The expansion is
+answer-derived, not oracle-derived.
+
+At 200 steps, raw no-replacement uniform `sampled_policy_reweighted_t1_k0_u32`
+reached `0.3350` exact-grid calculator-result accuracy and `0.3438` sampled
+normal. Adaptive branches underperformed at similar raw scoring budgets:
+`u8_b4_r2` reached `0.2025` calc, `u8_b4_r3` `0.2600`, and `u12_b4_r2`
+`0.2700`. The adaptive branches improved coverage over their small initial
+seed sets, but clustered heavily: they ended with only `18.42-22.08` unique
+scored results and true-result coverage `0.6350-0.7700`, below raw `u32`'s
+`32` unique results and `0.8450` coverage.
+
+Interpretation:
+
+- Simple loss-ranked neighborhood expansion does not rescue sparse
+  `policy_reweighted_t1` targets.
+- The next local-target approximation should use a learned proposal or
+  importance/bias correction rather than another hand-coded neighborhood
+  expansion.
+- If no better proposal mechanism is available, the more strategic path is to
+  return to source acquisition optimized for additive handoff/readout geometry.
+
 ## 2026-05-29 Sampled Local-Target Approximation Gate
 
 Task/work log:

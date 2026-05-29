@@ -225,11 +225,15 @@ Memory:
   sampled candidate sets underperformed badly unless they scored nearly the
   full result vocabulary (`u32` only `0.3350` exact-grid calc at 200 steps,
   `u36` `0.4100`, while full-vocabulary `u39` reached `0.6250`).
+- A simple adaptive loss-neighborhood proposal was negative: at similar scoring
+  budgets it underperformed raw uniform `u32` because expansion clustered into
+  fewer unique candidates and lower true-result coverage.
 - The result is not yet a scalable or non-prescriptive method. The tested
   targets still need broad forced-result scoring.
-- Next work should prioritize a smarter proposal distribution, learned
-  candidate generator, or bias/variance correction for `policy_reweighted_t1`.
-  Do not rerun raw uniform/top-k candidate-count ladders as novelty.
+- Next work should prioritize a learned candidate proposal or bias/variance
+  correction for `policy_reweighted_t1`; otherwise pivot back to source
+  acquisition for handoff geometry. Do not rerun raw uniform/top-k ladders or
+  simple low-loss-neighborhood expansion as novelty.
 
 Representative evidence:
 
@@ -239,3 +243,4 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-local-target-stage1-lift-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-local-target-convergence-retention-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-sampled-local-target-approximation-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-adaptive-local-target-proposal-gate.md`

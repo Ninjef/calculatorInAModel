@@ -133,9 +133,9 @@ These branches should not continue without a new mechanism:
    behavior.
 2. Prototype a target-propagation/local-target style credit-assignment path
    beyond the current exact-grid local-target gates: naive uniform/top-k sparse
-   sampling is not enough, so the next approximation needs a smarter proposal,
-   learned candidate generator, or bias/variance correction that improves
-   true-result coverage without near-full enumeration.
+   sampling and simple loss-neighborhood expansion are not enough, so the next
+   approximation needs a learned proposal or bias/variance correction that
+   improves true-result coverage without near-full enumeration.
 3. If trying to reduce hard-assignment cost, state the scalability hypothesis
    up front and compare against the exact-grid assignment ceiling rather than
    only against prior cheap selectors.

@@ -529,3 +529,9 @@ Conclusion: In a 200-step no-replacement sparse approximation gate, exact `polic
 Do not repeat: The same seed-2 200-step sparse candidate ladder over `k8_u8/k0_u16/k0_u24/k0_u32/k0_u36/k0_u39` as novelty.
 Next allowed test: Use a smarter proposal/learned candidate generator or importance-corrected target that improves true-result coverage without near-full forced-result enumeration.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-sampled-local-target-approximation-gate.md`
+
+DISPROVEN: Simple loss-ranked neighborhood expansion rescues sparse `policy_reweighted_t1` local targets.
+Conclusion: In a 200-step adaptive proposal gate, raw uniform `sampled_policy_reweighted_t1_k0_u32` reached `0.3350` exact-grid calc and `0.3438` sampled normal. Adaptive low-loss-neighborhood branches underperformed at similar raw scoring budgets: `u8_b4_r2` `0.2025` calc, `u8_b4_r3` `0.2600`, and `u12_b4_r2` `0.2700`; the adaptive branches had lower unique coverage (`18.42-22.08` unique results) and lower true-result coverage (`0.6350-0.7700`) than raw `u32` (`32` unique, `0.8450` coverage).
+Do not repeat: The same seed-2 200-step adaptive neighborhood gate over `u8_b4_r2/u8_b4_r3/u12_b4_r2` as novelty.
+Next allowed test: Use a learned proposal or importance/bias-corrected sampled target; otherwise pivot to source-acquisition-for-handoff geometry instead of more local sampled-candidate variants.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-adaptive-local-target-proposal-gate.md`

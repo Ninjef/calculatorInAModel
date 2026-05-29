@@ -47,6 +47,7 @@ def parse_branch_specs(text: str) -> list[str]:
         "expected_loss",
         "policy_reweighted_t",
         "sampled_policy_reweighted_t",
+        "adaptive_policy_reweighted_t",
         "logit_descent_p",
     )
     for branch in branches:
@@ -75,6 +76,51 @@ def parse_sampled_policy_reweighted_branch(branch: str) -> tuple[float, int, int
     if top_k + uniform_samples < 1:
         raise ValueError("sampled policy-reweighted branch needs at least one candidate")
     return temperature, top_k, uniform_samples
+
+
+def parse_adaptive_policy_reweighted_branch(branch: str) -> tuple[float, int, int, int]:
+    prefix = "adaptive_policy_reweighted_t"
+    if not branch.startswith(prefix):
+        raise ValueError(f"not an adaptive policy-reweighted branch: {branch!r}")
+    parts = branch.removeprefix(prefix).split("_")
+    if (
+        len(parts) != 4
+        or not parts[1].startswith("u")
+        or not parts[2].startswith("b")
+        or not parts[3].startswith("r")
+    ):
+        raise ValueError(
+            "adaptive policy-reweighted branch must look like "
+            "'adaptive_policy_reweighted_t1_u8_b4_r2'"
+        )
+    temperature = float(parts[0].replace("p", "."))
+    uniform_samples = int(parts[1].removeprefix("u"))
+    beam = int(parts[2].removeprefix("b"))
+    radius = int(parts[3].removeprefix("r"))
+    if temperature <= 0:
+        raise ValueError("adaptive policy-reweighted temperature must be positive")
+    if uniform_samples < 1:
+        raise ValueError("adaptive branch needs at least one uniform seed")
+    if beam < 1:
+        raise ValueError("adaptive branch needs a positive beam size")
+    if radius < 0:
+        raise ValueError("adaptive branch radius must be non-negative")
+    return temperature, uniform_samples, beam, radius
+
+
+def sample_uniform_result_candidates(
+    *,
+    batch_size: int,
+    result_vocab_size: int,
+    count: int,
+    device: torch.device,
+) -> torch.Tensor:
+    sample_count = min(count, result_vocab_size)
+    return (
+        torch.rand(batch_size, result_vocab_size, device=device)
+        .topk(k=sample_count, dim=-1)
+        .indices
+    )
 
 
 @torch.no_grad()
@@ -118,6 +164,87 @@ def score_forced_candidate_result_classes(
     return torch.cat(losses, dim=-1)
 
 
+def dense_unique_candidate_policy_reweighted_loss(
+    *,
+    model,
+    batch,
+    result_logits: torch.Tensor,
+    candidates: torch.Tensor,
+    candidate_losses: torch.Tensor,
+    temperature: float,
+    min_probability_floor: float,
+    metrics: dict[str, float | str],
+    digits: int,
+) -> tuple[torch.Tensor, dict[str, float | str]]:
+    if candidates.shape != candidate_losses.shape:
+        raise ValueError("candidates and candidate losses must have the same shape")
+    result_vocab_size = result_logits.shape[-1]
+    batch_size = batch.x.shape[0]
+    row_idx = torch.arange(batch_size, device=batch.x.device)
+    loss_table = result_logits.new_full(
+        (batch_size, result_vocab_size),
+        float("inf"),
+    )
+    for idx in range(candidates.shape[1]):
+        classes = candidates[:, idx]
+        current = loss_table[row_idx, classes]
+        loss_table[row_idx, classes] = torch.minimum(current, candidate_losses[:, idx])
+
+    candidate_mask = torch.isfinite(loss_table)
+    log_probs = result_logits.log_softmax(dim=-1)
+    target_logits = log_probs.detach() - (loss_table / temperature)
+    target_logits = target_logits.masked_fill(~candidate_mask, -1.0e9)
+    weights = torch.softmax(target_logits, dim=-1).detach()
+    if min_probability_floor > 0:
+        unique_counts = candidate_mask.sum(dim=-1)
+        if bool((min_probability_floor * unique_counts >= 1.0).any().item()):
+            raise ValueError("min probability floor times candidate count must be < 1")
+        weights = torch.where(
+            candidate_mask,
+            weights.clamp_min(min_probability_floor),
+            torch.zeros_like(weights),
+        )
+        weights = weights / weights.sum(dim=-1, keepdim=True).clamp_min(1.0e-12)
+
+    loss = -(weights * log_probs).sum(dim=-1).mean()
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=digits)
+    true_sum = true_a + true_b
+    target_entropy = -(weights * weights.clamp_min(1e-12).log()).sum(dim=-1)
+    target_argmax = weights.argmax(dim=-1)
+    true_candidate = candidate_mask[row_idx, true_sum]
+    true_prob = weights[row_idx, true_sum]
+    candidate_current_weights = torch.softmax(
+        log_probs.detach().masked_fill(~candidate_mask, -1.0e9),
+        dim=-1,
+    )
+    masked_losses = loss_table.masked_fill(~candidate_mask, 0.0)
+    candidate_current_loss = (candidate_current_weights * masked_losses).sum(dim=-1)
+    candidate_target_loss = (weights * masked_losses).sum(dim=-1)
+    unique_counts = candidate_mask.sum(dim=-1).to(torch.float32)
+    return loss, {
+        **metrics,
+        "target_scored_results": int(candidates.shape[1]),
+        "target_unique_scored_results": float(unique_counts.mean().item()),
+        "target_scored_fraction": float(candidates.shape[1] / result_vocab_size),
+        "target_unique_scored_fraction": float(
+            (unique_counts / result_vocab_size).mean().item()
+        ),
+        "target_true_candidate_coverage": float(true_candidate.float().mean().item()),
+        "target_entropy": float(target_entropy.mean().item()),
+        "target_effective_results": float(target_entropy.exp().mean().item()),
+        "target_true_probability": float(true_prob.mean().item()),
+        "target_argmax_accuracy": float((target_argmax == true_sum).float().mean().item()),
+        "target_argmax_matches_current": float(
+            (target_argmax == result_logits.detach().argmax(dim=-1)).float().mean().item()
+        ),
+        "target_candidate_expected_loss": float(candidate_target_loss.mean().item()),
+        "current_candidate_expected_loss": float(candidate_current_loss.mean().item()),
+        "target_candidate_expected_improvement": float(
+            (candidate_current_loss - candidate_target_loss).mean().item()
+        ),
+    }
+
+
 def sampled_policy_reweighted_loss(
     model,
     batch,
@@ -136,15 +263,13 @@ def sampled_policy_reweighted_loss(
             .indices
         )
     if uniform_samples > 0:
-        uniform_count = min(uniform_samples, result_vocab_size)
         candidate_parts.append(
-            torch.rand(
-                batch.x.shape[0],
-                result_vocab_size,
+            sample_uniform_result_candidates(
+                batch_size=batch.x.shape[0],
+                result_vocab_size=result_vocab_size,
+                count=uniform_samples,
                 device=batch.x.device,
             )
-            .topk(k=uniform_count, dim=-1)
-            .indices
         )
     candidates = torch.cat(candidate_parts, dim=-1)
     candidate_losses = score_forced_candidate_result_classes(
@@ -204,6 +329,78 @@ def sampled_policy_reweighted_loss(
     }
 
 
+def adaptive_policy_reweighted_loss(
+    model,
+    batch,
+    *,
+    branch: str,
+    args: argparse.Namespace,
+) -> tuple[torch.Tensor, dict[str, float | str]]:
+    temperature, uniform_samples, beam, radius = parse_adaptive_policy_reweighted_branch(
+        branch
+    )
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    result_vocab_size = result_logits.shape[-1]
+    initial_candidates = sample_uniform_result_candidates(
+        batch_size=batch.x.shape[0],
+        result_vocab_size=result_vocab_size,
+        count=uniform_samples,
+        device=batch.x.device,
+    )
+    initial_losses = score_forced_candidate_result_classes(
+        model,
+        batch,
+        initial_candidates,
+        chunk_size=args.result_chunk_size,
+    )
+    beam_count = min(beam, initial_candidates.shape[1])
+    best_initial_idx = initial_losses.topk(k=beam_count, largest=False, dim=-1).indices
+    centers = initial_candidates.gather(1, best_initial_idx)
+    offsets = torch.arange(-radius, radius + 1, device=batch.x.device)
+    expanded_candidates = (
+        centers.unsqueeze(-1)
+        .add(offsets.view(1, 1, -1))
+        .clamp(0, result_vocab_size - 1)
+        .reshape(batch.x.shape[0], -1)
+    )
+    expanded_losses = score_forced_candidate_result_classes(
+        model,
+        batch,
+        expanded_candidates,
+        chunk_size=args.result_chunk_size,
+    )
+    candidates = torch.cat([initial_candidates, expanded_candidates], dim=-1)
+    candidate_losses = torch.cat([initial_losses, expanded_losses], dim=-1)
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=args.digits)
+    true_sum = true_a + true_b
+    initial_true_coverage = (
+        (initial_candidates == true_sum.unsqueeze(-1)).any(dim=-1).float().mean().item()
+    )
+    loss, metrics = dense_unique_candidate_policy_reweighted_loss(
+        model=model,
+        batch=batch,
+        result_logits=result_logits,
+        candidates=candidates,
+        candidate_losses=candidate_losses,
+        temperature=temperature,
+        min_probability_floor=args.min_probability_floor,
+        digits=args.digits,
+        metrics={
+            "branch_loss_mode": branch,
+            "target_family": "adaptive_policy_reweighted",
+            "target_temperature": float(temperature),
+            "target_uniform_samples": int(uniform_samples),
+            "target_adaptive_beam": int(beam),
+            "target_adaptive_radius": int(radius),
+            "target_initial_true_candidate_coverage": float(initial_true_coverage),
+        },
+    )
+    return loss, {
+        "branch_loss": float(loss.detach().item()),
+        **metrics,
+    }
+
+
 def branch_loss(
     model,
     batch,
@@ -243,6 +440,8 @@ def branch_loss(
         }
     if branch.startswith("sampled_policy_reweighted_t"):
         return sampled_policy_reweighted_loss(model, batch, branch=branch, args=args)
+    if branch.startswith("adaptive_policy_reweighted_t"):
+        return adaptive_policy_reweighted_loss(model, batch, branch=branch, args=args)
 
     result_logits, _, _, _ = calculator_read_result_logits(model, batch)
     full_losses = score_forced_result_classes_chunked(
