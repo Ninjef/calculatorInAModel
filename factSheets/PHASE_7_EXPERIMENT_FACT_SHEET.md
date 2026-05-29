@@ -5539,3 +5539,51 @@ Interpretation:
 - Next useful work is replication on another no-decay stabilized source,
   continuation-cost reduction for this source family, or a cheaper proxy for
   continuation/readout slope.
+
+## 2026-05-29 Stabilized Source Reduced Continuation
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-seventy-seventh-task-Stabilized-source-reduced-continuation.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_stabilized_source_reduced_continuation
+```
+
+Question:
+
+Can the no-decay stabilized source lineage still clear the non-bottleneck gate
+if continuation is reduced from 800 to 600 steps?
+
+Setup:
+
+- Started from the step-600 checkpoint of the prior frozen-policy continuation
+  run.
+- Ran the standard 600-step policy-backbone-frozen readout.
+- Compared against the prior 800-continuation plus 600-readout positive.
+
+Result:
+
+| Recipe | Final eval | Best snapshot | Injection-zero | Forced-random | Oracle | Calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 800 continuation + 600 readout | `0.9575` | `0.9625` | `0.0156` | `0.0859` | `0.9375` | `0.8750` |
+| 600 continuation + 600 readout | `0.9425` | `0.9425` | `0.0078` | `0.0781` | `0.9297` | `0.8750` |
+
+Decision:
+
+```text
+stabilized_source_600_continuation_readout_positive
+```
+
+Interpretation:
+
+- The reduced continuation still clears the `0.90` non-bottleneck gate.
+- It loses only `0.0150` final eval versus the 800-continuation readout while
+  keeping calculator-dependence controls far below normal.
+- This improves the scalability profile for the no-decay stabilized source
+  family, but it should be replicated on another fresh stabilized source before
+  replacing the 800-step continuation default.

@@ -411,3 +411,9 @@ Conclusion: Starting from final-source handoff `0.6500`, direct 600-step readout
 Do not repeat: Same no-decay final-source handoff into direct readout, continuation, and post-continuation readout as novelty.
 Next allowed test: Replicate on another fresh stabilized source, reduce continuation cost, or identify a cheap continuation/readout-slope proxy.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-stabilized-source-continuation-readout.md`
+
+POSITIVE: The no-decay stabilized source can use 600-step continuation and still clear the non-bottleneck gate.
+Conclusion: Reading out from the step-600 continuation checkpoint reached final eval `0.9425` with injection-zero `0.0078`, forced-random `0.0781`, and learned calc `0.8750`; this is only `0.0150` below the 800-continuation readout.
+Do not repeat: Same no-decay stabilized step-600 continuation checkpoint into 600-step readout as novelty.
+Next allowed test: Replicate the 600-continuation recipe on another stabilized source, test 500 continuation, or build a proxy for deciding continuation budget.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-stabilized-source-reduced-continuation.md`
