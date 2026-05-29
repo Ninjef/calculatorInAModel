@@ -4237,6 +4237,17 @@ def test_semantic_decoder_checkpoint_load_scope_is_opt_in(tmp_path: Path) -> Non
     )
 
 
+def test_pick_device_respects_explicit_cpu() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_device", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    assert overfit_script.pick_device("cpu") == "cpu"
+
+
 def test_result_policy_anchor_penalizes_logit_drift() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_script_policy_anchor", script_path)

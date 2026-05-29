@@ -208,9 +208,14 @@ Memory:
   mixed-positive but below gate: continuation reached `0.7775`, 600-step
   readout reached `0.8175`, and extended readout reached `0.8475`, with low
   controls but learned calc stuck around `0.5391`.
-- The promising next direction is to improve scheduled source policy accuracy
-  while preserving additive geometry, then verify with standalone handoff.
-  Forced-result geometry alone remains a triage signal.
+- The source-policy diagnosis was confirmed: a gentle low-LR recovery phase
+  from the scheduled step-600 checkpoint (`lr=3e-4`, forced-true weight `0.1`,
+  30 steps) raised source calc from `0.5800` to `0.7950` while preserving
+  low forced-true loss, improved 600-step handoff to `0.8425`, and cleared
+  continuation/readout at `0.9320` with low zero/random controls.
+- The promising next direction is to replicate or automate this late-source
+  recovery recipe on fresh scheduled sources. Forced-result geometry alone
+  remains a triage signal; actual handoff/readout gates remain decisive.
 
 Representative evidence:
 
@@ -224,6 +229,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-op19-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-long-source-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-scheduled-source-continuation-readout.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-scheduled-source-low-lr-recovery.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 
 ## Direction: Target Propagation / Local Targets

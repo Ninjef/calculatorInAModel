@@ -6733,3 +6733,58 @@ Interpretation:
 - Next work should improve source policy accuracy while preserving the
   scheduled geometry gain, rather than spending more compute on this exact
   downstream chain.
+
+## 2026-05-29 Scheduled Source Low-LR Recovery
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-scheduled-source-low-lr-recovery.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_scheduled_source_policy_recovery/smoke_low_aux0p1_from_step600_steps5_cpu
+runs/2026-05-29_phase7_scheduled_source_policy_recovery/lr3e4_low_aux0p1_from_step600_steps30_cpu
+runs/2026-05-29_phase7_scheduled_source_policy_recovery/handoff600_from_lr3e4_low_aux_step30_cpu
+runs/2026-05-29_phase7_scheduled_source_policy_recovery/continuation800_from_recovered_handoff600_cpu
+runs/2026-05-29_phase7_scheduled_source_policy_recovery/readout600_from_recovered_continuation_cpu
+runs/2026-05-29_phase7_scheduled_source_policy_recovery/eval_readout_final_controls_cpu
+```
+
+Question:
+
+Can the scheduled step-600 source checkpoint recover learned calculator
+accuracy under gentler late-source training while preserving enough additive
+geometry to clear continuation/readout?
+
+Results:
+
+| Stage | Final eval / normal | Best snapshot | Injection-zero | Forced-random | Oracle | Learned calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| original step-600 source | `0.5800` source normal | n/a | `0.0675` | `0.0175` | `1.0000` | `0.5800` |
+| 5-step smoke, LR `0.003`, aux `0.1` | `0.1550` final eval | `0.1700` @ step `5` | `0.0525` | n/a | `1.0000` | `0.1700` |
+| 30-step recovery, LR `0.0003`, aux `0.1` | `0.7900` final eval | `0.7950` @ step `30` | `0.0675` | `0.0125` | `1.0000` | `0.7950` |
+| trusted 600-step handoff | `0.8425` final eval | `0.8525` @ step `100` | `0.0300` @ step `600` | `0.0175` @ step `600` | `0.8875` @ step `600` | `0.7750` @ step `600` |
+| 800-step continuation | `0.8900` final eval | `0.9175` @ step `700` | `0.0200` @ step `800` | n/a | `0.8675` @ step `800` | n/a |
+| 600-step readout | `0.9320` final eval | `0.9300` @ step `100` | `0.0200` @ step `600` | n/a | `0.8700` @ step `600` | n/a |
+| readout final zero-step controls | `0.9320` final eval / `0.9225` snapshot | n/a | `0.0300` | `0.0325` | `0.9050` | `0.7925` |
+
+Decision:
+
+```text
+scheduled_source_low_lr_recovery_clears_readout_gate
+```
+
+Interpretation:
+
+- The earlier below-gate continuation/readout failure was plausibly caused by
+  insufficient learned calculator accuracy, not by the scheduled geometry
+  objective being unusable.
+- Continuing the source at the original LR was immediately destructive; the
+  recovery phase needs low LR or an equivalent trust-region/late-phase control.
+- The recovered source clears the high non-bottleneck readout gate and remains
+  calculator-dependent under zero/random controls.
+- This is still not the final thesis result: it is prescriptive and relies on a
+  hand-selected source checkpoint plus a manual late-source phase.

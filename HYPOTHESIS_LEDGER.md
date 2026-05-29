@@ -565,3 +565,9 @@ Conclusion: Starting from scheduled step-600 handoff final `0.7725`, 800-step fr
 Do not repeat: The same scheduled step-600 handoff -> 800 continuation -> 600 readout -> extra 1000 readout chain as novelty.
 Next allowed test: Improve source policy accuracy while preserving scheduled geometry, or run continuation/readout only after a scheduled source checkpoint shows both strong handoff geometry and materially higher learned calculator accuracy.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-scheduled-source-continuation-readout.md`
+
+POSITIVE: Gentle low-LR recovery from a scheduled source checkpoint restores learned calc and clears readout.
+Conclusion: Continuing the scheduled step-600 source for 30 CPU steps with LR `3e-4` and lower forced-true weight `0.1` raised source calc from `0.5800` to `0.7950` while keeping forced-true loss low; the resulting frozen-policy 600-step handoff reached `0.8425`, 800-step continuation reached `0.8900` final / `0.9175` best snapshot, and 600-step readout reached `0.9320` final eval with final diagnostic controls normal `0.9225`, injection-zero `0.0300`, forced-random `0.0325`, learned calc `0.7925`.
+Do not repeat: The same seed-13 scheduled step-600 -> 30-step low-LR `aux=0.1` recovery -> 600 handoff -> 800 continuation -> 600 readout chain as novelty.
+Next allowed test: Replicate on a fresh scheduled source seed or integrate the low-LR/lower-aux recovery as an automatic late-source phase, then verify with the trusted 600-step handoff and continuation/readout gates.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-scheduled-source-low-lr-recovery.md`

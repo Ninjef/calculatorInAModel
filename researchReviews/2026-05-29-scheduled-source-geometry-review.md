@@ -99,3 +99,27 @@ higher learned calc.
 Updated steering: do not spend more compute on this exact continuation/readout
 chain. The scheduled source branch now needs source-policy accuracy or
 retention pressure while preserving the additive geometry gain.
+
+## Addendum: Low-LR Source Recovery
+
+The source-policy diagnosis was correct. Continuing the scheduled step-600
+source checkpoint gently, instead of extending the high-pressure source run,
+restored learned calculator quality while preserving enough additive geometry:
+
+- A 5-step smoke at the original LR `0.003` collapsed source normal from
+  `0.5800` to `0.1700`.
+- A 30-step recovery at LR `0.0003` with forced-true weight reduced to `0.1`
+  raised source normal/calc to `0.7950`.
+- The recovered source reached `0.8425` final eval under the trusted 600-step
+  frozen-policy handoff.
+- Standard 800-step continuation reached `0.8900` final eval and `0.9175`
+  best snapshot.
+- Standard 600-step readout reached `0.9320` final eval. A zero-step
+  counterfactual eval of the readout final checkpoint measured normal
+  `0.9225`, injection-zero `0.0300`, forced-random `0.0325`, oracle `0.9050`,
+  and learned calc `0.7925`.
+
+Updated steering: this branch now has a high non-bottleneck gate clear, but it
+is still prescriptive and checkpointed. The next useful work is fresh-seed
+replication or turning the gentle recovery into an automatic late-source phase,
+with the 600-step handoff plus continuation/readout gates kept as the arbiter.

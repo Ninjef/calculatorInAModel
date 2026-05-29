@@ -201,7 +201,15 @@ class TrainConfig:
     model: dict[str, object]
 
 
-def pick_device() -> str:
+def pick_device(preference: str = "auto") -> str:
+    if preference == "cpu":
+        return "cpu"
+    if preference == "mps":
+        if not torch.backends.mps.is_available():
+            raise ValueError("--device mps requested, but MPS is unavailable")
+        return "mps"
+    if preference != "auto":
+        raise ValueError(f"unknown device preference: {preference}")
     if torch.backends.mps.is_available():
         return "mps"
     return "cpu"
@@ -10198,6 +10206,12 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         default=Path(__file__).resolve().parent.parent / "runs",
     )
+    parser.add_argument(
+        "--device",
+        choices=["auto", "cpu", "mps"],
+        default="auto",
+        help="Training device to use; auto preserves the existing MPS-first behavior.",
+    )
     return parser.parse_args()
 
 
@@ -10769,7 +10783,7 @@ def main() -> None:
         and not 0 <= args.calculator_hook_after_layer <= args.n_layer
     ):
         raise ValueError("--calculator-hook-after-layer must be within model depth")
-    device = pick_device()
+    device = pick_device(args.device)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S_%f")
     suffix_parts = [args.variant]
     if args.oracle_train:

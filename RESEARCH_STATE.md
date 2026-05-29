@@ -99,7 +99,11 @@ Active directions:
   improved full-grid 600-step handoff from `0.2525` to `0.4150` at matched
   200-step source checkpoints; extending scheduled source training to step
   `600` raised final handoff to `0.7725`, but continuation/readout plateaued
-  below gate at `0.8475` with learned calc around `0.5391`.
+  below gate at `0.8475` with learned calc around `0.5391`. A gentle
+  low-LR source recovery from that step-600 checkpoint fixed the immediate
+  source-policy bottleneck: source calc rose to `0.7950`, 600-step handoff
+  improved to `0.8425`, and continuation/readout cleared the high
+  non-bottleneck gate at `0.9320` with low zero/random controls.
 - A genuinely different credit-assignment family such as target propagation,
   local targets, or another mechanism that constructs useful calculator-query
   targets without backpropagating through the calculator. The first
@@ -137,11 +141,12 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Improve scheduled source accuracy while preserving additive geometry. The
-   step-600 scheduled source gave strong handoff but continuation/readout
-   plateaued below gate because learned calc stayed around `0.5391`; next
-   variants need source-policy retention/accuracy pressure or fresh scheduled
-   sources that combine high calc with strong handoff geometry.
+1. Replicate the gentle scheduled-source recovery recipe on a fresh seed or
+   longer horizon. The first seed-13 recovery used low LR (`3e-4`) and lower
+   forced-true weight (`0.1`) from the scheduled step-600 checkpoint, improved
+   learned calc, and cleared readout at `0.9320`; the next question is whether
+   this is stable and whether it can be built into source training without
+   manual checkpoint surgery.
 2. Prototype a target-propagation/local-target style credit-assignment path
    beyond the current exact-grid local-target gates: naive uniform/top-k sparse
    sampling and simple loss-neighborhood expansion are not enough, so the next
