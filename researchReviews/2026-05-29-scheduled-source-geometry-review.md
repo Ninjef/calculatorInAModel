@@ -245,3 +245,27 @@ Smoothing and patience improved the hard seed but did not clear the gate:
 Updated steering: smoothing/patience is useful but still not enough. Do not
 keep tuning one-metric thresholds as novelty; either test a conjunctive
 source-plus-geometry transition or return to scalable assignment mechanisms.
+
+## Addendum: Conjunctive Recovery Trigger
+
+A hard source-accuracy conjunction did not rescue the seed-17 adaptive
+transition:
+
+- Added optional secondary trigger support to `overfit_one_batch.py`.
+- The primary forced-loss condition used the previous best one-metric settings:
+  `additive_forced_true_loss <= 0.05`, EMA beta `0.8`, patience `10`, min step
+  `500`.
+- The secondary condition required
+  `result_policy_argmax_result_accuracy >= 0.70`.
+- Recovery never fired: the primary count reached `132` with final EMA
+  `0.0055`, but secondary source accuracy ended at only `0.6325`.
+- Source final eval stayed `0.6100`.
+- The trusted 600-step frozen-policy handoff reached `0.6825` final eval /
+  `0.6925` step-600 snapshot, with injection-zero `0.0400`, forced-random
+  `0.0500`, and learned calc `0.6075`.
+
+Updated steering: do not continue hard source-accuracy gating as local novelty.
+The branch has learned that raw source accuracy can fire too eagerly on seed
+14 and too late/not at all on seed 17. Future work should return to scalable
+assignment or train source objectives against handoff/readout geometry more
+directly unless a new transition signal family is proposed up front.

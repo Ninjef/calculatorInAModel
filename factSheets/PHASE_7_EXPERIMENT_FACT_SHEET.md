@@ -7086,3 +7086,64 @@ Interpretation:
 - It still missed the high non-bottleneck gate, so the next transition test
   should be conjunctive or the branch should return to scalable assignment
   rather than another one-metric threshold sweep.
+
+## 2026-05-29 Conjunctive Recovery Trigger
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-conjunctive-recovery-trigger.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_scheduled_source_adaptive_recovery_replication/seed17_adaptive_conj_forcedloss005_ema08_pat10_acc070_steps631_cpu
+runs/2026-05-29_phase7_scheduled_source_adaptive_recovery_replication/seed17_handoff600_from_adaptive_conj_forcedloss005_ema08_pat10_acc070_cpu
+```
+
+Question:
+
+Does a hard conjunction between forced-loss readiness and source-policy
+accuracy improve the hard seed-17 adaptive recovery transition?
+
+Tooling:
+
+- Added optional secondary adaptive recovery trigger args:
+  `--late-source-recovery-secondary-trigger-metric`,
+  `--late-source-recovery-secondary-trigger-threshold`,
+  `--late-source-recovery-secondary-trigger-mode`,
+  `--late-source-recovery-secondary-trigger-ema-beta`, and
+  `--late-source-recovery-secondary-trigger-patience`.
+- Logged secondary raw value, smoothed value, count, and final secondary
+  trigger state.
+
+Results:
+
+| Seed-17 branch | Source final | Handoff final / step-600 normal | Injection-zero | Forced-random | Learned calc | Trigger |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| raw source-accuracy trigger, no fire | `0.6100` | `0.6825` / `0.6925` | `0.0400` | `0.0500` | `0.6075` | none |
+| forced-loss EMA `0.8`, patience `10` | `0.7625` | `0.8025` / `0.7975` | `0.0625` | `0.0325` | `0.7425` | step `509` |
+| forced-loss EMA plus source accuracy `>=0.70` | `0.6100` | `0.6825` / `0.6925` | `0.0400` | `0.0500` | `0.6075` | none |
+
+Trigger-state details:
+
+- Primary forced-loss EMA ended at `0.0055` with count `132`, so source
+  geometry/readout loss readiness was not the blocker.
+- Secondary source accuracy ended at `0.6325`; the `>=0.70` hard conjunction
+  never became ready.
+
+Decision:
+
+```text
+conjunctive_recovery_trigger_too_conservative
+```
+
+Interpretation:
+
+- A high hard source-accuracy conjunction recreates the no-fire failure mode
+  on seed 17 and gives up the smoothed forced-loss handoff gain.
+- Do not keep tuning hard source-accuracy gates as novelty. Future work should
+  return to scalable assignment or source objectives that improve
+  handoff/readout geometry directly unless a different transition signal
+  family is proposed up front.

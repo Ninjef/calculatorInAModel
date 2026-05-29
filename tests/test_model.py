@@ -4331,6 +4331,31 @@ def test_late_source_recovery_schedules_override_weight_and_lr() -> None:
     )
     assert count == 0
     assert not triggered
+    assert overfit_script.late_source_recovery_read_trigger_metric(
+        metric_name="result_policy_argmax_result_accuracy",
+        result_policy_stabilization_metrics={
+            "result_policy_argmax_result_accuracy": 0.75
+        },
+        additive_forced_true_loss_value=None,
+    ) == pytest.approx(0.75)
+    assert overfit_script.late_source_recovery_read_trigger_metric(
+        metric_name="additive_forced_true_loss",
+        result_policy_stabilization_metrics={},
+        additive_forced_true_loss_value=0.04,
+    ) == pytest.approx(0.04)
+    assert overfit_script.late_source_recovery_conjunctive_trigger_ready(
+        primary_ready=True, secondary_metric="none", secondary_ready=False
+    )
+    assert overfit_script.late_source_recovery_conjunctive_trigger_ready(
+        primary_ready=True,
+        secondary_metric="result_policy_argmax_result_accuracy",
+        secondary_ready=True,
+    )
+    assert not overfit_script.late_source_recovery_conjunctive_trigger_ready(
+        primary_ready=True,
+        secondary_metric="result_policy_argmax_result_accuracy",
+        secondary_ready=False,
+    )
 
 
 def test_result_policy_anchor_penalizes_logit_drift() -> None:

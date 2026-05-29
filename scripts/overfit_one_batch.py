@@ -142,6 +142,11 @@ class TrainConfig:
     late_source_recovery_trigger_mode: str
     late_source_recovery_trigger_ema_beta: float
     late_source_recovery_trigger_patience: int
+    late_source_recovery_secondary_trigger_metric: str
+    late_source_recovery_secondary_trigger_threshold: float
+    late_source_recovery_secondary_trigger_mode: str
+    late_source_recovery_secondary_trigger_ema_beta: float
+    late_source_recovery_secondary_trigger_patience: int
     late_source_recovery_min_step: int
     calculator_causal_gap_weight: float
     calculator_causal_gap_margin: float
@@ -1241,6 +1246,38 @@ def late_source_recovery_update_trigger_state(
     )
     updated_count = consecutive_count + 1 if threshold_crossed else 0
     return smoothed_value, updated_count, updated_count >= patience
+
+
+def late_source_recovery_read_trigger_metric(
+    *,
+    metric_name: str,
+    result_policy_stabilization_metrics: dict[str, float],
+    additive_forced_true_loss_value: float | None,
+) -> float | None:
+    if (
+        metric_name == "result_policy_argmax_result_accuracy"
+        and result_policy_stabilization_metrics
+    ):
+        return float(
+            result_policy_stabilization_metrics[
+                "result_policy_argmax_result_accuracy"
+            ]
+        )
+    if (
+        metric_name == "additive_forced_true_loss"
+        and additive_forced_true_loss_value is not None
+    ):
+        return additive_forced_true_loss_value
+    return None
+
+
+def late_source_recovery_conjunctive_trigger_ready(
+    *,
+    primary_ready: bool,
+    secondary_metric: str,
+    secondary_ready: bool,
+) -> bool:
+    return primary_ready and (secondary_metric == "none" or secondary_ready)
 
 
 def result_policy_anchor_effective_weight(
@@ -6927,6 +6964,21 @@ def run_variant(
         late_source_recovery_trigger_patience=(
             args.late_source_recovery_trigger_patience
         ),
+        late_source_recovery_secondary_trigger_metric=(
+            args.late_source_recovery_secondary_trigger_metric
+        ),
+        late_source_recovery_secondary_trigger_threshold=(
+            args.late_source_recovery_secondary_trigger_threshold
+        ),
+        late_source_recovery_secondary_trigger_mode=(
+            args.late_source_recovery_secondary_trigger_mode
+        ),
+        late_source_recovery_secondary_trigger_ema_beta=(
+            args.late_source_recovery_secondary_trigger_ema_beta
+        ),
+        late_source_recovery_secondary_trigger_patience=(
+            args.late_source_recovery_secondary_trigger_patience
+        ),
         late_source_recovery_min_step=args.late_source_recovery_min_step,
         calculator_causal_gap_weight=args.calculator_causal_gap_weight,
         calculator_causal_gap_margin=args.calculator_causal_gap_margin,
@@ -7498,6 +7550,8 @@ def run_variant(
     adaptive_late_source_recovery_trigger_step: int | None = None
     adaptive_late_source_recovery_trigger_ema: float | None = None
     adaptive_late_source_recovery_trigger_count = 0
+    adaptive_late_source_recovery_secondary_trigger_ema: float | None = None
+    adaptive_late_source_recovery_secondary_trigger_count = 0
     model.train()
     for step in range(args.steps + 1):
         fixed_late_source_recovery_active = late_source_recovery_active(
@@ -8080,28 +8134,29 @@ def run_variant(
             loss = loss + additive_forced_true_objective
         late_source_recovery_trigger_raw_value = None
         late_source_recovery_trigger_value = None
+        late_source_recovery_secondary_trigger_raw_value = None
+        late_source_recovery_secondary_trigger_value = None
         late_source_recovery_triggered_this_step = False
         if (
             not current_late_source_recovery_active
             and args.late_source_recovery_trigger_metric != "none"
             and step >= args.late_source_recovery_min_step
         ):
-            if (
-                args.late_source_recovery_trigger_metric
-                == "result_policy_argmax_result_accuracy"
-                and result_policy_stabilization_metrics
-            ):
-                late_source_recovery_trigger_raw_value = float(
-                    result_policy_stabilization_metrics[
-                        "result_policy_argmax_result_accuracy"
-                    ]
+            trigger_patience_satisfied = False
+            secondary_trigger_patience_satisfied = (
+                args.late_source_recovery_secondary_trigger_metric == "none"
+            )
+            late_source_recovery_trigger_raw_value = (
+                late_source_recovery_read_trigger_metric(
+                    metric_name=args.late_source_recovery_trigger_metric,
+                    result_policy_stabilization_metrics=(
+                        result_policy_stabilization_metrics
+                    ),
+                    additive_forced_true_loss_value=(
+                        additive_forced_true_loss_value
+                    ),
                 )
-            elif (
-                args.late_source_recovery_trigger_metric
-                == "additive_forced_true_loss"
-                and additive_forced_true_loss_value is not None
-            ):
-                late_source_recovery_trigger_raw_value = additive_forced_true_loss_value
+            )
             if late_source_recovery_trigger_raw_value is not None:
                 (
                     adaptive_late_source_recovery_trigger_ema,
@@ -8119,7 +8174,57 @@ def run_variant(
                 late_source_recovery_trigger_value = (
                     adaptive_late_source_recovery_trigger_ema
                 )
-            if late_source_recovery_trigger_value is not None and trigger_patience_satisfied:
+            if args.late_source_recovery_secondary_trigger_metric != "none":
+                late_source_recovery_secondary_trigger_raw_value = (
+                    late_source_recovery_read_trigger_metric(
+                        metric_name=(
+                            args.late_source_recovery_secondary_trigger_metric
+                        ),
+                        result_policy_stabilization_metrics=(
+                            result_policy_stabilization_metrics
+                        ),
+                        additive_forced_true_loss_value=(
+                            additive_forced_true_loss_value
+                        ),
+                    )
+                )
+                if late_source_recovery_secondary_trigger_raw_value is not None:
+                    (
+                        adaptive_late_source_recovery_secondary_trigger_ema,
+                        adaptive_late_source_recovery_secondary_trigger_count,
+                        secondary_trigger_patience_satisfied,
+                    ) = late_source_recovery_update_trigger_state(
+                        metric_value=(
+                            late_source_recovery_secondary_trigger_raw_value
+                        ),
+                        previous_ema=(
+                            adaptive_late_source_recovery_secondary_trigger_ema
+                        ),
+                        consecutive_count=(
+                            adaptive_late_source_recovery_secondary_trigger_count
+                        ),
+                        threshold=(
+                            args.late_source_recovery_secondary_trigger_threshold
+                        ),
+                        mode=args.late_source_recovery_secondary_trigger_mode,
+                        ema_beta=(
+                            args.late_source_recovery_secondary_trigger_ema_beta
+                        ),
+                        patience=(
+                            args.late_source_recovery_secondary_trigger_patience
+                        ),
+                    )
+                    late_source_recovery_secondary_trigger_value = (
+                        adaptive_late_source_recovery_secondary_trigger_ema
+                    )
+            if late_source_recovery_conjunctive_trigger_ready(
+                primary_ready=(
+                    late_source_recovery_trigger_value is not None
+                    and trigger_patience_satisfied
+                ),
+                secondary_metric=args.late_source_recovery_secondary_trigger_metric,
+                secondary_ready=secondary_trigger_patience_satisfied,
+            ):
                 adaptive_late_source_recovery_active = True
                 adaptive_late_source_recovery_trigger_step = step
                 late_source_recovery_triggered_this_step = True
@@ -8313,6 +8418,17 @@ def run_variant(
             if late_source_recovery_trigger_raw_value is not None:
                 curve_row["late_source_recovery_trigger_raw_value"] = (
                     late_source_recovery_trigger_raw_value
+                )
+            if late_source_recovery_secondary_trigger_value is not None:
+                curve_row["late_source_recovery_secondary_trigger_value"] = (
+                    late_source_recovery_secondary_trigger_value
+                )
+                curve_row["late_source_recovery_secondary_trigger_count"] = (
+                    adaptive_late_source_recovery_secondary_trigger_count
+                )
+            if late_source_recovery_secondary_trigger_raw_value is not None:
+                curve_row["late_source_recovery_secondary_trigger_raw_value"] = (
+                    late_source_recovery_secondary_trigger_raw_value
                 )
             if adaptive_late_source_recovery_trigger_step is not None:
                 curve_row["late_source_recovery_trigger_step"] = (
@@ -9003,6 +9119,21 @@ def run_variant(
     metrics["late_source_recovery_trigger_patience"] = (
         args.late_source_recovery_trigger_patience
     )
+    metrics["late_source_recovery_secondary_trigger_metric"] = (
+        args.late_source_recovery_secondary_trigger_metric
+    )
+    metrics["late_source_recovery_secondary_trigger_threshold"] = (
+        args.late_source_recovery_secondary_trigger_threshold
+    )
+    metrics["late_source_recovery_secondary_trigger_mode"] = (
+        args.late_source_recovery_secondary_trigger_mode
+    )
+    metrics["late_source_recovery_secondary_trigger_ema_beta"] = (
+        args.late_source_recovery_secondary_trigger_ema_beta
+    )
+    metrics["late_source_recovery_secondary_trigger_patience"] = (
+        args.late_source_recovery_secondary_trigger_patience
+    )
     metrics["late_source_recovery_min_step"] = args.late_source_recovery_min_step
     metrics["late_source_recovery_trigger_step"] = (
         adaptive_late_source_recovery_trigger_step
@@ -9012,6 +9143,12 @@ def run_variant(
     )
     metrics["late_source_recovery_final_trigger_count"] = (
         adaptive_late_source_recovery_trigger_count
+    )
+    metrics["late_source_recovery_final_secondary_trigger_ema"] = (
+        adaptive_late_source_recovery_secondary_trigger_ema
+    )
+    metrics["late_source_recovery_final_secondary_trigger_count"] = (
+        adaptive_late_source_recovery_secondary_trigger_count
     )
     metrics["final_late_source_recovery_active"] = (
         late_source_recovery_active(
@@ -10038,6 +10175,53 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--late-source-recovery-secondary-trigger-metric",
+        choices=[
+            "none",
+            "result_policy_argmax_result_accuracy",
+            "additive_forced_true_loss",
+        ],
+        default="none",
+        help=(
+            "Optional secondary adaptive trigger metric. When set, late source "
+            "recovery activates only after both the primary and secondary "
+            "triggers satisfy their smoothing and patience settings."
+        ),
+    )
+    parser.add_argument(
+        "--late-source-recovery-secondary-trigger-threshold",
+        type=float,
+        default=0.0,
+        help="Threshold for --late-source-recovery-secondary-trigger-metric.",
+    )
+    parser.add_argument(
+        "--late-source-recovery-secondary-trigger-mode",
+        choices=["above", "below"],
+        default="above",
+        help=(
+            "Secondary trigger mode: require the selected metric above or "
+            "below the threshold."
+        ),
+    )
+    parser.add_argument(
+        "--late-source-recovery-secondary-trigger-ema-beta",
+        type=float,
+        default=0.0,
+        help=(
+            "EMA beta for secondary adaptive late-source trigger smoothing. "
+            "The default 0.0 uses the raw current metric."
+        ),
+    )
+    parser.add_argument(
+        "--late-source-recovery-secondary-trigger-patience",
+        type=int,
+        default=1,
+        help=(
+            "Number of consecutive secondary smoothed trigger crossings "
+            "required before activating late source recovery."
+        ),
+    )
+    parser.add_argument(
         "--late-source-recovery-min-step",
         type=int,
         default=0,
@@ -10746,6 +10930,22 @@ def main() -> None:
         raise ValueError("--late-source-recovery-trigger-ema-beta must be in [0, 1)")
     if args.late_source_recovery_trigger_patience < 1:
         raise ValueError("--late-source-recovery-trigger-patience must be positive")
+    if not 0.0 <= args.late_source_recovery_secondary_trigger_ema_beta < 1.0:
+        raise ValueError(
+            "--late-source-recovery-secondary-trigger-ema-beta must be in [0, 1)"
+        )
+    if args.late_source_recovery_secondary_trigger_patience < 1:
+        raise ValueError(
+            "--late-source-recovery-secondary-trigger-patience must be positive"
+        )
+    if (
+        args.late_source_recovery_secondary_trigger_metric != "none"
+        and args.late_source_recovery_trigger_metric == "none"
+    ):
+        raise ValueError(
+            "--late-source-recovery-secondary-trigger-metric requires "
+            "--late-source-recovery-trigger-metric"
+        )
     if (
         args.late_source_recovery_trigger_metric != "none"
         and args.late_source_recovery_start_step >= 0
@@ -11451,6 +11651,24 @@ def main() -> None:
                 suffix_parts.append(
                     f"laterecovpat{args.late_source_recovery_trigger_patience}"
                 )
+            if args.late_source_recovery_secondary_trigger_metric != "none":
+                suffix_parts.append(
+                    f"laterecov2{args.late_source_recovery_secondary_trigger_mode}"
+                    f"{args.late_source_recovery_secondary_trigger_threshold:g}"
+                )
+                suffix_parts.append(
+                    args.late_source_recovery_secondary_trigger_metric
+                )
+                if args.late_source_recovery_secondary_trigger_ema_beta > 0:
+                    suffix_parts.append(
+                        "laterecov2ema"
+                        f"{args.late_source_recovery_secondary_trigger_ema_beta:g}"
+                    )
+                if args.late_source_recovery_secondary_trigger_patience > 1:
+                    suffix_parts.append(
+                        "laterecov2pat"
+                        f"{args.late_source_recovery_secondary_trigger_patience}"
+                    )
         if args.calculator_causal_gap_weight > 0:
             suffix_parts.append(f"causalgapw{args.calculator_causal_gap_weight:g}")
             suffix_parts.append(f"causalgapm{args.calculator_causal_gap_margin:g}")
@@ -11651,6 +11869,16 @@ def main() -> None:
         f"trigger_mode={args.late_source_recovery_trigger_mode} "
         f"trigger_ema_beta={args.late_source_recovery_trigger_ema_beta} "
         f"trigger_patience={args.late_source_recovery_trigger_patience} "
+        "secondary_trigger_metric="
+        f"{args.late_source_recovery_secondary_trigger_metric} "
+        "secondary_trigger_threshold="
+        f"{args.late_source_recovery_secondary_trigger_threshold} "
+        "secondary_trigger_mode="
+        f"{args.late_source_recovery_secondary_trigger_mode} "
+        "secondary_trigger_ema_beta="
+        f"{args.late_source_recovery_secondary_trigger_ema_beta} "
+        "secondary_trigger_patience="
+        f"{args.late_source_recovery_secondary_trigger_patience} "
         f"min_step={args.late_source_recovery_min_step}"
     )
     print(

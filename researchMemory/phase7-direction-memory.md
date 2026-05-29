@@ -246,6 +246,10 @@ Memory:
   hard seed: beta `0.8`, patience `10`, min step `500` fired at step `509`,
   raised source final to `0.7625`, and improved trusted 600-step handoff to
   `0.8025` with low forced-random (`0.0325`) but still below the high gate.
+- A hard conjunctive source-accuracy gate was too conservative on the same
+  hard seed: forced-loss readiness was satisfied, but requiring
+  `result_policy_argmax_result_accuracy >= 0.70` never fired, source final
+  stayed `0.6100`, and handoff returned to `0.6825`.
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -268,6 +272,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-fresh-adaptive-recovery-trigger-replication.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-forced-loss-adaptive-recovery-trigger.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-smoothed-forced-loss-recovery-trigger.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-conjunctive-recovery-trigger.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 
 ## Direction: Target Propagation / Local Targets

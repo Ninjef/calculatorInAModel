@@ -481,6 +481,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/097-a-hard-source-accuracy-conjunction-is-too-conservative-for-the-hard-seed-17-recovery-trigg",
+      "target": "researchMemory/hypotheses/phase7/097-a-hard-source-accuracy-conjunction-is-too-conservative-for-the-hard-seed-17-recovery-trigg.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -728,6 +733,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-smoothed-forced-loss-recovery-trigger.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-conjunctive-recovery-trigger.md",
       "type": "supported_by"
     },
     {
@@ -1458,6 +1468,13 @@
       "source_path": "researchMemory/hypotheses/phase7/096-ema-plus-patience-forced-loss-recovery-improves-the-hard-seed-17-handoff-but-still-misses-.md",
       "status": "MIXED-POSITIVE",
       "title": "EMA plus patience forced-loss recovery improves the hard seed-17 handoff but still misses the high gate."
+    },
+    {
+      "id": "doc/097-a-hard-source-accuracy-conjunction-is-too-conservative-for-the-hard-seed-17-recovery-trigg",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/097-a-hard-source-accuracy-conjunction-is-too-conservative-for-the-hard-seed-17-recovery-trigg.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "A hard source-accuracy conjunction is too conservative for the hard seed-17 recovery trigger."
     },
     {
       "id": "doc/phase7-direction-memory",
