@@ -17,6 +17,7 @@ import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
+from functools import lru_cache
 from pathlib import Path
 from typing import Iterable
 
@@ -166,15 +167,8 @@ def local_texts_for_backend(texts: list[str], *, model: str, query: bool = False
     return texts
 
 
-def embed_texts_sentence_transformers(
-    texts: list[str],
-    model: str = DEFAULT_LOCAL_MODEL,
-    query: bool = False,
-    local_files_only: bool = False,
-    batch_size: int = 32,
-) -> np.ndarray:
-    if not texts:
-        return np.zeros((0, 0), dtype=np.float32)
+@lru_cache(maxsize=4)
+def load_sentence_transformer(model: str, local_files_only: bool):
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError as exc:
@@ -185,10 +179,22 @@ def embed_texts_sentence_transformers(
     quiet_load = os.environ.get("RESEARCH_MEMORY_VERBOSE_MODEL_LOAD") != "1"
     if quiet_load:
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
-            encoder = SentenceTransformer(model, local_files_only=local_files_only)
-    else:
-        encoder = SentenceTransformer(model, local_files_only=local_files_only)
+            return SentenceTransformer(model, local_files_only=local_files_only)
+    return SentenceTransformer(model, local_files_only=local_files_only)
+
+
+def embed_texts_sentence_transformers(
+    texts: list[str],
+    model: str = DEFAULT_LOCAL_MODEL,
+    query: bool = False,
+    local_files_only: bool = False,
+    batch_size: int = 32,
+) -> np.ndarray:
+    if not texts:
+        return np.zeros((0, 0), dtype=np.float32)
+    encoder = load_sentence_transformer(model, local_files_only)
     prepared = local_texts_for_backend(texts, model=model, query=query)
+    quiet_load = os.environ.get("RESEARCH_MEMORY_VERBOSE_MODEL_LOAD") != "1"
     if quiet_load:
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             embeddings = encoder.encode(

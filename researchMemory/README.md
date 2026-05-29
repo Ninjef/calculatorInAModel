@@ -80,6 +80,23 @@ python3 researchMemory/scripts/search_memory.py "Should we try more REINFORCE?"
 Search uses cached local model files by default. If the model is not cached on
 a new machine, rebuild the index first or pass `--allow-download`.
 
+For active research sessions, keep the local BGE model warm in a small
+localhost server:
+
+```bash
+python3 researchMemory/scripts/serve_memory.py
+```
+
+Then search through the warm server:
+
+```bash
+python3 researchMemory/scripts/search_memory_fast.py "Should we try more REINFORCE?"
+```
+
+The server logs warmup time, request start, result count, and request duration.
+`search_memory_fast.py` falls back to one-shot search if the server is not
+running; pass `--no-fallback` when you want failure instead.
+
 The generated files live under `researchMemory/index/`:
 
 - `memories.jsonl`: memory records with title, summary, generated questions,
