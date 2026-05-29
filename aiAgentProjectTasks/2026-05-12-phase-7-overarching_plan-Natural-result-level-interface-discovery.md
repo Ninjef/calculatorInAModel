@@ -1368,3 +1368,27 @@ This shows weak-source frozen handoff can improve with more downstream
 optimization while retaining calculator dependence. It does not erase source
 quality sensitivity: after the same total 1600-step adaptation budget, both
 weak-source continuations still trail the strong-source `~0.95` handoff.
+
+## Status Update: 2026-05-28, Bottleneck-to-Additive Low-LR Unfreeze
+
+The first simple full-policy unfreeze probe was negative:
+
+```text
+bottleneck_to_additive_low_lr_unfreeze_policy_collapse_negative
+```
+
+Starting from the adapted weak-source checkpoints, I removed
+`--freeze-calculator-policy` and continued with global LR `3e-4` for 400
+steps. This did not improve the handoff and damaged the calculator policy.
+
+`src4_add2` final eval fell from `0.6050` to `0.5200`, learned
+calculator-result accuracy collapsed from `0.8725` to `0.3000`, and
+forced-random rose to `0.1200`.
+
+`src5_add5` final eval stayed roughly flat (`0.8175 -> 0.8100`), but learned
+calculator-result accuracy collapsed from `0.8000` to `0.2525` and
+forced-random rose to `0.1125`.
+
+Future unfreezing should not be plain low-LR answer-loss continuation. It needs
+selective parameter movement, explicit policy-retention regularization, or
+gated unfreezing based on calculator-result accuracy.

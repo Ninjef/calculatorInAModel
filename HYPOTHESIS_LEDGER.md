@@ -207,3 +207,9 @@ Conclusion: Continuing weak cells for another 800 steps improved `src5_add5` fin
 Do not repeat: The same `src4_add2` or `src5_add5` one-extra-800-step continuation as novelty.
 Next allowed test: Better source checkpoint selection, stronger readout adaptation, controlled unfreezing, or source-policy training that produces more handoff-friendly representations.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-downstream-adaptation.md`
+
+DISPROVEN: Low-LR full-policy unfreezing preserves adapted non-bottleneck calculator use.
+Conclusion: From adapted weak-source checkpoints, unfreezing all policy parameters at LR `3e-4` for 400 steps collapsed learned calc from `0.8725 -> 0.3000` and `0.8000 -> 0.2525`; answer accuracy did not improve.
+Do not repeat: The same `src4_add2` or `src5_add5` adapted-checkpoint low-LR `3e-4`, 400-step full unfreeze as novelty.
+Next allowed test: Selective unfreezing, explicit policy-retention regularization, or unfreeze schedules gated by calculator-result accuracy.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-low-lr-unfreeze.md`

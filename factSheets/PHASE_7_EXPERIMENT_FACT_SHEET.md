@@ -3645,3 +3645,55 @@ Interpretation:
 - Next work should test source checkpoint selection, better downstream
   adaptation objectives, or controlled unfreezing rather than merely repeating
   one more longer frozen continuation.
+
+## 2026-05-28 Bottleneck-to-Additive Low-LR Unfreeze Probe
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-forty-second-task-Bottleneck-to-additive-low-lr-unfreeze.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_bottleneck_to_additive_transfer_unfreeze_probe
+```
+
+Question:
+
+After downstream adaptation has learned to use a frozen calculator path, can a
+low-LR full-policy unfreeze improve or preserve the handoff?
+
+Configuration:
+
+- Continued from the adapted weak-source checkpoints.
+- Loaded with `--semantic-decoder-checkpoint-load-scope full_model`.
+- Removed `--freeze-calculator-policy`.
+- global LR `3e-4`;
+- answer loss weight `1`;
+- exact-grid natural `0..19`;
+- 400 steps.
+
+Result:
+
+| Run | Final eval before | Final eval after | Best normal after | Last injection-zero | Last forced-random | Last oracle | Learned calc before | Learned calc after |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` unfreeze | `0.6050` | `0.5200` | `0.6500` at `0` | `0.0225` | `0.1200` | `0.7100` | `0.8725` | `0.3000` |
+| `src5_add5` unfreeze | `0.8175` | `0.8100` | `0.8325` at `0` | `0.0225` | `0.1125` | `0.7900` | `0.8000` | `0.2525` |
+
+Decision:
+
+```text
+bottleneck_to_additive_low_lr_unfreeze_policy_collapse_negative
+```
+
+Interpretation:
+
+- Low-LR full unfreeze does not preserve the learned calculator policy.
+- Normal accuracy can partly survive through the already-trained downstream
+  path, but learned calculator-result accuracy collapses and forced-random
+  accuracy rises.
+- Future unfreezing work needs selective parameter movement, explicit policy
+  retention, or a gate that monitors calculator-result accuracy during
+  unfreeze.

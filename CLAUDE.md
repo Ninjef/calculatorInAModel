@@ -428,6 +428,20 @@ handoffs are hard failures, but source/readout quality still matters because
 neither weak-source continuation matched the strong-source `~0.95` result by
 the same total 1600-step adaptation budget.
 
+A first controlled unfreeze probe was negative:
+`bottleneck_to_additive_low_lr_unfreeze_policy_collapse_negative`. Starting
+from the adapted weak-source checkpoints, removing `--freeze-calculator-policy`
+and continuing with low global LR `3e-4` for 400 steps damaged the learned
+calculator policy in both cells. `src4_add2` learned calc fell from `0.8725`
+to `0.3000`, final eval fell from `0.6050` to `0.5200`, and forced-random
+rose to `0.1200`. `src5_add5` learned calc fell from `0.8000` to `0.2525`,
+final eval stayed roughly flat (`0.8175 -> 0.8100`), and forced-random rose to
+`0.1125`. Normal accuracy can partly survive through downstream/bypass-like
+adaptation, but low-LR unfreezing is not a safe policy-preserving handoff.
+Next unfreezing work needs explicit policy retention regularization, a much
+more selective unfreeze, or a mechanism that validates calculator-result
+accuracy while adapting.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -540,6 +554,9 @@ Do not rerun these as next steps unless debugging new code:
   `src5_add5` for one extra 800-step continuation as novelty. They established
   that longer downstream adaptation helps but does not fully erase source
   quality sensitivity.
+- low-LR `3e-4` full-policy unfreeze for 400 steps from the adapted
+  `src4_add2` or `src5_add5` checkpoints as novelty. It collapsed learned
+  calculator-result accuracy.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -555,9 +572,9 @@ bottleneck-to-additive handoff that is stronger than a plain zero-injection
 loss-gap hinge, seed replication/unfreeze schedules for the frozen-policy
 bottleneck-to-additive handoff that specifically changes source checkpoint
 selection, downstream adaptation beyond just one longer continuation, or
-unfreezing, a Jacobian-conditioned state more substantial than the result-output
-`J^T answer_grad` feature, or a richer target construction that remains valid
-after upstream movement.
+unfreezing with explicit policy-retention constraints, a Jacobian-conditioned
+state more substantial than the result-output `J^T answer_grad` feature, or a
+richer target construction that remains valid after upstream movement.
 Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`

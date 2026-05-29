@@ -303,6 +303,11 @@ means weak-source handoff is partly an adaptation problem, but the strong
 source still reached `~0.95` faster and higher. Useful next handoff ideas are
 checkpoint selection, better readout adaptation, and controlled unfreezing
 rather than simply extending every frozen run.
+The first simple controlled-unfreeze attempt was negative. Continuing adapted
+weak-source checkpoints with all policy parameters unfrozen at LR `3e-4`
+collapsed learned calculator-result accuracy to `0.3000` and `0.2525`.
+Unfreezing therefore needs retention constraints or selective parameter
+movement; ordinary low-LR answer-loss continuation is not enough.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 
