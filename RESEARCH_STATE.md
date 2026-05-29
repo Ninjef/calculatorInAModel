@@ -107,7 +107,9 @@ Active directions:
   replicated the recovery effect and cleared the handoff gate directly:
   seed-14 scheduled source step `600` recovered from `0.6675` to `0.8850`
   source eval, then reached `0.9600` final frozen-policy handoff with
-  injection-zero/forced-random around `0.085`.
+  injection-zero/forced-random around `0.085`. Folding the same late phase
+  into one automated run on seed 14 preserved the result: final source eval
+  `0.8775` and 600-step handoff `0.9400`, with low zero/random controls.
 - A genuinely different credit-assignment family such as target propagation,
   local targets, or another mechanism that constructs useful calculator-query
   targets without backpropagating through the calculator. The first
@@ -145,11 +147,11 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Automate the gentle scheduled-source recovery recipe. The low-LR/lower-aux
-   late phase now has two positive seeds, including a fresh seed-14 handoff
-   clear at `0.9600`; the next question is whether this can be built into
-   source training without manual checkpoint surgery, while preserving
-   handoff/readout gates and causal controls.
+1. Make the automated scheduled-source recovery recipe less hand-tuned. The
+   first in-run phase switch preserved the seed-14 handoff clear (`0.9400`),
+   but still uses a fixed transition step and prescriptive hard assignment.
+   Next test either adaptive transition criteria or move back toward scalable
+   assignment approximations while keeping handoff/readout gates as arbiter.
 2. Prototype a target-propagation/local-target style credit-assignment path
    beyond the current exact-grid local-target gates: naive uniform/top-k sparse
    sampling and simple loss-neighborhood expansion are not enough, so the next

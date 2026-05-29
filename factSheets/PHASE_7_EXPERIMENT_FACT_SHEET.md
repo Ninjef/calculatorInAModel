@@ -6836,3 +6836,55 @@ Interpretation:
   recovery.
 - The result is still prescriptive and checkpointed; it does not solve
   scalable non-prescriptive credit assignment by itself.
+
+## 2026-05-29 Automated Scheduled Source Recovery
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-automated-scheduled-source-recovery.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_scheduled_source_auto_recovery/seed14_auto_late_recovery_steps630_cpu
+runs/2026-05-29_phase7_scheduled_source_auto_recovery/seed14_handoff600_from_auto_late_recovery_cpu
+```
+
+Question:
+
+Can the successful manual seed-14 late-source recovery be folded into a single
+source-training run?
+
+Tooling:
+
+- Added non-default late-source recovery flags to `overfit_one_batch.py`:
+  `--late-source-recovery-start-step`,
+  `--late-source-recovery-lr-multiplier`, and
+  `--late-source-recovery-additive-forced-true-loss-weight`.
+- Defaults preserve existing behavior.
+
+Results:
+
+| Stage | Final eval / normal | Injection-zero | Forced-random | Oracle | Learned calc | Notes |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| automated source, step-600 snapshot | `0.6375` snapshot | `0.0575` | n/a | `1.0000` | `0.6375` | before recovery updates |
+| automated source final | `0.8775` final eval | n/a | n/a | n/a | n/a | recovery active, LR multiplier `0.1`, forced-true weight `0.1` |
+| automated 600-step handoff | `0.9400` final eval / `0.9475` snapshot | `0.0800` | `0.0775` | `0.9650` | `0.8725` | trusted frozen-policy gate |
+
+Decision:
+
+```text
+automated_scheduled_source_recovery_positive
+```
+
+Interpretation:
+
+- The automated in-run phase switch preserves the manual recovery effect,
+  though it is slightly below the manual relaunch (`0.9400` vs `0.9600`
+  handoff final eval).
+- This removes manual checkpoint surgery from the staged source recipe.
+- The method remains prescriptive and fixed-step; the next useful improvement
+  is adaptive transition criteria or a less prescriptive/scalable assignment
+  path.

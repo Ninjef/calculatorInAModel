@@ -142,3 +142,25 @@ The zero/random controls on seed 14 are higher than seed 13, but still far
 below normal. Further value comes from automating the late-source transition
 or explicitly testing stability on another seed, not from rerunning this exact
 seed-14 chain.
+
+## Addendum: Automated Late-Source Recovery
+
+The manual checkpoint relaunch was replaced with an in-run late-source recovery
+switch:
+
+- `overfit_one_batch.py` now accepts a non-default late-source recovery phase
+  that can lower optimizer LR and override the forced-true additive weight at a
+  configured step.
+- On seed 14, one 630-step source run switched at step `600` to LR multiplier
+  `0.1` and forced-true weight `0.1`.
+- The automated source reached final eval `0.8775` versus `0.8850` for the
+  manual relaunch.
+- The trusted 600-step frozen-policy handoff reached `0.9400` final eval and
+  `0.9475` step-600 snapshot, versus `0.9600`/`0.9650` for manual relaunch.
+- Final handoff snapshot controls: injection-zero `0.0800`, forced-random
+  `0.0775`, oracle `0.9650`, learned calc `0.8725`.
+
+Updated steering: the late-source phase is now automatable. It is still
+fixed-step and prescriptive, so the next question is adaptive transition
+criteria or a return to scalable/non-prescriptive assignment mechanisms, with
+the trusted handoff/readout gates retained.

@@ -4248,6 +4248,43 @@ def test_pick_device_respects_explicit_cpu() -> None:
     assert overfit_script.pick_device("cpu") == "cpu"
 
 
+def test_late_source_recovery_schedules_override_weight_and_lr() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_script_late_recovery", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    assert not overfit_script.late_source_recovery_active(start_step=10, step=9)
+    assert overfit_script.late_source_recovery_active(start_step=10, step=10)
+    assert overfit_script.late_source_recovery_lr_multiplier(
+        start_step=10, multiplier=0.1, step=9
+    ) == pytest.approx(1.0)
+    assert overfit_script.late_source_recovery_lr_multiplier(
+        start_step=10, multiplier=0.1, step=10
+    ) == pytest.approx(0.1)
+
+    assert overfit_script.effective_additive_forced_true_weight(
+        initial_weight=0.5,
+        start_step=5,
+        ramp_steps=0,
+        step=9,
+        late_recovery_start_step=10,
+        late_recovery_weight=0.1,
+    ) == pytest.approx(0.5)
+    assert overfit_script.effective_additive_forced_true_weight(
+        initial_weight=0.5,
+        start_step=5,
+        ramp_steps=0,
+        step=10,
+        late_recovery_start_step=10,
+        late_recovery_weight=0.1,
+    ) == pytest.approx(0.1)
+
+
 def test_result_policy_anchor_penalizes_logit_drift() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_script_policy_anchor", script_path)

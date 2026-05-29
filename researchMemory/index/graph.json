@@ -456,6 +456,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/092-the-late-scheduled-source-recovery-phase-can-be-automated-in-one-source-run",
+      "target": "researchMemory/hypotheses/phase7/092-the-late-scheduled-source-recovery-phase-can-be-automated-in-one-source-run.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -678,6 +683,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-fresh-scheduled-source-recovery-replication.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-automated-scheduled-source-recovery.md",
       "type": "supported_by"
     },
     {
@@ -1373,6 +1383,13 @@
       "source_path": "researchMemory/hypotheses/phase7/091-the-gentle-scheduled-source-recovery-recipe-replicates-on-a-fresh-seed-and-clears-handoff-.md",
       "status": "POSITIVE",
       "title": "The gentle scheduled-source recovery recipe replicates on a fresh seed and clears handoff directly."
+    },
+    {
+      "id": "doc/092-the-late-scheduled-source-recovery-phase-can-be-automated-in-one-source-run",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/092-the-late-scheduled-source-recovery-phase-can-be-automated-in-one-source-run.md",
+      "status": "POSITIVE",
+      "title": "The late scheduled-source recovery phase can be automated in one source run."
     },
     {
       "id": "doc/phase7-direction-memory",

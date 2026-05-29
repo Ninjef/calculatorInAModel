@@ -577,3 +577,9 @@ Conclusion: Fresh seed-14 scheduled source training reached step-600 source eval
 Do not repeat: The same seed-14 scheduled source -> 30-step low-LR recovery -> 600-step frozen-policy handoff as novelty.
 Next allowed test: Automate the late-source transition or test a third seed only if the explicit question is stability; keep the 600-step handoff/readout gates as arbiter and monitor the somewhat higher seed-14 zero/random controls.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-fresh-scheduled-source-recovery-replication.md`
+
+POSITIVE: The late scheduled-source recovery phase can be automated in one source run.
+Conclusion: Adding an in-run late-source recovery switch at step `600` (LR multiplier `0.1`, forced-true weight override `0.1`) preserved the seed-14 recovery effect without manual checkpoint relaunch: final source eval reached `0.8775`, and the trusted 600-step frozen-policy handoff reached `0.9400` final eval / `0.9475` step-600 snapshot with learned calc `0.8725`, injection-zero `0.0800`, and forced-random `0.0775`.
+Do not repeat: The same seed-14 automated fixed-step-600 recovery plus 600-step handoff as novelty.
+Next allowed test: Replace the fixed recovery step with adaptive transition criteria, or move the source branch toward less prescriptive/scalable assignment while preserving the handoff/readout gates.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-automated-scheduled-source-recovery.md`

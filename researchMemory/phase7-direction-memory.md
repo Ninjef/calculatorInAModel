@@ -218,10 +218,15 @@ Memory:
   `0.9600` final eval under the trusted 600-step frozen-policy handoff, with
   learned calc `0.8700`, injection-zero `0.0850`, and forced-random `0.0875`
   at the final snapshot.
-- The promising next direction is to automate this late-source recovery phase
-  rather than manually selecting checkpoint `600` and relaunching. Forced-result
-  geometry alone remains a triage signal; actual handoff/readout gates remain
-  decisive.
+- The late-source recovery phase can be automated in a single source run:
+  a fixed step-600 switch to LR multiplier `0.1` and forced-true weight `0.1`
+  reached source eval `0.8775` and a trusted 600-step handoff final eval
+  `0.9400`, with learned calc `0.8725`, injection-zero `0.0800`, and
+  forced-random `0.0775` at the final handoff snapshot.
+- The promising next direction is to replace the fixed recovery step with an
+  adaptive transition or move back toward less prescriptive/scalable assignment.
+  Forced-result geometry alone remains a triage signal; actual handoff/readout
+  gates remain decisive.
 
 Representative evidence:
 
@@ -237,6 +242,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-scheduled-source-continuation-readout.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-scheduled-source-low-lr-recovery.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-fresh-scheduled-source-recovery-replication.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-automated-scheduled-source-recovery.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 
 ## Direction: Target Propagation / Local Targets

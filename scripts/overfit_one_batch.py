@@ -134,6 +134,9 @@ class TrainConfig:
     additive_forced_true_loss_weight: float
     additive_forced_true_start_step: int
     additive_forced_true_ramp_steps: int
+    late_source_recovery_start_step: int
+    late_source_recovery_lr_multiplier: float
+    late_source_recovery_additive_forced_true_loss_weight: float | None
     calculator_causal_gap_weight: float
     calculator_causal_gap_margin: float
     boundary_feedback_weight: float
@@ -1158,6 +1161,48 @@ def additive_forced_true_weight_schedule(
         return initial_weight
     fraction = min(1.0, max(0.0, (step - start_step) / ramp_steps))
     return initial_weight * fraction
+
+
+def late_source_recovery_active(*, start_step: int, step: int) -> bool:
+    return start_step >= 0 and step >= start_step
+
+
+def late_source_recovery_lr_multiplier(
+    *, start_step: int, multiplier: float, step: int
+) -> float:
+    if late_source_recovery_active(start_step=start_step, step=step):
+        return multiplier
+    return 1.0
+
+
+def effective_additive_forced_true_weight(
+    *,
+    initial_weight: float,
+    start_step: int,
+    ramp_steps: int,
+    step: int,
+    late_recovery_start_step: int,
+    late_recovery_weight: float | None,
+) -> float:
+    if (
+        late_recovery_weight is not None
+        and late_source_recovery_active(start_step=late_recovery_start_step, step=step)
+    ):
+        return late_recovery_weight
+    return additive_forced_true_weight_schedule(
+        initial_weight=initial_weight,
+        start_step=start_step,
+        ramp_steps=ramp_steps,
+        step=step,
+    )
+
+
+def set_optimizer_lr_multiplier(
+    optimizer: torch.optim.Optimizer, multiplier: float
+) -> None:
+    for group in optimizer.param_groups:
+        base_lr = group.setdefault("initial_lr", group["lr"])
+        group["lr"] = float(base_lr) * multiplier
 
 
 def result_policy_anchor_effective_weight(
@@ -6696,6 +6741,8 @@ def run_variant(
             betas=(0.9, 0.95),
             weight_decay=args.weight_decay,
         )
+    for group in optim.param_groups:
+        group["initial_lr"] = group["lr"]
 
     run_name = f"{args.variant}-{num_digits}digit-seed{seed}"
     run_dir = base_run_dir / run_name
@@ -6824,6 +6871,11 @@ def run_variant(
         additive_forced_true_loss_weight=args.additive_forced_true_loss_weight,
         additive_forced_true_start_step=args.additive_forced_true_start_step,
         additive_forced_true_ramp_steps=args.additive_forced_true_ramp_steps,
+        late_source_recovery_start_step=args.late_source_recovery_start_step,
+        late_source_recovery_lr_multiplier=args.late_source_recovery_lr_multiplier,
+        late_source_recovery_additive_forced_true_loss_weight=(
+            args.late_source_recovery_additive_forced_true_loss_weight
+        ),
         calculator_causal_gap_weight=args.calculator_causal_gap_weight,
         calculator_causal_gap_margin=args.calculator_causal_gap_margin,
         boundary_feedback_weight=args.boundary_feedback_weight,
@@ -7392,6 +7444,18 @@ def run_variant(
     )
     model.train()
     for step in range(args.steps + 1):
+        current_late_source_recovery_active = late_source_recovery_active(
+            start_step=args.late_source_recovery_start_step,
+            step=step,
+        )
+        current_late_source_recovery_lr_multiplier = (
+            late_source_recovery_lr_multiplier(
+                start_step=args.late_source_recovery_start_step,
+                multiplier=args.late_source_recovery_lr_multiplier,
+                step=step,
+            )
+        )
+        set_optimizer_lr_multiplier(optim, current_late_source_recovery_lr_multiplier)
         if args.operand_max is None:
             batch = make_batch(
                 batch_size=args.batch_size,
@@ -7911,11 +7975,15 @@ def run_variant(
                 current_result_policy_anchor_weight
                 * result_policy_anchor_objective
             )
-        current_additive_forced_true_weight = additive_forced_true_weight_schedule(
+        current_additive_forced_true_weight = effective_additive_forced_true_weight(
             initial_weight=args.additive_forced_true_loss_weight,
             start_step=args.additive_forced_true_start_step,
             ramp_steps=args.additive_forced_true_ramp_steps,
             step=step,
+            late_recovery_start_step=args.late_source_recovery_start_step,
+            late_recovery_weight=(
+                args.late_source_recovery_additive_forced_true_loss_weight
+            ),
         )
         if current_additive_forced_true_weight > 0:
             if use_reinforce:
@@ -8112,6 +8180,12 @@ def run_variant(
                 "answer_loss_weight": args.answer_loss_weight,
                 "adaptive_interface_loss_weight": scheduled_adaptive_interface_weight,
                 "oracle_operands_used": int(use_oracle_for_step),
+                "late_source_recovery_active": int(
+                    current_late_source_recovery_active
+                ),
+                "late_source_recovery_lr_multiplier": (
+                    current_late_source_recovery_lr_multiplier
+                ),
             }
             if aux_loss_value is not None:
                 curve_row["aux_operand_loss"] = aux_loss_value
@@ -8776,11 +8850,33 @@ def run_variant(
     metrics["additive_forced_true_ramp_steps"] = (
         args.additive_forced_true_ramp_steps
     )
+    metrics["late_source_recovery_start_step"] = args.late_source_recovery_start_step
+    metrics["late_source_recovery_lr_multiplier"] = (
+        args.late_source_recovery_lr_multiplier
+    )
+    metrics["late_source_recovery_additive_forced_true_loss_weight"] = (
+        args.late_source_recovery_additive_forced_true_loss_weight
+    )
     metrics["final_additive_forced_true_effective_weight"] = (
-        additive_forced_true_weight_schedule(
+        effective_additive_forced_true_weight(
             initial_weight=args.additive_forced_true_loss_weight,
             start_step=args.additive_forced_true_start_step,
             ramp_steps=args.additive_forced_true_ramp_steps,
+            step=args.steps,
+            late_recovery_start_step=args.late_source_recovery_start_step,
+            late_recovery_weight=(
+                args.late_source_recovery_additive_forced_true_loss_weight
+            ),
+        )
+    )
+    metrics["final_late_source_recovery_active"] = late_source_recovery_active(
+        start_step=args.late_source_recovery_start_step,
+        step=args.steps,
+    )
+    metrics["final_late_source_recovery_lr_multiplier"] = (
+        late_source_recovery_lr_multiplier(
+            start_step=args.late_source_recovery_start_step,
+            multiplier=args.late_source_recovery_lr_multiplier,
             step=args.steps,
         )
     )
@@ -9707,6 +9803,36 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--late-source-recovery-start-step",
+        type=int,
+        default=-1,
+        help=(
+            "If non-negative, start a late source-recovery phase at this step. "
+            "The phase can lower optimizer LR and override the additive "
+            "forced-true auxiliary weight in the same run."
+        ),
+    )
+    parser.add_argument(
+        "--late-source-recovery-lr-multiplier",
+        type=float,
+        default=1.0,
+        help=(
+            "Optimizer LR multiplier during the late source-recovery phase. "
+            "For the current scheduled-source recipe, 0.1 reproduces the "
+            "manual 0.003 -> 0.0003 transition."
+        ),
+    )
+    parser.add_argument(
+        "--late-source-recovery-additive-forced-true-loss-weight",
+        type=float,
+        default=None,
+        help=(
+            "Optional additive forced-true weight override during late source "
+            "recovery. If omitted, the ordinary additive forced-true schedule "
+            "continues unchanged."
+        ),
+    )
+    parser.add_argument(
         "--calculator-causal-gap-weight",
         type=float,
         default=0.0,
@@ -10391,6 +10517,18 @@ def main() -> None:
         raise ValueError("--additive-forced-true-start-step must be non-negative")
     if args.additive_forced_true_ramp_steps < 0:
         raise ValueError("--additive-forced-true-ramp-steps must be non-negative")
+    if args.late_source_recovery_start_step < -1:
+        raise ValueError("--late-source-recovery-start-step must be -1 or non-negative")
+    if args.late_source_recovery_lr_multiplier <= 0:
+        raise ValueError("--late-source-recovery-lr-multiplier must be positive")
+    if (
+        args.late_source_recovery_additive_forced_true_loss_weight is not None
+        and args.late_source_recovery_additive_forced_true_loss_weight < 0
+    ):
+        raise ValueError(
+            "--late-source-recovery-additive-forced-true-loss-weight "
+            "must be non-negative"
+        )
     if args.action_loss_full_enum_chunk_size < 1:
         raise ValueError("--action-loss-full-enum-chunk-size must be positive")
     if args.expected_answer_loss_weight < 0:
@@ -11061,6 +11199,17 @@ def main() -> None:
                 suffix_parts.append(
                     f"addforcedramp{args.additive_forced_true_ramp_steps}"
                 )
+        if args.late_source_recovery_start_step >= 0:
+            suffix_parts.append(f"laterecov{args.late_source_recovery_start_step}")
+            if args.late_source_recovery_lr_multiplier != 1.0:
+                suffix_parts.append(
+                    f"laterecovlr{args.late_source_recovery_lr_multiplier:g}"
+                )
+            if args.late_source_recovery_additive_forced_true_loss_weight is not None:
+                suffix_parts.append(
+                    "laterecovadd"
+                    f"{args.late_source_recovery_additive_forced_true_loss_weight:g}"
+                )
         if args.calculator_causal_gap_weight > 0:
             suffix_parts.append(f"causalgapw{args.calculator_causal_gap_weight:g}")
             suffix_parts.append(f"causalgapm{args.calculator_causal_gap_margin:g}")
@@ -11249,6 +11398,13 @@ def main() -> None:
         f"loss_weight={args.additive_forced_true_loss_weight} "
         f"start_step={args.additive_forced_true_start_step} "
         f"ramp_steps={args.additive_forced_true_ramp_steps}"
+    )
+    print(
+        "late source recovery: "
+        f"start_step={args.late_source_recovery_start_step} "
+        f"lr_multiplier={args.late_source_recovery_lr_multiplier} "
+        "additive_forced_true_loss_weight="
+        f"{args.late_source_recovery_additive_forced_true_loss_weight}"
     )
     print(
         "calculator causal gap: "
