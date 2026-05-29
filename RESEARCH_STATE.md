@@ -118,22 +118,22 @@ Active directions:
   forced-true-loss trigger with patience fired at step `509` and improved the
   hard-seed handoff to `0.8025`, but still missed the high gate. A hard
   conjunctive gate requiring source accuracy `>=0.70` never fired on the same
-  seed and fell back to the weak no-recovery handoff (`0.6825`).
+  seed and fell back to the weak no-recovery handoff (`0.6825`). A budgeted
+  contrastive forced-margin source objective is positive at the matched
+  full-grid early handoff gate: one sampled negative per prompt reached
+  `0.3225` source calc / `0.3600` final eval at 200 steps and `0.6600` final
+  eval under trusted 600-step frozen-policy handoff, beating the matched
+  scheduled forced-true 200-step handoff (`0.4150`) with low controls. The
+  neg-4 full-grid version was too costly locally, so treat one-negative margin
+  as the scalable variant to extend or replicate.
 - A genuinely different credit-assignment family such as target propagation or
   local targets. Exact `policy_reweighted_t1` is positive and survives
   answer-only retention, but full enumeration is not scalable. Naive sparse
-  sampling and low-loss neighborhoods failed; a new replay-memory proposal is
-  the first useful approximation. With cached per-prompt losses, `u8_m24`
-  beats raw uniform `u32` at 200 steps (`0.5900` vs `0.3350` exact calc) and
-  retains `0.8600` calc / `0.8750` sampled normal after an 800+200 gate. A
-  lower-budget `u2_m30` point improves the 200-step gate to `0.6025` calc /
-  `0.6016` sampled normal, but retains less strongly (`0.7850` calc /
-  `0.7656` normal). Light cached-candidate rescoring ties `u2_m30`; heavier
-  rescoring hurts. Reset memory exposes the transductive dependency: at 199
-  steps, `reset100` fell to `0.4575` / `0.4453` and `reset50` to `0.2575` /
-  `0.2812` despite mostly restored target coverage. Streaming removes the
-  strong lift: at 800 batch-16 steps, exact/raw `u32` reached `0.2450` calc,
-  `u8_m24` `0.2650`, and `u2_m30` `0.1850`.
+  sampling and low-loss neighborhoods failed. Fixed replay memory looked useful
+  on the exhaustive grid, but rescoring did not help, reset windows damaged
+  learning, and streaming minibatches removed the strong lift. Continue local
+  targets only with learned/generalized proposals, estimator correction, or a
+  different target construction.
 - Lower-cost assignment is useful only when it changes scalability, not merely
   proxy selection.
 
@@ -165,11 +165,10 @@ These branches should not continue without a new mechanism:
 ## Next 1-3 Experiments
 
 1. Move replay-memory work to learned/generalized proposals or a different
-   target construction. Rescoring, resets, and streaming prompts do not turn
-   fixed-grid replay memory into a scalable method.
-2. In parallel, keep source objectives aimed at actual handoff/readout geometry,
+   target construction; fixed-grid replay caches are paused.
+2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
-3. If trying to reduce hard-assignment cost, state the scalability hypothesis
+3. If reducing hard-assignment cost, state the scalability hypothesis
    up front and compare against the exact-grid assignment ceiling rather than
    only against prior cheap selectors.
 

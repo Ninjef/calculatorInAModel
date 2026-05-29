@@ -291,3 +291,28 @@ ranking over the earlier scheduled forced-true small gate (`forced_best_true
 so it is not automatically better. A full-grid test is justified only as a
 mechanism comparison against scheduled forced-true, with actual handoff/readout
 gates retained as arbiter.
+
+### Full-Grid Budgeted Forced-Margin Gate
+
+The first full-grid attempt with 4 sampled negatives per prompt was too costly
+on the local path and was stopped after writing only the run config. That cost
+is part of the scalability result: the contrastive branch should not move
+forward as a many-negative auxiliary unless the implementation or schedule is
+changed.
+
+A budgeted one-negative version completed quickly and was positive at the
+matched 200-step full-grid gate:
+
+- Source step `200`: `0.3225` result-policy accuracy / `0.3600` final eval.
+- Geometry: `forced_best_true=0.6725`, but 50-step slope final loss `1.4660`,
+  worse than scheduled forced-true (`1.0360`).
+- Trusted 600-step frozen-policy handoff: final eval `0.6600`, step-600 normal
+  `0.7050`, injection-zero `0.0000`, forced-random `0.0250`, learned calc
+  `0.3375`.
+
+This beats the matched scheduled forced-true 200-step handoff (`0.4150`) and
+baseline (`0.2525`) despite the weaker slope metric. The important steering
+lesson is unchanged but sharper: geometry and slope remain diagnostics; actual
+handoff gates decide. The one-negative forced-margin branch is now worth a
+longer-horizon (`400/600`) or fresh-seed check, while the 4-negative full-grid
+variant should not be repeated without a compute-reduction plan.

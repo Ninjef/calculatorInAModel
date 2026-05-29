@@ -250,11 +250,14 @@ Memory:
   hard seed: forced-loss readiness was satisfied, but requiring
   `result_policy_argmax_result_accuracy >= 0.70` never fired, source final
   stayed `0.6100`, and handoff returned to `0.6825`.
-- A new contrastive source-geometry objective is mixed-positive in the small
-  gate: scheduled additive forced-margin training reached `0.4100` source calc
-  / `0.3800` final eval, `forced_best_true=0.6200`, and `top3=0.7500`, but its
-  50-step slope final loss (`1.0238`) was worse than scheduled forced-true
-  (`0.7979`).
+- A budgeted contrastive source-geometry objective is positive in the matched
+  full-grid early handoff gate. The full-grid 4-negative forced-margin branch
+  was too costly locally, but one sampled negative per prompt reached `0.3225`
+  source calc / `0.3600` final eval at step `200`. Geometry was mixed
+  (`forced_best_true=0.6725`, 50-step slope final loss `1.4660`), but the
+  trusted 600-step frozen-policy handoff reached `0.6600` final eval /
+  `0.7050` step-600 normal with low controls, above matched scheduled
+  forced-true (`0.4150`) and baseline (`0.2525`).
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -279,6 +282,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-smoothed-forced-loss-recovery-trigger.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-conjunctive-recovery-trigger.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-source-aux-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-op19-gate.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 
 ## Direction: Target Propagation / Local Targets

@@ -7500,3 +7500,70 @@ Interpretation:
 - It did not beat scheduled forced-true on the 50-step downstream slope loss.
 - A full-grid test is justified only as a mechanism comparison against
   scheduled forced-true, with trusted handoff/readout gates kept as arbiter.
+
+## 2026-05-29 Additive Forced-Margin Op19 Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-op19-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_additive_forced_margin/op19_gate_steps200
+runs/2026-05-29_phase7_additive_forced_margin/op19_gate_steps200_neg1
+```
+
+Question:
+
+Does the contrastive forced-margin source objective survive the full
+`operand_max=19` setting and improve actual additive handoff versus the matched
+scheduled forced-true 200-step source?
+
+Setup:
+
+- Seed `13`, full `0..19` grid, 200 source steps.
+- Same no-decay source stabilization as the scheduled forced-true branch:
+  improvement assignment `10`, entropy `0.05`, batch diversity `0.1`.
+- Scheduled forced-margin: weight `0.5`, start step `50`, margin `0.05`.
+
+Compute note:
+
+- The 4-negative full-grid branch was stopped after it only wrote config; it
+  was too costly for the local path.
+- The tested scalable branch used one sampled negative per prompt.
+
+Source and geometry:
+
+| Branch | Source calc @200 | Source final eval | Forced best=true | Forced top3=true | 50-step slope final loss |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| baseline prior | `0.2875` | `0.2825` | `0.0000` | `0.0000` | `1.8058` |
+| scheduled forced-true prior | `0.2800` | `0.2750` | `0.2125` | `0.4025` | `1.0360` |
+| forced-margin, 1 negative | `0.3225` | `0.3600` | `0.6725` | n/a | `1.4660` |
+
+Trusted 600-step frozen-policy handoff:
+
+| Source | Final eval | Step-600 normal | Injection-zero | Forced-random | Learned calc |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| baseline prior | `0.2525` | `0.2625` | `0.0000` | n/a | `0.2813` |
+| scheduled forced-true prior | `0.4150` | `0.3925` | `0.0469` | n/a | `0.2813` |
+| forced-margin, 1 negative | `0.6600` | `0.7050` | `0.0000` | `0.0250` | `0.3375` |
+
+Decision:
+
+```text
+additive_forced_margin_op19_neg1_handoff_positive
+```
+
+Interpretation:
+
+- One-negative forced-margin is the first contrastive version that is both
+  practical on full-grid source training and positive under the trusted handoff
+  gate.
+- Geometry ranking improved sharply, but the slope loss was worse than
+  scheduled forced-true; actual 600-step handoff was decisive.
+- Do not repeat the 4-negative full-grid branch without a compute-reduction
+  plan. The next useful test is a longer one-negative forced-margin source
+  horizon or fresh-seed stability check with the same handoff arbiter.
