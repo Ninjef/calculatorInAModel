@@ -571,3 +571,9 @@ Conclusion: Continuing the scheduled step-600 source for 30 CPU steps with LR `3
 Do not repeat: The same seed-13 scheduled step-600 -> 30-step low-LR `aux=0.1` recovery -> 600 handoff -> 800 continuation -> 600 readout chain as novelty.
 Next allowed test: Replicate on a fresh scheduled source seed or integrate the low-LR/lower-aux recovery as an automatic late-source phase, then verify with the trusted 600-step handoff and continuation/readout gates.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-scheduled-source-low-lr-recovery.md`
+
+POSITIVE: The gentle scheduled-source recovery recipe replicates on a fresh seed and clears handoff directly.
+Conclusion: Fresh seed-14 scheduled source training reached step-600 source eval `0.6675`; the same 30-step CPU recovery (`lr=3e-4`, forced-true weight `0.1`) raised source eval to `0.8850`, and the trusted 600-step frozen-policy additive handoff reached `0.9600` final eval / `0.9650` step-600 snapshot with learned calc `0.8700`, injection-zero `0.0850`, and forced-random `0.0875`.
+Do not repeat: The same seed-14 scheduled source -> 30-step low-LR recovery -> 600-step frozen-policy handoff as novelty.
+Next allowed test: Automate the late-source transition or test a third seed only if the explicit question is stability; keep the 600-step handoff/readout gates as arbiter and monitor the somewhat higher seed-14 zero/random controls.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-fresh-scheduled-source-recovery-replication.md`

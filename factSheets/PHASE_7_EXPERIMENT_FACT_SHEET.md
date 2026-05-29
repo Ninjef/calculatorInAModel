@@ -6788,3 +6788,51 @@ Interpretation:
   calculator-dependent under zero/random controls.
 - This is still not the final thesis result: it is prescriptive and relies on a
   hand-selected source checkpoint plus a manual late-source phase.
+
+## 2026-05-29 Fresh Scheduled Source Recovery Replication
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-fresh-scheduled-source-recovery-replication.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_scheduled_source_fresh_recovery/seed14_scheduled_steps600_cpu
+runs/2026-05-29_phase7_scheduled_source_fresh_recovery/seed14_low_aux0p1_recovery_from_step600_steps30_cpu
+runs/2026-05-29_phase7_scheduled_source_fresh_recovery/seed14_handoff600_from_recovery_step30_cpu
+```
+
+Question:
+
+Does the seed-13 low-LR/lower-aux recovery effect replicate on a fresh
+scheduled source seed?
+
+Results:
+
+| Stage | Final eval / normal | Injection-zero | Forced-random | Oracle | Learned calc | Forced-true loss |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| scheduled source step 600 | `0.6675` final eval / `0.6375` snapshot | `0.0575` | n/a | `1.0000` | `0.6375` | `0.2202` |
+| 30-step low-LR recovery | `0.8850` final eval / `0.8900` snapshot | `0.0425` | n/a | `1.0000` | `0.8900` | `0.1433` |
+| 600-step frozen-policy handoff | `0.9600` final eval / `0.9650` snapshot | `0.0850` | `0.0875` | `0.9850` | `0.8700` | n/a |
+
+Decision:
+
+```text
+fresh_scheduled_source_recovery_replication_positive
+```
+
+Interpretation:
+
+- The gentle recovery recipe replicated on a fresh seed and the recovered
+  checkpoint cleared the high non-bottleneck gate directly under the trusted
+  600-step frozen-policy handoff.
+- The seed-14 zero/random controls are higher than seed 13, but remain far
+  below normal (`0.0850`/`0.0875` vs `0.9650` snapshot normal).
+- This strengthens the case for an automatic late-source phase: high-pressure
+  scheduled geometry formation followed by low-LR/lower-aux source-policy
+  recovery.
+- The result is still prescriptive and checkpointed; it does not solve
+  scalable non-prescriptive credit assignment by itself.

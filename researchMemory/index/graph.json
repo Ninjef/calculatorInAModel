@@ -451,6 +451,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/091-the-gentle-scheduled-source-recovery-recipe-replicates-on-a-fresh-seed-and-clears-handoff",
+      "target": "researchMemory/hypotheses/phase7/091-the-gentle-scheduled-source-recovery-recipe-replicates-on-a-fresh-seed-and-clears-handoff-.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -668,6 +673,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-scheduled-source-low-lr-recovery.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-fresh-scheduled-source-recovery-replication.md",
       "type": "supported_by"
     },
     {
@@ -1356,6 +1366,13 @@
       "source_path": "researchMemory/hypotheses/phase7/090-gentle-low-lr-recovery-from-a-scheduled-source-checkpoint-restores-learned-calc-and-clears.md",
       "status": "POSITIVE",
       "title": "Gentle low-LR recovery from a scheduled source checkpoint restores learned calc and clears readout."
+    },
+    {
+      "id": "doc/091-the-gentle-scheduled-source-recovery-recipe-replicates-on-a-fresh-seed-and-clears-handoff",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/091-the-gentle-scheduled-source-recovery-recipe-replicates-on-a-fresh-seed-and-clears-handoff-.md",
+      "status": "POSITIVE",
+      "title": "The gentle scheduled-source recovery recipe replicates on a fresh seed and clears handoff directly."
     },
     {
       "id": "doc/phase7-direction-memory",

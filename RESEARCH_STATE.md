@@ -103,7 +103,11 @@ Active directions:
   low-LR source recovery from that step-600 checkpoint fixed the immediate
   source-policy bottleneck: source calc rose to `0.7950`, 600-step handoff
   improved to `0.8425`, and continuation/readout cleared the high
-  non-bottleneck gate at `0.9320` with low zero/random controls.
+  non-bottleneck gate at `0.9320` with low zero/random controls. A fresh seed
+  replicated the recovery effect and cleared the handoff gate directly:
+  seed-14 scheduled source step `600` recovered from `0.6675` to `0.8850`
+  source eval, then reached `0.9600` final frozen-policy handoff with
+  injection-zero/forced-random around `0.085`.
 - A genuinely different credit-assignment family such as target propagation,
   local targets, or another mechanism that constructs useful calculator-query
   targets without backpropagating through the calculator. The first
@@ -141,12 +145,11 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Replicate the gentle scheduled-source recovery recipe on a fresh seed or
-   longer horizon. The first seed-13 recovery used low LR (`3e-4`) and lower
-   forced-true weight (`0.1`) from the scheduled step-600 checkpoint, improved
-   learned calc, and cleared readout at `0.9320`; the next question is whether
-   this is stable and whether it can be built into source training without
-   manual checkpoint surgery.
+1. Automate the gentle scheduled-source recovery recipe. The low-LR/lower-aux
+   late phase now has two positive seeds, including a fresh seed-14 handoff
+   clear at `0.9600`; the next question is whether this can be built into
+   source training without manual checkpoint surgery, while preserving
+   handoff/readout gates and causal controls.
 2. Prototype a target-propagation/local-target style credit-assignment path
    beyond the current exact-grid local-target gates: naive uniform/top-k sparse
    sampling and simple loss-neighborhood expansion are not enough, so the next

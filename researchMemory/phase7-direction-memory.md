@@ -213,9 +213,15 @@ Memory:
   30 steps) raised source calc from `0.5800` to `0.7950` while preserving
   low forced-true loss, improved 600-step handoff to `0.8425`, and cleared
   continuation/readout at `0.9320` with low zero/random controls.
-- The promising next direction is to replicate or automate this late-source
-  recovery recipe on fresh scheduled sources. Forced-result geometry alone
-  remains a triage signal; actual handoff/readout gates remain decisive.
+- The recovery effect replicated on fresh seed `14`: scheduled step-600 source
+  eval `0.6675` recovered to `0.8850`, and the recovered checkpoint reached
+  `0.9600` final eval under the trusted 600-step frozen-policy handoff, with
+  learned calc `0.8700`, injection-zero `0.0850`, and forced-random `0.0875`
+  at the final snapshot.
+- The promising next direction is to automate this late-source recovery phase
+  rather than manually selecting checkpoint `600` and relaunching. Forced-result
+  geometry alone remains a triage signal; actual handoff/readout gates remain
+  decisive.
 
 Representative evidence:
 
@@ -230,6 +236,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-long-source-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-scheduled-source-continuation-readout.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-scheduled-source-low-lr-recovery.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-fresh-scheduled-source-recovery-replication.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 
 ## Direction: Target Propagation / Local Targets

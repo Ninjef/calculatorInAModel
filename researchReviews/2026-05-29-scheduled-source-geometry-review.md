@@ -123,3 +123,22 @@ Updated steering: this branch now has a high non-bottleneck gate clear, but it
 is still prescriptive and checkpointed. The next useful work is fresh-seed
 replication or turning the gentle recovery into an automatic late-source phase,
 with the 600-step handoff plus continuation/readout gates kept as the arbiter.
+
+## Addendum: Fresh-Seed Recovery Replication
+
+The gentle recovery recipe replicated on a fresh scheduled source seed:
+
+- Seed-14 scheduled source training reached step-600 source eval `0.6675`,
+  with forced-true additive loss `0.2202`.
+- The same 30-step recovery recipe, LR `0.0003` and forced-true weight `0.1`,
+  raised source eval to `0.8850` and reduced forced-true loss to `0.1433`.
+- The trusted 600-step frozen-policy additive handoff from the recovered
+  checkpoint reached `0.9600` final eval and `0.9650` step-600 snapshot.
+- Final snapshot controls: injection-zero `0.0850`, forced-random `0.0875`,
+  oracle `0.9850`, learned calc `0.8700`.
+
+Updated steering: the low-LR recovery phase is no longer a one-seed artifact.
+The zero/random controls on seed 14 are higher than seed 13, but still far
+below normal. Further value comes from automating the late-source transition
+or explicitly testing stability on another seed, not from rerunning this exact
+seed-14 chain.
