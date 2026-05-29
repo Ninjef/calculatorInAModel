@@ -2,6 +2,11 @@
 
 Last updated: 2026-05-29
 
+Maintenance rule: keep this file under about `200` lines. Replace stale
+synthesis instead of appending history. Put older strategic snapshots in
+`researchReviews/`, topic memories in `researchMemory/`, and raw evidence in
+`factSheets/` or `aiAgentWorkHistory/`.
+
 ## Overarching Goal
 
 Prove that a model can be trained from scratch to use a non-differentiable

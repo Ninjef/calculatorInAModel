@@ -4,7 +4,12 @@ Tiny claims and outcomes to prevent retesting settled branches.
 
 Use this file tactically. The strategic synthesis lives in
 `RESEARCH_STATE.md`; this ledger prevents local reruns and records which
-families are paused.
+families are paused. Direction-level synthesis lives in `researchMemory/`.
+
+Maintenance rule: individual entries may accumulate here, but when several
+entries point to the same lesson, consolidate that lesson into
+`researchMemory/` and update the family status index rather than relying on
+future agents to infer it from chronology.
 
 ## Family Status Index
 
