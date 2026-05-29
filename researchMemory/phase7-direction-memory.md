@@ -223,9 +223,15 @@ Memory:
   reached source eval `0.8775` and a trusted 600-step handoff final eval
   `0.9400`, with learned calc `0.8725`, injection-zero `0.0800`, and
   forced-random `0.0775` at the final handoff snapshot.
-- The promising next direction is to replace the fixed recovery step with an
-  adaptive transition or move back toward less prescriptive/scalable assignment.
-  Forced-result geometry alone remains a triage signal; actual handoff/readout
+- A simple adaptive source-accuracy trigger is mixed-positive: after the
+  adaptive recovery switch was wired to lower both LR and forced-true weight,
+  `result_policy_argmax_result_accuracy >= 0.65` fired at step `528` and the
+  trusted 600-step handoff reached `0.9850` final eval, exceeding the fixed
+  step-600 switch. The tradeoff is higher controls (`0.1325` zero and
+  forced-random) and lower source final eval (`0.8250`), so it needs fresh-seed
+  replication or a smoother/conjunctive trigger before treating it as a
+  validated selector.
+- Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
 Representative evidence:
@@ -243,6 +249,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-scheduled-source-low-lr-recovery.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-fresh-scheduled-source-recovery-replication.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-automated-scheduled-source-recovery.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-adaptive-source-recovery-trigger.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 
 ## Direction: Target Propagation / Local Targets

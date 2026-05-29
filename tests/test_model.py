@@ -4283,6 +4283,15 @@ def test_late_source_recovery_schedules_override_weight_and_lr() -> None:
         late_recovery_start_step=10,
         late_recovery_weight=0.1,
     ) == pytest.approx(0.1)
+    assert overfit_script.late_source_recovery_metric_triggers(
+        metric_value=0.7, threshold=0.65, mode="above"
+    )
+    assert not overfit_script.late_source_recovery_metric_triggers(
+        metric_value=0.6, threshold=0.65, mode="above"
+    )
+    assert overfit_script.late_source_recovery_metric_triggers(
+        metric_value=0.2, threshold=0.25, mode="below"
+    )
 
 
 def test_result_policy_anchor_penalizes_logit_drift() -> None:

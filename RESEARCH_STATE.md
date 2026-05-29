@@ -110,6 +110,13 @@ Active directions:
   injection-zero/forced-random around `0.085`. Folding the same late phase
   into one automated run on seed 14 preserved the result: final source eval
   `0.8775` and 600-step handoff `0.9400`, with low zero/random controls.
+  Replacing the fixed transition with a source-accuracy trigger is promising
+  but not settled: after correcting the adaptive phase to switch both LR and
+  forced-true weight, `argmax_result_accuracy >= 0.65` fired at step `528`;
+  source final eval fell to `0.8250`, yet the trusted 600-step handoff reached
+  `0.9850` final eval / `0.9775` snapshot. Controls were higher than the
+  fixed-step run (`0.1325` zero and forced-random), so this is a useful
+  adaptive candidate, not a validated selector.
 - A genuinely different credit-assignment family such as target propagation,
   local targets, or another mechanism that constructs useful calculator-query
   targets without backpropagating through the calculator. The first
@@ -147,11 +154,11 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Make the automated scheduled-source recovery recipe less hand-tuned. The
-   first in-run phase switch preserved the seed-14 handoff clear (`0.9400`),
-   but still uses a fixed transition step and prescriptive hard assignment.
-   Next test either adaptive transition criteria or move back toward scalable
-   assignment approximations while keeping handoff/readout gates as arbiter.
+1. Stress-test the adaptive late-source transition rather than source accuracy
+   alone. A simple source-argmax trigger beat fixed step-600 on seed 14
+   handoff (`0.9850` vs `0.9400`) but had higher zero/random controls, so the
+   next version should replicate on a fresh source or use a smoothed/conjunctive
+   trigger while keeping trusted 600-step handoff controls as arbiter.
 2. Prototype a target-propagation/local-target style credit-assignment path
    beyond the current exact-grid local-target gates: naive uniform/top-k sparse
    sampling and simple loss-neighborhood expansion are not enough, so the next

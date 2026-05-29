@@ -164,3 +164,25 @@ Updated steering: the late-source phase is now automatable. It is still
 fixed-step and prescriptive, so the next question is adaptive transition
 criteria or a return to scalable/non-prescriptive assignment mechanisms, with
 the trusted handoff/readout gates retained.
+
+## Addendum: Adaptive Recovery Trigger
+
+The first corrected adaptive transition is mixed-positive:
+
+- Added source-metric trigger flags for late-source recovery and fixed the
+  adaptive path so it lowers both LR and forced-true auxiliary weight after the
+  trigger.
+- On seed 14, `result_policy_argmax_result_accuracy >= 0.65` with min step
+  `500` triggered at step `528`.
+- The adaptive source final eval was only `0.8250`, but its step-600 source
+  snapshot was `0.8825` with zero/forced-random `0.0425`/`0.0200`.
+- The trusted 600-step frozen-policy handoff reached `0.9850` final eval and
+  `0.9775` step-600 snapshot, beating the fixed step-600 automated handoff
+  (`0.9400` final).
+- Handoff controls worsened: injection-zero and forced-random were both
+  `0.1325`, versus `0.0800`/`0.0775` for the fixed-step run.
+
+Updated steering: source final eval is not enough to judge transition quality,
+and the simple adaptive trigger deserves replication or smoothing before it
+becomes the default. Keep using trusted handoff controls as the arbiter; do not
+rerun the same seed-14 threshold as novelty.

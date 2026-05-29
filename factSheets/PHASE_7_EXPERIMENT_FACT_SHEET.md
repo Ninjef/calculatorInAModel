@@ -6888,3 +6888,57 @@ Interpretation:
 - The method remains prescriptive and fixed-step; the next useful improvement
   is adaptive transition criteria or a less prescriptive/scalable assignment
   path.
+
+## 2026-05-29 Adaptive Source Recovery Trigger
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-adaptive-source-recovery-trigger.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_scheduled_source_auto_recovery/seed14_adaptive_acc065_fixed_override_steps631_cpu
+runs/2026-05-29_phase7_scheduled_source_auto_recovery/seed14_handoff600_from_adaptive_acc065_fixed_override_cpu
+```
+
+Question:
+
+Can source metrics replace the fixed step-600 late-source recovery switch?
+
+Tooling:
+
+- Added adaptive late-source recovery flags:
+  `--late-source-recovery-trigger-metric`,
+  `--late-source-recovery-trigger-threshold`,
+  `--late-source-recovery-trigger-mode`, and
+  `--late-source-recovery-min-step`.
+- Corrected the adaptive path so a triggered recovery switches both LR and the
+  forced-true auxiliary override; an earlier exploratory run switched LR only
+  and is superseded by the fixed-override run above.
+
+Results:
+
+| Stage | Final eval / normal | Injection-zero | Forced-random | Oracle | Learned calc | Notes |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| adaptive source final | `0.8250` final eval / `0.8825` step-600 snapshot | `0.0425` at step 600 | `0.0200` at step 600 | `1.0000` | `0.8825` at step 600 | trigger step `528`, final LR multiplier `0.1`, final forced-true weight `0.1` |
+| adaptive 600-step handoff | `0.9850` final eval / `0.9775` snapshot | `0.1325` | `0.1325` | `0.9775` | `0.8425` | trusted frozen-policy gate |
+
+Decision:
+
+```text
+adaptive_source_accuracy_recovery_trigger_mixed_positive
+```
+
+Interpretation:
+
+- The simple source-accuracy trigger can remove the fixed transition step on
+  seed 14 and beat the fixed step-600 handoff final eval (`0.9850` vs
+  `0.9400`).
+- Source final eval was not a reliable arbiter here: it fell to `0.8250`, yet
+  handoff improved.
+- Controls worsened versus the fixed-step handoff (`0.1325`/`0.1325` vs
+  `0.0800`/`0.0775`), so this is promising but not validated as the default
+  selector.

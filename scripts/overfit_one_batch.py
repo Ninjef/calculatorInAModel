@@ -137,6 +137,10 @@ class TrainConfig:
     late_source_recovery_start_step: int
     late_source_recovery_lr_multiplier: float
     late_source_recovery_additive_forced_true_loss_weight: float | None
+    late_source_recovery_trigger_metric: str
+    late_source_recovery_trigger_threshold: float
+    late_source_recovery_trigger_mode: str
+    late_source_recovery_min_step: int
     calculator_causal_gap_weight: float
     calculator_causal_gap_margin: float
     boundary_feedback_weight: float
@@ -1203,6 +1207,16 @@ def set_optimizer_lr_multiplier(
     for group in optimizer.param_groups:
         base_lr = group.setdefault("initial_lr", group["lr"])
         group["lr"] = float(base_lr) * multiplier
+
+
+def late_source_recovery_metric_triggers(
+    *, metric_value: float, threshold: float, mode: str
+) -> bool:
+    if mode == "above":
+        return metric_value >= threshold
+    if mode == "below":
+        return metric_value <= threshold
+    raise ValueError(f"unknown late source recovery trigger mode: {mode}")
 
 
 def result_policy_anchor_effective_weight(
@@ -6876,6 +6890,14 @@ def run_variant(
         late_source_recovery_additive_forced_true_loss_weight=(
             args.late_source_recovery_additive_forced_true_loss_weight
         ),
+        late_source_recovery_trigger_metric=(
+            args.late_source_recovery_trigger_metric
+        ),
+        late_source_recovery_trigger_threshold=(
+            args.late_source_recovery_trigger_threshold
+        ),
+        late_source_recovery_trigger_mode=args.late_source_recovery_trigger_mode,
+        late_source_recovery_min_step=args.late_source_recovery_min_step,
         calculator_causal_gap_weight=args.calculator_causal_gap_weight,
         calculator_causal_gap_margin=args.calculator_causal_gap_margin,
         boundary_feedback_weight=args.boundary_feedback_weight,
@@ -7442,18 +7464,25 @@ def run_variant(
     optimizer_step_line_search_scales = parse_optimizer_step_line_search_scales(
         args.optimizer_step_line_search_scales
     )
+    adaptive_late_source_recovery_active = False
+    adaptive_late_source_recovery_trigger_step: int | None = None
     model.train()
     for step in range(args.steps + 1):
-        current_late_source_recovery_active = late_source_recovery_active(
-            start_step=args.late_source_recovery_start_step,
-            step=step,
+        fixed_late_source_recovery_active = late_source_recovery_active(
+            start_step=args.late_source_recovery_start_step, step=step
+        )
+        current_late_source_recovery_active = (
+            fixed_late_source_recovery_active or adaptive_late_source_recovery_active
         )
         current_late_source_recovery_lr_multiplier = (
-            late_source_recovery_lr_multiplier(
-                start_step=args.late_source_recovery_start_step,
-                multiplier=args.late_source_recovery_lr_multiplier,
-                step=step,
-            )
+            args.late_source_recovery_lr_multiplier
+            if current_late_source_recovery_active
+            else 1.0
+        )
+        current_late_source_recovery_start_step = (
+            adaptive_late_source_recovery_trigger_step
+            if adaptive_late_source_recovery_trigger_step is not None
+            else args.late_source_recovery_start_step
         )
         set_optimizer_lr_multiplier(optim, current_late_source_recovery_lr_multiplier)
         if args.operand_max is None:
@@ -7980,7 +8009,7 @@ def run_variant(
             start_step=args.additive_forced_true_start_step,
             ramp_steps=args.additive_forced_true_ramp_steps,
             step=step,
-            late_recovery_start_step=args.late_source_recovery_start_step,
+            late_recovery_start_step=current_late_source_recovery_start_step,
             late_recovery_weight=(
                 args.late_source_recovery_additive_forced_true_loss_weight
             ),
@@ -8017,6 +8046,46 @@ def run_variant(
                 "additive_forced_true_objective"
             ] = additive_forced_true_objective_value
             loss = loss + additive_forced_true_objective
+        late_source_recovery_trigger_value = None
+        late_source_recovery_triggered_this_step = False
+        if (
+            not current_late_source_recovery_active
+            and args.late_source_recovery_trigger_metric != "none"
+            and step >= args.late_source_recovery_min_step
+        ):
+            if (
+                args.late_source_recovery_trigger_metric
+                == "result_policy_argmax_result_accuracy"
+                and result_policy_stabilization_metrics
+            ):
+                late_source_recovery_trigger_value = float(
+                    result_policy_stabilization_metrics[
+                        "result_policy_argmax_result_accuracy"
+                    ]
+                )
+            elif (
+                args.late_source_recovery_trigger_metric
+                == "additive_forced_true_loss"
+                and additive_forced_true_loss_value is not None
+            ):
+                late_source_recovery_trigger_value = additive_forced_true_loss_value
+            if late_source_recovery_trigger_value is not None and (
+                late_source_recovery_metric_triggers(
+                    metric_value=late_source_recovery_trigger_value,
+                    threshold=args.late_source_recovery_trigger_threshold,
+                    mode=args.late_source_recovery_trigger_mode,
+                )
+            ):
+                adaptive_late_source_recovery_active = True
+                adaptive_late_source_recovery_trigger_step = step
+                late_source_recovery_triggered_this_step = True
+                current_late_source_recovery_active = True
+                current_late_source_recovery_lr_multiplier = (
+                    args.late_source_recovery_lr_multiplier
+                )
+                set_optimizer_lr_multiplier(
+                    optim, current_late_source_recovery_lr_multiplier
+                )
         if args.calculator_causal_gap_weight > 0:
             if use_reinforce:
                 raise ValueError(
@@ -8186,7 +8255,18 @@ def run_variant(
                 "late_source_recovery_lr_multiplier": (
                     current_late_source_recovery_lr_multiplier
                 ),
+                "late_source_recovery_triggered_this_step": int(
+                    late_source_recovery_triggered_this_step
+                ),
             }
+            if late_source_recovery_trigger_value is not None:
+                curve_row["late_source_recovery_trigger_value"] = (
+                    late_source_recovery_trigger_value
+                )
+            if adaptive_late_source_recovery_trigger_step is not None:
+                curve_row["late_source_recovery_trigger_step"] = (
+                    adaptive_late_source_recovery_trigger_step
+                )
             if aux_loss_value is not None:
                 curve_row["aux_operand_loss"] = aux_loss_value
                 curve_row["aux_operand_loss_weight"] = aux_weight
@@ -8857,27 +8937,45 @@ def run_variant(
     metrics["late_source_recovery_additive_forced_true_loss_weight"] = (
         args.late_source_recovery_additive_forced_true_loss_weight
     )
+    metrics["late_source_recovery_trigger_metric"] = (
+        args.late_source_recovery_trigger_metric
+    )
+    metrics["late_source_recovery_trigger_threshold"] = (
+        args.late_source_recovery_trigger_threshold
+    )
+    metrics["late_source_recovery_trigger_mode"] = (
+        args.late_source_recovery_trigger_mode
+    )
+    metrics["late_source_recovery_min_step"] = args.late_source_recovery_min_step
+    metrics["late_source_recovery_trigger_step"] = (
+        adaptive_late_source_recovery_trigger_step
+    )
+    metrics["final_late_source_recovery_active"] = (
+        late_source_recovery_active(
+            start_step=args.late_source_recovery_start_step,
+            step=args.steps,
+        )
+        or adaptive_late_source_recovery_active
+    )
+    metrics["final_late_source_recovery_lr_multiplier"] = (
+        args.late_source_recovery_lr_multiplier
+        if metrics["final_late_source_recovery_active"]
+        else 1.0
+    )
     metrics["final_additive_forced_true_effective_weight"] = (
         effective_additive_forced_true_weight(
             initial_weight=args.additive_forced_true_loss_weight,
             start_step=args.additive_forced_true_start_step,
             ramp_steps=args.additive_forced_true_ramp_steps,
             step=args.steps,
-            late_recovery_start_step=args.late_source_recovery_start_step,
+            late_recovery_start_step=(
+                adaptive_late_source_recovery_trigger_step
+                if adaptive_late_source_recovery_trigger_step is not None
+                else args.late_source_recovery_start_step
+            ),
             late_recovery_weight=(
                 args.late_source_recovery_additive_forced_true_loss_weight
             ),
-        )
-    )
-    metrics["final_late_source_recovery_active"] = late_source_recovery_active(
-        start_step=args.late_source_recovery_start_step,
-        step=args.steps,
-    )
-    metrics["final_late_source_recovery_lr_multiplier"] = (
-        late_source_recovery_lr_multiplier(
-            start_step=args.late_source_recovery_start_step,
-            multiplier=args.late_source_recovery_lr_multiplier,
-            step=args.steps,
         )
     )
     metrics["final_result_policy_anchor_weight"] = result_policy_anchor_weight_schedule(
@@ -9833,6 +9931,38 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--late-source-recovery-trigger-metric",
+        choices=[
+            "none",
+            "result_policy_argmax_result_accuracy",
+            "additive_forced_true_loss",
+        ],
+        default="none",
+        help=(
+            "Optional adaptive trigger metric for late source recovery. The "
+            "trigger is evaluated from source-training metrics and activates "
+            "the recovery phase for subsequent optimizer steps."
+        ),
+    )
+    parser.add_argument(
+        "--late-source-recovery-trigger-threshold",
+        type=float,
+        default=0.0,
+        help="Threshold for --late-source-recovery-trigger-metric.",
+    )
+    parser.add_argument(
+        "--late-source-recovery-trigger-mode",
+        choices=["above", "below"],
+        default="above",
+        help="Trigger when the selected metric is above or below the threshold.",
+    )
+    parser.add_argument(
+        "--late-source-recovery-min-step",
+        type=int,
+        default=0,
+        help="Earliest step at which the adaptive late-source trigger can fire.",
+    )
+    parser.add_argument(
         "--calculator-causal-gap-weight",
         type=float,
         default=0.0,
@@ -10529,6 +10659,16 @@ def main() -> None:
             "--late-source-recovery-additive-forced-true-loss-weight "
             "must be non-negative"
         )
+    if args.late_source_recovery_min_step < 0:
+        raise ValueError("--late-source-recovery-min-step must be non-negative")
+    if (
+        args.late_source_recovery_trigger_metric != "none"
+        and args.late_source_recovery_start_step >= 0
+    ):
+        raise ValueError(
+            "--late-source-recovery-trigger-metric cannot be combined with "
+            "--late-source-recovery-start-step"
+        )
     if args.action_loss_full_enum_chunk_size < 1:
         raise ValueError("--action-loss-full-enum-chunk-size must be positive")
     if args.expected_answer_loss_weight < 0:
@@ -11210,6 +11350,14 @@ def main() -> None:
                     "laterecovadd"
                     f"{args.late_source_recovery_additive_forced_true_loss_weight:g}"
                 )
+        if args.late_source_recovery_trigger_metric != "none":
+            suffix_parts.append(
+                f"laterecov{args.late_source_recovery_trigger_mode}"
+                f"{args.late_source_recovery_trigger_threshold:g}"
+            )
+            suffix_parts.append(args.late_source_recovery_trigger_metric)
+            if args.late_source_recovery_min_step > 0:
+                suffix_parts.append(f"laterecovmin{args.late_source_recovery_min_step}")
         if args.calculator_causal_gap_weight > 0:
             suffix_parts.append(f"causalgapw{args.calculator_causal_gap_weight:g}")
             suffix_parts.append(f"causalgapm{args.calculator_causal_gap_margin:g}")
@@ -11404,7 +11552,11 @@ def main() -> None:
         f"start_step={args.late_source_recovery_start_step} "
         f"lr_multiplier={args.late_source_recovery_lr_multiplier} "
         "additive_forced_true_loss_weight="
-        f"{args.late_source_recovery_additive_forced_true_loss_weight}"
+        f"{args.late_source_recovery_additive_forced_true_loss_weight} "
+        f"trigger_metric={args.late_source_recovery_trigger_metric} "
+        f"trigger_threshold={args.late_source_recovery_trigger_threshold} "
+        f"trigger_mode={args.late_source_recovery_trigger_mode} "
+        f"min_step={args.late_source_recovery_min_step}"
     )
     print(
         "calculator causal gap: "

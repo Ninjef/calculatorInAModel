@@ -461,6 +461,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/093-a-simple-source-accuracy-trigger-can-replace-the-fixed-late-source-recovery-step-on-seed-1",
+      "target": "researchMemory/hypotheses/phase7/093-a-simple-source-accuracy-trigger-can-replace-the-fixed-late-source-recovery-step-on-seed-1.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -688,6 +693,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-automated-scheduled-source-recovery.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-adaptive-source-recovery-trigger.md",
       "type": "supported_by"
     },
     {
@@ -1390,6 +1400,13 @@
       "source_path": "researchMemory/hypotheses/phase7/092-the-late-scheduled-source-recovery-phase-can-be-automated-in-one-source-run.md",
       "status": "POSITIVE",
       "title": "The late scheduled-source recovery phase can be automated in one source run."
+    },
+    {
+      "id": "doc/093-a-simple-source-accuracy-trigger-can-replace-the-fixed-late-source-recovery-step-on-seed-1",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/093-a-simple-source-accuracy-trigger-can-replace-the-fixed-late-source-recovery-step-on-seed-1.md",
+      "status": "MIXED-POSITIVE",
+      "title": "A simple source-accuracy trigger can replace the fixed late-source recovery step on seed 14, but controls worsen."
     },
     {
       "id": "doc/phase7-direction-memory",
