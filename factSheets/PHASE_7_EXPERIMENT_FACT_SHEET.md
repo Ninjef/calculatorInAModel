@@ -5916,3 +5916,54 @@ Interpretation:
 - Existing handoff exact-match traces show very early exact-match also fails:
   `src5` does not select its known winner until about step `500`.
 - Keep 500/600-step handoff probes as source-selection gates.
+
+## 2026-05-29 Source Assignment Weight-5 Transfer Probe
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-source-assignment-weight5-transfer-probe.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_source_acquisition_stabilization_floor_weight_sweep
+```
+
+Question:
+
+Does lowering source hard improvement-assignment weight from `10` to `5`
+preserve more transferable additive geometry on hostile CLI seed `10`?
+
+Setup:
+
+- Source: entropy `0.05`, batch diversity `0.1`, improvement assignment `5`,
+  no decay, exact-grid natural result-space source training for 1600 steps.
+- Handoff probes: 600-step frozen-policy additive handoffs from the source
+  step `1200` checkpoint and from the final source checkpoint.
+
+Result:
+
+| Source/checkpoint | Source normal | 600-step handoff snapshot | Handoff final eval |
+| --- | ---: | ---: | ---: |
+| source step `1200` | `0.7800` | `0.3425` | `0.3000` |
+| source step `1500` | `0.7825` | not run | not run |
+| source final | `0.6750` eval | `0.2475` | `0.2325` |
+
+Decision:
+
+```text
+source_improvement_weight5_transfer_negative
+```
+
+Interpretation:
+
+- Lowering assignment weight weakened source acquisition versus the earlier
+  weight-10 seed-10 source (`0.9000` final eval).
+- It did not improve additive transfer: the best tested weight-5 checkpoint
+  stayed below the prior weight-10 seed-10 step `1000` handoff (`0.4475`
+  snapshot, `0.4450` final eval).
+- Do not sweep lower assignment weights as the next source-stability plan.
+  Optimize or select sources against actual 500/600-step handoff behavior, or
+  add a direct source-training term for handoff/readout geometry.

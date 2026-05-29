@@ -379,6 +379,11 @@ but `src4_add2` only reached `0.7550` despite learned calc `0.8550`. This
 supports source-quality selection/acquisition as a next bottleneck: if the
 source policy's representation is handoff-friendly, stable readout adaptation
 can work without an anchor; if it is not, more time alone does not fix it.
+Simply lowering the hard improvement-assignment source weight is not the fix:
+on hostile seed `10`, weight `5` weakened source acquisition to `0.6750`
+final eval and its best tested additive handoff reached only `0.3425` at
+600 steps. Future source work should train or select for actual 500/600-step
+handoff behavior, not just soften the existing assignment objective.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

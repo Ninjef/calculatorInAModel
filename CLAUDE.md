@@ -759,6 +759,11 @@ Do not rerun these as next steps unless debugging new code:
   adaptation from the adapted `src4_add2` or `src5_add5` checkpoints as
   novelty. It lifted `src5` to strong answer accuracy while `src4` stayed weak,
   so longer stable-policy readout adaptation does not erase source sensitivity.
+- seed-10 no-decay source acquisition with entropy `0.05`, batch diversity
+  `0.1`, improvement assignment weight `5`, and 1600 source steps as novelty.
+  It weakened source acquisition (`0.6750` final eval) and did not improve
+  additive transfer: step `1200` handoff reached only `0.3425` at 600 steps
+  and `0.3000` final eval.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -778,6 +783,8 @@ unfreezing with calculator-accuracy-gated retention, an adaptive floor around
 the `0.1` anchor-strength region, continuous rather than discrete behavior
 control, a more restrictive selective parameter set than freezing the action
 head alone,
+source acquisition optimized against actual 500/600-step additive handoff
+behavior rather than lower assignment-weight sweeps alone,
 a Jacobian-conditioned state more substantial than the result-output
 `J^T answer_grad` feature, or a richer target construction that remains valid
 after upstream movement.

@@ -453,3 +453,9 @@ Conclusion: On known `src2/src4/src5` handoff comparisons, 100-step loss/loss-dr
 Do not repeat: Same 0/25/50/100-step loss-slope probe over `src2` step `1300`/final, `src4` step `1000/1200`/final, or `src5` step `1100/1400/1500`/final as novelty.
 Next allowed test: Keep 500/600-step handoff gates, optimize source acquisition against actual early handoff exact, or train a learned proxy on accumulated handoff traces.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-short-slope-selector-validation.md`
+
+DISPROVEN: Lowering the hard improvement-assignment source weight from `10` to `5` rescues transfer-hostile seed-10 geometry.
+Conclusion: The weight-5 seed-10 source weakened to final eval `0.6750`; its best source snapshots were around `0.78`, and 600-step additive handoffs from step `1200`/final reached only `0.3425`/`0.2475` snapshots and `0.3000`/`0.2325` final eval.
+Do not repeat: Same seed-10 no-decay entropy `0.05`, diversity `0.1`, improvement weight `5`, 1600-step source run or step-1200/final 600-step frozen handoffs as novelty.
+Next allowed test: Optimize source acquisition against actual 500/600-step handoff behavior, add a direct handoff/readout geometry term, or train a learned selector validated against the handoff gate.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-source-assignment-weight5-transfer-probe.md`
