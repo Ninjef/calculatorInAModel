@@ -4675,3 +4675,49 @@ Interpretation:
   the strong `src2` sources despite poor additive handoff.
 - The reusable script is useful infrastructure, but simple frozen-state linear
   sum separability is not the missing handoff-quality metric.
+
+## 2026-05-29 Handoff Probe Selector Validation
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-sixtieth-task-Handoff-probe-selector-validation.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_handoff_probe_selector_validation
+```
+
+Question:
+
+Can the short additive handoff probe select a better source checkpoint than
+source normal/calculator accuracy?
+
+Result:
+
+| Source checkpoint | Source normal | Normal @ 400 | Normal @ 600 | Normal @ 800 | Final injection-zero | Final oracle | Final calc | Final eval |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| final / step `1600` | `0.8325` | `0.2975` | `0.4525` | `0.5725` | `0.0125` | `0.5600` | `0.8000` | `0.5550` |
+| step `1500` | `0.9200` | `0.4325` | `0.5250` | `0.6925` | `0.0150` | `0.7025` | `0.9000` | `0.6975` |
+| step `1400` probe | `0.8900` | `0.4150` | `0.6625` | n/a | `0.0000` | `0.7050` | `0.8950` | `0.6400` |
+| step `1100` probe | `0.8400` | `0.3475` | `0.6825` | n/a | `0.0000` | `0.7650` | `0.8325` | `0.6850` |
+| step `1100` full | `0.8400` | `0.3475` | `0.6825` | `0.7775` | `0.0000` | `0.8625` | `0.8250` | `0.7950` |
+
+Decision:
+
+```text
+bottleneck_to_additive_handoff_probe_selector_positive
+```
+
+Interpretation:
+
+- The 600-step handoff probe selected `src5` step `1100`, a lower-source-
+  accuracy checkpoint than step `1500`.
+- Full transfer confirmed the selection: step `1100` reached `0.7950` versus
+  step `1500` at `0.6975`.
+- The 400-step probe would not have selected step `1100`, so 600 steps is the
+  better local selector.
+- This is not yet scalable enough as a final method, but it is a validated
+  source-selection target and a practical benchmark for cheaper proxies.
