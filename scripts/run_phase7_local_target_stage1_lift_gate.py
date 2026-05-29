@@ -32,6 +32,7 @@ from scripts.run_phase7_local_target_propagation_gate import (  # noqa: E402
     write_rows,
 )
 from src.data import ANSWER_FORMATS  # noqa: E402
+from src.model import masked_cross_entropy  # noqa: E402
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -165,6 +166,15 @@ def branch_loss(
     }
 
 
+def answer_only_loss(model, batch) -> tuple[torch.Tensor, dict[str, float | str]]:
+    logits = model(batch.x)
+    loss = masked_cross_entropy(logits, batch.y, batch.loss_mask)
+    return loss, {
+        "branch_loss_mode": "answer_only_retention",
+        "branch_loss": float(loss.detach().item()),
+    }
+
+
 @torch.no_grad()
 def exact_grid_policy_metrics(model, batch, *, digits: int) -> dict[str, float | str]:
     logits, diagnostics = model(batch.x, return_diagnostics=True)
@@ -218,16 +228,29 @@ def train_branch(
     )
     rows: list[dict[str, Any]] = []
 
-    def append_snapshot(step: int, train_metrics: dict[str, float | str]) -> None:
+    def append_snapshot(
+        step: int,
+        train_metrics: dict[str, float | str],
+        *,
+        phase: str,
+        phase_step: int,
+    ) -> None:
         row = {
             "branch": branch,
+            "phase": phase,
             "step": int(step),
+            "phase_step": int(phase_step),
             **train_metrics,
             **exact_grid_policy_metrics(model, batch, digits=args.digits),
         }
         run_sampled_controls = (
             step == 0
-            or step == args.steps
+            or phase_step == 0
+            or (phase == "target" and phase_step == args.steps)
+            or (
+                phase == "retention"
+                and phase_step == args.retention_steps
+            )
             or (
                 args.control_eval_every > 0
                 and step % args.control_eval_every == 0
@@ -252,7 +275,7 @@ def train_branch(
         rows.append(row)
 
     initial_loss, initial_metrics = branch_loss(model, batch, branch=branch, args=args)
-    append_snapshot(0, initial_metrics)
+    append_snapshot(0, initial_metrics, phase="target", phase_step=0)
     for step in range(1, args.steps + 1):
         model.train()
         optimizer.zero_grad(set_to_none=True)
@@ -262,7 +285,38 @@ def train_branch(
             torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
         optimizer.step()
         if step % args.eval_every == 0 or step == args.steps:
-            append_snapshot(step, metrics)
+            append_snapshot(step, metrics, phase="target", phase_step=step)
+
+    target_final = rows[-1]
+    if args.retention_steps > 0:
+        optimizer = torch.optim.AdamW(
+            adaptive_optimizer_param_groups(
+                model,
+                lr=args.retention_lr,
+                input_proj_lr=args.retention_input_proj_lr,
+                upstream_lr=args.retention_upstream_lr,
+                weight_decay=args.weight_decay,
+            )
+        )
+        for retention_step in range(1, args.retention_steps + 1):
+            model.train()
+            optimizer.zero_grad(set_to_none=True)
+            loss, metrics = answer_only_loss(model, batch)
+            loss.backward()
+            if args.grad_clip > 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+            optimizer.step()
+            absolute_step = args.steps + retention_step
+            if (
+                retention_step % args.retention_eval_every == 0
+                or retention_step == args.retention_steps
+            ):
+                append_snapshot(
+                    absolute_step,
+                    metrics,
+                    phase="retention",
+                    phase_step=retention_step,
+                )
 
     final = rows[-1]
     sampled_rows = [row for row in rows if "sampled_normal_exact_match" in row]
@@ -271,8 +325,11 @@ def train_branch(
     return {
         "branch": branch,
         "steps": int(args.steps),
+        "retention_steps": int(args.retention_steps),
         "trainable_parameter_groups": trainable_parameter_summary(model),
         "initial_state_tensors": int(len(initial_state)),
+        "target_final": target_final,
+        "retention_final": final if args.retention_steps > 0 else None,
         "final": final,
         "best_sampled_normal": best,
         "best_exact_grid_calc": calc_best,
@@ -300,7 +357,9 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "batch_size": int(batch.x.shape[0]),
         "operand_max": int(args.operand_max),
         "steps": int(args.steps),
+        "retention_steps": int(args.retention_steps),
         "eval_every": int(args.eval_every),
+        "retention_eval_every": int(args.retention_eval_every),
         "eval_samples": int(args.eval_samples),
         "semantic_decoder_checkpoint": str(resolve_path(args.semantic_decoder_checkpoint)),
         "branches": branches,
@@ -329,12 +388,17 @@ def main() -> int:
     parser.add_argument("--mlp-expansion", type=int, default=1)
     parser.add_argument("--calculator-hook-after-layer", type=int, default=1)
     parser.add_argument("--steps", type=int, default=200)
+    parser.add_argument("--retention-steps", type=int, default=0)
     parser.add_argument("--eval-every", type=int, default=25)
+    parser.add_argument("--retention-eval-every", type=int, default=25)
     parser.add_argument("--control-eval-every", type=int, default=100)
     parser.add_argument("--eval-samples", type=int, default=128)
     parser.add_argument("--lr", type=float, default=3e-3)
     parser.add_argument("--input-proj-lr", type=float, default=1e-2)
     parser.add_argument("--upstream-lr", type=float, default=3e-4)
+    parser.add_argument("--retention-lr", type=float, default=3e-3)
+    parser.add_argument("--retention-input-proj-lr", type=float, default=1e-2)
+    parser.add_argument("--retention-upstream-lr", type=float, default=3e-4)
     parser.add_argument("--weight-decay", type=float, default=0.0)
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--result-chunk-size", type=int, default=16)
@@ -357,8 +421,12 @@ def main() -> int:
 
     if args.steps < 1:
         raise ValueError("--steps must be positive")
+    if args.retention_steps < 0:
+        raise ValueError("--retention-steps must be non-negative")
     if args.eval_every < 1:
         raise ValueError("--eval-every must be positive")
+    if args.retention_eval_every < 1:
+        raise ValueError("--retention-eval-every must be positive")
     if args.control_eval_every < 0:
         raise ValueError("--control-eval-every must be non-negative")
     if args.result_chunk_size < 1:
@@ -379,12 +447,22 @@ def main() -> int:
     write_rows(output_root / "local_target_stage1_rows.csv", all_rows)
     for result in summary["results"]:
         final = result["final"]
+        target_final = result["target_final"]
         best = result["best_sampled_normal"]
-        print(
-            f"{result['branch']}: final_normal={final['sampled_normal_exact_match']:.4f} "
-            f"final_calc={final['exact_grid_calculator_result_accuracy']:.4f} "
-            f"best_normal={best['sampled_normal_exact_match']:.4f}"
-        )
+        if result["retention_final"] is None:
+            print(
+                f"{result['branch']}: final_normal={final['sampled_normal_exact_match']:.4f} "
+                f"final_calc={final['exact_grid_calculator_result_accuracy']:.4f} "
+                f"best_normal={best['sampled_normal_exact_match']:.4f}"
+            )
+        else:
+            print(
+                f"{result['branch']}: target_normal={target_final['sampled_normal_exact_match']:.4f} "
+                f"target_calc={target_final['exact_grid_calculator_result_accuracy']:.4f} "
+                f"retention_normal={final['sampled_normal_exact_match']:.4f} "
+                f"retention_calc={final['exact_grid_calculator_result_accuracy']:.4f} "
+                f"best_normal={best['sampled_normal_exact_match']:.4f}"
+            )
     return 0
 
 

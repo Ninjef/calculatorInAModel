@@ -201,7 +201,7 @@ Representative evidence:
 
 ## Direction: Target Propagation / Local Targets
 
-Status: active candidate with Stage 1 partial positive
+Status: active candidate with Stage 1 retention partial positive
 
 Memory:
 
@@ -217,11 +217,16 @@ Memory:
   exact-grid calculator-result accuracy and `0.5391` sampled normal accuracy,
   beating the failed expected-loss baseline and slightly beating the
   same-budget hard-boundary run.
+- An 800-step target-training plus 200-step answer-only retention gate showed
+  `policy_reweighted_t1` is nonmonotonic during target training but can finish
+  retention strongest: `0.8925` exact-grid calculator-result accuracy and
+  `0.8750` sampled normal, with injection-zero and forced-random controls low.
 - The result is not yet a scalable or non-prescriptive method. The tested
   targets still use full forced-result scoring.
-- Next work should either extend/replicate `policy_reweighted_t1` with
-  convergence and retention checks, or approximate it with sampled/top-k/
-  learned targets that avoid full result-class enumeration.
+- Next work should prioritize approximating `policy_reweighted_t1` with
+  sampled/top-k/learned targets that avoid full result-class enumeration.
+  Seed-replicate the longer retention result only if stability is the explicit
+  question.
 
 Representative evidence:
 
@@ -229,3 +234,4 @@ Representative evidence:
 - `RESEARCH_STATE.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-local-target-propagation-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-local-target-stage1-lift-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-local-target-convergence-retention-gate.md`

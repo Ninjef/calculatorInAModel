@@ -1,5 +1,53 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-29 Local-Target Convergence And Retention Gate
+
+Task/work log:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-local-target-convergence-retention-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_local_target_convergence_retention_gate/policy_t1_vs_hard_steps800_retention200
+```
+
+Code:
+
+```text
+scripts/run_phase7_local_target_stage1_lift_gate.py
+```
+
+Result:
+
+```text
+local_target_policy_reweighted_retention_partial_positive
+```
+
+The runner now supports optional answer-only retention after the local-target
+phase. In an 800-step target-training plus 200-step answer-only retention gate,
+`policy_reweighted_t1` trailed hard-boundary at target step 800 (`0.7050` vs
+`0.8200` exact-grid calculator-result accuracy), despite peaking earlier at
+step 600 (`0.8925`). After answer-only retention, `policy_reweighted_t1`
+finished at `0.8925` exact-grid calculator-result accuracy and `0.8750`
+sampled normal accuracy, above hard-boundary's `0.8050` and `0.8281`.
+Controls stayed causal for both branches (`injection_zero=0.0234`,
+`forced_random=0.0156`, oracle `1.0000`).
+
+Interpretation:
+
+- `policy_reweighted_t1` can produce a natural result-level calculator policy
+  that answer-only training retains and can improve.
+- Target training is nonmonotonic, so the branch needs stability/selection
+  care before longer runs are trusted.
+- The result is still not scalable because the target-training phase scores all
+  forced result classes.
+- Next useful work is a sampled/top-k/learned approximation to
+  `policy_reweighted_t1`, or seed replication only if stability is the
+  explicit question.
+
 ## 2026-05-29 Local-Target Stage 1 Lift Gate
 
 Task/work log:

@@ -517,3 +517,9 @@ Conclusion: In a 200-step exact-grid Stage 1 gate, `policy_reweighted_t1` reache
 Do not repeat: The same seed-2, 200-step Stage 1 comparison of `hard_boundary`, `expected_loss`, `policy_reweighted_t1`, and `logit_descent_p0.1` as novelty.
 Next allowed test: Replicate or extend `policy_reweighted_t1` to a longer convergence/retention gate, then design a sampled/top-k/learned approximation that avoids full forced-result enumeration.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-local-target-stage1-lift-gate.md`
+
+PARTIAL-POSITIVE: `policy_reweighted_t1` local targets can survive and improve during answer-only retention, but target training is nonmonotonic.
+Conclusion: In an 800-step target-training plus 200-step answer-only retention gate, `policy_reweighted_t1` trailed hard-boundary at target step 800 (`0.7050` vs `0.8200` exact-grid calc) after peaking at step 600 (`0.8925`), but finished retention at `0.8925` exact-grid calc and `0.8750` sampled normal versus hard-boundary `0.8050`/`0.8281`. Controls remained causal (`injection_zero=0.0234`, `forced_random=0.0156`, oracle `1.0000`).
+Do not repeat: The same seed-2, 800-target-step plus 200-retention-step comparison of `hard_boundary` and `policy_reweighted_t1` as novelty.
+Next allowed test: Seed-replicate only if stability is the explicit question; otherwise approximate `policy_reweighted_t1` with sampled/top-k/learned targets that avoid full forced-result enumeration.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-local-target-convergence-retention-gate.md`

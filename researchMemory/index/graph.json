@@ -406,6 +406,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/082-policy-reweighted-t1-local-targets-can-survive-and-improve-during-answer-only-retention-bu",
+      "target": "researchMemory/hypotheses/phase7/082-policy-reweighted-t1-local-targets-can-survive-and-improve-during-answer-only-retention-bu.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -618,6 +623,11 @@
     {
       "source": "direction/target-propagation-local-targets",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-local-target-stage1-lift-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-local-target-convergence-retention-gate.md",
       "type": "supported_by"
     },
     {
@@ -1195,6 +1205,13 @@
       "title": "The softer policy-reweighted local target produces Stage 1 lift above the failed expected-loss baseline."
     },
     {
+      "id": "doc/082-policy-reweighted-t1-local-targets-can-survive-and-improve-during-answer-only-retention-bu",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/082-policy-reweighted-t1-local-targets-can-survive-and-improve-during-answer-only-retention-bu.md",
+      "status": "PARTIAL-POSITIVE",
+      "title": "`policy_reweighted_t1` local targets can survive and improve during answer-only retention, but target training is nonmonotonic."
+    },
+    {
       "id": "doc/phase7-direction-memory",
       "kind": "memory_document",
       "source_path": "researchMemory/phase7-direction-memory.md",
@@ -1268,7 +1285,7 @@
       "id": "direction/target-propagation-local-targets",
       "kind": "direction_memory",
       "source_path": "researchMemory/phase7-direction-memory.md",
-      "status": "active candidate with Stage 1 partial positive",
+      "status": "active candidate with Stage 1 retention partial positive",
       "title": "Target Propagation / Local Targets"
     }
   ]
