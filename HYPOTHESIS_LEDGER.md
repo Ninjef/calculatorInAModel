@@ -339,3 +339,9 @@ Conclusion: Giving the handoff-probe-selected `src5` step-1100 lineage the same 
 Do not repeat: Same `src5` step-1100 selected handoff plus extra 800-step frozen-policy continuation plus no-anchor policy-backbone-frozen 1600-step adaptation as novelty.
 Next allowed test: Apply the fair continuation recipe to `src4` step-1200, or optimize source acquisition for early handoff and continuation slope.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-selected-source-continuation-fairness.md`
+
+POSITIVE: Fair continuation also improves the weak `src4` selected-source lineage.
+Conclusion: `src4` step-1200 selected handoff improved from `0.7800` to `0.8150` with another 800 frozen-policy steps, then reached `0.9125` after policy-backbone-frozen long adaptation, beating direct selected long (`0.8900`) and old final-source long (`0.7550`).
+Do not repeat: Same `src4` step-1200 selected handoff plus extra 800-step frozen-policy continuation plus no-anchor policy-backbone-frozen 1600-step adaptation as novelty.
+Next allowed test: Reduce handoff-probe/continuation cost, or optimize source acquisition for early handoff and continuation slope.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-src4-selected-source-continuation-fairness.md`

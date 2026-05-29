@@ -4903,3 +4903,45 @@ Interpretation:
   adaptation result.
 - The continued selected lineage remained calculator-dependent: injection-zero
   was `0.0000`, and forced-random was near chance at `0.0225`.
+
+## 2026-05-29 `src4` Selected-Source Continuation Fairness
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-sixty-fifth-task-Src4-selected-source-continuation-fairness.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_src4_selected_source_continuation_fairness
+```
+
+Question:
+
+Does the fair continuation recipe that nearly closed the `src5` selected-source
+gap also improve the weaker `src4` step-1200 selected-source lineage?
+
+Result:
+
+| Run | Start final | Continued final | Long final eval | Long best normal | Last injection-zero | Last forced-random | Last oracle | Last calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| old `src4` final-source lineage | n/a | `0.6050` | `0.7550` | `0.7600` at `1100` | `0.0525` | `0.0900` | `0.7325` | `0.8550` |
+| selected `src4` direct long | `0.7800` | n/a | `0.8900` | `0.8975` at `1400` | `0.0000` | `0.0175` | `0.8675` | `0.8225` |
+| selected `src4` continued long | `0.7800` | `0.8150` | `0.9125` | `0.9475` at `1400` | `0.0075` | `0.0250` | `0.8825` | `0.8025` |
+
+Decision:
+
+```text
+src4_selected_source_continuation_fairness_positive
+```
+
+Interpretation:
+
+- The fair continuation recipe also improves the weak `src4` selected-source
+  lineage.
+- It beats direct selected-source long adaptation (`0.8900`) and old
+  final-source long adaptation (`0.7550`).
+- The gain is smaller than for `src5`, but forced-random remains near chance,
+  so calculator dependence is retained.
