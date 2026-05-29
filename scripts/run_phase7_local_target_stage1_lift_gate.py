@@ -46,12 +46,162 @@ def parse_branch_specs(text: str) -> list[str]:
         "hard_boundary",
         "expected_loss",
         "policy_reweighted_t",
+        "sampled_policy_reweighted_t",
         "logit_descent_p",
     )
     for branch in branches:
         if not branch.startswith(allowed_prefixes):
             raise argparse.ArgumentTypeError(f"unknown branch {branch!r}")
     return branches
+
+
+def parse_sampled_policy_reweighted_branch(branch: str) -> tuple[float, int, int]:
+    prefix = "sampled_policy_reweighted_t"
+    if not branch.startswith(prefix):
+        raise ValueError(f"not a sampled policy-reweighted branch: {branch!r}")
+    parts = branch.removeprefix(prefix).split("_")
+    if len(parts) != 3 or not parts[1].startswith("k") or not parts[2].startswith("u"):
+        raise ValueError(
+            "sampled policy-reweighted branch must look like "
+            "'sampled_policy_reweighted_t1_k8_u8'"
+        )
+    temperature = float(parts[0].replace("p", "."))
+    top_k = int(parts[1].removeprefix("k"))
+    uniform_samples = int(parts[2].removeprefix("u"))
+    if temperature <= 0:
+        raise ValueError("sampled policy-reweighted temperature must be positive")
+    if top_k < 0 or uniform_samples < 0:
+        raise ValueError("candidate counts must be non-negative")
+    if top_k + uniform_samples < 1:
+        raise ValueError("sampled policy-reweighted branch needs at least one candidate")
+    return temperature, top_k, uniform_samples
+
+
+@torch.no_grad()
+def score_forced_candidate_result_classes(
+    model,
+    batch,
+    candidates: torch.Tensor,
+    *,
+    chunk_size: int,
+) -> torch.Tensor:
+    if chunk_size < 1:
+        raise ValueError("candidate result chunk size must be positive")
+    if candidates.ndim != 2:
+        raise ValueError("candidates must be [batch, candidate_count]")
+    was_training = model.training
+    model.eval()
+    losses: list[torch.Tensor] = []
+    try:
+        for start in range(0, candidates.shape[1], chunk_size):
+            forced_chunk = candidates[:, start : start + chunk_size]
+            width = forced_chunk.shape[1]
+            expanded_x = batch.x.repeat_interleave(width, dim=0)
+            expanded_y = batch.y.repeat_interleave(width, dim=0)
+            expanded_mask = batch.loss_mask.repeat_interleave(width, dim=0)
+            forced = forced_chunk.reshape(-1)
+            logits = model(expanded_x, forced_calculator_result_class=forced)
+            token_loss = torch.nn.functional.cross_entropy(
+                logits.reshape(-1, logits.shape[-1]),
+                expanded_y.reshape(-1),
+                reduction="none",
+            ).reshape_as(expanded_y)
+            loss_mask = expanded_mask.to(token_loss.dtype)
+            losses.append(
+                ((token_loss * loss_mask).sum(dim=-1) / loss_mask.sum(dim=-1).clamp(min=1.0))
+                .reshape(batch.x.shape[0], width)
+                .detach()
+            )
+    finally:
+        if was_training:
+            model.train()
+    return torch.cat(losses, dim=-1)
+
+
+def sampled_policy_reweighted_loss(
+    model,
+    batch,
+    *,
+    branch: str,
+    args: argparse.Namespace,
+) -> tuple[torch.Tensor, dict[str, float | str]]:
+    temperature, top_k, uniform_samples = parse_sampled_policy_reweighted_branch(branch)
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    result_vocab_size = result_logits.shape[-1]
+    candidate_parts: list[torch.Tensor] = []
+    if top_k > 0:
+        candidate_parts.append(
+            result_logits.detach()
+            .topk(k=min(top_k, result_vocab_size), dim=-1)
+            .indices
+        )
+    if uniform_samples > 0:
+        uniform_count = min(uniform_samples, result_vocab_size)
+        candidate_parts.append(
+            torch.rand(
+                batch.x.shape[0],
+                result_vocab_size,
+                device=batch.x.device,
+            )
+            .topk(k=uniform_count, dim=-1)
+            .indices
+        )
+    candidates = torch.cat(candidate_parts, dim=-1)
+    candidate_losses = score_forced_candidate_result_classes(
+        model,
+        batch,
+        candidates,
+        chunk_size=args.result_chunk_size,
+    )
+    selected_log_probs = result_logits.log_softmax(dim=-1).gather(1, candidates)
+    target_logits = selected_log_probs.detach() - (candidate_losses / temperature)
+    weights = torch.softmax(target_logits, dim=-1).detach()
+    if args.min_probability_floor > 0:
+        action_count = weights.shape[-1]
+        if args.min_probability_floor * action_count >= 1.0:
+            raise ValueError("min probability floor times candidate count must be < 1")
+        weights = weights.clamp_min(args.min_probability_floor)
+        weights = weights / weights.sum(dim=-1, keepdim=True)
+
+    loss = -(weights * selected_log_probs).sum(dim=-1).mean()
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=args.digits)
+    true_sum = true_a + true_b
+    target_entropy = -(weights * weights.clamp_min(1e-12).log()).sum(dim=-1)
+    target_argmax = candidates.gather(1, weights.argmax(dim=-1, keepdim=True)).squeeze(-1)
+    true_mask = candidates == true_sum.unsqueeze(-1)
+    true_prob = (weights * true_mask.to(weights.dtype)).sum(dim=-1)
+    unique_counts = torch.tensor(
+        [row.unique().numel() for row in candidates.detach().cpu()],
+        device=batch.x.device,
+        dtype=torch.float32,
+    )
+    candidate_current_weights = torch.softmax(selected_log_probs.detach(), dim=-1)
+    candidate_current_loss = (candidate_current_weights * candidate_losses).sum(dim=-1)
+    candidate_target_loss = (weights * candidate_losses).sum(dim=-1)
+    return loss, {
+        "branch_loss_mode": branch,
+        "branch_loss": float(loss.detach().item()),
+        "target_family": "sampled_policy_reweighted",
+        "target_temperature": float(temperature),
+        "target_top_k": int(top_k),
+        "target_uniform_samples": int(uniform_samples),
+        "target_scored_results": int(candidates.shape[1]),
+        "target_unique_scored_results": float(unique_counts.mean().item()),
+        "target_scored_fraction": float(candidates.shape[1] / result_vocab_size),
+        "target_true_candidate_coverage": float(true_mask.any(dim=-1).float().mean().item()),
+        "target_entropy": float(target_entropy.mean().item()),
+        "target_effective_results": float(target_entropy.exp().mean().item()),
+        "target_true_probability": float(true_prob.mean().item()),
+        "target_argmax_accuracy": float((target_argmax == true_sum).float().mean().item()),
+        "target_argmax_matches_current": float(
+            (target_argmax == result_logits.detach().argmax(dim=-1)).float().mean().item()
+        ),
+        "target_candidate_expected_loss": float(candidate_target_loss.mean().item()),
+        "current_candidate_expected_loss": float(candidate_current_loss.mean().item()),
+        "target_candidate_expected_improvement": float(
+            (candidate_current_loss - candidate_target_loss).mean().item()
+        ),
+    }
 
 
 def branch_loss(
@@ -91,6 +241,8 @@ def branch_loss(
             "branch_loss": float(loss.detach().item()),
             **{f"expected_{key}": value for key, value in metrics.items()},
         }
+    if branch.startswith("sampled_policy_reweighted_t"):
+        return sampled_policy_reweighted_loss(model, batch, branch=branch, args=args)
 
     result_logits, _, _, _ = calculator_read_result_logits(model, batch)
     full_losses = score_forced_result_classes_chunked(

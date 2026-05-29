@@ -97,8 +97,9 @@ Active directions:
   local targets, or another mechanism that constructs useful calculator-query
   targets without backpropagating through the calculator. The first
   local-target gates are positive, including answer-only retention for
-  `policy_reweighted_t1`, but still depend on full forced-result scoring and
-  show nonmonotonic target-training dynamics.
+  `policy_reweighted_t1`, but still depend on broad forced-result scoring.
+  Naive sparse sampled candidates underperform unless coverage approaches the
+  full result vocabulary.
 - A lower-cost assignment method only if it changes scalability of the
   successful hard-assignment branch, not merely another proxy selector.
 
@@ -131,10 +132,10 @@ These branches should not continue without a new mechanism:
    checkpoints, and it must be gated against standalone 600-step handoff
    behavior.
 2. Prototype a target-propagation/local-target style credit-assignment path
-   beyond the current exact-grid local-target gates: prioritize a sampled/top-k/
-   learned approximation to `policy_reweighted_t1` that avoids full
-   result-class enumeration. Seed-replicate the 800+200 retention result only
-   if stability is the explicit question.
+   beyond the current exact-grid local-target gates: naive uniform/top-k sparse
+   sampling is not enough, so the next approximation needs a smarter proposal,
+   learned candidate generator, or bias/variance correction that improves
+   true-result coverage without near-full enumeration.
 3. If trying to reduce hard-assignment cost, state the scalability hypothesis
    up front and compare against the exact-grid assignment ceiling rather than
    only against prior cheap selectors.

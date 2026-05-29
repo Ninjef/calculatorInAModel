@@ -1,5 +1,57 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-29 Sampled Local-Target Approximation Gate
+
+Task/work log:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-sampled-local-target-approximation-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_sampled_local_target_gate/policy_t1_no_replacement_200
+runs/2026-05-29_phase7_sampled_local_target_gate/policy_t1_near_full_200
+runs/2026-05-29_phase7_sampled_local_target_gate/policy_t1_exact_alone_200
+```
+
+Code:
+
+```text
+scripts/run_phase7_local_target_stage1_lift_gate.py
+```
+
+Result:
+
+```text
+sampled_local_target_naive_sparse_mixed_negative
+```
+
+The runner now includes `sampled_policy_reweighted_t<T>_k<K>_u<U>` branches
+that score a sparse candidate set made from current-policy top-k result classes
+plus no-replacement uniform samples. This directly tests whether
+`policy_reweighted_t1` can avoid full forced-result enumeration.
+
+At 200 steps, exact `policy_reweighted_t1` reached `0.5600` exact-grid
+calculator-result accuracy and `0.5391` sampled normal. Sparse no-replacement
+uniform branches improved with coverage but lagged: `u16` reached `0.1975`
+calc, `u24` `0.2800`, `u32` `0.3350`, and near-full `u36` `0.4100`.
+Full-vocabulary `u39` recovered the signal (`0.6250` calc, `0.5547` sampled
+normal), confirming the sparse path itself can train when it sees essentially
+all result classes. Top-k plus uniform was worse (`k8_u8`: `0.0925` calc).
+
+Interpretation:
+
+- Naive sparse sampled local targets are not yet a scalable replacement for
+  full forced-result scoring.
+- The failure appears tied to candidate coverage/proposal quality: target
+  argmax accuracy and true-result probability rise with scored fraction, but
+  useful learning only appears near full coverage.
+- Next useful work needs a smarter proposal, learned candidate generator, or
+  importance/bias correction rather than another raw uniform sample-count
+  ladder.
+
 ## 2026-05-29 Local-Target Convergence And Retention Gate
 
 Task/work log:

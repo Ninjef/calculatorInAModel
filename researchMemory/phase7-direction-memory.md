@@ -221,12 +221,15 @@ Memory:
   `policy_reweighted_t1` is nonmonotonic during target training but can finish
   retention strongest: `0.8925` exact-grid calculator-result accuracy and
   `0.8750` sampled normal, with injection-zero and forced-random controls low.
+- A first sparse approximation gate was mixed-negative: naive top-k/uniform
+  sampled candidate sets underperformed badly unless they scored nearly the
+  full result vocabulary (`u32` only `0.3350` exact-grid calc at 200 steps,
+  `u36` `0.4100`, while full-vocabulary `u39` reached `0.6250`).
 - The result is not yet a scalable or non-prescriptive method. The tested
-  targets still use full forced-result scoring.
-- Next work should prioritize approximating `policy_reweighted_t1` with
-  sampled/top-k/learned targets that avoid full result-class enumeration.
-  Seed-replicate the longer retention result only if stability is the explicit
-  question.
+  targets still need broad forced-result scoring.
+- Next work should prioritize a smarter proposal distribution, learned
+  candidate generator, or bias/variance correction for `policy_reweighted_t1`.
+  Do not rerun raw uniform/top-k candidate-count ladders as novelty.
 
 Representative evidence:
 
@@ -235,3 +238,4 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-local-target-propagation-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-local-target-stage1-lift-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-local-target-convergence-retention-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-sampled-local-target-approximation-gate.md`

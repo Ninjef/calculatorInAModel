@@ -411,6 +411,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/083-naive-sparse-sampled-policy-reweighted-t1-targets-do-not-preserve-the-full-enum-learning-s",
+      "target": "researchMemory/hypotheses/phase7/083-naive-sparse-sampled-policy-reweighted-t1-targets-do-not-preserve-the-full-enum-learning-s.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -628,6 +633,11 @@
     {
       "source": "direction/target-propagation-local-targets",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-local-target-convergence-retention-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-sampled-local-target-approximation-gate.md",
       "type": "supported_by"
     },
     {
@@ -1210,6 +1220,13 @@
       "source_path": "researchMemory/hypotheses/phase7/082-policy-reweighted-t1-local-targets-can-survive-and-improve-during-answer-only-retention-bu.md",
       "status": "PARTIAL-POSITIVE",
       "title": "`policy_reweighted_t1` local targets can survive and improve during answer-only retention, but target training is nonmonotonic."
+    },
+    {
+      "id": "doc/083-naive-sparse-sampled-policy-reweighted-t1-targets-do-not-preserve-the-full-enum-learning-s",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/083-naive-sparse-sampled-policy-reweighted-t1-targets-do-not-preserve-the-full-enum-learning-s.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Naive sparse sampled `policy_reweighted_t1` targets do not preserve the full-enum learning signal unless candidate coverage is near-full."
     },
     {
       "id": "doc/phase7-direction-memory",
