@@ -643,3 +643,9 @@ Conclusion: Adding `--streaming-train-batch-size` and prompt-keyed replay caches
 Do not repeat: The same seed-2 streaming minibatch gates at batch `16` for `200/800` steps or batch `64` for `200` steps over exact, raw `u32`, `u2_m30`, and `u8_m24` as novelty.
 Next allowed test: Do not treat prompt-keyed replay memory as the scalable answer. Continue local targets only with a learned/generalized proposal, estimator correction, or a different target construction; otherwise return mainline compute to source objectives aimed at handoff/readout geometry.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-streaming-prompt-gate.md`
+
+PAUSED: Fixed replay-memory local-target proposals are not the scalable path.
+Conclusion: The replay-memory branch produced a real fixed-grid positive, but the follow-up stress tests identify the mechanism as prompt-identity transduction rather than a scalable candidate proposal. Lower fresh budgets worked on the fixed grid, but rescoring did not improve retention, reset windows damaged learning, and streaming minibatches removed the strong lift. This pauses fixed per-prompt replay caches as a family, including fresh-count, rescore-count, reset-interval, batch-size, and longer-run variants.
+Do not repeat: Do not run more fixed replay-memory budget ladders, rescore ladders, reset intervals, streaming batch-size/length checks, or seed replications as novelty.
+Next allowed test: Local-target work needs a genuinely new mechanism: learned/generalized candidate proposal, estimator/bias correction, or a target construction that does not require the useful result to already be in a hand-coded candidate set. Otherwise prioritize source objectives that improve additive handoff/readout geometry.
+Source: `researchReviews/2026-05-29-replay-memory-branch-review.md`

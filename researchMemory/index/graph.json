@@ -511,6 +511,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/103-fixed-replay-memory-local-target-proposals-are-not-the-scalable-path",
+      "target": "researchMemory/hypotheses/phase7/103-fixed-replay-memory-local-target-proposals-are-not-the-scalable-path.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -788,6 +793,11 @@
     {
       "source": "direction/target-propagation-local-targets",
       "target": "researchReviews/2026-05-29-phase7-local-target-approximation-review.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "researchReviews/2026-05-29-replay-memory-branch-review.md",
       "type": "supported_by"
     },
     {
@@ -1562,6 +1572,13 @@
       "title": "Streaming minibatches remove replay-memory's strong fixed-grid local-target lift."
     },
     {
+      "id": "doc/103-fixed-replay-memory-local-target-proposals-are-not-the-scalable-path",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/103-fixed-replay-memory-local-target-proposals-are-not-the-scalable-path.md",
+      "status": "PAUSED",
+      "title": "Fixed replay-memory local-target proposals are not the scalable path."
+    },
+    {
       "id": "doc/phase7-direction-memory",
       "kind": "memory_document",
       "source_path": "researchMemory/phase7-direction-memory.md",
@@ -1635,7 +1652,7 @@
       "id": "direction/target-propagation-local-targets",
       "kind": "direction_memory",
       "source_path": "researchMemory/phase7-direction-memory.md",
-      "status": "active candidate with first scalable-approximation positive",
+      "status": "active only with learned/corrected proposals or new target construction",
       "title": "Target Propagation / Local Targets"
     }
   ]

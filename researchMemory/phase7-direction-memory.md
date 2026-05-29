@@ -277,7 +277,7 @@ Representative evidence:
 
 ## Direction: Target Propagation / Local Targets
 
-Status: active candidate with first scalable-approximation positive
+Status: active only with learned/corrected proposals or new target construction
 
 Memory:
 
@@ -304,7 +304,7 @@ Memory:
 - A simple adaptive loss-neighborhood proposal was negative: at similar scoring
   budgets it underperformed raw uniform `u32` because expansion clustered into
   fewer unique candidates and lower true-result coverage.
-- A replay-memory proposal is the first positive sparse approximation: scoring
+- A replay-memory proposal was the first positive sparse approximation: scoring
   `8` fresh uniform results per step and reusing cached low-loss candidates
   beat raw uniform `u32` at 200 steps (`0.5900` vs `0.3350` exact-grid calc)
   and reached `0.8600` calc / `0.8750` sampled normal after an 800+200
@@ -326,17 +326,17 @@ Memory:
   lift. At 800 steps with batch `16`, exact `policy_reweighted_t1` and raw
   uniform `u32` both reached `0.2450` exact calc, `u8_m24` was only comparable
   at `0.2650`, and `u2_m30` lagged at `0.1850`.
-- The result is promising but still transductive: on the fixed exhaustive grid
-  the memory eventually observes all `39` result classes. Reset/rescore and
-  prompt-keyed streaming variants are not enough; next local-target work needs
-  learned/generalized proposal memory, estimator correction, or a different
-  target construction.
+- The durable lesson is negative for fixed hand-coded proposals. Exact
+  `policy_reweighted_t1` remains a useful ceiling, but fixed replay memory is
+  not a scalable method. Next local-target work needs learned/generalized
+  proposal memory, estimator correction, or a different target construction.
 
 Representative evidence:
 
 - `SOLUTION_IDEAS.md`
 - `RESEARCH_STATE.md`
 - `researchReviews/2026-05-29-phase7-local-target-approximation-review.md`
+- `researchReviews/2026-05-29-replay-memory-branch-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-local-target-propagation-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-local-target-stage1-lift-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-local-target-convergence-retention-gate.md`
