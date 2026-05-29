@@ -426,6 +426,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/086-delaying-the-forced-true-additive-auxiliary-can-preserve-source-acquisition-while-shaping",
+      "target": "researchMemory/hypotheses/phase7/086-delaying-the-forced-true-additive-auxiliary-can-preserve-source-acquisition-while-shaping-.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -618,6 +623,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-source-aux-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-schedule-gate.md",
       "type": "supported_by"
     },
     {
@@ -1266,6 +1276,13 @@
       "source_path": "researchMemory/hypotheses/phase7/085-a-forced-true-additive-readout-auxiliary-can-shape-transfer-geometry-during-bottleneck-sou.md",
       "status": "MIXED-POSITIVE",
       "title": "A forced-true additive readout auxiliary can shape transfer geometry during bottleneck source acquisition."
+    },
+    {
+      "id": "doc/086-delaying-the-forced-true-additive-auxiliary-can-preserve-source-acquisition-while-shaping",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/086-delaying-the-forced-true-additive-auxiliary-can-preserve-source-acquisition-while-shaping-.md",
+      "status": "POSITIVE",
+      "title": "Delaying the forced-true additive auxiliary can preserve source acquisition while shaping additive geometry."
     },
     {
       "id": "doc/phase7-direction-memory",

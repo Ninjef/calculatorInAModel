@@ -132,6 +132,8 @@ class TrainConfig:
     result_policy_anchor_temperature: float
     result_policy_anchor_mode: str
     additive_forced_true_loss_weight: float
+    additive_forced_true_start_step: int
+    additive_forced_true_ramp_steps: int
     calculator_causal_gap_weight: float
     calculator_causal_gap_margin: float
     boundary_feedback_weight: float
@@ -771,6 +773,7 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_policy_anchor_kl",
         "result_policy_anchor_mse",
         "additive_forced_true_loss_weight",
+        "additive_forced_true_effective_weight",
         "additive_forced_true_objective",
         "additive_forced_true_loss",
         "calculator_causal_gap_weight",
@@ -1130,6 +1133,23 @@ def result_policy_anchor_weight_schedule(
         return initial_weight
     decayed = initial_weight * max(0.0, 1.0 - (step / decay_steps))
     return max(floor, decayed)
+
+
+def additive_forced_true_weight_schedule(
+    *,
+    initial_weight: float,
+    start_step: int,
+    ramp_steps: int,
+    step: int,
+) -> float:
+    if initial_weight <= 0:
+        return 0.0
+    if step < start_step:
+        return 0.0
+    if ramp_steps <= 0:
+        return initial_weight
+    fraction = min(1.0, max(0.0, (step - start_step) / ramp_steps))
+    return initial_weight * fraction
 
 
 def result_policy_anchor_effective_weight(
@@ -6794,6 +6814,8 @@ def run_variant(
         result_policy_anchor_temperature=args.result_policy_anchor_temperature,
         result_policy_anchor_mode=args.result_policy_anchor_mode,
         additive_forced_true_loss_weight=args.additive_forced_true_loss_weight,
+        additive_forced_true_start_step=args.additive_forced_true_start_step,
+        additive_forced_true_ramp_steps=args.additive_forced_true_ramp_steps,
         calculator_causal_gap_weight=args.calculator_causal_gap_weight,
         calculator_causal_gap_margin=args.calculator_causal_gap_margin,
         boundary_feedback_weight=args.boundary_feedback_weight,
@@ -7881,7 +7903,13 @@ def run_variant(
                 current_result_policy_anchor_weight
                 * result_policy_anchor_objective
             )
-        if args.additive_forced_true_loss_weight > 0:
+        current_additive_forced_true_weight = additive_forced_true_weight_schedule(
+            initial_weight=args.additive_forced_true_loss_weight,
+            start_step=args.additive_forced_true_start_step,
+            ramp_steps=args.additive_forced_true_ramp_steps,
+            step=step,
+        )
+        if current_additive_forced_true_weight > 0:
             if use_reinforce:
                 raise ValueError(
                     "additive forced-true objective is not supported with reinforce"
@@ -7898,8 +7926,7 @@ def run_variant(
                 additive_forced_true_loss.detach().item()
             )
             additive_forced_true_objective = (
-                args.additive_forced_true_loss_weight
-                * additive_forced_true_loss
+                current_additive_forced_true_weight * additive_forced_true_loss
             )
             additive_forced_true_objective_value = float(
                 additive_forced_true_objective.detach().item()
@@ -7907,6 +7934,9 @@ def run_variant(
             additive_forced_true_metrics[
                 "additive_forced_true_loss_weight"
             ] = float(args.additive_forced_true_loss_weight)
+            additive_forced_true_metrics[
+                "additive_forced_true_effective_weight"
+            ] = float(current_additive_forced_true_weight)
             additive_forced_true_metrics[
                 "additive_forced_true_objective"
             ] = additive_forced_true_objective_value
@@ -8131,7 +8161,7 @@ def run_variant(
                     result_policy_anchor_objective_value
                 )
                 curve_row.update(result_policy_anchor_metrics)
-            if args.additive_forced_true_loss_weight > 0:
+            if additive_forced_true_metrics:
                 curve_row.update(additive_forced_true_metrics)
             if args.calculator_causal_gap_weight > 0:
                 curve_row.update(calculator_causal_gap_metrics)
@@ -8247,7 +8277,7 @@ def run_variant(
                 + (
                     f" additive_forced_true_loss={additive_forced_true_loss_value:.4f}"
                     f" additive_forced_true_obj={additive_forced_true_objective_value:.4f}"
-                    if args.additive_forced_true_loss_weight > 0
+                    if additive_forced_true_metrics
                     else ""
                 )
                 + (
@@ -8731,6 +8761,20 @@ def run_variant(
     metrics["result_policy_anchor_mode"] = args.result_policy_anchor_mode
     metrics["additive_forced_true_loss_weight"] = (
         args.additive_forced_true_loss_weight
+    )
+    metrics["additive_forced_true_start_step"] = (
+        args.additive_forced_true_start_step
+    )
+    metrics["additive_forced_true_ramp_steps"] = (
+        args.additive_forced_true_ramp_steps
+    )
+    metrics["final_additive_forced_true_effective_weight"] = (
+        additive_forced_true_weight_schedule(
+            initial_weight=args.additive_forced_true_loss_weight,
+            start_step=args.additive_forced_true_start_step,
+            ramp_steps=args.additive_forced_true_ramp_steps,
+            step=args.steps,
+        )
     )
     metrics["final_result_policy_anchor_weight"] = result_policy_anchor_weight_schedule(
         initial_weight=args.result_policy_anchor_weight,
@@ -9636,6 +9680,25 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--additive-forced-true-start-step",
+        type=int,
+        default=0,
+        help=(
+            "Delay the additive forced-true auxiliary until this training step "
+            "so early source policy acquisition can establish a foothold."
+        ),
+    )
+    parser.add_argument(
+        "--additive-forced-true-ramp-steps",
+        type=int,
+        default=0,
+        help=(
+            "Linearly ramp the additive forced-true auxiliary from zero to "
+            "--additive-forced-true-loss-weight after the start step; 0 jumps "
+            "to full weight."
+        ),
+    )
+    parser.add_argument(
         "--calculator-causal-gap-weight",
         type=float,
         default=0.0,
@@ -10310,6 +10373,10 @@ def main() -> None:
         )
     if args.additive_forced_true_loss_weight < 0:
         raise ValueError("--additive-forced-true-loss-weight must be non-negative")
+    if args.additive_forced_true_start_step < 0:
+        raise ValueError("--additive-forced-true-start-step must be non-negative")
+    if args.additive_forced_true_ramp_steps < 0:
+        raise ValueError("--additive-forced-true-ramp-steps must be non-negative")
     if args.action_loss_full_enum_chunk_size < 1:
         raise ValueError("--action-loss-full-enum-chunk-size must be positive")
     if args.expected_answer_loss_weight < 0:
@@ -10972,6 +11039,14 @@ def main() -> None:
             suffix_parts.append(
                 f"addforcedtrue{args.additive_forced_true_loss_weight:g}"
             )
+            if args.additive_forced_true_start_step > 0:
+                suffix_parts.append(
+                    f"addforcedstart{args.additive_forced_true_start_step}"
+                )
+            if args.additive_forced_true_ramp_steps > 0:
+                suffix_parts.append(
+                    f"addforcedramp{args.additive_forced_true_ramp_steps}"
+                )
         if args.calculator_causal_gap_weight > 0:
             suffix_parts.append(f"causalgapw{args.calculator_causal_gap_weight:g}")
             suffix_parts.append(f"causalgapm{args.calculator_causal_gap_margin:g}")
@@ -11157,7 +11232,9 @@ def main() -> None:
     )
     print(
         "additive forced-true auxiliary: "
-        f"loss_weight={args.additive_forced_true_loss_weight}"
+        f"loss_weight={args.additive_forced_true_loss_weight} "
+        f"start_step={args.additive_forced_true_start_step} "
+        f"ramp_steps={args.additive_forced_true_ramp_steps}"
     )
     print(
         "calculator causal gap: "

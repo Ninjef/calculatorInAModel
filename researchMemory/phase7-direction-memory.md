@@ -191,10 +191,15 @@ Memory:
   readout auxiliary during bottleneck source acquisition made the true result
   the best forced additive result on `59%` of a small `0..9` grid versus `0%`
   baseline, but weakened source policy accuracy at the same budget.
-- The promising next direction is not another checkpoint selector; it is a
-  scheduled/gated or policy-anchored source objective that preserves source
-  calculator acquisition while shaping downstream handoff/readout geometry,
-  then verifying with the standalone 600-step handoff gate.
+- Scheduling fixed the first tradeoff in the same small gate: delaying the
+  forced-true additive auxiliary to step `50` improved source calc/final eval
+  over baseline (`0.3900`/`0.4000` vs `0.3500`/`0.3800`) while retaining
+  strong additive geometry (`forced_best_true=0.5100` vs baseline `0.0000`).
+- The promising next direction is not another checkpoint selector; scale the
+  scheduled geometry objective to `operand_max=19` with source-only
+  checkpointing first, then verify promising checkpoints with the standalone
+  600-step handoff gate. If larger runs drift late, add a behavior gate or
+  policy-retention anchor.
 
 Representative evidence:
 
@@ -204,6 +209,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-seed10-source-checkpoint-geometry-sweep.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-source-assignment-weight5-transfer-probe.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-source-aux-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-schedule-gate.md`
 
 ## Direction: Target Propagation / Local Targets
 

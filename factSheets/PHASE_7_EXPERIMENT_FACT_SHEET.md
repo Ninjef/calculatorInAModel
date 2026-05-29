@@ -6461,3 +6461,66 @@ Interpretation:
 - Next versions should be scheduled/gated or paired with a policy-retention
   anchor, then verified on `operand_max=19` with targeted standalone 600-step
   additive handoff gates.
+
+## 2026-05-29 Additive Forced-True Schedule Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-schedule-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_additive_forced_true_schedule/smoke
+runs/2026-05-29_phase7_additive_forced_true_schedule/small_gate
+```
+
+Question:
+
+Can delaying the forced-true additive auxiliary preserve source calculator
+policy acquisition while keeping the additive readout-geometry benefit?
+
+Implementation:
+
+- Added `--additive-forced-true-start-step`.
+- Added `--additive-forced-true-ramp-steps`.
+- Logged the auxiliary effective weight.
+
+Small gate:
+
+- Same `operand_max=9`, seed `13`, 100-step setup as the always-on auxiliary
+  gate.
+- New branch used `--additive-forced-true-loss-weight 0.5` and
+  `--additive-forced-true-start-step 50`.
+
+Source results:
+
+| Branch | Aux schedule | Source calc @100 | Source normal snapshot | Final eval exact |
+| --- | --- | ---: | ---: | ---: |
+| baseline | none | `0.3500` | `0.3400` | `0.3800` |
+| always-on aux | weight `0.5` from step `0` | `0.2800` | `0.3200` | `0.2800` |
+| scheduled aux | weight `0.5` from step `50` | `0.3900` | `0.4300` | `0.4000` |
+
+Geometry probe:
+
+| Branch | Forced best=true | Forced top3=true | 50-step slope final loss |
+| --- | ---: | ---: | ---: |
+| baseline | `0.0000` | `0.0000` | `1.5305` |
+| always-on aux | `0.5900` | `0.6900` | `0.7367` |
+| scheduled aux | `0.5100` | `0.5600` | `0.7979` |
+
+Decision:
+
+```text
+additive_forced_true_start50_schedule_positive_small_gate
+```
+
+Interpretation:
+
+- Scheduling fixed the small-gate source-policy tradeoff: the scheduled branch
+  beat baseline on source calc and final eval.
+- It retained most of the additive readout-geometry benefit.
+- Next test should scale to `operand_max=19` using source-only checkpointing
+  first, then verify with targeted standalone 600-step additive handoff.
