@@ -239,6 +239,7 @@ Representative evidence:
 
 - `SOLUTION_IDEAS.md`
 - `RESEARCH_STATE.md`
+- `researchReviews/2026-05-29-phase7-local-target-approximation-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-local-target-propagation-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-local-target-stage1-lift-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-local-target-convergence-retention-gate.md`

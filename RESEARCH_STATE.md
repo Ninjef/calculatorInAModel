@@ -115,6 +115,10 @@ These branches should not continue without a new mechanism:
 - Fixed fit-once linear shadow feedback.
 - Simple online MLP shadow-gradient variants that only tweak normalization,
   validation selection, dropout, or loss shape.
+- Hand-coded local-target candidate proposal variants, including raw
+  uniform/top-k sparse sampling and simple low-loss neighborhood expansion.
+  Continue local targets only with a learned proposal, estimator correction, or
+  different target construction.
 - Cheap source selectors based on frozen-state readout, forced-result geometry,
   25/50/100-step loss slope, simple ridge over early traces, or 500-step
   embedded probe normal score alone. Use these only for logging, rejection

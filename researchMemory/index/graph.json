@@ -627,6 +627,11 @@
     },
     {
       "source": "direction/target-propagation-local-targets",
+      "target": "researchReviews/2026-05-29-phase7-local-target-approximation-review.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-local-target-propagation-gate.md",
       "type": "supported_by"
     },

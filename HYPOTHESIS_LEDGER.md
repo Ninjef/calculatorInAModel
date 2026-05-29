@@ -25,7 +25,7 @@ future agents to infer it from chronology.
 | Bottleneck-to-additive staged handoff | Active but constrained | Proves non-bottleneck viability, but source quality and policy protection remain bottlenecks. |
 | Cheap source-checkpoint selectors | Paused | Frozen-state, geometry, short-slope, ridge, and embedded 500-step probes are not reliable replacements for actual handoff gates. |
 | Source acquisition for transfer geometry | Active | Current best strategic direction if it directly targets handoff/readout behavior. |
-| Target propagation / local targets | Active candidate | Stage 0 and short Stage 1 local-target gates are positive, but tested forms still use full forced-result scoring and must be approximated before they count as scalable. |
+| Target propagation / local targets | Active candidate, constrained | Exact/full-enum local-target gates are positive, but raw sampled/top-k and simple adaptive-neighborhood approximations are paused; continue only with learned proposals, estimator correction, or a different target construction. |
 
 Rule: if a proposed experiment belongs to a paused family, it needs a new
 mechanism and should be reconciled with `RESEARCH_STATE.md` before running.
