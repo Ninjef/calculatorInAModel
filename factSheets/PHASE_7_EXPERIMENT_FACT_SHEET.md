@@ -4815,3 +4815,48 @@ Interpretation:
 - The 600-step handoff probe is a useful source-quality metric, but downstream
   long-adaptation quality likely needs an additional readout-compatibility
   criterion.
+
+## 2026-05-29 Long-Adaptation Selector Probe
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-sixty-third-task-Long-adaptation-selector-probe.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_long_adaptation_selector_probe
+```
+
+Question:
+
+Does the `src5` source-accuracy-selected step-1500 checkpoint beat the
+handoff-probe-selected step-1100 checkpoint after the same 1600-step
+stable-policy adaptation?
+
+Result:
+
+| Run | Frozen handoff final | Adapted final eval | Adapted best normal | Last injection-zero | Last forced-random | Last oracle | Last calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src5` step-1100 selected | `0.7950` | `0.9250` | `0.9325` at `1600` | `0.0000` | `0.0150` | `0.9525` | `0.8275` |
+| `src5` step-1500 runner-up | `0.6975` | `0.9100` | `0.9400` at `1500` | `0.0000` | `0.0250` | `0.9525` | `0.9325` |
+| `src5` old final-source | `0.5550` | `0.9500` | `0.9625` at `1500` | `0.0025` | `0.0350` | `0.9050` | `0.8325` |
+
+Decision:
+
+```text
+long_adaptation_selector_probe_step1500_negative
+```
+
+Interpretation:
+
+- The source-accuracy-selected step-1500 checkpoint does not beat the 600-step
+  handoff-probe-selected step-1100 checkpoint under long stable-policy
+  adaptation.
+- Step `1500` ends with higher calculator-result accuracy but lower answer
+  accuracy than step `1100`, another counterexample to calculator accuracy as a
+  sufficient selector.
+- The old final-source long-adaptation result remains a separate lineage gap to
+  inspect.
