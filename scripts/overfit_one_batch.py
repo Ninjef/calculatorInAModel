@@ -120,6 +120,8 @@ class TrainConfig:
     result_policy_anchor_gate_threshold: float
     result_policy_anchor_gate_weight: float
     result_policy_anchor_gate_metric: str
+    result_policy_anchor_gate_mode: str
+    result_policy_anchor_gate_band: float
     result_policy_anchor_temperature: float
     result_policy_anchor_mode: str
     calculator_causal_gap_weight: float
@@ -746,6 +748,8 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_policy_anchor_gate_threshold",
         "result_policy_anchor_gate_weight",
         "result_policy_anchor_gate_metric",
+        "result_policy_anchor_gate_mode",
+        "result_policy_anchor_gate_band",
         "result_policy_anchor_gate_metric_value",
         "result_policy_anchor_gate_active",
         "result_policy_anchor_mode",
@@ -1122,6 +1126,8 @@ def result_policy_anchor_effective_weight(
     gate_threshold: float,
     gate_weight: float,
     gate_metric_value: float,
+    gate_mode: str = "discrete",
+    gate_band: float = 0.0,
 ) -> tuple[float, bool]:
     if scheduled_weight <= 0:
         return 0.0, False
@@ -1130,7 +1136,17 @@ def result_policy_anchor_effective_weight(
     gate_active = gate_metric_value < gate_threshold
     if not gate_active:
         return scheduled_weight, False
-    return max(scheduled_weight, gate_weight), True
+    if gate_mode == "discrete":
+        return max(scheduled_weight, gate_weight), True
+    if gate_mode == "linear":
+        if gate_band <= 0:
+            raise ValueError("linear result-policy anchor gate requires positive band")
+        fraction = min(1.0, max(0.0, (gate_threshold - gate_metric_value) / gate_band))
+        effective_weight = scheduled_weight + fraction * (
+            gate_weight - scheduled_weight
+        )
+        return max(scheduled_weight, effective_weight), True
+    raise ValueError(f"unknown result-policy anchor gate mode: {gate_mode}")
 
 
 def capture_result_policy_anchor(
@@ -6578,6 +6594,8 @@ def run_variant(
         ),
         result_policy_anchor_gate_weight=args.result_policy_anchor_gate_weight,
         result_policy_anchor_gate_metric=args.result_policy_anchor_gate_metric,
+        result_policy_anchor_gate_mode=args.result_policy_anchor_gate_mode,
+        result_policy_anchor_gate_band=args.result_policy_anchor_gate_band,
         result_policy_anchor_temperature=args.result_policy_anchor_temperature,
         result_policy_anchor_mode=args.result_policy_anchor_mode,
         calculator_causal_gap_weight=args.calculator_causal_gap_weight,
@@ -7614,6 +7632,8 @@ def run_variant(
                 gate_threshold=args.result_policy_anchor_gate_threshold,
                 gate_weight=args.result_policy_anchor_gate_weight,
                 gate_metric_value=result_policy_anchor_gate_metric_value,
+                gate_mode=args.result_policy_anchor_gate_mode,
+                gate_band=args.result_policy_anchor_gate_band,
             )
             result_policy_anchor_objective_value = float(
                 (
@@ -7640,6 +7660,12 @@ def run_variant(
             )
             result_policy_anchor_metrics["result_policy_anchor_gate_metric"] = (
                 args.result_policy_anchor_gate_metric
+            )
+            result_policy_anchor_metrics["result_policy_anchor_gate_mode"] = (
+                args.result_policy_anchor_gate_mode
+            )
+            result_policy_anchor_metrics["result_policy_anchor_gate_band"] = float(
+                args.result_policy_anchor_gate_band
             )
             result_policy_anchor_metrics[
                 "result_policy_anchor_gate_metric_value"
@@ -8401,6 +8427,8 @@ def run_variant(
     )
     metrics["result_policy_anchor_gate_weight"] = args.result_policy_anchor_gate_weight
     metrics["result_policy_anchor_gate_metric"] = args.result_policy_anchor_gate_metric
+    metrics["result_policy_anchor_gate_mode"] = args.result_policy_anchor_gate_mode
+    metrics["result_policy_anchor_gate_band"] = args.result_policy_anchor_gate_band
     metrics["result_policy_anchor_temperature"] = (
         args.result_policy_anchor_temperature
     )
@@ -9207,6 +9235,25 @@ def parse_args() -> argparse.Namespace:
         choices=["argmax_agreement", "current_argmax_accuracy"],
         default="argmax_agreement",
         help="Result-policy anchor metric used for behavior-gated anchoring.",
+    )
+    parser.add_argument(
+        "--result-policy-anchor-gate-mode",
+        choices=["discrete", "linear"],
+        default="discrete",
+        help=(
+            "How to convert gate-metric shortfall into an anchor weight. "
+            "discrete jumps to the gate weight; linear ramps over "
+            "--result-policy-anchor-gate-band."
+        ),
+    )
+    parser.add_argument(
+        "--result-policy-anchor-gate-band",
+        type=float,
+        default=0.0,
+        help=(
+            "Metric shortfall band for linear result-policy anchor gating; "
+            "the gate reaches full weight when metric is threshold minus band."
+        ),
     )
     parser.add_argument(
         "--result-policy-anchor-temperature",
@@ -10162,6 +10209,14 @@ def main() -> None:
         and args.result_policy_anchor_gate_weight <= 0
     ):
         raise ValueError("--result-policy-anchor-gate-threshold requires gate weight")
+    if args.result_policy_anchor_gate_band < 0:
+        raise ValueError("--result-policy-anchor-gate-band must be non-negative")
+    if (
+        args.result_policy_anchor_gate_threshold > 0
+        and args.result_policy_anchor_gate_mode == "linear"
+        and args.result_policy_anchor_gate_band <= 0
+    ):
+        raise ValueError("--result-policy-anchor-gate-mode linear requires gate band")
     if args.result_policy_anchor_temperature <= 0:
         raise ValueError("--result-policy-anchor-temperature must be positive")
     if args.result_policy_anchor_weight > 0:
@@ -10504,6 +10559,14 @@ def main() -> None:
                     f"-w{args.result_policy_anchor_gate_weight:g}"
                     f"-{args.result_policy_anchor_gate_metric}"
                 )
+                if args.result_policy_anchor_gate_mode != "discrete":
+                    suffix_parts.append(
+                        f"rpolanchorgatemode{args.result_policy_anchor_gate_mode}"
+                    )
+                if args.result_policy_anchor_gate_band > 0:
+                    suffix_parts.append(
+                        f"rpolanchorgateband{args.result_policy_anchor_gate_band:g}"
+                    )
         if args.calculator_causal_gap_weight > 0:
             suffix_parts.append(f"causalgapw{args.calculator_causal_gap_weight:g}")
             suffix_parts.append(f"causalgapm{args.calculator_causal_gap_margin:g}")
@@ -10673,7 +10736,9 @@ def main() -> None:
         f"floor={args.result_policy_anchor_floor} "
         f"gate_threshold={args.result_policy_anchor_gate_threshold} "
         f"gate_weight={args.result_policy_anchor_gate_weight} "
-        f"gate_metric={args.result_policy_anchor_gate_metric}"
+        f"gate_metric={args.result_policy_anchor_gate_metric} "
+        f"gate_mode={args.result_policy_anchor_gate_mode} "
+        f"gate_band={args.result_policy_anchor_gate_band}"
     )
     print(
         "calculator causal gap: "

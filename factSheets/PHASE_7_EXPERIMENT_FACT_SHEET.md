@@ -4195,3 +4195,75 @@ Interpretation:
   recipe across weak-source cells. Future work should use continuous/adaptive
   anchor control, combine calculator accuracy with answer utility, change the
   selective-unfreeze parameter set, or improve source-policy acquisition.
+
+## 2026-05-29 Bottleneck-to-Additive Continuous Anchor Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-fifty-first-task-Bottleneck-to-additive-continuous-anchor-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_bottleneck_to_additive_transfer_policy_anchor_continuous_gated_unfreeze
+```
+
+Code change:
+
+- Added `--result-policy-anchor-gate-mode` with choices `discrete` and
+  `linear`.
+- Added `--result-policy-anchor-gate-band`.
+- `discrete` preserves the previous threshold behavior.
+- `linear` scales the effective anchor weight by metric shortfall across the
+  configured band.
+- Added focused unit coverage for linear effective-weight behavior.
+
+Question:
+
+Can continuous metric-shortfall control preserve transferred non-bottleneck
+calculator use with lower average anchor weight than fixed `0.1`?
+
+Configuration:
+
+- Continued from the adapted weak-source checkpoints.
+- Loaded with `--semantic-decoder-checkpoint-load-scope full_model`.
+- Removed `--freeze-calculator-policy`.
+- global LR `3e-4`;
+- base `--result-policy-anchor-weight 0.01`;
+- `--result-policy-anchor-mode kl`;
+- `--result-policy-anchor-gate-metric current_argmax_accuracy`;
+- `--result-policy-anchor-gate-threshold 0.85`;
+- `--result-policy-anchor-gate-mode linear`;
+- `--result-policy-anchor-gate-band 0.10`;
+- `--result-policy-anchor-gate-weight 0.1`;
+- answer loss weight `1`;
+- exact-grid natural `0..19`;
+- 400 steps.
+
+Result:
+
+| Run | Frozen adapted final | Anchor-0.1 final | Linear-gated final | Best normal | Final injection-zero | Final forced-random | Final oracle | Final calc | Final agreement | Gate active rows | Mean effective weight |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` linear gate | `0.6050` | `0.8325` | `0.8375` | `0.8375` at `400` | `0.0575` | `0.1175` | `0.8925` | `0.7675` | `0.8975` | `9/9` | `0.0385` |
+| `src5_add5` linear gate | `0.8175` | `0.9750` | `0.9725` | `0.9525` at `400` | `0.0000` | `0.0550` | `0.9300` | `0.7600` | `0.8925` | `9/9` | `0.0833` |
+
+Decision:
+
+```text
+bottleneck_to_additive_continuous_anchor_gate_partial
+```
+
+Interpretation:
+
+- The linear controller mechanically worked, producing intermediate effective
+  weights rather than only `0.01` or `0.1`.
+- `src4_add2` slightly beat fixed anchor `0.1` on final eval while using mean
+  effective weight `0.0385`.
+- `src5_add5` stayed strongly calculator-dependent but ended slightly below
+  the fixed `0.1` result and below the discrete accuracy-gated final eval.
+- Continuous gating is useful infrastructure and a partial positive, but it is
+  not yet a clean replacement for fixed lightweight anchoring. Further work
+  should avoid simple band sweeps and instead add answer-utility awareness,
+  change selective unfreezing, or improve source-policy acquisition.

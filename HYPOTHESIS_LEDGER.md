@@ -261,3 +261,9 @@ Conclusion: Base anchor `0.01` with `current_argmax_accuracy` gates `<0.80` or `
 Do not repeat: Same adapted `src4_add2/src5_add5`, base anchor `0.01`, gate thresholds `0.80` or `0.82`, gate weight `0.1`, calculator-accuracy gate, LR `3e-4`, 400-step full unfreeze as novelty.
 Next allowed test: Continuous/adaptive anchor control, selective policy-path unfreezing, stronger source acquisition, or a retention signal that combines calculator accuracy with answer utility.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-bottleneck-to-additive-accuracy-gated-anchor.md`
+
+PARTIAL: Continuous calculator-accuracy anchor control can lower average retention weight but is not a clean fixed-`0.1` replacement.
+Conclusion: Linear gate with base `0.01`, threshold `0.85`, band `0.10`, and max `0.1` reached `src4` final eval `0.8375` with mean weight `0.0385`, but `src5` ended `0.9725`, slightly below fixed `0.1`/discrete accuracy gates.
+Do not repeat: Same adapted `src4_add2/src5_add5`, base `0.01`, linear `current_argmax_accuracy` gate threshold `0.85`, band `0.10`, gate weight `0.1`, LR `3e-4`, 400-step full unfreeze as novelty.
+Next allowed test: Source-policy acquisition, selective policy-path unfreezing, or a retention controller that combines calculator accuracy with answer utility instead of metric-only anchor scaling.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-bottleneck-to-additive-continuous-anchor-gate.md`

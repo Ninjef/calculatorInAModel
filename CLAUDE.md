@@ -544,6 +544,20 @@ the fixed `0.1` anchor result (`0.8325` final eval). The simple discrete
 accuracy gate is therefore threshold-sensitive useful infrastructure, not a
 better retention recipe.
 
+Continuous anchor gating was then added and tested:
+`bottleneck_to_additive_continuous_anchor_gate_partial`. The new
+`--result-policy-anchor-gate-mode linear` plus
+`--result-policy-anchor-gate-band` turns metric shortfall into a smooth anchor
+weight between the scheduled/base weight and the gate weight. With base anchor
+`0.01`, max `0.1`, `current_argmax_accuracy` threshold `0.85`, and band
+`0.10`, `src4_add2` reached final eval `0.8375`, best normal `0.8375`, final
+calculator accuracy `0.7675`, and mean anchor weight `0.0385`, slightly above
+the fixed `0.1` final-eval result for that cell. `src5_add5` stayed strong at
+final eval `0.9725`, learned calc `0.7600`, and mean anchor weight `0.0833`,
+but landed just below fixed `0.1`/discrete accuracy gates. This is a useful
+adaptive-retention control and a partial positive, not yet a clean replacement
+for fixed lightweight anchoring.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -691,6 +705,11 @@ Do not rerun these as next steps unless debugging new code:
   `3e-4`, and 400-step full unfreeze from the adapted `src4_add2` or
   `src5_add5` checkpoints as novelty. It behaved adaptively and helped
   `src5`, but did not beat constant `0.1` across both cells.
+- continuous linear calculator-accuracy anchor gate with base `0.01`,
+  threshold `0.85`, band `0.10`, gate weight `0.1`, LR `3e-4`, and 400-step
+  full unfreeze from the adapted `src4_add2` or `src5_add5` checkpoints as
+  novelty. It improved `src4` at lower mean anchor weight but did not beat
+  fixed `0.1` across both cells.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement

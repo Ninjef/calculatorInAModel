@@ -1620,3 +1620,43 @@ below the fixed-anchor answer result. The next retention idea should move
 beyond simple discrete thresholds, for example continuous/adaptive control,
 selective policy-path unfreezing, or a signal that combines calculator-result
 accuracy with answer utility.
+
+## Status Update: 2026-05-29, Bottleneck-to-Additive Continuous Anchor Gate
+
+Continuous anchor gating produced a partial positive:
+
+```text
+bottleneck_to_additive_continuous_anchor_gate_partial
+```
+
+Code change:
+
+- Added `--result-policy-anchor-gate-mode {discrete,linear}`.
+- Added `--result-policy-anchor-gate-band`.
+- `discrete` preserves prior behavior.
+- `linear` ramps from the scheduled/base anchor weight to the gate weight as
+  the selected metric falls through the configured band.
+
+Experiment:
+
+- Same adapted weak-source checkpoints.
+- Full policy unfreeze, LR `3e-4`.
+- Base KL anchor `0.01`.
+- Gate metric `current_argmax_accuracy`.
+- Gate threshold `0.85`.
+- Gate band `0.10`.
+- Gate weight `0.1`.
+- 400 steps.
+
+| Run | Final eval | Best normal | Final calc | Final injection-zero | Final anchor agreement | Gate active rows | Mean effective weight |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` linear gate | `0.8375` | `0.8375` at `400` | `0.7675` | `0.0575` | `0.8975` | `9/9` | `0.0385` |
+| `src5_add5` linear gate | `0.9725` | `0.9525` at `400` | `0.7600` | `0.0000` | `0.8925` | `9/9` | `0.0833` |
+
+The continuous controller is useful: it improved `src4_add2` over the fixed
+`0.1` anchor on final eval while using less than half the average anchor
+weight. It did not beat the fixed `0.1` or discrete accuracy gates on
+`src5_add5`, so this is a partial positive rather than a clean replacement for
+fixed lightweight anchoring. Next work should avoid simple band sweeps and
+instead change the retention signal, the movable parameter set, or source
+policy acquisition.

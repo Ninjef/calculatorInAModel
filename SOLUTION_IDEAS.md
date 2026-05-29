@@ -349,6 +349,15 @@ result. Do not keep sweeping simple discrete thresholds as if that alone is
 the recipe; the next retention idea should be continuous/adaptive, combine
 calculator accuracy with answer utility, or change which policy-path
 parameters are allowed to move.
+Continuous anchor control is now implemented through
+`--result-policy-anchor-gate-mode linear` and
+`--result-policy-anchor-gate-band`. The first linear calculator-accuracy gate
+(`0.01`, threshold `0.85`, band `0.10`, max `0.1`) improved `src4_add2`
+slightly beyond fixed `0.1` while using mean anchor weight `0.0385`, but
+`src5_add5` slipped slightly below the best fixed/discrete gate. Treat it as a
+useful retention controller, not as the final scalable method. Further anchor
+work should add answer-utility awareness or change what parameters move,
+rather than just sweeping bands.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

@@ -3724,6 +3724,36 @@ def test_result_policy_anchor_weight_schedule_respects_floor() -> None:
     )
     assert weight == pytest.approx(0.2)
     assert active
+    weight, active = overfit_script.result_policy_anchor_effective_weight(
+        scheduled_weight=0.01,
+        gate_threshold=0.85,
+        gate_weight=0.1,
+        gate_metric_value=0.80,
+        gate_mode="linear",
+        gate_band=0.10,
+    )
+    assert weight == pytest.approx(0.055)
+    assert active
+    weight, active = overfit_script.result_policy_anchor_effective_weight(
+        scheduled_weight=0.01,
+        gate_threshold=0.85,
+        gate_weight=0.1,
+        gate_metric_value=0.70,
+        gate_mode="linear",
+        gate_band=0.10,
+    )
+    assert weight == pytest.approx(0.1)
+    assert active
+    weight, active = overfit_script.result_policy_anchor_effective_weight(
+        scheduled_weight=0.01,
+        gate_threshold=0.85,
+        gate_weight=0.1,
+        gate_metric_value=0.90,
+        gate_mode="linear",
+        gate_band=0.10,
+    )
+    assert weight == pytest.approx(0.01)
+    assert not active
 
 
 def test_adaptive_interface_selects_high_probability_operand_pair() -> None:
