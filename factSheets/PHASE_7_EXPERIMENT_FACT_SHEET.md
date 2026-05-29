@@ -4556,3 +4556,60 @@ Interpretation:
 - Next work should measure handoff geometry directly, such as short-transfer
   slope, oracle-vs-normal gap after short adaptation, or a linear/readout probe
   on the frozen source/additive state.
+
+## 2026-05-29 Short Handoff Probe Audit
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-fifty-seventh-task-Short-handoff-probe-audit.md
+```
+
+Question:
+
+Can existing transfer traces reveal a cheaper handoff-geometry signal after
+source normal/calculator accuracy failed as a selector?
+
+Data:
+
+- Original frozen-policy transfer replication cells.
+- Weak-source downstream continuation traces.
+- `src5` selected-source handoff.
+- `src2` selected-source and final-source control handoffs.
+
+Result:
+
+| Cell | Normal @ 200 | Normal @ 400 | Normal @ 600 | Normal @ 800 | Final eval | Final calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src2_final_add4` | `0.1250` | `0.5700` | `0.8025` | `0.9325` | `0.9525` | `0.9150` |
+| `src2_step1300_add4` | `0.1100` | `0.4100` | `0.7200` | `0.8875` | `0.8675` | `0.9250` |
+| `src4_final_add2` | `0.1375` | `0.2400` | `0.2675` | `0.3150` | `0.3025` | `0.8725` |
+| `src4_final_add4` | `0.1175` | `0.2375` | `0.2825` | `0.2950` | `0.3375` | `0.8575` |
+| `src5_final_add5` | `0.0300` | `0.2975` | `0.4525` | `0.5725` | `0.5550` | `0.8000` |
+| `src5_step1500_add5` | `0.0450` | `0.4325` | `0.5250` | `0.6925` | `0.6975` | `0.9000` |
+
+Correlation with final eval across the six non-continued frozen-policy cells:
+
+| Probe | Correlation |
+| --- | ---: |
+| normal @ 200 | `-0.0959` |
+| normal @ 400 | `0.9374` |
+| normal @ 600 | `0.9935` |
+| normal @ 800 | `0.9960` |
+
+Decision:
+
+```text
+bottleneck_to_additive_short_handoff_probe_partial
+```
+
+Interpretation:
+
+- Early additive handoff progress is a better source-quality signal than
+  source normal/calculator accuracy in the current data.
+- Step `400` is already useful; step `600` is very predictive.
+- This catches the `src2` source-accuracy selector failure before a full
+  800-step transfer.
+- The probe is still not fully scalable because it requires partial downstream
+  training. Next work should build a cheaper readout or linear proxy for this
+  handoff-geometry signal.

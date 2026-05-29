@@ -297,3 +297,9 @@ Conclusion: Reproduced `src2` with checkpoints; source step `1300` had higher so
 Do not repeat: Same `src2` step-1300 versus final additive seed-4 frozen-policy 800-step transfer as novelty.
 Next allowed test: Source-quality probes for handoff geometry, source acquisition optimized for transfer/readout learnability, or selected-source replication with a selector beyond source accuracy.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-source-selection-metric-replication.md`
+
+PARTIAL: Short additive handoff progress predicts final handoff better than source accuracy.
+Conclusion: Across six non-continued frozen-policy transfer cells, normal accuracy at step `400` correlated with final eval at `0.9374`, and step `600` at `0.9935`; step `200` was noisy (`-0.0959`).
+Do not repeat: Same trace audit over the current frozen-policy transfer cells as novelty.
+Next allowed test: Use a 400/600-step handoff probe for checkpoint selection, build a cheaper readout/linear proxy for that probe, or optimize source acquisition for early additive handoff slope.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-short-handoff-probe-audit.md`
