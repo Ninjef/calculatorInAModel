@@ -367,6 +367,12 @@ baseline, but it still trailed lightweight anchored unfreezing. This supports
 the diagnosis that upstream representation drift is the dangerous failure
 mode; future selective-unfreeze ideas should combine stable policy backbones
 with better readout/action-head adaptation or a small utility-aware anchor.
+A tiny fixed result-policy anchor on top of policy-backbone freezing did not
+help: anchor agreement already stayed near `1.0`, and final answer accuracy
+slightly trailed no-anchor policy-backbone freezing. This says the missing
+piece in that branch is not action-head retention. Look instead at downstream
+readout adaptation under stable policy, answer-utility-aware retention, or
+better source policies.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

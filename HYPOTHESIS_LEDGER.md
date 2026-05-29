@@ -273,3 +273,9 @@ Conclusion: `--freeze-calculator-policy-backbone` with no anchor preserved final
 Do not repeat: Same adapted `src4_add2/src5_add5`, no anchor, `--freeze-calculator-policy-backbone`, LR `3e-4`, 400-step unfreeze as novelty.
 Next allowed test: Combine policy-backbone freezing with lightweight/utility-aware retention, improve source-policy acquisition, or test whether a different movable parameter set improves readout without policy drift.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-bottleneck-to-additive-policy-backbone-freeze.md`
+
+NO-GAIN: Tiny anchoring is redundant when the policy backbone is frozen.
+Conclusion: `--freeze-calculator-policy-backbone` plus KL anchor `0.01` kept anchor agreement `1.0000/0.9975` and learned calc `0.8200/0.8000`, but final eval `0.7125/0.8600` was slightly below no-anchor backbone freeze.
+Do not repeat: Same adapted `src4_add2/src5_add5`, `--freeze-calculator-policy-backbone`, result-policy anchor `0.01`, LR `3e-4`, 400-step unfreeze as novelty.
+Next allowed test: Improve downstream/readout adaptation under stable policy, use answer-utility-aware retention, or improve source-policy acquisition; tiny action-policy anchoring is not the missing ingredient here.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-bottleneck-to-additive-policy-backbone-tiny-anchor.md`

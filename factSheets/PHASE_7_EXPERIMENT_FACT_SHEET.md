@@ -4330,3 +4330,59 @@ Interpretation:
 - It still trailed lightweight anchored unfreezing, so action-head/readout
   adaptation with a stable pre-hook representation is useful but not sufficient
   as the whole handoff recipe.
+
+## 2026-05-29 Policy-Backbone Freeze Plus Tiny Anchor
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-fifty-third-task-Bottleneck-to-additive-policy-backbone-tiny-anchor.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_bottleneck_to_additive_transfer_policy_backbone_freeze_tiny_anchor
+```
+
+Question:
+
+Does a tiny action-policy anchor help when the upstream policy backbone is
+already frozen and the result action head remains trainable?
+
+Configuration:
+
+- Continued from the adapted weak-source checkpoints.
+- Loaded with `--semantic-decoder-checkpoint-load-scope full_model`.
+- Added `--freeze-calculator-policy-backbone`.
+- Added `--result-policy-anchor-weight 0.01`.
+- `--result-policy-anchor-mode kl`.
+- No behavior gate.
+- global LR `3e-4`;
+- answer loss weight `1`;
+- exact-grid natural `0..19`;
+- 400 steps.
+
+Result:
+
+| Run | No-anchor backbone final | Tiny-anchor backbone final | Best normal | Final injection-zero | Final forced-random | Final oracle | Final calc | Final anchor agreement | Final anchor acc | Anchor loss |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` backbone + anchor `0.01` | `0.7250` | `0.7125` | `0.7250` at `400` | `0.0325` | `0.0950` | `0.7625` | `0.8200` | `1.0000` | `0.8450` | `0.000004` |
+| `src5_add5` backbone + anchor `0.01` | `0.8700` | `0.8600` | `0.8700` at `50` | `0.0075` | `0.0400` | `0.8725` | `0.8000` | `0.9975` | `0.8225` | `0.000004` |
+
+Decision:
+
+```text
+bottleneck_to_additive_policy_backbone_tiny_anchor_no_gain
+```
+
+Interpretation:
+
+- The frozen policy backbone already kept result-policy agreement near `1.0`.
+- Anchor loss stayed around `4e-6`, so the tiny anchor had almost nothing to
+  correct.
+- Final answer accuracy was slightly worse than no-anchor policy-backbone
+  freezing in both cells.
+- The missing ingredient for this branch is downstream/readout adaptation under
+  a stable policy, answer-utility-aware retention, or better source-policy
+  acquisition, not fixed tiny action-policy anchoring.

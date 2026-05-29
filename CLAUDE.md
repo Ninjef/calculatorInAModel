@@ -571,6 +571,19 @@ to about `0.25-0.30`, but it is still weaker than lightweight anchored
 unfreezing. The upstream policy representation is the fragile part; freezing
 it is useful, but action-head/readout adaptation alone is not enough.
 
+Adding a tiny action-policy anchor on top of policy-backbone freezing was then
+tested:
+`bottleneck_to_additive_policy_backbone_tiny_anchor_no_gain`. With
+`--freeze-calculator-policy-backbone`, KL anchor `0.01`, no gate, and LR
+`3e-4`, adapted weak-source `src4_add2` ended at final eval `0.7125`, best
+normal `0.7250`, learned calculator accuracy `0.8200`, and final anchor
+agreement `1.0000`; `src5_add5` ended at final eval `0.8600`, best normal
+`0.8700`, learned calculator accuracy `0.8000`, and final anchor agreement
+`0.9975`. This was slightly worse than no-anchor policy-backbone freezing.
+The anchor loss stayed near zero, showing that backbone freezing already kept
+the action policy nearly unchanged; the remaining bottleneck is downstream
+readout/adaptation, not action-head drift.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -727,6 +740,10 @@ Do not rerun these as next steps unless debugging new code:
   unfreeze from the adapted `src4_add2` or `src5_add5` checkpoints as novelty.
   It preserved learned calculator accuracy and improved answer accuracy over
   frozen-adapted baselines, but did not beat lightweight anchored unfreezing.
+- `--freeze-calculator-policy-backbone` plus fixed result-policy KL anchor
+  `0.01`, LR `3e-4`, 400-step unfreeze from the adapted `src4_add2` or
+  `src5_add5` checkpoints as novelty. Anchor agreement stayed near `1.0` and
+  it did not improve over no-anchor policy-backbone freezing.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement

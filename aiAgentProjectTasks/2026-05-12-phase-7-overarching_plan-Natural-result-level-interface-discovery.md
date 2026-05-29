@@ -1697,3 +1697,34 @@ It also improved final answer accuracy over the frozen-adapted baselines for
 both weak cells. However, it remains below lightweight anchored unfreezing, so
 stable policy-backbone freezing is useful but not sufficient as the whole
 handoff recipe.
+
+## Status Update: 2026-05-29, Policy-Backbone Freeze Plus Tiny Anchor
+
+Tiny action-policy anchoring on top of policy-backbone freezing produced no
+gain:
+
+```text
+bottleneck_to_additive_policy_backbone_tiny_anchor_no_gain
+```
+
+Experiment:
+
+- Same adapted weak-source checkpoints.
+- Full model load.
+- Added `--freeze-calculator-policy-backbone`.
+- Added fixed KL result-policy anchor `0.01`.
+- No behavior gate.
+- LR `3e-4`.
+- 400 steps.
+
+| Run | No-anchor backbone final | Tiny-anchor backbone final | Best normal | Final calc | Final injection-zero | Final anchor agreement | Anchor loss |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` policy-backbone + anchor `0.01` | `0.7250` | `0.7125` | `0.7250` at `400` | `0.8200` | `0.0325` | `1.0000` | `0.000004` |
+| `src5_add5` policy-backbone + anchor `0.01` | `0.8700` | `0.8600` | `0.8700` at `50` | `0.8000` | `0.0075` | `0.9975` | `0.000004` |
+
+The tiny anchor was effectively redundant: the frozen policy backbone already
+kept result-policy agreement near `1.0`, and the extra anchor slightly reduced
+final answer accuracy relative to no-anchor policy-backbone freezing. The next
+selective-freeze work should focus on downstream/readout adaptation under a
+stable policy, answer-utility-aware retention, or source-policy acquisition,
+not tiny fixed action-policy anchoring.
