@@ -5750,3 +5750,58 @@ Interpretation:
   handoff.
 - Next useful proxy should measure additive learning slope or
   injection-to-answer geometry directly.
+
+## 2026-05-29 Additive Handoff Geometry Probe
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-eighty-first-task-Additive-handoff-geometry-probe.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_additive_handoff_geometry_probe/seed9_seed10_sweep
+runs/2026-05-29_phase7_additive_handoff_geometry_probe/src6_src7_validation
+```
+
+Question:
+
+Can a direct injection-to-answer or short-slope diagnostic replace the
+expensive additive handoff probe as a source-transfer selector?
+
+Setup:
+
+- Added `scripts/run_additive_handoff_geometry_probe.py`.
+- Loaded source checkpoints in additive-compatible mode and froze calculator
+  policy.
+- Measured forced-result counterfactual losses over all result classes.
+- Measured short downstream-only learning slope at steps `0,50,100`.
+
+Result:
+
+| Source | Known status | Calc | True-best | True top-3 | True-best gap | 100-step loss |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| seed-9 final | positive | `0.8675` | `0.0625` | `0.2125` | `0.0034` | `1.5852` |
+| seed-10 step `1000` | weak | `0.7550` | `0.0000` | `0.0300` | `0.0061` | `1.6569` |
+| seed-10 step `1300` | weak | `0.8575` | `0.0000` | `0.0300` | `0.0063` | `1.5986` |
+| seed-10 step `1400` | weak | `0.8475` | `0.0000` | `0.0300` | `0.0058` | `1.5955` |
+| seed-10 final | negative | `0.9025` | `0.0000` | `0.0450` | `0.0063` | `1.6221` |
+| `src6` final | positive | `0.8450` | `0.0050` | `0.0550` | `0.0049` | `1.7164` |
+| `src7` step `1400` | boundary negative | `0.8000` | `0.0050` | `0.0950` | `0.0048` | `1.8318` |
+
+Decision:
+
+```text
+additive_handoff_geometry_probe_partial_no_selector
+```
+
+Interpretation:
+
+- Forced-result geometry is a better warning signal than frozen-state linear
+  decodability for seed-10: all seed-10 checkpoints had true-best `0.0`.
+- It is not a validated selector: `src6` positive and `src7` boundary-negative
+  were too close, and 100-step loss slope did not cleanly rank known outcomes.
+- Use this as a source-training diagnostic or auxiliary objective candidate,
+  but keep actual 400/600-step additive handoff probes as the selection gate.

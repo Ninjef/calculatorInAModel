@@ -435,3 +435,9 @@ Conclusion: Earlier seed-10 checkpoints improved 600-step handoff over final (`0
 Do not repeat: Same seed-10 step `1000`/`1300`/`1400` 600-step handoff sweep or frozen-state linear probe over these checkpoints as novelty.
 Next allowed test: Build an additive learning-slope or injection-to-answer geometry proxy, or optimize source acquisition for early handoff slope.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-seed10-source-checkpoint-geometry-sweep.md`
+
+MIXED-NEGATIVE: A direct additive handoff geometry probe can replace the 400/600-step handoff selector.
+Conclusion: Forced-result geometry flags seed-10 as hostile (`true_best=0.0`, true top-3 `0.03-0.045`, true-best gap `0.0058-0.0063`) versus seed-9 positive (`true_best=0.0625`, top-3 `0.2125`, gap `0.0034`), but it does not cleanly separate `src6` positive from `src7` boundary-negative and 100-step loss slope is not a reliable selector.
+Do not repeat: Same geometry probe over seed-9 final, seed-10 `1000/1300/1400/final`, `src6` final, or `src7` step `1400` as novelty.
+Next allowed test: Add forced-result geometry as a source-training snapshot metric, optimize it during source acquisition, or keep using actual handoff probes as selection gates.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-additive-handoff-geometry-probe.md`
