@@ -4991,3 +4991,53 @@ Interpretation:
   calculator dependence under controls.
 - This cuts the stable readout-adaptation stage from 1600 to 600 steps for the
   current selected-source continuation recipe.
+
+## 2026-05-29 Shorter Handoff Probe Trace Audit
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-sixty-seventh-task-Shorter-handoff-probe-trace-audit.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_handoff_probe_selector_validation
+runs/2026-05-29_phase7_handoff_probe_selector_src4
+runs/2026-05-29_phase7_source_checkpoint_selection_gate
+runs/2026-05-28_phase7_bottleneck_to_additive_transfer_replication
+```
+
+Question:
+
+Can the source-selection handoff probe be shortened below 600 steps without
+changing the selected source checkpoint on the current validated candidate
+sets?
+
+Result:
+
+| Source family | Candidate | Normal @ 400 | Normal @ 500 | Normal @ 600 | Final handoff |
+| --- | --- | ---: | ---: | ---: | ---: |
+| `src5` | step `1100` | `0.3475` | `0.5575` | `0.6825` | `0.7950` full |
+| `src5` | step `1400` | `0.4150` | `0.5350` | `0.6625` | `0.6400` |
+| `src5` | step `1500` | `0.4325` | `0.4600` | `0.5250` | `0.6975` full |
+| `src5` | final | `0.2975` | `0.4100` | `0.4525` | `0.5550` full |
+| `src4` | step `1000` | `0.3875` | `0.4275` | `0.5450` | `0.5225` |
+| `src4` | step `1200` | `0.5450` | `0.5875` | `0.6250` | `0.7800` full |
+| `src4` | final | `0.2400` | `0.2325` | `0.2675` | `0.3025` full |
+
+Decision:
+
+```text
+shorter_handoff_probe_500_trace_positive_400_negative
+```
+
+Interpretation:
+
+- The 400-step handoff probe is too short for `src5`; it would pick the wrong
+  candidate.
+- The 500-step handoff probe selects the same candidates as the validated
+  600-step probe on both audited source families.
+- This is a trace audit and should be validated on new source checkpoints before
+  treating 500 steps as a general selector.

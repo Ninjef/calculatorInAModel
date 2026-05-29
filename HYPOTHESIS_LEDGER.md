@@ -351,3 +351,9 @@ Conclusion: From continued selected checkpoints, 200-step readout worked for `sr
 Do not repeat: Same 200/600-step no-anchor policy-backbone-frozen readout adaptation from continued selected `src4` step-1200/add2 and `src5` step-1100/add5 checkpoints as novelty.
 Next allowed test: Reduce the 600-step handoff probe or 800-step frozen-policy continuation cost, or optimize source acquisition for early handoff/continuation slope.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-reduced-readout-budget-validation.md`
+
+MIXED-POSITIVE: The source-selection handoff probe can be cut to 500 steps on current candidates, but not to 400.
+Conclusion: Existing traces show 400-step probe would pick `src5` step-1500, but 500-step probe picks the same checkpoints as 600 for both audited families (`src5` step-1100, `src4` step-1200).
+Do not repeat: Same trace audit over existing `src5` 1100/1400/1500/final and `src4` 1000/1200/final handoff probes as novelty.
+Next allowed test: Validate 500-step selection on new source checkpoints, reduce the 800-step continuation cost, or optimize source acquisition for early handoff/continuation slope.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-shorter-handoff-probe-trace-audit.md`
