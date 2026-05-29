@@ -2,6 +2,29 @@
 
 Tiny claims and outcomes to prevent retesting settled branches.
 
+Use this file tactically. The strategic synthesis lives in
+`RESEARCH_STATE.md`; this ledger prevents local reruns and records which
+families are paused.
+
+## Family Status Index
+
+| Family | Status | Strategic implication |
+| --- | --- | --- |
+| Oracle calculator wiring | Paused | Use only as a wiring/control check; not progress toward the thesis. |
+| Generic retention-after-teaching | Paused | Already proven in identifiable/scaffolded settings; only run for a new interface or stability question. |
+| Vanilla score-function / expected answer-loss discovery | Paused | Sampling variance and decoder calibration were not the main blockers. |
+| Simple decoder calibration | Paused | Local gradient sign improvements did not produce Stage 1 discovery. |
+| Simple direct feedback / fixed shadow gradients | Paused | Stage 0 alignment alone was not enough; do not repeat without a new dynamics mechanism. |
+| Simple online shadow-gradient variants | Paused | Normalization, validation selection, dropout, and directional losses did not clear the useful-training gate. |
+| Hard improvement assignment | Active but constrained | Strong bottleneck source ceiling, but scalability and prescriptiveness remain unresolved. |
+| Bottleneck-to-additive staged handoff | Active but constrained | Proves non-bottleneck viability, but source quality and policy protection remain bottlenecks. |
+| Cheap source-checkpoint selectors | Paused | Frozen-state, geometry, short-slope, ridge, and embedded 500-step probes are not reliable replacements for actual handoff gates. |
+| Source acquisition for transfer geometry | Active | Current best strategic direction if it directly targets handoff/readout behavior. |
+| Target propagation / local targets | Active candidate | Worth a gated prototype because it changes the credit-assignment family. |
+
+Rule: if a proposed experiment belongs to a paused family, it needs a new
+mechanism and should be reconciled with `RESEARCH_STATE.md` before running.
+
 ## Phase 7
 
 DISPROVEN: Vanilla result-space policy gradient is mainly blocked by finite-sample variance.
