@@ -201,7 +201,7 @@ Representative evidence:
 
 ## Direction: Target Propagation / Local Targets
 
-Status: active candidate with Stage 0 partial
+Status: active candidate with Stage 1 partial positive
 
 Memory:
 
@@ -213,15 +213,19 @@ Memory:
   current-policy-reweighted targets and weakly proximal logit-descent targets
   produce gradients aligned with the hard boundary ceiling, while expected
   answer loss remains anti-aligned.
+- A 200-step Stage 1 lift gate showed `policy_reweighted_t1` reaches `0.5600`
+  exact-grid calculator-result accuracy and `0.5391` sampled normal accuracy,
+  beating the failed expected-loss baseline and slightly beating the
+  same-budget hard-boundary run.
 - The result is not yet a scalable or non-prescriptive method. The tested
-  targets still use full forced-result scoring, and the sharpest settings
-  mostly recover the known boundary teacher.
-- Next work should be a short Stage 1 lift gate for softer aligned settings,
-  or a real approximation to these local targets that avoids full result-class
-  enumeration.
+  targets still use full forced-result scoring.
+- Next work should either extend/replicate `policy_reweighted_t1` with
+  convergence and retention checks, or approximate it with sampled/top-k/
+  learned targets that avoid full result-class enumeration.
 
 Representative evidence:
 
 - `SOLUTION_IDEAS.md`
 - `RESEARCH_STATE.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-local-target-propagation-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-local-target-stage1-lift-gate.md`

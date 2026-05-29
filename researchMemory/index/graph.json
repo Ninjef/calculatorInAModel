@@ -401,6 +401,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/081-the-softer-policy-reweighted-local-target-produces-stage-1-lift-above-the-failed-expected",
+      "target": "researchMemory/hypotheses/phase7/081-the-softer-policy-reweighted-local-target-produces-stage-1-lift-above-the-failed-expected-.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -608,6 +613,11 @@
     {
       "source": "direction/target-propagation-local-targets",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-local-target-propagation-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-local-target-stage1-lift-gate.md",
       "type": "supported_by"
     },
     {
@@ -1178,6 +1188,13 @@
       "title": "Local-target propagation style result-boundary targets can pass Stage 0, but sharp settings mostly recover the full-enum boundary teacher."
     },
     {
+      "id": "doc/081-the-softer-policy-reweighted-local-target-produces-stage-1-lift-above-the-failed-expected",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/081-the-softer-policy-reweighted-local-target-produces-stage-1-lift-above-the-failed-expected-.md",
+      "status": "PARTIAL-POSITIVE",
+      "title": "The softer policy-reweighted local target produces Stage 1 lift above the failed expected-loss baseline."
+    },
+    {
       "id": "doc/phase7-direction-memory",
       "kind": "memory_document",
       "source_path": "researchMemory/phase7-direction-memory.md",
@@ -1251,7 +1268,7 @@
       "id": "direction/target-propagation-local-targets",
       "kind": "direction_memory",
       "source_path": "researchMemory/phase7-direction-memory.md",
-      "status": "active candidate with Stage 0 partial",
+      "status": "active candidate with Stage 1 partial positive",
       "title": "Target Propagation / Local Targets"
     }
   ]

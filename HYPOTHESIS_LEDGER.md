@@ -25,7 +25,7 @@ future agents to infer it from chronology.
 | Bottleneck-to-additive staged handoff | Active but constrained | Proves non-bottleneck viability, but source quality and policy protection remain bottlenecks. |
 | Cheap source-checkpoint selectors | Paused | Frozen-state, geometry, short-slope, ridge, and embedded 500-step probes are not reliable replacements for actual handoff gates. |
 | Source acquisition for transfer geometry | Active | Current best strategic direction if it directly targets handoff/readout behavior. |
-| Target propagation / local targets | Active candidate | Stage 0 local-target gate is partially positive, but tested forms still use full forced-result scoring and sharp settings mostly recover the boundary teacher. |
+| Target propagation / local targets | Active candidate | Stage 0 and short Stage 1 local-target gates are positive, but tested forms still use full forced-result scoring and must be approximated before they count as scalable. |
 
 Rule: if a proposed experiment belongs to a paused family, it needs a new
 mechanism and should be reconciled with `RESEARCH_STATE.md` before running.
@@ -511,3 +511,9 @@ Conclusion: A new exact-grid Stage 0 diagnostic found that current-policy-reweig
 Do not repeat: The same seed-2 exact-grid Stage 0 sweep over policy-reweighted temperatures `0.25/0.5/1/2` and logit-descent proximity `0.01/0.1/1` as novelty.
 Next allowed test: If continuing this family, run a short Stage 1 lift gate for the softer aligned settings (`policy_reweighted_t1` or `logit_descent_p0.1`) against the hard-boundary ceiling, then design an approximation that avoids full result-class enumeration before calling it scalable.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-local-target-propagation-gate.md`
+
+PARTIAL-POSITIVE: The softer policy-reweighted local target produces Stage 1 lift above the failed expected-loss baseline.
+Conclusion: In a 200-step exact-grid Stage 1 gate, `policy_reweighted_t1` reached `0.5600` exact-grid calculator-result accuracy and `0.5391` sampled normal accuracy with controls low (`injection_zero=0.0234`, `forced_random=0.0156`), slightly above the hard-boundary ceiling run at the same budget (`0.5500` calc, `0.4844` normal). Ordinary expected loss collapsed to near chance (`0.0025` calc, `0.0000` normal), while `logit_descent_p0.1` improved but lagged (`0.2950` calc, `0.1953` normal).
+Do not repeat: The same seed-2, 200-step Stage 1 comparison of `hard_boundary`, `expected_loss`, `policy_reweighted_t1`, and `logit_descent_p0.1` as novelty.
+Next allowed test: Replicate or extend `policy_reweighted_t1` to a longer convergence/retention gate, then design a sampled/top-k/learned approximation that avoids full forced-result enumeration.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-local-target-stage1-lift-gate.md`

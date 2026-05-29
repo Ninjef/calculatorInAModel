@@ -1,5 +1,49 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-29 Local-Target Stage 1 Lift Gate
+
+Task/work log:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-local-target-stage1-lift-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_local_target_stage1_lift_gate/full_grid_seed2_steps200_fast_controls
+```
+
+Code:
+
+```text
+scripts/run_phase7_local_target_stage1_lift_gate.py
+```
+
+Result:
+
+```text
+local_target_policy_reweighted_stage1_lift_partial_positive
+```
+
+The 200-step Stage 1 gate compared the hard-boundary ceiling, ordinary
+expected answer loss, `policy_reweighted_t1`, and `logit_descent_p0.1`.
+`policy_reweighted_t1` reached `0.5600` exact-grid calculator-result accuracy
+and `0.5391` sampled normal accuracy, slightly above the same-budget
+hard-boundary branch (`0.5500` calc, `0.4844` normal). Ordinary expected loss
+again collapsed to near chance (`0.0025` calc, `0.0000` normal).
+`logit_descent_p0.1` improved above chance but lagged (`0.2950` calc,
+`0.1953` normal). Intervention controls stayed low for the positive branch
+(`injection_zero=0.0234`, `forced_random=0.0156`, oracle `1.0000`).
+
+Interpretation:
+
+- The softer policy-reweighted local target produces real Stage 1 lift.
+- The result remains non-scalable because every update still scores all forced
+  result classes.
+- Next useful work is convergence/retention for `policy_reweighted_t1`, or a
+  sampled/top-k/learned approximation that avoids full enumeration.
+
 ## 2026-05-29 Local-Target Propagation Stage 0 Gate
 
 Task/work log:
