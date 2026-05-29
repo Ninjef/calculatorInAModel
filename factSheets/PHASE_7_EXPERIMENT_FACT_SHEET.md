@@ -6087,3 +6087,69 @@ Interpretation:
 - The next meaningful experiment is a real no-decay source-acquisition lineage
   with meaningful 500-step probe logging, then verification of the selected
   checkpoint with the established handoff gate.
+
+## 2026-05-29 In-Training Probe Source Selection Validation
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-intraining-probe-source-selection-validation.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_intraining_handoff_probe_source/src11_nodecay_probe500_steps800
+runs/2026-05-29_phase7_intraining_handoff_probe_source/verify_step400_probe_selected_handoff600
+runs/2026-05-29_phase7_intraining_handoff_probe_source/verify_step800_probe_runnerup_handoff600
+```
+
+Question:
+
+Does the newly implemented in-training additive handoff probe select the same
+source checkpoint as the established standalone 600-step frozen-policy handoff
+gate?
+
+Setup:
+
+- Ran a fresh no-decay stabilized source lineage for `800` source steps with
+  entropy `0.05`, batch diversity `0.1`, and improvement assignment weight
+  `10`.
+- Enabled logging-only additive handoff probes every `400` source steps.
+- Each embedded probe used `500` downstream steps and `400` samples.
+- Verified the embedded-probe winner and runner-up with standalone `600`-step
+  frozen-policy additive handoffs.
+
+Source and probe results:
+
+| Source step | Source normal/calc | Embedded probe normal @500 | Embedded probe oracle | Embedded probe calc |
+| ---: | ---: | ---: | ---: | ---: |
+| `0` | `0.0125` | `0.2850` | `0.0700` | `0.0250` |
+| `400` | `0.4250` | `0.5625` | `0.4350` | `0.4175` |
+| `800` | `0.6600` | `0.5525` | `0.5350` | `0.7425` |
+
+Standalone verification:
+
+| Source checkpoint | Standalone normal @500 | Standalone normal @600 | Final eval | Injection-zero @600 | Oracle @600 | Calc @600 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| step `400` | `0.5650` | `0.5975` | `0.6050` | `0.0100` | `0.4950` | `0.3900` |
+| step `800` | `0.5975` | `0.6925` | `0.7075` | `0.0000` | `0.6500` | `0.6550` |
+
+Decision:
+
+```text
+intraining_500_probe_selector_mixed_negative
+```
+
+Interpretation:
+
+- The embedded probe produced useful trajectory data during source training,
+  but its 500-step normal score selected the wrong checkpoint on this fresh
+  lineage.
+- Step `800` had slightly lower embedded normal @500, but stronger embedded
+  oracle/calculator transfer and much stronger standalone 600-step handoff.
+- Treat embedded 500-step probes as logging/triage until they are either run
+  to `600` steps or verified against a standalone 600-step gate.
+- This reinforces the periodic review conclusion: do not keep replacing the
+  handoff gate with cheap proxies unless they beat raw handoff exact under
+  fresh-family validation.

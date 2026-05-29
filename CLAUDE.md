@@ -773,6 +773,11 @@ Do not rerun these as next steps unless debugging new code:
   verified that `overfit_one_batch.py` can clone current source state into an
   additive non-bottleneck probe, freeze the calculator policy, and write
   `additive_handoff_probe_rows.csv`.
+- the fresh source step `400` vs step `800` embedded-probe selector check as
+  novelty. The 500-step in-training probe selected step `400` by normal exact
+  (`0.5625` vs `0.5525`), but standalone 600-step frozen-policy handoff
+  favored step `800` (`0.6925` snapshot, `0.7075` final eval) over step `400`
+  (`0.5975`, `0.6050`).
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -792,9 +797,9 @@ unfreezing with calculator-accuracy-gated retention, an adaptive floor around
 the `0.1` anchor-strength region, continuous rather than discrete behavior
 control, a more restrictive selective parameter set than freezing the action
 head alone,
-real source-acquisition runs that enable the new logging-only additive
-handoff probe with meaningful 500-step budgets and then verify selected
-checkpoints against the established handoff gate,
+source-acquisition runs that use embedded additive handoff probes as logging
+or triage only unless they run to 600 steps or are verified by the standalone
+600-step handoff gate,
 a Jacobian-conditioned state more substantial than the result-output
 `J^T answer_grad` feature, or a richer target construction that remains valid
 after upstream movement.

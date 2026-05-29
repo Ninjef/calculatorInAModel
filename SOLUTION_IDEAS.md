@@ -390,8 +390,14 @@ winner accuracy even at step `500`, below raw early exact at `6/8`. The next
 practical source-acquisition tool should log the real additive handoff probe
 during source training on cloned state, then select checkpoints by that score.
 That logging tool now exists in `overfit_one_batch.py`; it is diagnostic-only
-and writes `additive_handoff_probe_rows.csv`. The next source run should use a
-meaningful 500-step probe budget, not the one-step smoke.
+and writes `additive_handoff_probe_rows.csv`. A first real source run with
+500-step embedded probes showed that this is useful instrumentation but not a
+validated selector: embedded normal @500 chose source step `400` (`0.5625`)
+over step `800` (`0.5525`), while standalone 600-step handoff favored step
+`800` (`0.6925` snapshot, `0.7075` final eval) over step `400` (`0.5975`,
+`0.6050`). Future use should either run embedded probes to 600 steps, select
+with richer trend/oracle/calc metrics, or verify embedded-probe candidates with
+the standalone 600-step gate.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 
