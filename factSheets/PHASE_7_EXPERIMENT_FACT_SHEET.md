@@ -5587,3 +5587,55 @@ Interpretation:
 - This improves the scalability profile for the no-decay stabilized source
   family, but it should be replicated on another fresh stabilized source before
   replacing the 800-step continuation default.
+
+## 2026-05-29 Stabilized Source Continuation Boundary
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-seventy-eighth-task-Stabilized-source-continuation-boundary.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_stabilized_source_reduced_continuation
+```
+
+Question:
+
+How far can the no-decay stabilized source continuation budget be reduced
+before the 600-step readout falls below the non-bottleneck gate?
+
+Setup:
+
+- Used the prior frozen-policy continuation run from the no-decay final-source
+  handoff.
+- Loaded step `600`, `500`, `400`, and `300` continuation checkpoints.
+- Ran 600 policy-backbone-frozen readout steps from each checkpoint.
+
+Result:
+
+| Continuation checkpoint | Readout final eval | Best snapshot | Injection-zero | Forced-random | Oracle | Calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| step `600` | `0.9425` | `0.9425` | `0.0078` | `0.0781` | `0.9297` | `0.8750` |
+| step `500` | `0.9400` | `0.9400` | `0.0156` | `0.0703` | `0.9219` | `0.8750` |
+| step `400` | `0.9175` | `0.9325` | `0.0078` | `0.0703` | `0.9219` | `0.8750` |
+| step `300` | `0.8850` | `0.9150` | `0.0078` | `0.0625` | `0.9063` | `0.8750` |
+
+Decision:
+
+```text
+stabilized_source_400_continuation_boundary_positive_300_negative
+```
+
+Interpretation:
+
+- For this no-decay stabilized lineage, 400 continuation steps are enough to
+  clear the non-bottleneck gate after 600-step readout, but 300 steps are not
+  enough by final eval.
+- The step-300 readout briefly reached `0.9150`, but final eval fell to
+  `0.8850`; until a readout-snapshot selector is predeclared and validated,
+  use final eval for the gate.
+- This is a scalability improvement for this lineage, but the 400/500 boundary
+  needs replication on another stabilized source before changing defaults.

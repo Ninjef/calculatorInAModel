@@ -417,3 +417,9 @@ Conclusion: Reading out from the step-600 continuation checkpoint reached final 
 Do not repeat: Same no-decay stabilized step-600 continuation checkpoint into 600-step readout as novelty.
 Next allowed test: Replicate the 600-continuation recipe on another stabilized source, test 500 continuation, or build a proxy for deciding continuation budget.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-stabilized-source-reduced-continuation.md`
+
+MIXED-POSITIVE: The no-decay stabilized source continuation budget can be cut to 400 steps, but not 300 by final eval.
+Conclusion: 600-step readout from continuation checkpoints reached final eval `0.9400` at step `500`, `0.9175` at step `400`, and `0.8850` at step `300`; controls stayed far below normal.
+Do not repeat: Same no-decay stabilized `600/500/400/300` continuation-checkpoint readout ladder as novelty.
+Next allowed test: Replicate the 400/500 boundary on another no-decay stabilized source, validate a readout-snapshot selector, or build a cheap continuation-budget proxy.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-stabilized-source-continuation-boundary.md`
