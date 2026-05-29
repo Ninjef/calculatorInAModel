@@ -7451,3 +7451,52 @@ Interpretation:
   but it does not preserve the strong fixed-grid advantage. `u2_m30` is weak.
 - The next local-target scalability work needs a learned/generalized proposal,
   estimator correction, or a different target construction.
+
+## 2026-05-29 Additive Forced-Margin Source Auxiliary Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-source-aux-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_additive_forced_margin/small_gate_margin_sched50
+```
+
+Question:
+
+Can a contrastive additive source-geometry auxiliary improve forced-result
+ranking without competing with source policy acquisition?
+
+Tooling:
+
+- Added `--additive-forced-margin-loss-weight`.
+- The auxiliary temporarily uses additive mode, forces the true result and
+  sampled wrong results, and penalizes cases where the true forced answer loss
+  is not lower than the hardest sampled wrong loss by
+  `--additive-forced-margin`.
+
+Small gate:
+
+| Branch | Source calc @100 | Source final eval | Forced best=true | Forced top3=true | True-best gap | Slope final loss @50 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| baseline prior | `0.3500` | `0.3800` | `0.0000` | `0.0000` | `0.0197` | `1.5305` |
+| scheduled forced-true prior | `0.3900` | `0.4000` | `0.5100` | `0.5600` | n/a | `0.7979` |
+| scheduled forced-margin | `0.4100` | `0.3800` | `0.6200` | `0.7500` | `0.0082` | `1.0238` |
+
+Decision:
+
+```text
+additive_forced_margin_source_aux_mixed_positive_small_gate
+```
+
+Interpretation:
+
+- The margin objective improved forced-result ranking and did not damage
+  small-gate source policy acquisition.
+- It did not beat scheduled forced-true on the 50-step downstream slope loss.
+- A full-grid test is justified only as a mechanism comparison against
+  scheduled forced-true, with trusted handoff/readout gates kept as arbiter.

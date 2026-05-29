@@ -516,6 +516,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/104-a-scheduled-additive-forced-margin-auxiliary-can-shape-source-handoff-geometry-without-hur",
+      "target": "researchMemory/hypotheses/phase7/104-a-scheduled-additive-forced-margin-auxiliary-can-shape-source-handoff-geometry-without-hur.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -768,6 +773,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-conjunctive-recovery-trigger.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-source-aux-gate.md",
       "type": "supported_by"
     },
     {
@@ -1577,6 +1587,13 @@
       "source_path": "researchMemory/hypotheses/phase7/103-fixed-replay-memory-local-target-proposals-are-not-the-scalable-path.md",
       "status": "PAUSED",
       "title": "Fixed replay-memory local-target proposals are not the scalable path."
+    },
+    {
+      "id": "doc/104-a-scheduled-additive-forced-margin-auxiliary-can-shape-source-handoff-geometry-without-hur",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/104-a-scheduled-additive-forced-margin-auxiliary-can-shape-source-handoff-geometry-without-hur.md",
+      "status": "MIXED-POSITIVE",
+      "title": "A scheduled additive forced-margin auxiliary can shape source handoff geometry without hurting small-gate source policy acquisition."
     },
     {
       "id": "doc/phase7-direction-memory",

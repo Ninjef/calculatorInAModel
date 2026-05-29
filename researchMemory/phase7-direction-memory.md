@@ -250,6 +250,11 @@ Memory:
   hard seed: forced-loss readiness was satisfied, but requiring
   `result_policy_argmax_result_accuracy >= 0.70` never fired, source final
   stayed `0.6100`, and handoff returned to `0.6825`.
+- A new contrastive source-geometry objective is mixed-positive in the small
+  gate: scheduled additive forced-margin training reached `0.4100` source calc
+  / `0.3800` final eval, `forced_best_true=0.6200`, and `top3=0.7500`, but its
+  50-step slope final loss (`1.0238`) was worse than scheduled forced-true
+  (`0.7979`).
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -273,6 +278,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-forced-loss-adaptive-recovery-trigger.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-smoothed-forced-loss-recovery-trigger.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-conjunctive-recovery-trigger.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-source-aux-gate.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 
 ## Direction: Target Propagation / Local Targets

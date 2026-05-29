@@ -134,6 +134,11 @@ class TrainConfig:
     additive_forced_true_loss_weight: float
     additive_forced_true_start_step: int
     additive_forced_true_ramp_steps: int
+    additive_forced_margin_loss_weight: float
+    additive_forced_margin_start_step: int
+    additive_forced_margin_ramp_steps: int
+    additive_forced_margin_negative_count: int
+    additive_forced_margin: float
     late_source_recovery_start_step: int
     late_source_recovery_lr_multiplier: float
     late_source_recovery_additive_forced_true_loss_weight: float | None
@@ -798,6 +803,13 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "additive_forced_true_effective_weight",
         "additive_forced_true_objective",
         "additive_forced_true_loss",
+        "additive_forced_margin_loss_weight",
+        "additive_forced_margin_effective_weight",
+        "additive_forced_margin_objective",
+        "additive_forced_margin_loss",
+        "additive_forced_margin_true_loss",
+        "additive_forced_margin_negative_loss",
+        "additive_forced_margin_active_fraction",
         "calculator_causal_gap_weight",
         "calculator_causal_gap_margin",
         "calculator_causal_gap_objective",
@@ -1200,6 +1212,21 @@ def effective_additive_forced_true_weight(
         and late_source_recovery_active(start_step=late_recovery_start_step, step=step)
     ):
         return late_recovery_weight
+    return additive_forced_true_weight_schedule(
+        initial_weight=initial_weight,
+        start_step=start_step,
+        ramp_steps=ramp_steps,
+        step=step,
+    )
+
+
+def additive_forced_margin_weight_schedule(
+    *,
+    initial_weight: float,
+    start_step: int,
+    ramp_steps: int,
+    step: int,
+) -> float:
     return additive_forced_true_weight_schedule(
         initial_weight=initial_weight,
         start_step=start_step,
@@ -3607,6 +3634,81 @@ def additive_forced_true_result_loss(
     loss = per_example.mean()
     return loss, {
         "additive_forced_true_loss": float(loss.detach().item()),
+    }
+
+
+def sample_wrong_result_classes(
+    *,
+    true_classes: torch.Tensor,
+    result_vocab_size: int,
+    negative_count: int,
+) -> torch.Tensor:
+    if negative_count < 1:
+        raise ValueError("negative_count must be positive")
+    if result_vocab_size < 2:
+        raise ValueError("result_vocab_size must be at least 2")
+    raw = torch.randint(
+        low=0,
+        high=result_vocab_size - 1,
+        size=(true_classes.shape[0], negative_count),
+        device=true_classes.device,
+    )
+    return raw + (raw >= true_classes.unsqueeze(-1)).to(raw.dtype)
+
+
+def additive_forced_margin_result_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    negative_count: int,
+    margin: float,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    if model.calculator_hook is None:
+        raise ValueError("additive forced-margin loss requires a calculator hook")
+    if model.calculator_hook.result_vocab_size is None:
+        raise ValueError("additive forced-margin loss requires result-space hook")
+    if margin < 0:
+        raise ValueError("additive forced-margin margin must be non-negative")
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = true_a + true_b
+    result_vocab_size = int(model.calculator_hook.result_vocab_size)
+    wrong_classes = sample_wrong_result_classes(
+        true_classes=true_sum,
+        result_vocab_size=result_vocab_size,
+        negative_count=negative_count,
+    )
+    with temporary_calculator_bottleneck_mode(model, "none"):
+        true_logits = model(batch.x, forced_calculator_result_class=true_sum)
+        expanded_x = batch.x.repeat_interleave(negative_count, dim=0)
+        expanded_y = batch.y.repeat_interleave(negative_count, dim=0)
+        expanded_mask = batch.loss_mask.repeat_interleave(negative_count, dim=0)
+        wrong_logits = model(
+            expanded_x,
+            forced_calculator_result_class=wrong_classes.reshape(-1),
+        )
+    true_loss = masked_cross_entropy_per_example(
+        true_logits,
+        batch.y,
+        batch.loss_mask,
+    )
+    wrong_loss = masked_cross_entropy_per_example(
+        wrong_logits,
+        expanded_y,
+        expanded_mask,
+    ).reshape(batch.x.shape[0], negative_count)
+    hardest_wrong_loss = wrong_loss.min(dim=-1).values
+    per_example_margin = torch.relu(margin + true_loss - hardest_wrong_loss)
+    loss = per_example_margin.mean()
+    return loss, {
+        "additive_forced_margin_loss": float(loss.detach().item()),
+        "additive_forced_margin_true_loss": float(true_loss.mean().detach().item()),
+        "additive_forced_margin_negative_loss": float(
+            hardest_wrong_loss.mean().detach().item()
+        ),
+        "additive_forced_margin_active_fraction": float(
+            (per_example_margin > 0).float().mean().detach().item()
+        ),
     }
 
 
@@ -6946,6 +7048,13 @@ def run_variant(
         additive_forced_true_loss_weight=args.additive_forced_true_loss_weight,
         additive_forced_true_start_step=args.additive_forced_true_start_step,
         additive_forced_true_ramp_steps=args.additive_forced_true_ramp_steps,
+        additive_forced_margin_loss_weight=args.additive_forced_margin_loss_weight,
+        additive_forced_margin_start_step=args.additive_forced_margin_start_step,
+        additive_forced_margin_ramp_steps=args.additive_forced_margin_ramp_steps,
+        additive_forced_margin_negative_count=(
+            args.additive_forced_margin_negative_count
+        ),
+        additive_forced_margin=args.additive_forced_margin,
         late_source_recovery_start_step=args.late_source_recovery_start_step,
         late_source_recovery_lr_multiplier=args.late_source_recovery_lr_multiplier,
         late_source_recovery_additive_forced_true_loss_weight=(
@@ -7768,6 +7877,9 @@ def run_variant(
         additive_forced_true_loss_value = None
         additive_forced_true_objective_value = None
         additive_forced_true_metrics: dict[str, float] = {}
+        additive_forced_margin_loss_value = None
+        additive_forced_margin_objective_value = None
+        additive_forced_margin_metrics: dict[str, float] = {}
         calculator_causal_gap_objective_value = None
         calculator_causal_gap_metrics: dict[str, float] = {}
         boundary_feedback_loss_value = None
@@ -8132,6 +8244,52 @@ def run_variant(
                 "additive_forced_true_objective"
             ] = additive_forced_true_objective_value
             loss = loss + additive_forced_true_objective
+        current_additive_forced_margin_weight = additive_forced_margin_weight_schedule(
+            initial_weight=args.additive_forced_margin_loss_weight,
+            start_step=args.additive_forced_margin_start_step,
+            ramp_steps=args.additive_forced_margin_ramp_steps,
+            step=step,
+        )
+        if current_additive_forced_margin_weight > 0:
+            if use_reinforce:
+                raise ValueError(
+                    "additive forced-margin objective is not supported with reinforce"
+                )
+            (
+                additive_forced_margin_loss,
+                additive_forced_margin_metrics,
+            ) = additive_forced_margin_result_loss(
+                model,
+                batch,
+                num_digits=num_digits,
+                negative_count=args.additive_forced_margin_negative_count,
+                margin=args.additive_forced_margin,
+            )
+            additive_forced_margin_loss_value = float(
+                additive_forced_margin_loss.detach().item()
+            )
+            additive_forced_margin_objective = (
+                current_additive_forced_margin_weight * additive_forced_margin_loss
+            )
+            additive_forced_margin_objective_value = float(
+                additive_forced_margin_objective.detach().item()
+            )
+            additive_forced_margin_metrics[
+                "additive_forced_margin_loss_weight"
+            ] = float(args.additive_forced_margin_loss_weight)
+            additive_forced_margin_metrics[
+                "additive_forced_margin_effective_weight"
+            ] = float(current_additive_forced_margin_weight)
+            additive_forced_margin_metrics[
+                "additive_forced_margin_objective"
+            ] = additive_forced_margin_objective_value
+            additive_forced_margin_metrics[
+                "additive_forced_margin_negative_count"
+            ] = float(args.additive_forced_margin_negative_count)
+            additive_forced_margin_metrics["additive_forced_margin"] = float(
+                args.additive_forced_margin
+            )
+            loss = loss + additive_forced_margin_objective
         late_source_recovery_trigger_raw_value = None
         late_source_recovery_trigger_value = None
         late_source_recovery_secondary_trigger_raw_value = None
@@ -8492,6 +8650,8 @@ def run_variant(
                 curve_row.update(result_policy_anchor_metrics)
             if additive_forced_true_metrics:
                 curve_row.update(additive_forced_true_metrics)
+            if additive_forced_margin_metrics:
+                curve_row.update(additive_forced_margin_metrics)
             if args.calculator_causal_gap_weight > 0:
                 curve_row.update(calculator_causal_gap_metrics)
             if use_boundary_feedback:
@@ -8607,6 +8767,12 @@ def run_variant(
                     f" additive_forced_true_loss={additive_forced_true_loss_value:.4f}"
                     f" additive_forced_true_obj={additive_forced_true_objective_value:.4f}"
                     if additive_forced_true_metrics
+                    else ""
+                )
+                + (
+                    f" additive_forced_margin_loss={additive_forced_margin_loss_value:.4f}"
+                    f" additive_forced_margin_obj={additive_forced_margin_objective_value:.4f}"
+                    if additive_forced_margin_metrics
                     else ""
                 )
                 + (
@@ -9176,6 +9342,14 @@ def run_variant(
             late_recovery_weight=(
                 args.late_source_recovery_additive_forced_true_loss_weight
             ),
+        )
+    )
+    metrics["final_additive_forced_margin_effective_weight"] = (
+        additive_forced_margin_weight_schedule(
+            initial_weight=args.additive_forced_margin_loss_weight,
+            start_step=args.additive_forced_margin_start_step,
+            ramp_steps=args.additive_forced_margin_ramp_steps,
+            step=args.steps,
         )
     )
     metrics["final_result_policy_anchor_weight"] = result_policy_anchor_weight_schedule(
@@ -10101,6 +10275,41 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--additive-forced-margin-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Source-acquisition auxiliary: in additive mode, force the true "
+            "calculator result and sampled wrong results, then penalize cases "
+            "where the true forced answer loss is not lower than the hardest "
+            "sampled wrong loss by --additive-forced-margin."
+        ),
+    )
+    parser.add_argument(
+        "--additive-forced-margin-start-step",
+        type=int,
+        default=0,
+        help="Delay the additive forced-margin auxiliary until this training step.",
+    )
+    parser.add_argument(
+        "--additive-forced-margin-ramp-steps",
+        type=int,
+        default=0,
+        help="Linearly ramp the additive forced-margin auxiliary after its start step.",
+    )
+    parser.add_argument(
+        "--additive-forced-margin-negative-count",
+        type=int,
+        default=4,
+        help="Number of sampled wrong result classes per prompt for forced-margin loss.",
+    )
+    parser.add_argument(
+        "--additive-forced-margin",
+        type=float,
+        default=0.05,
+        help="Required answer-loss margin between true and hardest sampled wrong result.",
+    )
+    parser.add_argument(
         "--late-source-recovery-start-step",
         type=int,
         default=-1,
@@ -10912,6 +11121,16 @@ def main() -> None:
         raise ValueError("--additive-forced-true-start-step must be non-negative")
     if args.additive_forced_true_ramp_steps < 0:
         raise ValueError("--additive-forced-true-ramp-steps must be non-negative")
+    if args.additive_forced_margin_loss_weight < 0:
+        raise ValueError("--additive-forced-margin-loss-weight must be non-negative")
+    if args.additive_forced_margin_start_step < 0:
+        raise ValueError("--additive-forced-margin-start-step must be non-negative")
+    if args.additive_forced_margin_ramp_steps < 0:
+        raise ValueError("--additive-forced-margin-ramp-steps must be non-negative")
+    if args.additive_forced_margin_negative_count < 1:
+        raise ValueError("--additive-forced-margin-negative-count must be positive")
+    if args.additive_forced_margin < 0:
+        raise ValueError("--additive-forced-margin must be non-negative")
     if args.late_source_recovery_start_step < -1:
         raise ValueError("--late-source-recovery-start-step must be -1 or non-negative")
     if args.late_source_recovery_lr_multiplier <= 0:

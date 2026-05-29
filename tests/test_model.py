@@ -4359,6 +4359,58 @@ def test_late_source_recovery_schedules_override_weight_and_lr() -> None:
     )
 
 
+def test_additive_forced_margin_loss_routes_additive_gradients() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_script_forced_margin", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="ste",
+        calculator_action_head="result_space",
+        calculator_read_position="operands",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    model = TinyGPT(cfg)
+    batch = ArithmeticBatch(
+        x=torch.tensor([[1, PLUS_ID, 2, EQ_ID], [0, PLUS_ID, 3, EQ_ID]]),
+        y=torch.zeros((2, 4), dtype=torch.long),
+        loss_mask=torch.tensor(
+            [[False, False, False, True], [False, False, False, True]]
+        ),
+    )
+
+    loss, metrics = overfit_script.additive_forced_margin_result_loss(
+        model,
+        batch,
+        num_digits=1,
+        negative_count=3,
+        margin=0.05,
+    )
+    assert loss.item() >= 0.0
+    assert metrics["additive_forced_margin_active_fraction"] >= 0.0
+    assert model.cfg.calculator_bottleneck_mode == "answer_decoder"
+    loss.backward()
+    assert model.calculator_hook is not None
+    assert model.calculator_hook.output_proj.weight.grad is not None
+    assert model.calculator_hook.output_proj.weight.grad.norm().item() > 0.0
+
+
 def test_result_policy_anchor_penalizes_logit_drift() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_script_policy_anchor", script_path)

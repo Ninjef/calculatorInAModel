@@ -269,3 +269,25 @@ The branch has learned that raw source accuracy can fire too eagerly on seed
 14 and too late/not at all on seed 17. Future work should return to scalable
 assignment or train source objectives against handoff/readout geometry more
 directly unless a new transition signal family is proposed up front.
+
+## Addendum: Additive Forced-Margin Source Auxiliary
+
+A contrastive geometry objective was added as a new source-training mechanism:
+
+- `--additive-forced-margin-loss-weight` temporarily uses additive mode,
+  forces the true result and sampled wrong results, and penalizes cases where
+  the true forced answer loss is not lower than the hardest sampled wrong loss
+  by a configured margin.
+- In the matched small `operand_max=9`, seed-13, 100-step gate, the scheduled
+  variant (`weight=0.5`, start step `50`, margin `0.05`, 4 negatives) reached
+  source result-policy accuracy `0.4100` and final eval `0.3800`.
+- Geometry probe: `forced_best_true=0.6200`, `forced_top3_true=0.7500`,
+  `true-best gap=0.0082`, and 50-step slope final loss `1.0238`.
+
+Interpretation: mixed-positive. The margin objective improved forced-result
+ranking over the earlier scheduled forced-true small gate (`forced_best_true
+0.5100`, `top3=0.5600`) and did not hurt source policy acquisition. But its
+50-step downstream slope loss was worse than scheduled forced-true (`0.7979`),
+so it is not automatically better. A full-grid test is justified only as a
+mechanism comparison against scheduled forced-true, with actual handoff/readout
+gates retained as arbiter.
