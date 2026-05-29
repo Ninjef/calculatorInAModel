@@ -308,6 +308,11 @@ weak-source checkpoints with all policy parameters unfrozen at LR `3e-4`
 collapsed learned calculator-result accuracy to `0.3000` and `0.2525`.
 Unfreezing therefore needs retention constraints or selective parameter
 movement; ordinary low-LR answer-loss continuation is not enough.
+Adding an explicit result-policy KL anchor made unfreezing useful: with anchor
+weight `10`, `src4_add2` improved to `0.7475` final eval and `src5_add5`
+improved to `0.9525`, while learned calculator-result accuracy stayed around
+`0.80`. This is still staged and anchored, but it is a concrete path for
+adapting a non-bottleneck calculator without immediately destroying the policy.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

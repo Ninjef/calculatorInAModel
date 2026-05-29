@@ -114,6 +114,10 @@ class TrainConfig:
     result_policy_improvement_assignment_quota_multiplier: float
     result_policy_stabilization_temperature: float
     result_policy_stabilization_decay_steps: int
+    result_policy_anchor_weight: float
+    result_policy_anchor_decay_steps: int
+    result_policy_anchor_temperature: float
+    result_policy_anchor_mode: str
     calculator_causal_gap_weight: float
     calculator_causal_gap_margin: float
     boundary_feedback_weight: float
@@ -729,6 +733,18 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_policy_hard_marginal_effective_results",
         "result_policy_argmax_result_accuracy",
         "result_policy_top3_result_accuracy",
+        "result_policy_anchor_objective",
+        "result_policy_anchor_loss",
+        "result_policy_anchor_weight",
+        "result_policy_anchor_mode",
+        "result_policy_anchor_temperature",
+        "result_policy_anchor_argmax_agreement",
+        "result_policy_anchor_current_argmax_accuracy",
+        "result_policy_anchor_anchor_argmax_accuracy",
+        "result_policy_anchor_current_top3_accuracy",
+        "result_policy_anchor_top3_agreement",
+        "result_policy_anchor_kl",
+        "result_policy_anchor_mse",
         "calculator_causal_gap_weight",
         "calculator_causal_gap_margin",
         "calculator_causal_gap_objective",
@@ -1075,6 +1091,106 @@ def result_policy_stabilization_weight(
     if decay_steps <= 0:
         return initial_weight
     return initial_weight * max(0.0, 1.0 - (step / decay_steps))
+
+
+def capture_result_policy_anchor(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    temperature: float,
+) -> dict[str, torch.Tensor]:
+    if model.cfg.calculator_action_head != "result_space":
+        raise ValueError("result-policy anchor requires result_space action head")
+    if temperature <= 0:
+        raise ValueError("result-policy anchor temperature must be positive")
+    was_training = model.training
+    model.eval()
+    with torch.no_grad():
+        result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+        true_a, true_b = fixed_width_operands_from_batch(
+            batch.x, num_digits=num_digits
+        )
+        true_sum = true_a + true_b
+        probs = torch.softmax(result_logits / temperature, dim=-1)
+        argmax = result_logits.argmax(dim=-1)
+    if was_training:
+        model.train()
+    return {
+        "logits": result_logits.detach(),
+        "probs": probs.detach(),
+        "argmax": argmax.detach(),
+        "true_sum": true_sum.detach(),
+    }
+
+
+def result_policy_anchor_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    anchor: dict[str, torch.Tensor],
+    *,
+    temperature: float,
+    mode: str,
+) -> tuple[torch.Tensor, dict[str, float | str]]:
+    if model.cfg.calculator_action_head != "result_space":
+        raise ValueError("result-policy anchor requires result_space action head")
+    if temperature <= 0:
+        raise ValueError("result-policy anchor temperature must be positive")
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    anchor_logits = anchor["logits"].to(device=result_logits.device)
+    anchor_probs = anchor["probs"].to(device=result_logits.device)
+    anchor_argmax = anchor["argmax"].to(device=result_logits.device)
+    true_sum = anchor["true_sum"].to(device=result_logits.device)
+    if result_logits.shape != anchor_logits.shape:
+        raise ValueError("result-policy anchor batch/logit shape mismatch")
+    current_log_probs = torch.log_softmax(result_logits / temperature, dim=-1)
+    kl_loss = torch.nn.functional.kl_div(
+        current_log_probs,
+        anchor_probs,
+        reduction="batchmean",
+    ) * (temperature * temperature)
+    mse_loss = torch.nn.functional.mse_loss(result_logits, anchor_logits)
+    if mode == "kl":
+        objective = kl_loss
+    elif mode == "mse":
+        objective = mse_loss
+    else:
+        raise ValueError(f"unknown result-policy anchor mode: {mode}")
+    current_argmax = result_logits.argmax(dim=-1)
+    k = min(3, result_logits.shape[-1])
+    current_topk = result_logits.topk(k=k, dim=-1).indices
+    anchor_topk = anchor_logits.topk(k=k, dim=-1).indices
+    topk_agreement = (
+        current_topk.unsqueeze(2) == anchor_topk.unsqueeze(1)
+    ).any(dim=(1, 2))
+    metrics: dict[str, float | str] = {
+        "result_policy_anchor_loss": float(objective.detach().item()),
+        "result_policy_anchor_mode": mode,
+        "result_policy_anchor_temperature": float(temperature),
+        "result_policy_anchor_argmax_agreement": float(
+            (current_argmax == anchor_argmax).float().mean().detach().item()
+        ),
+        "result_policy_anchor_current_argmax_accuracy": float(
+            (current_argmax == true_sum).float().mean().detach().item()
+        ),
+        "result_policy_anchor_anchor_argmax_accuracy": float(
+            (anchor_argmax == true_sum).float().mean().detach().item()
+        ),
+        "result_policy_anchor_current_top3_accuracy": float(
+            (current_topk == true_sum.unsqueeze(1))
+            .any(dim=-1)
+            .float()
+            .mean()
+            .detach()
+            .item()
+        ),
+        "result_policy_anchor_top3_agreement": float(
+            topk_agreement.float().mean().detach().item()
+        ),
+        "result_policy_anchor_kl": float(kl_loss.detach().item()),
+        "result_policy_anchor_mse": float(mse_loss.detach().item()),
+    }
+    return objective, metrics
 
 
 def hard_improvement_assignment_targets(
@@ -6398,6 +6514,10 @@ def run_variant(
         result_policy_stabilization_decay_steps=(
             args.result_policy_stabilization_decay_steps
         ),
+        result_policy_anchor_weight=args.result_policy_anchor_weight,
+        result_policy_anchor_decay_steps=args.result_policy_anchor_decay_steps,
+        result_policy_anchor_temperature=args.result_policy_anchor_temperature,
+        result_policy_anchor_mode=args.result_policy_anchor_mode,
         calculator_causal_gap_weight=args.calculator_causal_gap_weight,
         calculator_causal_gap_margin=args.calculator_causal_gap_margin,
         boundary_feedback_weight=args.boundary_feedback_weight,
@@ -6929,6 +7049,27 @@ def run_variant(
             f"result_gap={shadow_feedback_calibration_metrics['shadow_feedback_train_heldout_result_proj_cosine_gap']:.6f}"
         )
 
+    result_policy_anchor: dict[str, torch.Tensor] | None = None
+    if args.result_policy_anchor_weight > 0:
+        if exhaustive_grid_batch is None:
+            raise ValueError("result-policy anchor requires an exhaustive-grid batch")
+        result_policy_anchor = capture_result_policy_anchor(
+            model,
+            exhaustive_grid_batch,
+            num_digits=num_digits,
+            temperature=args.result_policy_anchor_temperature,
+        )
+        anchor_acc = (
+            result_policy_anchor["argmax"] == result_policy_anchor["true_sum"]
+        ).float().mean().item()
+        print(
+            "result policy anchor: "
+            f"mode={args.result_policy_anchor_mode} "
+            f"weight={args.result_policy_anchor_weight:.6f} "
+            f"temperature={args.result_policy_anchor_temperature:.4f} "
+            f"argmax_acc={anchor_acc:.4f}"
+        )
+
     curve: list[dict[str, float | int]] = []
     snapshots: list[dict[str, object]] = []
     final_loss = float("nan")
@@ -7134,6 +7275,8 @@ def run_variant(
         result_boundary_target_metrics: dict[str, float] = {}
         result_policy_stabilization_objective_value = None
         result_policy_stabilization_metrics: dict[str, float] = {}
+        result_policy_anchor_objective_value = None
+        result_policy_anchor_metrics: dict[str, float | str] = {}
         calculator_causal_gap_objective_value = None
         calculator_causal_gap_metrics: dict[str, float] = {}
         boundary_feedback_loss_value = None
@@ -7374,6 +7517,42 @@ def run_variant(
                 result_policy_stabilization_objective.item()
             )
             loss = loss + result_policy_stabilization_objective
+        if result_policy_anchor is not None:
+            current_result_policy_anchor_weight = (
+                result_policy_stabilization_weight(
+                    initial_weight=args.result_policy_anchor_weight,
+                    decay_steps=args.result_policy_anchor_decay_steps,
+                    step=step,
+                )
+            )
+            (
+                result_policy_anchor_objective,
+                result_policy_anchor_metrics,
+            ) = result_policy_anchor_loss(
+                model,
+                batch,
+                result_policy_anchor,
+                temperature=args.result_policy_anchor_temperature,
+                mode=args.result_policy_anchor_mode,
+            )
+            result_policy_anchor_objective_value = float(
+                (
+                    current_result_policy_anchor_weight
+                    * result_policy_anchor_objective
+                )
+                .detach()
+                .item()
+            )
+            result_policy_anchor_metrics["result_policy_anchor_weight"] = float(
+                current_result_policy_anchor_weight
+            )
+            result_policy_anchor_metrics["result_policy_anchor_objective"] = (
+                result_policy_anchor_objective_value
+            )
+            loss = loss + (
+                current_result_policy_anchor_weight
+                * result_policy_anchor_objective
+            )
         if args.calculator_causal_gap_weight > 0:
             if use_reinforce:
                 raise ValueError(
@@ -7589,6 +7768,11 @@ def run_variant(
                     result_policy_stabilization_objective_value
                 )
                 curve_row.update(result_policy_stabilization_metrics)
+            if result_policy_anchor is not None:
+                curve_row["result_policy_anchor_objective"] = (
+                    result_policy_anchor_objective_value
+                )
+                curve_row.update(result_policy_anchor_metrics)
             if args.calculator_causal_gap_weight > 0:
                 curve_row.update(calculator_causal_gap_metrics)
             if use_boundary_feedback:
@@ -7690,6 +7874,14 @@ def run_variant(
                     f" result_policy_hard_eff={result_policy_stabilization_metrics['result_policy_hard_marginal_effective_results']:.3f}"
                     f" result_policy_acc={result_policy_stabilization_metrics['result_policy_argmax_result_accuracy']:.3f}"
                     if use_result_policy_stabilization
+                    else ""
+                )
+                + (
+                    f" policy_anchor_loss={result_policy_anchor_metrics['result_policy_anchor_loss']:.4f}"
+                    f" policy_anchor_weight={result_policy_anchor_metrics['result_policy_anchor_weight']:.4f}"
+                    f" policy_anchor_agree={result_policy_anchor_metrics['result_policy_anchor_argmax_agreement']:.3f}"
+                    f" policy_anchor_acc={result_policy_anchor_metrics['result_policy_anchor_current_argmax_accuracy']:.3f}"
+                    if result_policy_anchor is not None
                     else ""
                 )
                 + (
@@ -8098,6 +8290,31 @@ def run_variant(
             step=args.steps,
         )
     )
+    metrics["result_policy_anchor_weight"] = args.result_policy_anchor_weight
+    metrics["result_policy_anchor_decay_steps"] = (
+        args.result_policy_anchor_decay_steps
+    )
+    metrics["result_policy_anchor_temperature"] = (
+        args.result_policy_anchor_temperature
+    )
+    metrics["result_policy_anchor_mode"] = args.result_policy_anchor_mode
+    metrics["final_result_policy_anchor_weight"] = result_policy_stabilization_weight(
+        initial_weight=args.result_policy_anchor_weight,
+        decay_steps=args.result_policy_anchor_decay_steps,
+        step=args.steps,
+    )
+    if result_policy_anchor is not None:
+        final_anchor_loss, final_anchor_metrics = result_policy_anchor_loss(
+            model,
+            exhaustive_grid_batch,
+            result_policy_anchor,
+            temperature=args.result_policy_anchor_temperature,
+            mode=args.result_policy_anchor_mode,
+        )
+        metrics["final_result_policy_anchor_loss"] = float(
+            final_anchor_loss.detach().item()
+        )
+        metrics["final_result_policy_anchor_metrics"] = final_anchor_metrics
     metrics["calculator_causal_gap_weight"] = args.calculator_causal_gap_weight
     metrics["calculator_causal_gap_margin"] = args.calculator_causal_gap_margin
     metrics["boundary_feedback_weight"] = args.boundary_feedback_weight
@@ -8832,6 +9049,33 @@ def parse_args() -> argparse.Namespace:
             "Linearly decay result-policy entropy/diversity weights to zero "
             "over this many steps; 0 keeps them constant."
         ),
+    )
+    parser.add_argument(
+        "--result-policy-anchor-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Anchor result-space policy logits to their initial fixed-grid "
+            "distribution during training. Useful for controlled unfreezing."
+        ),
+    )
+    parser.add_argument(
+        "--result-policy-anchor-decay-steps",
+        type=int,
+        default=0,
+        help="Linearly decay result-policy anchor weight to zero; 0 keeps it constant.",
+    )
+    parser.add_argument(
+        "--result-policy-anchor-temperature",
+        type=float,
+        default=1.0,
+        help="Temperature for KL result-policy anchoring.",
+    )
+    parser.add_argument(
+        "--result-policy-anchor-mode",
+        choices=["kl", "mse"],
+        default="kl",
+        help="Anchor to the initial result policy by KL over probabilities or logit MSE.",
     )
     parser.add_argument(
         "--calculator-causal-gap-weight",
@@ -9735,6 +9979,20 @@ def main() -> None:
             "--calculator-action-head result_space requires "
             "--calculator-output-format sum"
         )
+    if args.result_policy_anchor_weight < 0:
+        raise ValueError("--result-policy-anchor-weight must be non-negative")
+    if args.result_policy_anchor_decay_steps < 0:
+        raise ValueError("--result-policy-anchor-decay-steps must be non-negative")
+    if args.result_policy_anchor_temperature <= 0:
+        raise ValueError("--result-policy-anchor-temperature must be positive")
+    if args.result_policy_anchor_weight > 0:
+        if args.calculator_action_head != "result_space":
+            raise ValueError("--result-policy-anchor-weight requires result_space head")
+        if not args.exhaustive_grid_batch:
+            raise ValueError(
+                "--result-policy-anchor-weight currently requires "
+                "--exhaustive-grid-batch so anchor rows stay fixed"
+            )
     if args.input_proj_anchor_weight < 0:
         raise ValueError("--input-proj-anchor-weight must be non-negative")
     if args.input_proj_anchor_decay_steps < 0:
@@ -10045,6 +10303,17 @@ def main() -> None:
                 suffix_parts.append(
                     f"rpoldcy{args.result_policy_stabilization_decay_steps}"
                 )
+        if args.result_policy_anchor_weight > 0:
+            suffix_parts.append(
+                f"rpolanchor{args.result_policy_anchor_weight:g}"
+                f"-{args.result_policy_anchor_mode}"
+            )
+            if args.result_policy_anchor_temperature != 1.0:
+                suffix_parts.append(f"rpolanchort{args.result_policy_anchor_temperature:g}")
+            if args.result_policy_anchor_decay_steps > 0:
+                suffix_parts.append(
+                    f"rpolanchordcy{args.result_policy_anchor_decay_steps}"
+                )
         if args.calculator_causal_gap_weight > 0:
             suffix_parts.append(f"causalgapw{args.calculator_causal_gap_weight:g}")
             suffix_parts.append(f"causalgapm{args.calculator_causal_gap_margin:g}")
@@ -10202,6 +10471,13 @@ def main() -> None:
         f"{args.result_policy_improvement_assignment_quota_multiplier} "
         f"temperature={args.result_policy_stabilization_temperature} "
         f"decay_steps={args.result_policy_stabilization_decay_steps}"
+    )
+    print(
+        "result policy anchor: "
+        f"weight={args.result_policy_anchor_weight} "
+        f"mode={args.result_policy_anchor_mode} "
+        f"temperature={args.result_policy_anchor_temperature} "
+        f"decay_steps={args.result_policy_anchor_decay_steps}"
     )
     print(
         "calculator causal gap: "

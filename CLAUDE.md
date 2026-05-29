@@ -442,6 +442,22 @@ Next unfreezing work needs explicit policy retention regularization, a much
 more selective unfreeze, or a mechanism that validates calculator-result
 accuracy while adapting.
 
+Explicit result-policy anchoring then produced a useful controlled-unfreeze
+partial positive:
+`bottleneck_to_additive_policy_anchor_unfreeze_partial`. A new
+`--result-policy-anchor-weight` objective snapshots the initial fixed-grid
+result-space policy and penalizes KL/MSE drift during training. With LR
+`3e-4`, all policy parameters unfrozen, and KL anchor weight `10`, the adapted
+weak-source handoffs avoided the collapse seen in plain unfreeze.
+`src4_add2` improved from `0.6050` frozen-adapted final eval to `0.7475`,
+with learned calc `0.8075`, anchor agreement `0.9800`, injection-zero
+`0.0100`, and oracle `0.7875`. `src5_add5` improved from `0.8175` to
+`0.9525`, with learned calc `0.7950`, anchor agreement `0.9850`,
+injection-zero `0.0000`, and oracle `0.9375`. This is not a scalable
+from-scratch solution because it anchors a staged policy, but it shows that
+controlled unfreezing can improve non-bottleneck handoff if policy retention
+is explicitly protected.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -557,6 +573,10 @@ Do not rerun these as next steps unless debugging new code:
 - low-LR `3e-4` full-policy unfreeze for 400 steps from the adapted
   `src4_add2` or `src5_add5` checkpoints as novelty. It collapsed learned
   calculator-result accuracy.
+- result-policy KL anchor weight `10`, LR `3e-4`, 400-step full unfreeze from
+  the adapted `src4_add2` or `src5_add5` checkpoints as novelty. This is now
+  a partial positive; next anchored-unfreeze work should vary anchor schedule,
+  selective unfreezing, or source acquisition.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -572,9 +592,10 @@ bottleneck-to-additive handoff that is stronger than a plain zero-injection
 loss-gap hinge, seed replication/unfreeze schedules for the frozen-policy
 bottleneck-to-additive handoff that specifically changes source checkpoint
 selection, downstream adaptation beyond just one longer continuation, or
-unfreezing with explicit policy-retention constraints, a Jacobian-conditioned
-state more substantial than the result-output `J^T answer_grad` feature, or a
-richer target construction that remains valid after upstream movement.
+unfreezing with a different policy-retention schedule/selective parameter set,
+a Jacobian-conditioned state more substantial than the result-output
+`J^T answer_grad` feature, or a richer target construction that remains valid
+after upstream movement.
 Keep the exact-grid boundary-ceiling
 diagnostic as the Stage 0 gate for any new mechanism, require a heldout warmup
 pass before Stage 1, and require early Stage 1 lift above the `0.16`

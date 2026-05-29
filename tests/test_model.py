@@ -4001,6 +4001,67 @@ def test_semantic_decoder_checkpoint_load_scope_is_opt_in(tmp_path: Path) -> Non
     )
 
 
+def test_result_policy_anchor_penalizes_logit_drift() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_policy_anchor", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    torch.manual_seed(0)
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="ste",
+        calculator_action_head="result_space",
+        calculator_read_position="operands",
+        calculator_bottleneck_mode="none",
+    )
+    model = TinyGPT(cfg)
+    batch = ArithmeticBatch(
+        x=torch.tensor([[1, PLUS_ID, 2, EQ_ID], [0, PLUS_ID, 3, EQ_ID]]),
+        y=torch.zeros((2, 4), dtype=torch.long),
+        loss_mask=torch.tensor(
+            [[False, False, False, True], [False, False, False, True]]
+        ),
+    )
+
+    anchor = overfit_script.capture_result_policy_anchor(
+        model, batch, num_digits=1, temperature=1.0
+    )
+    initial_loss, initial_metrics = overfit_script.result_policy_anchor_loss(
+        model, batch, anchor, temperature=1.0, mode="kl"
+    )
+    assert initial_loss.item() == pytest.approx(0.0, abs=1e-6)
+    assert initial_metrics["result_policy_anchor_argmax_agreement"] == pytest.approx(1.0)
+
+    assert model.calculator_hook is not None
+    assert model.calculator_hook.result_proj is not None
+    with torch.no_grad():
+        model.calculator_hook.result_proj.weight.add_(
+            torch.randn_like(model.calculator_hook.result_proj.weight) * 0.5
+        )
+
+    drift_loss, drift_metrics = overfit_script.result_policy_anchor_loss(
+        model, batch, anchor, temperature=1.0, mode="kl"
+    )
+    drift_loss.backward()
+
+    assert drift_loss.item() > initial_loss.item()
+    assert drift_metrics["result_policy_anchor_kl"] > 0.0
+    assert model.calculator_hook.result_proj.weight.grad is not None
+    assert model.calculator_hook.result_proj.weight.grad.abs().sum().item() > 0
+
+
 def test_strict_phase6_runner_threads_semantic_decoder_only_scope(tmp_path: Path) -> None:
     script_path = Path("scripts/run_phase6_strict_random_upstream_local_target.py")
     spec = importlib.util.spec_from_file_location("strict_phase6_runner", script_path)

@@ -213,3 +213,9 @@ Conclusion: From adapted weak-source checkpoints, unfreezing all policy paramete
 Do not repeat: The same `src4_add2` or `src5_add5` adapted-checkpoint low-LR `3e-4`, 400-step full unfreeze as novelty.
 Next allowed test: Selective unfreezing, explicit policy-retention regularization, or unfreeze schedules gated by calculator-result accuracy.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-low-lr-unfreeze.md`
+
+PARTIAL: Result-policy anchoring can make full-policy unfreeze useful after staged handoff.
+Conclusion: KL anchor weight `10` at LR `3e-4` preserved learned calc (`0.8075/0.7950`) and improved final eval over frozen adapted baselines (`src4_add2 0.6050 -> 0.7475`, `src5_add5 0.8175 -> 0.9525`).
+Do not repeat: Same adapted `src4_add2/src5_add5`, anchor weight `10`, LR `3e-4`, 400-step KL-anchor full unfreeze as novelty.
+Next allowed test: Anchor decay/off-ramp, selective unfreeze, source checkpoint selection, or less prescriptive source-policy acquisition.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-policy-anchor-unfreeze.md`

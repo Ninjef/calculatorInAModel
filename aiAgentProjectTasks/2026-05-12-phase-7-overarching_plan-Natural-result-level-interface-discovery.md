@@ -1392,3 +1392,28 @@ forced-random rose to `0.1125`.
 Future unfreezing should not be plain low-LR answer-loss continuation. It needs
 selective parameter movement, explicit policy-retention regularization, or
 gated unfreezing based on calculator-result accuracy.
+
+## Status Update: 2026-05-28, Bottleneck-to-Additive Policy-Anchor Unfreeze
+
+Adding explicit result-policy anchoring produced a partial positive:
+
+```text
+bottleneck_to_additive_policy_anchor_unfreeze_partial
+```
+
+I added a fixed-grid result-policy anchor objective that snapshots the initial
+result-space policy and penalizes KL or logit-MSE drift during training.
+
+With LR `3e-4`, all policy parameters unfrozen, and KL anchor weight `10`, the
+adapted weak-source handoffs no longer collapsed:
+
+| Run | Frozen adapted final | Plain unfreeze final | Anchored final | Last learned calc | Last injection-zero |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` | `0.6050` | `0.5200` | `0.7475` | `0.8075` | `0.0100` |
+| `src5_add5` | `0.8175` | `0.8100` | `0.9525` | `0.7950` | `0.0000` |
+
+The anchor prevented the policy-collapse failure mode while allowing useful
+non-bottleneck adaptation. It is not final success because the method is still
+staged and anchored to a learned policy. Next work should test anchor decay or
+off-ramp schedules, selective unfreezing, or less prescriptive source-policy
+training.

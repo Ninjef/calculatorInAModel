@@ -3697,3 +3697,69 @@ Interpretation:
 - Future unfreezing work needs selective parameter movement, explicit policy
   retention, or a gate that monitors calculator-result accuracy during
   unfreeze.
+
+## 2026-05-28 Bottleneck-to-Additive Policy-Anchor Unfreeze Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-forty-third-task-Bottleneck-to-additive-policy-anchor-unfreeze.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_bottleneck_to_additive_transfer_policy_anchor_unfreeze
+```
+
+Code change:
+
+- Added `--result-policy-anchor-weight`.
+- Added `--result-policy-anchor-decay-steps`.
+- Added `--result-policy-anchor-temperature`.
+- Added `--result-policy-anchor-mode {kl,mse}`.
+- The anchor snapshots the initial fixed-grid result-space policy and applies
+  a KL or logit-MSE drift penalty during training. It currently requires
+  `--exhaustive-grid-batch` so anchor rows stay fixed.
+
+Question:
+
+Can explicit result-policy anchoring prevent the policy collapse seen under
+plain low-LR full unfreezing while still allowing downstream/non-bottleneck
+adaptation?
+
+Configuration:
+
+- Continued from the adapted weak-source checkpoints.
+- Loaded with `--semantic-decoder-checkpoint-load-scope full_model`.
+- Removed `--freeze-calculator-policy`.
+- global LR `3e-4`;
+- `--result-policy-anchor-weight 10`;
+- `--result-policy-anchor-mode kl`;
+- answer loss weight `1`;
+- exact-grid natural `0..19`;
+- 400 steps.
+
+Result:
+
+| Run | Frozen adapted final | Plain unfreeze final | Anchored final | Anchored best normal | Last injection-zero | Last forced-random | Last oracle | Last learned calc | Last anchor agreement |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` anchor | `0.6050` | `0.5200` | `0.7475` | `0.7375` at `150` | `0.0100` | `0.0950` | `0.7875` | `0.8075` | `0.9800` |
+| `src5_add5` anchor | `0.8175` | `0.8100` | `0.9525` | `0.9650` at `400` | `0.0000` | `0.0450` | `0.9375` | `0.7950` | `0.9850` |
+
+Decision:
+
+```text
+bottleneck_to_additive_policy_anchor_unfreeze_partial
+```
+
+Interpretation:
+
+- The result-policy anchor prevented the learned calculator-result collapse
+  that occurred under plain low-LR full unfreeze.
+- Anchored unfreeze improved both weak-source adapted handoffs, and `src5_add5`
+  reached the strong-source accuracy band while preserving calculator
+  dependence.
+- This is still not the final project goal because it uses a staged and
+  anchored policy. Next work should test an anchor off-ramp/decay, selective
+  unfreezing, or less prescriptive source-policy acquisition.
