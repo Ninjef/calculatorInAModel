@@ -389,6 +389,9 @@ leave-family-out ridge over early handoff trace features reached only `5/8`
 winner accuracy even at step `500`, below raw early exact at `6/8`. The next
 practical source-acquisition tool should log the real additive handoff probe
 during source training on cloned state, then select checkpoints by that score.
+That logging tool now exists in `overfit_one_batch.py`; it is diagnostic-only
+and writes `additive_handoff_probe_rows.csv`. The next source run should use a
+meaningful 500-step probe budget, not the one-step smoke.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

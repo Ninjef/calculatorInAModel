@@ -465,3 +465,9 @@ Conclusion: Leave-family-out ridge over 21 deduped candidates and 8 source famil
 Do not repeat: Same ridge selector over normal/zero/oracle/forced-random/calc early trace features on the current Phase 7 handoff trace dataset as novelty.
 Next allowed test: Add logging-only in-training additive handoff probes, collect more labeled families, or test a richer learned selector only if it beats raw early exact under leave-family-out validation.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-handoff-trace-learned-selector-audit.md`
+
+TOOLING: Logging-only in-training additive handoff probes are implemented.
+Conclusion: `overfit_one_batch.py` can now clone current source state into additive non-bottleneck mode, freeze the calculator policy, train a bounded downstream probe, and log probe rows/metrics without feeding probe gradients back into source training.
+Do not repeat: One-step smoke under `runs/2026-05-29_phase7_additive_handoff_probe_logging_smoke` as novelty.
+Next allowed test: Run a real source-acquisition lineage with meaningful 500-step probe logging and verify selected checkpoints with the established handoff gate.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-in-training-additive-handoff-probe-logging.md`

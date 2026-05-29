@@ -6028,3 +6028,62 @@ Interpretation:
 - The next implementation step should be logging-only in-training additive
   handoff probes for source checkpoints, not another cheap selector unless it
   is validated leave-family-out and beats raw early exact.
+
+## 2026-05-29 In-Training Additive Handoff Probe Logging
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-in-training-additive-handoff-probe-logging.md
+```
+
+Code:
+
+```text
+scripts/overfit_one_batch.py
+```
+
+Question:
+
+Can source training log actual additive handoff behavior on cloned state, so
+checkpoint selection can use the real 500/600-step signal instead of failed
+cheap proxies?
+
+Implementation:
+
+- Added `--additive-handoff-probe-every`.
+- Added `--additive-handoff-probe-steps`.
+- Added `--additive-handoff-probe-eval-every`.
+- Added `--additive-handoff-probe-samples`.
+- Added `--additive-handoff-probe-lr`.
+- Added `--additive-handoff-probe-weight-decay`.
+- Added `--additive-handoff-probe-seed`.
+- The probe clones current source state into an additive non-bottleneck
+  result-space `ste` model, freezes the calculator policy, trains only the
+  additive downstream path, and logs rows to
+  `additive_handoff_probe_rows.csv`.
+- Probe metrics are also summarized into `metrics.json`.
+- The probe is logging-only and does not feed gradients into source training.
+
+Smoke result:
+
+```text
+runs/2026-05-29_phase7_additive_handoff_probe_logging_smoke
+```
+
+The zero-step smoke with a one-step probe completed and wrote probe rows plus
+`final_additive_handoff_probe` / `best_additive_handoff_probe_normal_exact_match`
+in `metrics.json`.
+
+Decision:
+
+```text
+additive_handoff_probe_logging_implemented
+```
+
+Interpretation:
+
+- This is infrastructure, not a research success claim.
+- The next meaningful experiment is a real no-decay source-acquisition lineage
+  with meaningful 500-step probe logging, then verification of the selected
+  checkpoint with the established handoff gate.

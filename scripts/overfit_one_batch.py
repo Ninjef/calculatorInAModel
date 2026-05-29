@@ -70,6 +70,13 @@ class TrainConfig:
     snapshot_every: int
     snapshot_samples: int
     checkpoint_every: int
+    additive_handoff_probe_every: int
+    additive_handoff_probe_steps: int
+    additive_handoff_probe_eval_every: int
+    additive_handoff_probe_samples: int
+    additive_handoff_probe_lr: float
+    additive_handoff_probe_weight_decay: float
+    additive_handoff_probe_seed: int
     calculator_estimator: str
     calculator_action_head: str
     calculator_read_position: str
@@ -6337,6 +6344,143 @@ def make_model_config(
     )
 
 
+def load_compatible_state_from_model(source: TinyGPT, target: TinyGPT) -> None:
+    source_state = source.state_dict()
+    target_state = target.state_dict()
+    compatible = {
+        name: tensor.detach().clone()
+        for name, tensor in source_state.items()
+        if name in target_state and tensor.shape == target_state[name].shape
+    }
+    target.load_state_dict(compatible, strict=False)
+
+
+def make_additive_handoff_probe_model(
+    source: TinyGPT,
+    *,
+    num_digits: int,
+    calculator_operand_vocab_size: int,
+    args: argparse.Namespace,
+    device: str,
+) -> TinyGPT:
+    cfg = make_model_config(
+        num_digits,
+        "model-c",
+        injection_scale=args.injection_scale,
+        operand_vocab_size=calculator_operand_vocab_size,
+        calculator_estimator="ste",
+        calculator_action_head="result_space",
+        calculator_read_position=args.calculator_read_position,
+        calculator_read_span_width=args.calculator_read_span_width,
+        calculator_injection_mode="add",
+        calculator_bottleneck_mode="none",
+        calculator_output_format=args.calculator_output_format,
+        answer_decoder_interaction=args.answer_decoder_interaction,
+        calculator_result_head_hidden_size=args.calculator_result_head_hidden_size,
+        answer_format=args.answer_format,
+        n_layer=args.n_layer,
+        n_head=args.n_head,
+        n_embd=args.n_embd,
+        mlp_expansion=args.mlp_expansion,
+        calculator_hook_after_layer=args.calculator_hook_after_layer,
+    )
+    probe = TinyGPT(cfg).to(device)
+    load_compatible_state_from_model(source, probe)
+    freeze_calculator_policy_parameters(probe)
+    return probe
+
+
+def run_additive_handoff_probe_from_model(
+    source: TinyGPT,
+    *,
+    source_step: int,
+    num_digits: int,
+    operand_max: int,
+    calculator_operand_vocab_size: int,
+    batch: ArithmeticBatch,
+    args: argparse.Namespace,
+    device: str,
+) -> list[dict[str, object]]:
+    if args.additive_handoff_probe_steps < 0:
+        raise ValueError("additive handoff probe steps must be non-negative")
+    probe = make_additive_handoff_probe_model(
+        source,
+        num_digits=num_digits,
+        calculator_operand_vocab_size=calculator_operand_vocab_size,
+        args=args,
+        device=device,
+    )
+    optimizer = torch.optim.AdamW(
+        adaptive_optimizer_param_groups(
+            probe,
+            lr=args.additive_handoff_probe_lr,
+            input_proj_lr=args.additive_handoff_probe_lr,
+            upstream_lr=args.additive_handoff_probe_lr,
+            weight_decay=args.additive_handoff_probe_weight_decay,
+        ),
+        betas=(0.9, 0.95),
+    )
+    eval_every = args.additive_handoff_probe_eval_every
+    wanted_steps = {0, args.additive_handoff_probe_steps}
+    if eval_every > 0:
+        wanted_steps.update(
+            range(
+                eval_every,
+                args.additive_handoff_probe_steps + 1,
+                eval_every,
+            )
+        )
+    rows: list[dict[str, object]] = []
+
+    def append(probe_step: int, loss: float | None = None) -> None:
+        row = snapshot_row_from_model(
+            probe,
+            step=probe_step,
+            num_digits=num_digits,
+            operand_max=operand_max,
+            samples=args.additive_handoff_probe_samples,
+            seed=args.additive_handoff_probe_seed + source_step + probe_step,
+            device=device,
+            answer_format=args.answer_format,
+        )
+        row = {
+            f"additive_handoff_probe_{key}": value
+            for key, value in row.items()
+        }
+        row["source_step"] = source_step
+        row["probe_step"] = probe_step
+        row["probe_train_loss"] = float("nan") if loss is None else loss
+        rows.append(row)
+
+    was_training = source.training
+    source.eval()
+    try:
+        append(0)
+        probe.train()
+        for probe_step in range(1, args.additive_handoff_probe_steps + 1):
+            logits = probe(batch.x)
+            losses = masked_cross_entropy_per_example(
+                logits, batch.y, batch.loss_mask
+            )
+            loss = losses.mean()
+            optimizer.zero_grad(set_to_none=True)
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(
+                [param for param in probe.parameters() if param.requires_grad],
+                args.grad_clip,
+            )
+            optimizer.step()
+            if probe_step in wanted_steps:
+                append(probe_step, float(loss.detach().item()))
+                probe.train()
+    finally:
+        if was_training:
+            source.train()
+        else:
+            source.eval()
+    return rows
+
+
 def run_variant(
     *,
     num_digits: int,
@@ -6523,6 +6667,15 @@ def run_variant(
         snapshot_every=args.snapshot_every,
         snapshot_samples=args.snapshot_samples,
         checkpoint_every=args.checkpoint_every,
+        additive_handoff_probe_every=args.additive_handoff_probe_every,
+        additive_handoff_probe_steps=args.additive_handoff_probe_steps,
+        additive_handoff_probe_eval_every=args.additive_handoff_probe_eval_every,
+        additive_handoff_probe_samples=args.additive_handoff_probe_samples,
+        additive_handoff_probe_lr=args.additive_handoff_probe_lr,
+        additive_handoff_probe_weight_decay=(
+            args.additive_handoff_probe_weight_decay
+        ),
+        additive_handoff_probe_seed=args.additive_handoff_probe_seed,
         calculator_estimator=args.calculator_estimator,
         calculator_action_head=args.calculator_action_head,
         calculator_read_position=args.calculator_read_position,
@@ -7163,6 +7316,7 @@ def run_variant(
 
     curve: list[dict[str, float | int]] = []
     snapshots: list[dict[str, object]] = []
+    additive_handoff_probe_rows: list[dict[str, object]] = []
     final_loss = float("nan")
     policy_baseline: float | None = None
     action_loss_replay_cache = ActionLossReplayCache()
@@ -8096,6 +8250,41 @@ def run_variant(
             )
             model.train()
 
+        if (
+            args.variant == "model-c"
+            and args.additive_handoff_probe_every > 0
+            and step % args.additive_handoff_probe_every == 0
+        ):
+            probe_batch = (
+                exhaustive_grid_batch if exhaustive_grid_batch is not None else batch
+            )
+            probe_rows = run_additive_handoff_probe_from_model(
+                model,
+                source_step=step,
+                num_digits=num_digits,
+                operand_max=operand_max,
+                calculator_operand_vocab_size=calculator_operand_vocab_size,
+                batch=probe_batch,
+                args=args,
+                device=device,
+            )
+            additive_handoff_probe_rows.extend(probe_rows)
+            final_probe = probe_rows[-1]
+            print(
+                "additive handoff probe "
+                f"source_step={step:5d} "
+                f"probe_step={final_probe['probe_step']} "
+                "normal="
+                f"{final_probe['additive_handoff_probe_normal_exact_match']:.3f} "
+                "zero_inj="
+                f"{final_probe['additive_handoff_probe_injection_zero_exact_match']:.3f} "
+                "oracle="
+                f"{final_probe['additive_handoff_probe_oracle_exact_match']:.3f} "
+                "calc="
+                f"{final_probe['additive_handoff_probe_calculator_result_accuracy']:.3f}"
+            )
+            model.train()
+
         if step == args.steps:
             final_loss = loss.item()
             break
@@ -8276,6 +8465,28 @@ def run_variant(
         int(exhaustive_grid_size) if exhaustive_grid_size is not None else None
     )
     metrics["calculator_operand_vocab_size"] = calculator_operand_vocab_size
+    metrics["additive_handoff_probe_every"] = args.additive_handoff_probe_every
+    metrics["additive_handoff_probe_steps"] = args.additive_handoff_probe_steps
+    metrics["additive_handoff_probe_eval_every"] = (
+        args.additive_handoff_probe_eval_every
+    )
+    metrics["additive_handoff_probe_samples"] = args.additive_handoff_probe_samples
+    metrics["additive_handoff_probe_lr"] = args.additive_handoff_probe_lr
+    metrics["additive_handoff_probe_weight_decay"] = (
+        args.additive_handoff_probe_weight_decay
+    )
+    metrics["additive_handoff_probe_seed"] = args.additive_handoff_probe_seed
+    if additive_handoff_probe_rows:
+        final_probe_row = additive_handoff_probe_rows[-1]
+        metrics["final_additive_handoff_probe"] = final_probe_row
+        metrics["best_additive_handoff_probe_normal_exact_match"] = max(
+            float(row["additive_handoff_probe_normal_exact_match"])
+            for row in additive_handoff_probe_rows
+        )
+        metrics["best_additive_handoff_probe_row"] = max(
+            additive_handoff_probe_rows,
+            key=lambda row: float(row["additive_handoff_probe_normal_exact_match"]),
+        )
     metrics["parameter_count"] = model.num_params()
     metrics["run_dir"] = str(run_dir)
     metrics["variant"] = args.variant
@@ -8625,6 +8836,11 @@ def run_variant(
     save_curve(run_dir / "training_curve.csv", curve)
     if snapshots:
         write_rows(run_dir / "diagnostic_snapshots.csv", snapshots)
+    if additive_handoff_probe_rows:
+        write_rows(
+            run_dir / "additive_handoff_probe_rows.csv",
+            additive_handoff_probe_rows,
+        )
     if args.variant == "model-c":
         trace_rows = calculator_trace_rows(
             model,
@@ -8905,6 +9121,56 @@ def parse_args() -> argparse.Namespace:
             "For Model C snapshots, also save model weights every N steps under "
             "checkpoint_snapshots/. Requires --snapshot-every to trigger the step."
         ),
+    )
+    parser.add_argument(
+        "--additive-handoff-probe-every",
+        type=int,
+        default=0,
+        help=(
+            "For Model C source runs, every N training steps clone the current "
+            "model into additive non-bottleneck mode, freeze the calculator "
+            "policy, train the downstream path for a short probe, and log the "
+            "result. The probe is logging-only and does not affect gradients."
+        ),
+    )
+    parser.add_argument(
+        "--additive-handoff-probe-steps",
+        type=int,
+        default=500,
+        help="Number of downstream adaptation steps for the additive handoff probe.",
+    )
+    parser.add_argument(
+        "--additive-handoff-probe-eval-every",
+        type=int,
+        default=100,
+        help=(
+            "Within each additive handoff probe, log diagnostics every N probe "
+            "steps. 0 logs only probe step 0 and the final probe step."
+        ),
+    )
+    parser.add_argument(
+        "--additive-handoff-probe-samples",
+        type=int,
+        default=400,
+        help="Diagnostic samples per additive handoff probe row.",
+    )
+    parser.add_argument(
+        "--additive-handoff-probe-lr",
+        type=float,
+        default=0.003,
+        help="Learning rate for the logging-only additive handoff probe.",
+    )
+    parser.add_argument(
+        "--additive-handoff-probe-weight-decay",
+        type=float,
+        default=0.0,
+        help="Weight decay for the logging-only additive handoff probe.",
+    )
+    parser.add_argument(
+        "--additive-handoff-probe-seed",
+        type=int,
+        default=70_000,
+        help="Base diagnostic seed for additive handoff probe rows.",
     )
     parser.add_argument(
         "--injection-scale",
@@ -9836,6 +10102,27 @@ def main() -> None:
         raise ValueError("--checkpoint-every must be non-negative")
     if args.checkpoint_every > 0 and args.snapshot_every <= 0:
         raise ValueError("--checkpoint-every requires --snapshot-every")
+    if args.additive_handoff_probe_every < 0:
+        raise ValueError("--additive-handoff-probe-every must be non-negative")
+    if args.additive_handoff_probe_steps < 0:
+        raise ValueError("--additive-handoff-probe-steps must be non-negative")
+    if args.additive_handoff_probe_eval_every < 0:
+        raise ValueError("--additive-handoff-probe-eval-every must be non-negative")
+    if args.additive_handoff_probe_samples < 1:
+        raise ValueError("--additive-handoff-probe-samples must be positive")
+    if args.additive_handoff_probe_lr <= 0:
+        raise ValueError("--additive-handoff-probe-lr must be positive")
+    if args.additive_handoff_probe_weight_decay < 0:
+        raise ValueError("--additive-handoff-probe-weight-decay must be non-negative")
+    if args.additive_handoff_probe_every > 0 and args.variant != "model-c":
+        raise ValueError("--additive-handoff-probe-every requires --variant model-c")
+    if (
+        args.additive_handoff_probe_every > 0
+        and args.calculator_action_head != "result_space"
+    ):
+        raise ValueError(
+            "--additive-handoff-probe-every requires --calculator-action-head result_space"
+        )
     if args.calculator_estimator == "reinforce" and args.variant != "model-c":
         raise ValueError("--calculator-estimator reinforce requires --variant model-c")
     result_space_reinforce_requested = (
@@ -10681,6 +10968,14 @@ def main() -> None:
         "diagnostic snapshots: "
         f"every={args.snapshot_every} samples={args.snapshot_samples} "
         f"checkpoint_every={args.checkpoint_every}"
+    )
+    print(
+        "additive handoff probe: "
+        f"every={args.additive_handoff_probe_every} "
+        f"steps={args.additive_handoff_probe_steps} "
+        f"eval_every={args.additive_handoff_probe_eval_every} "
+        f"samples={args.additive_handoff_probe_samples} "
+        f"lr={args.additive_handoff_probe_lr}"
     )
     print(f"calculator estimator: {args.calculator_estimator}")
     print(f"calculator action head: {args.calculator_action_head}")

@@ -769,6 +769,10 @@ Do not rerun these as next steps unless debugging new code:
   it reached only `3/8`, `4/8`, `3/8`, and `5/8` winner accuracy at
   prediction steps `200/300/400/500`; raw early exact matched or beat it at
   every step.
+- the one-step in-training additive handoff probe smoke as novelty. It only
+  verified that `overfit_one_batch.py` can clone current source state into an
+  additive non-bottleneck probe, freeze the calculator policy, and write
+  `additive_handoff_probe_rows.csv`.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -788,9 +792,9 @@ unfreezing with calculator-accuracy-gated retention, an adaptive floor around
 the `0.1` anchor-strength region, continuous rather than discrete behavior
 control, a more restrictive selective parameter set than freezing the action
 head alone,
-source acquisition optimized against actual 500/600-step additive handoff
-behavior rather than lower assignment-weight sweeps alone,
-logging-only in-training additive handoff probes for source checkpoints,
+real source-acquisition runs that enable the new logging-only additive
+handoff probe with meaningful 500-step budgets and then verify selected
+checkpoints against the established handoff gate,
 a Jacobian-conditioned state more substantial than the result-output
 `J^T answer_grad` feature, or a richer target construction that remains valid
 after upstream movement.
