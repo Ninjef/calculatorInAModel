@@ -441,6 +441,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/089-the-scheduled-step-600-source-lineage-remains-calculator-dependent-but-misses-the-high-con",
+      "target": "researchMemory/hypotheses/phase7/089-the-scheduled-step-600-source-lineage-remains-calculator-dependent-but-misses-the-high-con.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -648,6 +653,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-long-source-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-scheduled-source-continuation-readout.md",
       "type": "supported_by"
     },
     {
@@ -1322,6 +1332,13 @@
       "source_path": "researchMemory/hypotheses/phase7/088-longer-scheduled-forced-true-source-acquisition-compounds-handoff-geometry-through-step-60.md",
       "status": "POSITIVE",
       "title": "Longer scheduled forced-true source acquisition compounds handoff geometry through step 600."
+    },
+    {
+      "id": "doc/089-the-scheduled-step-600-source-lineage-remains-calculator-dependent-but-misses-the-high-con",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/089-the-scheduled-step-600-source-lineage-remains-calculator-dependent-but-misses-the-high-con.md",
+      "status": "MIXED-POSITIVE",
+      "title": "The scheduled step-600 source lineage remains calculator-dependent but misses the high continuation/readout gate."
     },
     {
       "id": "doc/phase7-direction-memory",

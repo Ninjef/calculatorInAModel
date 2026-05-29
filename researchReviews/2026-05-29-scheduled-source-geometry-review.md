@@ -82,3 +82,20 @@ Still missing:
 Use the scheduled step-600 source/handoff lineage as the next handoff candidate
 for continuation/readout. Keep actual handoff verification in the loop.
 
+## Addendum: Continuation/Readout Result
+
+The scheduled step-600 handoff lineage was tested with the standard downstream
+recipe:
+
+- 800-step frozen-policy continuation: `0.7775` final eval.
+- 600-step policy-backbone-frozen readout after continuation: `0.8175`.
+- Extra 1000 stable-policy readout steps: `0.8475`.
+
+Controls stayed low, so the branch remains calculator-dependent, but it missed
+the high non-bottleneck gate. Learned calculator accuracy stayed around
+`0.5391`, unlike earlier positive continuation/readout lineages with much
+higher learned calc.
+
+Updated steering: do not spend more compute on this exact continuation/readout
+chain. The scheduled source branch now needs source-policy accuracy or
+retention pressure while preserving the additive geometry gain.

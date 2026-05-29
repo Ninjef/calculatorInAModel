@@ -204,9 +204,13 @@ Memory:
   600-step handoff final eval `0.7725`. Step `800` had perfect forced-result
   geometry but worse handoff (`0.6750`), so final source checkpoint is not
   automatically best.
-- The promising next direction is continuation/readout from the scheduled
-  step-600 handoff lineage. Keep standalone 600-step handoff verification in
-  the loop; forced-result geometry alone remains a triage signal.
+- Continuation/readout from the scheduled step-600 handoff lineage was
+  mixed-positive but below gate: continuation reached `0.7775`, 600-step
+  readout reached `0.8175`, and extended readout reached `0.8475`, with low
+  controls but learned calc stuck around `0.5391`.
+- The promising next direction is to improve scheduled source policy accuracy
+  while preserving additive geometry, then verify with standalone handoff.
+  Forced-result geometry alone remains a triage signal.
 
 Representative evidence:
 
@@ -219,6 +223,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-schedule-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-op19-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-long-source-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-scheduled-source-continuation-readout.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 
 ## Direction: Target Propagation / Local Targets

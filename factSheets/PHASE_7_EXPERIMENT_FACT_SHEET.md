@@ -6682,3 +6682,54 @@ Interpretation:
   cannot replace handoff verification.
 - Next work should run continuation/readout from the step-600 handoff lineage
   to test whether this scheduled source can clear the high non-bottleneck gate.
+
+## 2026-05-29 Scheduled Source Continuation/Readout
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-scheduled-source-continuation-readout.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_additive_forced_true_schedule/op19_long/continuation_from_step600_handoff_steps800
+runs/2026-05-29_phase7_additive_forced_true_schedule/op19_long/readout_from_continuation_steps600
+runs/2026-05-29_phase7_additive_forced_true_schedule/op19_long/direct_readout_from_step600_handoff_steps600
+runs/2026-05-29_phase7_additive_forced_true_schedule/op19_long/readout_extended_from_continuation_read600_steps1000
+```
+
+Question:
+
+Can the scheduled step-600 handoff lineage clear the high non-bottleneck gate
+with the standard continuation/readout recipe?
+
+Results:
+
+| Stage | Final eval | Best snapshot | Injection-zero | Forced-random | Oracle | Learned calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| handoff step-600 source | `0.7725` | `0.7150` @ step `500` | `0.0469` | `0.0313` | `0.7344` | `0.5391` |
+| 800-step continuation | `0.7775` | `0.7750` @ step `800` | `0.0391` | `0.0313` | `0.6484` | `0.5391` |
+| direct 600-step readout | `0.7875` | `0.8050` @ step `600` | `0.0391` | `0.0391` | `0.6406` | `0.5391` |
+| 600-step readout after continuation | `0.8175` | `0.8075` @ step `600` | `0.0547` | `0.0391` | `0.6250` | `0.5391` |
+| extended readout, +1000 steps | `0.8475` | `0.8350` @ step `1000` | `0.0547` | `0.0313` | `0.6328` | `0.5391` |
+
+Decision:
+
+```text
+scheduled_source_continuation_readout_partial_below_gate
+```
+
+Interpretation:
+
+- The lineage remains causally calculator-dependent: injection-zero and
+  forced-random controls stay far below normal.
+- The standard continuation/readout recipe improves the handoff but does not
+  clear the high non-bottleneck gate.
+- The likely bottleneck is learned calculator signal quality at handoff:
+  learned calc stayed around `0.5391`, much lower than prior positive
+  continuation/readout lineages.
+- Next work should improve source policy accuracy while preserving the
+  scheduled geometry gain, rather than spending more compute on this exact
+  downstream chain.
