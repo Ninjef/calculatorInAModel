@@ -157,3 +157,24 @@ caveat is that the current test is transductive: on the fixed exhaustive grid,
 the memory eventually observes all `39` result classes. The next tests should
 stress lower fresh scoring, stale-loss aging/rescoring, and generalization
 beyond a fixed prompt grid before treating this as scalable.
+
+## Addendum: Lower Fresh-Scoring Budget
+
+The first budget stress is positive, with a useful floor:
+
+- At 200 steps, `memory_policy_reweighted_t1_u2_m30` was best despite scoring
+  only `2` fresh results per step: exact-grid calc `0.6025`, sampled normal
+  `0.6016`, true-candidate coverage `0.9925`, and target argmax `0.9600`.
+- The same gate showed `u8_m24` at `0.5900`/`0.5391`, `u4_m28` at
+  `0.5100`/`0.4844`, and `u1_m31` at only `0.4075`/`0.4219`; raw uniform
+  `u32` remained `0.3350`/`0.3438`.
+- An 800+200 `u2_m30` retention gate reached target `0.9000` exact calc /
+  `0.8750` sampled normal and retained `0.7850` calc / `0.7656` normal. This
+  is weaker than `u8_m24` retention (`0.8600`/`0.8750`) but still far above the
+  sparse uniform baselines.
+
+Updated steering: do not run more simple replay-memory budget ladders as
+novelty. Treat `u2_m30` as the best current low-fresh-score point and `u1_m31`
+as below the useful 200-step budget floor. The next replay-memory work should
+attack transduction directly: stale-cache aging/rescoring, memory reset,
+streaming/non-exhaustive prompts, or learned/generalized candidate memory.

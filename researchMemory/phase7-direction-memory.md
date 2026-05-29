@@ -309,10 +309,15 @@ Memory:
   beat raw uniform `u32` at 200 steps (`0.5900` vs `0.3350` exact-grid calc)
   and reached `0.8600` calc / `0.8750` sampled normal after an 800+200
   answer-only retention gate.
+- Lowering the fresh scoring budget improved the short gate through `u2_m30`:
+  at 200 steps `u2_m30` reached `0.6025` exact-grid calc and `0.6016` sampled
+  normal, while `u1_m31` weakened to `0.4075`/`0.4219`. The long `u2_m30`
+  retention gate was positive but weaker than `u8_m24`: `0.7850` calc /
+  `0.7656` normal after answer-only retention.
 - The result is promising but still transductive: on the fixed exhaustive grid
   the memory eventually observes all `39` result classes. Next work should test
-  lower fresh scoring, stale-loss aging/rescoring, or learned/generalized
-  proposal memory before claiming scalability.
+  stale-loss aging/rescoring, memory reset, streaming/non-exhaustive prompts,
+  or learned/generalized proposal memory before claiming scalability.
 
 Representative evidence:
 
@@ -325,3 +330,4 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-sampled-local-target-approximation-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-adaptive-local-target-proposal-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-local-target-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-lower-budget-gate.md`

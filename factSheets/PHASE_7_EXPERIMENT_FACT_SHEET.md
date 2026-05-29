@@ -7205,3 +7205,55 @@ Interpretation:
   memory eventually observes all `39` result classes for each prompt. Next
   tests should stress lower fresh scoring, stale-loss aging/rescoring, and
   generalization beyond fixed prompt identities.
+
+## 2026-05-29 Replay-Memory Lower Fresh-Budget Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-replay-memory-lower-budget-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_memory_local_target_gate/lower_fresh_budget_200
+runs/2026-05-29_phase7_memory_local_target_gate/memory_u2_m30_retention_800_200
+```
+
+Question:
+
+How far can replay memory reduce fresh forced-result scoring while preserving
+the `policy_reweighted_t1` learning signal?
+
+200-step comparison:
+
+| Branch | Fresh scored / step | Target width | Exact-grid calc | Sampled normal | True coverage | Target argmax | Injection-zero | Forced-random |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sampled_policy_reweighted_t1_k0_u32` | `32` | `32` | `0.3350` | `0.3438` | `0.8450` | `0.8350` | `0.0234` | `0.0156` |
+| `memory_policy_reweighted_t1_u8_m24` | `8` | `32` | `0.5900` | `0.5391` | `1.0000` | `0.9850` | `0.0234` | `0.0156` |
+| `memory_policy_reweighted_t1_u4_m28` | `4` | `32` | `0.5100` | `0.4844` | `1.0000` | `0.9850` | `0.0234` | `0.0156` |
+| `memory_policy_reweighted_t1_u2_m30` | `2` | `32` | `0.6025` | `0.6016` | `0.9925` | `0.9600` | `0.0234` | `0.0156` |
+| `memory_policy_reweighted_t1_u1_m31` | `1` | `32` | `0.4075` | `0.4219` | `0.9250` | `0.8975` | `0.0234` | `0.0156` |
+
+800+200 retention:
+
+| Branch | Target exact calc | Target sampled normal | Best sampled normal | Retention exact calc | Retention sampled normal | Injection-zero | Forced-random |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `memory_policy_reweighted_t1_u2_m30` | `0.9000` | `0.8750` | `0.8984` | `0.7850` | `0.7656` | `0.0234` | `0.0156` |
+
+Decision:
+
+```text
+replay_memory_u2_low_fresh_budget_positive_with_retention_tradeoff
+```
+
+Interpretation:
+
+- Replay memory remains useful at only `2` fresh forced-result scores per step,
+  a `16x` fresh-scoring reduction versus raw uniform `u32`.
+- `u1_m31` weakens sharply at 200 steps, so it is below the current useful
+  budget floor.
+- `u2_m30` does not retain as well as `u8_m24`; next work should address stale
+  cached losses or transductive prompt identity memory rather than run more
+  simple budget sweeps.

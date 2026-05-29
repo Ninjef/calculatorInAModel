@@ -123,12 +123,14 @@ Active directions:
   local targets. Exact `policy_reweighted_t1` is positive and survives
   answer-only retention, but full enumeration is not scalable. Naive sparse
   sampling and low-loss neighborhoods failed; a new replay-memory proposal is
-  the first useful approximation: it scores only `8` fresh results per step,
-  reuses cached per-prompt losses, beats raw uniform `u32` at 200 steps
-  (`0.5900` vs `0.3350` exact calc), and reaches `0.8600` calc / `0.8750`
-  sampled normal after an 800+200 retention gate.
-- A lower-cost assignment method only if it changes scalability of the
-  successful hard-assignment branch, not merely another proxy selector.
+  the first useful approximation. With cached per-prompt losses, `u8_m24`
+  beats raw uniform `u32` at 200 steps (`0.5900` vs `0.3350` exact calc) and
+  retains `0.8600` calc / `0.8750` sampled normal after an 800+200 gate. A
+  lower-budget `u2_m30` point improves the 200-step gate to `0.6025` calc /
+  `0.6016` sampled normal, but retains less strongly (`0.7850` calc /
+  `0.7656` normal).
+- Lower-cost assignment is useful only when it changes scalability, not merely
+  proxy selection.
 
 ## Paused Or Deprioritized Branches
 
@@ -157,9 +159,10 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Stress-test replay-memory local targets for scalability: lower fresh scoring
-   budgets, reset/age stale memories, and test whether the proposal generalizes
-   beyond a fixed exhaustive grid. This is promising but still transductive.
+1. Stress-test replay-memory beyond fixed-grid transduction: reset/age stale
+   memories, rescore cached candidates, and test generalization beyond prompt
+   identities. The lower fresh-score curve is positive through `u2`; `u1`
+   weakens.
 2. In parallel, keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. If trying to reduce hard-assignment cost, state the scalability hypothesis
@@ -193,5 +196,4 @@ Write or update a `researchReviews/` memo after any of the following:
 - A branch produces a result that changes the active strategic bet.
 - The next proposed task feels like another local variant of a paused family.
 
-The review must answer what changed, what should stop, what deserves compute,
-and whether the project is closer to the overarching goal.
+The review must answer what changed, what should stop, what deserves compute, and whether the project is closer to the overarching goal.
