@@ -4721,3 +4721,48 @@ Interpretation:
   better local selector.
 - This is not yet scalable enough as a final method, but it is a validated
   source-selection target and a practical benchmark for cheaper proxies.
+
+## 2026-05-29 Handoff Probe Selector on `src4`
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-sixty-first-task-Handoff-probe-selector-src4.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_handoff_probe_selector_src4
+```
+
+Question:
+
+Can the 600-step handoff probe find a better `src4` source checkpoint than the
+weak final-source handoff?
+
+Result:
+
+| Setup | Source normal | Normal @ 400 | Normal @ 600 | Normal @ 800 | Final injection-zero | Final oracle | Final calc | Final eval |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| final-source old baseline | `0.8700` | `0.2400` | `0.2675` | `0.3150` | `0.0000` | `0.3125` | `0.8725` | `0.3025` |
+| final-source continued old baseline | `0.8700` | `0.4975` | `0.5300` | `0.5675` | `0.0025` | `0.5725` | `0.8725` | `0.6050` |
+| step `1000` probe | `0.8150` | `0.3875` | `0.5450` | n/a | `0.0025` | `0.5325` | `0.8075` | `0.5225` |
+| step `1200` probe | `0.7550` | `0.5450` | `0.6250` | n/a | `0.0000` | `0.6075` | `0.7875` | `0.6425` |
+| step `1200` full | `0.7550` | `0.5450` | `0.6250` | `0.7625` | `0.0000` | `0.7650` | `0.7775` | `0.7800` |
+
+Decision:
+
+```text
+bottleneck_to_additive_handoff_probe_selector_src4_positive
+```
+
+Interpretation:
+
+- The 600-step probe selected `src4` step `1200`, despite much lower source
+  normal/calculator accuracy than the final checkpoint.
+- Full transfer confirmed the selection: `0.7800` final eval versus old
+  final-source `0.3025`.
+- This also beats the old continued final-source baseline `0.6050`.
+- The result reinforces that source handoff quality is not source action
+  accuracy; the useful selector is downstream handoff geometry.

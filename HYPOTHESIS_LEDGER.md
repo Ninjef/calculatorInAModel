@@ -315,3 +315,9 @@ Conclusion: On `src5`, the 600-step probe selected step `1100` (source normal `0
 Do not repeat: Same `src5` step `1100/1400/1500/final`, additive seed `5`, frozen-policy handoff-probe comparison as novelty.
 Next allowed test: Use the 600-step handoff probe on newly acquired source checkpoints, reduce/approximate its cost, or optimize source acquisition for probe score.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-handoff-probe-selector-validation.md`
+
+POSITIVE: The 600-step handoff probe rescues weak `src4` source selection.
+Conclusion: Reproduced `src4` with snapshots; 600-step probe selected step `1200` (source normal `0.7550`) over final (`0.8700`), and full frozen handoff improved from old final-source `0.3025` to `0.7800`.
+Do not repeat: Same `src4` step `1000/1200/final`, additive seed `2`, frozen-policy handoff-probe comparison as novelty.
+Next allowed test: Use probe score during source acquisition, reduce probe cost, or test whether probe-selected sources reduce later anchor/long-adaptation needs.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-handoff-probe-selector-src4.md`
