@@ -5417,3 +5417,69 @@ Interpretation:
 - Pure decay-to-zero source stabilization is a dead end here. If these terms
   are reused, keep a nonzero floor, add anchoring, or optimize directly for a
   handoff/continuation proxy.
+
+## 2026-05-29 Source Acquisition Stabilization Floor
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-seventy-fifth-task-Source-acquisition-stabilization-floor.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_source_acquisition_stabilization_floor
+```
+
+Question:
+
+Does keeping entropy/diversity/improvement-assignment source stabilization
+active prevent the decay-to-zero collapse, and does the resulting source
+transfer into additive non-bottleneck handoff?
+
+Setup:
+
+- Current direct-feedback result-space bottleneck source recipe.
+- `result_policy_entropy_weight=0.05`,
+  `result_policy_batch_diversity_weight=0.1`, and
+  `result_policy_improvement_assignment_weight=10`.
+- `result_policy_stabilization_decay_steps=0`, exact-grid natural `0..19`,
+  frozen product semantic decoder, CLI seed `9`, 1600 source steps.
+- 800-step frozen-policy additive handoffs from source step `1400` and final
+  weights.
+
+Source result:
+
+| Step | Source normal | Injection-zero | Oracle | Learned calc |
+| --- | ---: | ---: | ---: | ---: |
+| `1200` | `0.8250` | `0.0525` | `1.0000` | `0.8250` |
+| `1400` | `0.9100` | `0.0650` | `1.0000` | `0.9100` |
+| `1500` | `0.8800` | `0.0400` | `1.0000` | `0.8800` |
+| `1600` | `0.8650` | `0.0400` | `1.0000` | `0.8650` |
+| final eval | `0.8575` | `0.0078` | `1.0000` | `0.8750` |
+
+Handoff result:
+
+| Candidate | Source normal | Normal @ 600 | Normal @ 800 | Final eval | Injection-zero | Forced-random | Oracle | Calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| step `1400` | `0.9100` | `0.4575` | `0.5200` | `0.4425` | `0.0078` | `0.0625` | `0.5234` | `0.8828` |
+| final | `0.8575` | `0.5250` | `0.7025` | `0.6500` | `0.0000` | `0.0859` | `0.7422` | `0.8750` |
+
+Decision:
+
+```text
+source_acquisition_entropy_diversity_nodecay_source_positive_transfer_negative
+```
+
+Interpretation:
+
+- Keeping the source objective active prevents the previous collapse.
+- High bottleneck source accuracy still does not imply additive handoff
+  quality: step `1400` had the best source normal (`0.9100`) but transferred
+  worse than final (`0.4425` vs `0.6500`).
+- The best handoff is below the recent weak `src7` handoff (`0.7325`) whose
+  full continuation/readout chain still missed the `0.90` gate, so downstream
+  continuation/readout was intentionally skipped.
+- Source acquisition needs a handoff/continuation-aware objective or proxy,
+  not only persistent entropy/diversity pressure.

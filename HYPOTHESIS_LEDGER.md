@@ -399,3 +399,9 @@ Conclusion: Fresh seed-9 source acquisition with entropy `0.05`, batch diversity
 Do not repeat: Same decay-to-zero source-only recipe with answer loss off as novelty.
 Next allowed test: Keep a nonzero source-objective floor, add policy anchoring, or optimize source acquisition for 600-step handoff/continuation slope.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-source-acquisition-stabilization-variant.md`
+
+MIXED-NEGATIVE: Keeping entropy/diversity source stabilization active fixes collapse and yields handoff-friendly geometry.
+Conclusion: No-decay entropy `0.05` + batch diversity `0.1` + improvement assignment `10` reached source step `1400` normal `0.9100` and final eval `0.8575`, but additive handoffs reached only `0.4425` from step `1400` and `0.6500` from final.
+Do not repeat: Same no-decay source recipe plus step `1400`/final additive seed-9 handoff comparison as novelty.
+Next allowed test: Add a handoff/continuation proxy to source acquisition, or inspect/anchor geometry that predicts additive transfer rather than source normal accuracy.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-source-acquisition-stabilization-floor.md`
