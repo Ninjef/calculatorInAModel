@@ -186,3 +186,25 @@ Updated steering: source final eval is not enough to judge transition quality,
 and the simple adaptive trigger deserves replication or smoothing before it
 becomes the default. Keep using trusted handoff controls as the arbiter; do not
 rerun the same seed-14 threshold as novelty.
+
+## Addendum: Fresh Adaptive Trigger Replication
+
+The seed-14 adaptive result did not replicate with raw source-accuracy
+thresholding:
+
+- On fresh seed 17, `result_policy_argmax_result_accuracy >= 0.65` with min
+  step `500` never fired.
+- The no-trigger source ended at `0.6100`; its trusted 600-step handoff reached
+  only `0.6825` final eval / `0.6925` step-600 snapshot, with injection-zero
+  `0.0400`, forced-random `0.0500`, and learned calc `0.6075`.
+- A matched fixed step-600 recovery control improved source final to `0.7450`
+  and handoff to `0.7675` final eval / `0.7850` snapshot, with injection-zero
+  `0.0500`, forced-random `0.0375`, and learned calc `0.7350`.
+- The fixed-step control still missed the high non-bottleneck gate, so this
+  seed is harder overall, but the adaptive threshold also failed to activate a
+  useful late phase.
+
+Updated steering: raw source-argmax thresholding is not validated. The next
+adaptive transition should use smoothing, patience, a conjunction with
+geometry/loss, or another trigger family; otherwise return to scalable
+assignment work rather than tuning this exact threshold.

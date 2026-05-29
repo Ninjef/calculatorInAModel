@@ -231,6 +231,12 @@ Memory:
   forced-random) and lower source final eval (`0.8250`), so it needs fresh-seed
   replication or a smoother/conjunctive trigger before treating it as a
   validated selector.
+- The fresh-seed replication was negative for raw source-accuracy thresholding:
+  on seed `17`, the same `>=0.65` trigger never fired, source final eval was
+  `0.6100`, and trusted 600-step handoff reached only `0.6825`. A matched fixed
+  step-600 control did better (`0.7450` source, `0.7675` handoff) but still
+  missed the high gate. Do not treat raw argmax source accuracy as a validated
+  adaptive transition criterion.
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -250,6 +256,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-fresh-scheduled-source-recovery-replication.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-automated-scheduled-source-recovery.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-adaptive-source-recovery-trigger.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-fresh-adaptive-recovery-trigger-replication.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 
 ## Direction: Target Propagation / Local Targets

@@ -6942,3 +6942,49 @@ Interpretation:
 - Controls worsened versus the fixed-step handoff (`0.1325`/`0.1325` vs
   `0.0800`/`0.0775`), so this is promising but not validated as the default
   selector.
+
+## 2026-05-29 Fresh Adaptive Recovery Trigger Replication
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-fresh-adaptive-recovery-trigger-replication.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_scheduled_source_adaptive_recovery_replication/seed17_adaptive_acc065_steps631_cpu
+runs/2026-05-29_phase7_scheduled_source_adaptive_recovery_replication/seed17_handoff600_from_adaptive_acc065_no_trigger_cpu
+runs/2026-05-29_phase7_scheduled_source_adaptive_recovery_replication/seed17_fixed_step600_recovery_steps631_cpu
+runs/2026-05-29_phase7_scheduled_source_adaptive_recovery_replication/seed17_handoff600_from_fixed_step600_cpu
+```
+
+Question:
+
+Does the simple source-argmax adaptive recovery trigger replicate on a fresh
+seed, and how does it compare with the fixed step-600 control on the same seed?
+
+Results:
+
+| Run | Source final | Handoff final / step-600 normal | Injection-zero | Forced-random | Learned calc | Notes |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| adaptive `argmax >= 0.65`, min step 500 | `0.6100` | `0.6825` / `0.6925` | `0.0400` | `0.0500` | `0.6075` | trigger never fired; final forced-true weight stayed `0.5` |
+| fixed step-600 recovery | `0.7450` | `0.7675` / `0.7850` | `0.0500` | `0.0375` | `0.7350` | LR multiplier `0.1`, forced-true weight `0.1` after step 600 |
+
+Decision:
+
+```text
+fresh_adaptive_source_accuracy_trigger_replication_negative
+```
+
+Interpretation:
+
+- The raw `result_policy_argmax_result_accuracy >= 0.65` trigger did not
+  replicate: it never fired on this fresh source, and the final source and
+  handoff were weak.
+- The fixed step-600 control did better on the same seed, so the failure is at
+  least partly a trigger problem rather than only a bad seed.
+- Even fixed step-600 missed the high non-bottleneck gate on this seed, so the
+  late recovery branch still needs either a stronger transition signal or a
+  more robust source-acquisition objective.
