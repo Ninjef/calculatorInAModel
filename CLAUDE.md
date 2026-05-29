@@ -532,6 +532,18 @@ constant `0.1` and slightly worse on final eval. Behavior gating is useful
 infrastructure for adaptive retention; this simple threshold is not yet better
 than a fixed lightweight anchor.
 
+A calculator-accuracy-gated anchor sweep was then tested:
+`bottleneck_to_additive_accuracy_gated_anchor_mixed_no_go`. With base anchor
+`0.01`, gate metric `current_argmax_accuracy`, gate weight `0.1`, and
+thresholds `0.80` and `0.82`, the gate behaved adaptively but did not beat the
+fixed `0.1` anchor across both weak-source handoff cells. `src5_add5` reached
+`0.9825` final eval at both thresholds with final calculator accuracy around
+`0.79`, slightly above the fixed `0.1` answer result. But `src4_add2` reached
+only `0.7725`/`0.7900` final eval with best normal `0.7975`/`0.8075`, below
+the fixed `0.1` anchor result (`0.8325` final eval). The simple discrete
+accuracy gate is therefore threshold-sensitive useful infrastructure, not a
+better retention recipe.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -674,6 +686,11 @@ Do not rerun these as next steps unless debugging new code:
   `0.1`, gate metric `argmax_agreement`, LR `3e-4`, and 400-step full
   unfreeze from the adapted `src4_add2` or `src5_add5` checkpoints as novelty.
   It improved over constant `0.01` but did not beat constant `0.1`.
+- calculator-accuracy-gated anchor with base `0.01`, gate thresholds `0.80`
+  or `0.82`, gate weight `0.1`, gate metric `current_argmax_accuracy`, LR
+  `3e-4`, and 400-step full unfreeze from the adapted `src4_add2` or
+  `src5_add5` checkpoints as novelty. It behaved adaptively and helped
+  `src5`, but did not beat constant `0.1` across both cells.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -690,8 +707,9 @@ loss-gap hinge, seed replication/unfreeze schedules for the frozen-policy
 bottleneck-to-additive handoff that specifically changes source checkpoint
 selection, downstream adaptation beyond just one longer continuation, or
 unfreezing with calculator-accuracy-gated retention, an adaptive floor around
-the `0.1` anchor-strength region, or a more restrictive selective parameter set
-than freezing the action head alone,
+the `0.1` anchor-strength region, continuous rather than discrete behavior
+control, a more restrictive selective parameter set than freezing the action
+head alone,
 a Jacobian-conditioned state more substantial than the result-output
 `J^T answer_grad` feature, or a richer target construction that remains valid
 after upstream movement.

@@ -4130,3 +4130,68 @@ Interpretation:
 - Next adaptive-retention work should test a better metric, continuous weight
   control, or coupling to calculator-result accuracy rather than repeating
   this exact gate.
+
+## 2026-05-29 Bottleneck-to-Additive Accuracy-Gated Anchor Sweep
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-fiftieth-task-Bottleneck-to-additive-accuracy-gated-anchor.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_bottleneck_to_additive_transfer_policy_anchor_accuracy_gated_unfreeze
+```
+
+Question:
+
+Does gating the anchor on actual current calculator-result accuracy preserve
+the useful low-average-weight behavior while responding to the metric that
+matters directly?
+
+Configuration:
+
+- Continued from the adapted weak-source checkpoints.
+- Loaded with `--semantic-decoder-checkpoint-load-scope full_model`.
+- Removed `--freeze-calculator-policy`.
+- global LR `3e-4`;
+- base `--result-policy-anchor-weight 0.01`;
+- `--result-policy-anchor-mode kl`;
+- `--result-policy-anchor-gate-metric current_argmax_accuracy`;
+- `--result-policy-anchor-gate-threshold 0.80` or `0.82`;
+- `--result-policy-anchor-gate-weight 0.1`;
+- answer loss weight `1`;
+- exact-grid natural `0..19`;
+- 400 steps.
+
+Result:
+
+| Run | Frozen adapted final | Anchor-0.1 final | Accuracy-gated final | Best normal | Final injection-zero | Final forced-random | Final oracle | Final calc | Final agreement | Gate active rows | Mean effective weight |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` gate `0.80` | `0.6050` | `0.8325` | `0.7725` | `0.7975` at `400` | `0.0500` | `0.1150` | `0.8200` | `0.8100` | `0.8525` | `0/9` | `0.0100` |
+| `src5_add5` gate `0.80` | `0.8175` | `0.9750` | `0.9825` | `0.9625` at `400` | `0.0000` | `0.0550` | `0.9175` | `0.7900` | `0.9125` | `8/9` | `0.0900` |
+| `src4_add2` gate `0.82` | `0.6050` | `0.8325` | `0.7900` | `0.8075` at `150` | `0.0775` | `0.1075` | `0.8500` | `0.8000` | `0.9025` | `4/9` | `0.0500` |
+| `src5_add5` gate `0.82` | `0.8175` | `0.9750` | `0.9825` | `0.9675` at `400` | `0.0000` | `0.0525` | `0.9175` | `0.7900` | `0.9200` | `8/9` | `0.0900` |
+
+Decision:
+
+```text
+bottleneck_to_additive_accuracy_gated_anchor_mixed_no_go
+```
+
+Interpretation:
+
+- The accuracy gate mechanically worked and produced distinct retention
+  patterns. Threshold `0.80` never boosted `src4`; threshold `0.82` boosted
+  `src4` intermittently; both boosted `src5` on `8/9` logged rows.
+- `src5_add5` slightly beat the fixed `0.1` anchor on final eval
+  (`0.9825` vs `0.9750`) while keeping injection-zero at `0.0`.
+- `src4_add2` did not beat fixed `0.1`: best/final answer accuracy remained
+  below `0.8325`, even though final calculator accuracy stayed around
+  `0.80-0.81`.
+- Simple discrete accuracy thresholds are therefore not a better retention
+  recipe across weak-source cells. Future work should use continuous/adaptive
+  anchor control, combine calculator accuracy with answer utility, change the
+  selective-unfreeze parameter set, or improve source-policy acquisition.

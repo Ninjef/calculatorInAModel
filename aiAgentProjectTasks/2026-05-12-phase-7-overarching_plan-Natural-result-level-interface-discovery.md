@@ -1586,3 +1586,37 @@ The gate improved policy retention over constant anchor `0.01`, especially for
 `src5_add5`, but did not beat constant anchor `0.1` in this two-cell gate. It
 is useful infrastructure for adaptive retention, but this simple threshold
 gate is not itself a better training recipe.
+
+## Status Update: 2026-05-29, Bottleneck-to-Additive Accuracy-Gated Anchor
+
+Calculator-accuracy-gated anchoring produced a mixed no-go:
+
+```text
+bottleneck_to_additive_accuracy_gated_anchor_mixed_no_go
+```
+
+Experiment:
+
+- Same adapted weak-source checkpoints.
+- Full policy unfreeze, LR `3e-4`.
+- Base KL anchor `0.01`.
+- Gate metric `current_argmax_accuracy`.
+- Gate thresholds `0.80` and `0.82`.
+- Gate weight `0.1`.
+- 400 steps.
+
+| Run | Final eval | Best normal | Final calc | Final injection-zero | Final anchor agreement | Gate active rows | Mean effective weight |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` acc gate `0.80` | `0.7725` | `0.7975` at `400` | `0.8100` | `0.0500` | `0.8525` | `0/9` | `0.0100` |
+| `src5_add5` acc gate `0.80` | `0.9825` | `0.9625` at `400` | `0.7900` | `0.0000` | `0.9125` | `8/9` | `0.0900` |
+| `src4_add2` acc gate `0.82` | `0.7900` | `0.8075` at `150` | `0.8000` | `0.0775` | `0.9025` | `4/9` | `0.0500` |
+| `src5_add5` acc gate `0.82` | `0.9825` | `0.9675` at `400` | `0.7900` | `0.0000` | `0.9200` | `8/9` | `0.0900` |
+
+The calculator-accuracy gate behaved as intended: `src4` used little or
+intermittent retention depending on threshold, while `src5` boosted most
+logged rows. But the two-cell result still did not beat fixed anchor `0.1`
+across both cells: `src5` slightly improved final eval, while `src4` remained
+below the fixed-anchor answer result. The next retention idea should move
+beyond simple discrete thresholds, for example continuous/adaptive control,
+selective policy-path unfreezing, or a signal that combines calculator-result
+accuracy with answer utility.

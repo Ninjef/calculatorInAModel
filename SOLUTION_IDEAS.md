@@ -342,6 +342,13 @@ weight and jump when anchor agreement falls below a threshold. A first gate
 (`0.01`, agreement `<0.9 -> 0.1`) improved over constant `0.01`, but did not
 beat constant `0.1`. The knob is useful, but the gate needs a smarter metric or
 continuous schedule to matter.
+Calculator-accuracy-gated anchoring was the first smarter metric test. It
+behaved adaptively, and `src5_add5` reached `0.9825` final eval, but
+thresholds `0.80/0.82` still left `src4_add2` below the fixed `0.1` anchor
+result. Do not keep sweeping simple discrete thresholds as if that alone is
+the recipe; the next retention idea should be continuous/adaptive, combine
+calculator accuracy with answer utility, or change which policy-path
+parameters are allowed to move.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 
