@@ -458,6 +458,18 @@ from-scratch solution because it anchors a staged policy, but it shows that
 controlled unfreezing can improve non-bottleneck handoff if policy retention
 is explicitly protected.
 
+The first anchor off-ramp was negative:
+`bottleneck_to_additive_anchor_decay_offramp_negative`. Keeping the same
+adapted weak-source checkpoints, LR `3e-4`, and full policy unfreeze, but
+linearly decaying the KL anchor from `10` to `0` over the first `200` of `400`
+steps caused post-shutoff drift. At step `200`, the transferred policies were
+still usable (`src4_add2` calc `0.8300`, `src5_add5` calc `0.8225`), but by
+the final checkpoint they fell to `0.5950` and `0.3850`. Final eval was
+`0.5925` for `src4_add2` and `0.6750` for `src5_add5`, worse than the
+constant-anchor partial positive and, for `src5_add5`, worse than the frozen
+adapted baseline. The anchor can protect unfreezing while present; this
+decay schedule does not yet create a self-sustaining non-bottleneck policy.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -577,6 +589,10 @@ Do not rerun these as next steps unless debugging new code:
   the adapted `src4_add2` or `src5_add5` checkpoints as novelty. This is now
   a partial positive; next anchored-unfreeze work should vary anchor schedule,
   selective unfreezing, or source acquisition.
+- result-policy KL anchor weight `10` decayed linearly to zero over `200`
+  steps, LR `3e-4`, 400-step full unfreeze from the adapted `src4_add2` or
+  `src5_add5` checkpoints as novelty. It lost calculator-result accuracy after
+  anchor shutoff.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -592,7 +608,8 @@ bottleneck-to-additive handoff that is stronger than a plain zero-injection
 loss-gap hinge, seed replication/unfreeze schedules for the frozen-policy
 bottleneck-to-additive handoff that specifically changes source checkpoint
 selection, downstream adaptation beyond just one longer continuation, or
-unfreezing with a different policy-retention schedule/selective parameter set,
+unfreezing with a slower/floored/gated policy-retention schedule or selective
+parameter set,
 a Jacobian-conditioned state more substantial than the result-output
 `J^T answer_grad` feature, or a richer target construction that remains valid
 after upstream movement.

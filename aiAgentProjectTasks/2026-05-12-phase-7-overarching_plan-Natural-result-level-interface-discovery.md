@@ -1417,3 +1417,26 @@ non-bottleneck adaptation. It is not final success because the method is still
 staged and anchored to a learned policy. Next work should test anchor decay or
 off-ramp schedules, selective unfreezing, or less prescriptive source-policy
 training.
+
+## Status Update: 2026-05-28, Bottleneck-to-Additive Anchor Decay Off-Ramp
+
+A fast anchor off-ramp failed:
+
+```text
+bottleneck_to_additive_anchor_decay_offramp_negative
+```
+
+Using the same adapted weak-source checkpoints, full policy unfreeze, LR
+`3e-4`, and KL anchor weight `10`, I linearly decayed the anchor to zero over
+the first `200` of `400` steps.
+
+| Run | Step-200 calc | Final calc | Final eval | Best normal | Final injection-zero |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` decay200 | `0.8300` | `0.5950` | `0.5925` | `0.7250` at `250` | `0.0325` |
+| `src5_add5` decay200 | `0.8225` | `0.3850` | `0.6750` | `0.9575` at `200` | `0.0375` |
+
+The policy was still useful when the anchor reached zero, but drifted during
+the no-anchor tail. This means the constant-anchor result was a real retention
+constraint, not just a temporary optimization aid that can be removed after
+200 steps. Next unfreezing work should test slower/floored/gated anchors or a
+selective parameter set rather than repeating the same fast decay.

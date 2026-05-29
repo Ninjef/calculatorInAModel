@@ -3763,3 +3763,59 @@ Interpretation:
 - This is still not the final project goal because it uses a staged and
   anchored policy. Next work should test an anchor off-ramp/decay, selective
   unfreezing, or less prescriptive source-policy acquisition.
+
+## 2026-05-28 Bottleneck-to-Additive Anchor Decay Off-Ramp Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-forty-fourth-task-Bottleneck-to-additive-anchor-decay-offramp.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_bottleneck_to_additive_transfer_policy_anchor_decay_unfreeze
+```
+
+Question:
+
+Can the constant-anchor controlled-unfreeze result become self-sustaining if
+the KL anchor is removed halfway through training?
+
+Configuration:
+
+- Continued from the adapted weak-source checkpoints.
+- Loaded with `--semantic-decoder-checkpoint-load-scope full_model`.
+- Removed `--freeze-calculator-policy`.
+- global LR `3e-4`;
+- `--result-policy-anchor-weight 10`;
+- `--result-policy-anchor-decay-steps 200`;
+- `--result-policy-anchor-mode kl`;
+- answer loss weight `1`;
+- exact-grid natural `0..19`;
+- 400 steps.
+
+Result:
+
+| Run | Frozen adapted final | Constant-anchor final | Decay final | Decay best normal | Step-200 calc | Final calc | Final anchor agree | Final injection-zero | Final forced-random | Final oracle |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` decay200 | `0.6050` | `0.7475` | `0.5925` | `0.7250` at `250` | `0.8300` | `0.5950` | `0.6200` | `0.0325` | `0.0975` | `0.7400` |
+| `src5_add5` decay200 | `0.8175` | `0.9525` | `0.6750` | `0.9575` at `200` | `0.8225` | `0.3850` | `0.4300` | `0.0375` | `0.0800` | `0.7925` |
+
+Decision:
+
+```text
+bottleneck_to_additive_anchor_decay_offramp_negative
+```
+
+Interpretation:
+
+- The policies were still useful when the anchor reached zero at step `200`.
+- During the following no-anchor tail, both policies drifted substantially;
+  the final calculator-result accuracy was much worse than constant anchoring.
+- Constant anchoring is therefore doing real policy-retention work. A fast
+  linear off-ramp is not enough to make the adapted non-bottleneck calculator
+  policy self-sustaining.
+- Next work should test slower/floored/gated anchors, selective unfreezing, or
+  less prescriptive source-policy acquisition rather than repeating this decay.

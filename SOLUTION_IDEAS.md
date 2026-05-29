@@ -313,6 +313,11 @@ weight `10`, `src4_add2` improved to `0.7475` final eval and `src5_add5`
 improved to `0.9525`, while learned calculator-result accuracy stayed around
 `0.80`. This is still staged and anchored, but it is a concrete path for
 adapting a non-bottleneck calculator without immediately destroying the policy.
+A fast off-ramp did not work: decaying that anchor from `10` to `0` over
+`200/400` unfreeze steps left the policies usable at shutoff, but final
+calculator-result accuracy fell to `0.5950` and `0.3850`. Future anchor work
+should use slower/floored/gated schedules or selective unfreezing, not assume
+that the policy becomes self-sustaining once downstream readout improves.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

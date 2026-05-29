@@ -219,3 +219,9 @@ Conclusion: KL anchor weight `10` at LR `3e-4` preserved learned calc (`0.8075/0
 Do not repeat: Same adapted `src4_add2/src5_add5`, anchor weight `10`, LR `3e-4`, 400-step KL-anchor full unfreeze as novelty.
 Next allowed test: Anchor decay/off-ramp, selective unfreeze, source checkpoint selection, or less prescriptive source-policy acquisition.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-policy-anchor-unfreeze.md`
+
+DISPROVEN: A fast KL-anchor off-ramp makes the adapted non-bottleneck policy self-sustaining.
+Conclusion: Decaying anchor weight `10 -> 0` over the first `200/400` unfreeze steps preserved calc accuracy at shutoff (`0.8300/0.8225`) but final calc fell to `0.5950/0.3850`, with final eval `0.5925/0.6750`.
+Do not repeat: Same adapted `src4_add2/src5_add5`, anchor weight `10`, decay `200`, LR `3e-4`, 400-step full unfreeze as novelty.
+Next allowed test: Slower or floored anchor schedules, calculator-accuracy-gated unfreezing, selective unfreeze, or a source policy that is robust without anchoring.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-anchor-decay-offramp.md`
