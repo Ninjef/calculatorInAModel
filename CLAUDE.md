@@ -764,6 +764,11 @@ Do not rerun these as next steps unless debugging new code:
   It weakened source acquisition (`0.6750` final eval) and did not improve
   additive transfer: step `1200` handoff reached only `0.3425` at 600 steps
   and `0.3000` final eval.
+- simple leave-family-out ridge selection over early additive handoff trace
+  features as novelty. Across `21` deduped candidates and `8` source families,
+  it reached only `3/8`, `4/8`, `3/8`, and `5/8` winner accuracy at
+  prediction steps `200/300/400/500`; raw early exact matched or beat it at
+  every step.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -785,6 +790,7 @@ control, a more restrictive selective parameter set than freezing the action
 head alone,
 source acquisition optimized against actual 500/600-step additive handoff
 behavior rather than lower assignment-weight sweeps alone,
+logging-only in-training additive handoff probes for source checkpoints,
 a Jacobian-conditioned state more substantial than the result-output
 `J^T answer_grad` feature, or a richer target construction that remains valid
 after upstream movement.

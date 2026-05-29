@@ -384,6 +384,11 @@ on hostile seed `10`, weight `5` weakened source acquisition to `0.6750`
 final eval and its best tested additive handoff reached only `0.3425` at
 600 steps. Future source work should train or select for actual 500/600-step
 handoff behavior, not just soften the existing assignment objective.
+A first learned selector audit also failed to replace the handoff gate:
+leave-family-out ridge over early handoff trace features reached only `5/8`
+winner accuracy even at step `500`, below raw early exact at `6/8`. The next
+practical source-acquisition tool should log the real additive handoff probe
+during source training on cloned state, then select checkpoints by that score.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

@@ -5967,3 +5967,64 @@ Interpretation:
 - Do not sweep lower assignment weights as the next source-stability plan.
   Optimize or select sources against actual 500/600-step handoff behavior, or
   add a direct source-training term for handoff/readout geometry.
+
+## 2026-05-29 Handoff Trace Learned Selector Audit
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-handoff-trace-learned-selector-audit.md
+```
+
+Script:
+
+```text
+scripts/analyze_handoff_trace_selector.py
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_handoff_trace_selector_audit_v2
+```
+
+Question:
+
+Can a simple learned selector trained on existing early additive handoff trace
+features replace the 500/600-step handoff gate?
+
+Setup:
+
+- Auto-discovered initial frozen-policy additive handoff traces under Phase 7
+  run roots.
+- Deduped repeated 600/800 variants of the same candidate.
+- Evaluated `21` candidates across `8` source families:
+  `src2/src4/src5/src6/src7/src9_nodecay/src10_nodecay/src10_improve5`.
+- Trained leave-family-out ridge regressions to predict 600-step handoff
+  exact-match from earlier trace features.
+
+Result:
+
+| Prediction step | Ridge selector | Raw early exact | Calc accuracy |
+| ---: | ---: | ---: | ---: |
+| `200` | `3/8` | `5/8` | `3/8` |
+| `300` | `4/8` | `4/8` | `1/8` |
+| `400` | `3/8` | `4/8` | `3/8` |
+| `500` | `5/8` | `6/8` | `3/8` |
+
+Decision:
+
+```text
+handoff_trace_ridge_selector_negative
+```
+
+Interpretation:
+
+- The simple ridge selector did not beat raw early exact at any audited
+  prediction step.
+- Step `500` remains the most useful cheap trace point, but the learned model
+  still misselected `src6`, `src7`, and `src10_nodecay`.
+- Keep actual 500/600-step handoff exact as the gate for now.
+- The next implementation step should be logging-only in-training additive
+  handoff probes for source checkpoints, not another cheap selector unless it
+  is validated leave-family-out and beats raw early exact.

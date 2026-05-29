@@ -459,3 +459,9 @@ Conclusion: The weight-5 seed-10 source weakened to final eval `0.6750`; its bes
 Do not repeat: Same seed-10 no-decay entropy `0.05`, diversity `0.1`, improvement weight `5`, 1600-step source run or step-1200/final 600-step frozen handoffs as novelty.
 Next allowed test: Optimize source acquisition against actual 500/600-step handoff behavior, add a direct handoff/readout geometry term, or train a learned selector validated against the handoff gate.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-source-assignment-weight5-transfer-probe.md`
+
+DISPROVEN: A simple learned ridge selector over early handoff trace features can replace the 500/600-step handoff gate.
+Conclusion: Leave-family-out ridge over 21 deduped candidates and 8 source families reached `3/8`, `4/8`, `3/8`, and `5/8` winner accuracy at prediction steps `200/300/400/500`; raw early exact matched or beat it at every step and reached `6/8` at step `500`.
+Do not repeat: Same ridge selector over normal/zero/oracle/forced-random/calc early trace features on the current Phase 7 handoff trace dataset as novelty.
+Next allowed test: Add logging-only in-training additive handoff probes, collect more labeled families, or test a richer learned selector only if it beats raw early exact under leave-family-out validation.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-handoff-trace-learned-selector-audit.md`
