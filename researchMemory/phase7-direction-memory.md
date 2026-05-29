@@ -242,6 +242,10 @@ Memory:
   to `0.7225`, and reached `0.7625` trusted 600-step handoff with low controls.
   This mostly matched the fixed step-600 control (`0.7675`) and beat the
   no-trigger source-accuracy branch (`0.6825`), but still missed the high gate.
+- Adding EMA/patience to the forced-loss trigger improved timing on the same
+  hard seed: beta `0.8`, patience `10`, min step `500` fired at step `509`,
+  raised source final to `0.7625`, and improved trusted 600-step handoff to
+  `0.8025` with low forced-random (`0.0325`) but still below the high gate.
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -263,6 +267,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-adaptive-source-recovery-trigger.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-fresh-adaptive-recovery-trigger-replication.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-forced-loss-adaptive-recovery-trigger.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-smoothed-forced-loss-recovery-trigger.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 
 ## Direction: Target Propagation / Local Targets

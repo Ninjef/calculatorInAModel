@@ -114,9 +114,9 @@ Active directions:
   `argmax_result_accuracy >= 0.65` fired at step `528` and improved handoff to
   `0.9850` final eval but with higher zero/random controls (`0.1325`); on a
   fresh seed it never fired, source final was `0.6100`, and handoff reached
-  only `0.6825` while a fixed step-600 control reached `0.7675`. Triggering
-  instead on low forced-true loss fired at step `500` and mostly recovered the
-  fixed-step result (`0.7625` handoff), but still missed the high gate.
+  only `0.6825` while a fixed step-600 control reached `0.7675`. A smoothed
+  forced-true-loss trigger with patience fired at step `509` and improved the
+  hard-seed handoff to `0.8025`, but still missed the high gate.
 - A genuinely different credit-assignment family such as target propagation,
   local targets, or another mechanism that constructs useful calculator-query
   targets without backpropagating through the calculator. The first
@@ -155,10 +155,10 @@ These branches should not continue without a new mechanism:
 ## Next 1-3 Experiments
 
 1. Replace simple one-metric recovery triggers with a more robust transition
-   signal. Source accuracy failed to fire on a fresh seed; forced-true loss
-   fired and matched fixed-step recovery but still missed the high gate. Next
-   try a smoothed/conjunctive trigger or return to scalable assignment work,
-   with trusted 600-step handoff controls as arbiter.
+   signal. Source accuracy failed on a fresh seed; smoothed forced-true loss
+   improved the hard-seed handoff but still missed the high gate. Next try a
+   conjunctive trigger or return to scalable assignment work, with trusted
+   600-step handoff controls as arbiter.
 2. Prototype a target-propagation/local-target style credit-assignment path
    beyond the current exact-grid local-target gates: naive uniform/top-k sparse
    sampling and simple loss-neighborhood expansion are not enough, so the next

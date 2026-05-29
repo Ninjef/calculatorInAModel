@@ -7037,3 +7037,52 @@ Interpretation:
 - It still missed the high non-bottleneck gate, so the branch needs either a
   smoothed/conjunctive trigger or a stronger source objective rather than more
   single-threshold tuning.
+
+## 2026-05-29 Smoothed Forced-Loss Recovery Trigger
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-smoothed-forced-loss-recovery-trigger.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_scheduled_source_adaptive_recovery_replication/seed17_adaptive_forcedloss005_ema08_pat10_steps631_cpu
+runs/2026-05-29_phase7_scheduled_source_adaptive_recovery_replication/seed17_handoff600_from_adaptive_forcedloss005_ema08_pat10_cpu
+```
+
+Question:
+
+Does adding EMA smoothing and patience to the forced-loss trigger improve the
+hard seed-17 recovery/handoff?
+
+Tooling:
+
+- Added `--late-source-recovery-trigger-ema-beta`.
+- Added `--late-source-recovery-trigger-patience`.
+- Logged trigger raw value, smoothed value, count, and trigger step.
+
+Results:
+
+| Seed-17 branch | Source final | Handoff final / step-600 normal | Injection-zero | Forced-random | Learned calc | Trigger |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| raw source-accuracy trigger, no fire | `0.6100` | `0.6825` / `0.6925` | `0.0400` | `0.0500` | `0.6075` | none |
+| raw forced-loss trigger | `0.7225` | `0.7625` / `0.7825` | `0.0450` | `0.0325` | `0.7350` | step `500` |
+| fixed step-600 control | `0.7450` | `0.7675` / `0.7850` | `0.0500` | `0.0375` | `0.7350` | step `600` |
+| forced-loss EMA `0.8`, patience `10` | `0.7625` | `0.8025` / `0.7975` | `0.0625` | `0.0325` | `0.7425` | step `509` |
+
+Decision:
+
+```text
+smoothed_forced_loss_recovery_trigger_mixed_positive
+```
+
+Interpretation:
+
+- Smoothing/patience improved the hard seed over both raw forced-loss and fixed
+  step-600 recovery.
+- It still missed the high non-bottleneck gate, so the next transition test
+  should be conjunctive or the branch should return to scalable assignment
+  rather than another one-metric threshold sweep.

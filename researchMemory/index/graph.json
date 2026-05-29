@@ -476,6 +476,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/096-ema-plus-patience-forced-loss-recovery-improves-the-hard-seed-17-handoff-but-still-misses",
+      "target": "researchMemory/hypotheses/phase7/096-ema-plus-patience-forced-loss-recovery-improves-the-hard-seed-17-handoff-but-still-misses-.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -718,6 +723,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-forced-loss-adaptive-recovery-trigger.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-smoothed-forced-loss-recovery-trigger.md",
       "type": "supported_by"
     },
     {
@@ -1441,6 +1451,13 @@
       "source_path": "researchMemory/hypotheses/phase7/095-forced-true-loss-is-a-better-adaptive-recovery-trigger-than-raw-source-accuracy-on-seed-17.md",
       "status": "MIXED",
       "title": "Forced-true loss is a better adaptive recovery trigger than raw source accuracy on seed 17, but it does not clear the gate."
+    },
+    {
+      "id": "doc/096-ema-plus-patience-forced-loss-recovery-improves-the-hard-seed-17-handoff-but-still-misses",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/096-ema-plus-patience-forced-loss-recovery-improves-the-hard-seed-17-handoff-but-still-misses-.md",
+      "status": "MIXED-POSITIVE",
+      "title": "EMA plus patience forced-loss recovery improves the hard seed-17 handoff but still misses the high gate."
     },
     {
       "id": "doc/phase7-direction-memory",

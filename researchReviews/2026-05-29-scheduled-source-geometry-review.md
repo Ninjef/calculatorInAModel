@@ -227,3 +227,21 @@ Updated steering: forced-true loss is a better adaptive signal than raw source
 accuracy on seed 17, but a single threshold is probably not enough. The next
 transition test should combine maturity signals or shift back toward scalable
 assignment mechanisms.
+
+## Addendum: Smoothed Forced-Loss Trigger
+
+Smoothing and patience improved the hard seed but did not clear the gate:
+
+- Added trigger EMA and patience support to `overfit_one_batch.py`.
+- `additive_forced_true_loss <= 0.05`, EMA beta `0.8`, patience `10`, min step
+  `500` fired at step `509`.
+- Source final eval improved to `0.7625`.
+- The trusted 600-step handoff reached `0.8025` final eval / `0.7975`
+  step-600 snapshot, with injection-zero `0.0625`, forced-random `0.0325`,
+  and learned calc `0.7425`.
+- This beat raw forced-loss trigger (`0.7625` handoff), fixed step-600
+  (`0.7675`), and raw source-accuracy trigger (`0.6825`) on seed 17.
+
+Updated steering: smoothing/patience is useful but still not enough. Do not
+keep tuning one-metric thresholds as novelty; either test a conjunctive
+source-plus-geometry transition or return to scalable assignment mechanisms.

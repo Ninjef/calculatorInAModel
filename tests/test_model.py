@@ -4292,6 +4292,45 @@ def test_late_source_recovery_schedules_override_weight_and_lr() -> None:
     assert overfit_script.late_source_recovery_metric_triggers(
         metric_value=0.2, threshold=0.25, mode="below"
     )
+    smoothed, count, triggered = (
+        overfit_script.late_source_recovery_update_trigger_state(
+            metric_value=0.4,
+            previous_ema=None,
+            consecutive_count=0,
+            threshold=0.5,
+            mode="below",
+            ema_beta=0.5,
+            patience=2,
+        )
+    )
+    assert smoothed == pytest.approx(0.4)
+    assert count == 1
+    assert not triggered
+    smoothed, count, triggered = (
+        overfit_script.late_source_recovery_update_trigger_state(
+            metric_value=0.2,
+            previous_ema=smoothed,
+            consecutive_count=count,
+            threshold=0.5,
+            mode="below",
+            ema_beta=0.5,
+            patience=2,
+        )
+    )
+    assert smoothed == pytest.approx(0.3)
+    assert count == 2
+    assert triggered
+    _, count, triggered = overfit_script.late_source_recovery_update_trigger_state(
+        metric_value=0.9,
+        previous_ema=smoothed,
+        consecutive_count=count,
+        threshold=0.5,
+        mode="below",
+        ema_beta=0.0,
+        patience=2,
+    )
+    assert count == 0
+    assert not triggered
 
 
 def test_result_policy_anchor_penalizes_logit_drift() -> None:

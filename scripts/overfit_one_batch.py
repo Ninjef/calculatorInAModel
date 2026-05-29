@@ -140,6 +140,8 @@ class TrainConfig:
     late_source_recovery_trigger_metric: str
     late_source_recovery_trigger_threshold: float
     late_source_recovery_trigger_mode: str
+    late_source_recovery_trigger_ema_beta: float
+    late_source_recovery_trigger_patience: int
     late_source_recovery_min_step: int
     calculator_causal_gap_weight: float
     calculator_causal_gap_margin: float
@@ -1217,6 +1219,28 @@ def late_source_recovery_metric_triggers(
     if mode == "below":
         return metric_value <= threshold
     raise ValueError(f"unknown late source recovery trigger mode: {mode}")
+
+
+def late_source_recovery_update_trigger_state(
+    *,
+    metric_value: float,
+    previous_ema: float | None,
+    consecutive_count: int,
+    threshold: float,
+    mode: str,
+    ema_beta: float,
+    patience: int,
+) -> tuple[float, int, bool]:
+    smoothed_value = (
+        metric_value
+        if previous_ema is None
+        else (ema_beta * previous_ema) + ((1.0 - ema_beta) * metric_value)
+    )
+    threshold_crossed = late_source_recovery_metric_triggers(
+        metric_value=smoothed_value, threshold=threshold, mode=mode
+    )
+    updated_count = consecutive_count + 1 if threshold_crossed else 0
+    return smoothed_value, updated_count, updated_count >= patience
 
 
 def result_policy_anchor_effective_weight(
@@ -6897,6 +6921,12 @@ def run_variant(
             args.late_source_recovery_trigger_threshold
         ),
         late_source_recovery_trigger_mode=args.late_source_recovery_trigger_mode,
+        late_source_recovery_trigger_ema_beta=(
+            args.late_source_recovery_trigger_ema_beta
+        ),
+        late_source_recovery_trigger_patience=(
+            args.late_source_recovery_trigger_patience
+        ),
         late_source_recovery_min_step=args.late_source_recovery_min_step,
         calculator_causal_gap_weight=args.calculator_causal_gap_weight,
         calculator_causal_gap_margin=args.calculator_causal_gap_margin,
@@ -7466,6 +7496,8 @@ def run_variant(
     )
     adaptive_late_source_recovery_active = False
     adaptive_late_source_recovery_trigger_step: int | None = None
+    adaptive_late_source_recovery_trigger_ema: float | None = None
+    adaptive_late_source_recovery_trigger_count = 0
     model.train()
     for step in range(args.steps + 1):
         fixed_late_source_recovery_active = late_source_recovery_active(
@@ -8046,6 +8078,7 @@ def run_variant(
                 "additive_forced_true_objective"
             ] = additive_forced_true_objective_value
             loss = loss + additive_forced_true_objective
+        late_source_recovery_trigger_raw_value = None
         late_source_recovery_trigger_value = None
         late_source_recovery_triggered_this_step = False
         if (
@@ -8058,7 +8091,7 @@ def run_variant(
                 == "result_policy_argmax_result_accuracy"
                 and result_policy_stabilization_metrics
             ):
-                late_source_recovery_trigger_value = float(
+                late_source_recovery_trigger_raw_value = float(
                     result_policy_stabilization_metrics[
                         "result_policy_argmax_result_accuracy"
                     ]
@@ -8068,14 +8101,25 @@ def run_variant(
                 == "additive_forced_true_loss"
                 and additive_forced_true_loss_value is not None
             ):
-                late_source_recovery_trigger_value = additive_forced_true_loss_value
-            if late_source_recovery_trigger_value is not None and (
-                late_source_recovery_metric_triggers(
-                    metric_value=late_source_recovery_trigger_value,
+                late_source_recovery_trigger_raw_value = additive_forced_true_loss_value
+            if late_source_recovery_trigger_raw_value is not None:
+                (
+                    adaptive_late_source_recovery_trigger_ema,
+                    adaptive_late_source_recovery_trigger_count,
+                    trigger_patience_satisfied,
+                ) = late_source_recovery_update_trigger_state(
+                    metric_value=late_source_recovery_trigger_raw_value,
+                    previous_ema=adaptive_late_source_recovery_trigger_ema,
+                    consecutive_count=adaptive_late_source_recovery_trigger_count,
                     threshold=args.late_source_recovery_trigger_threshold,
                     mode=args.late_source_recovery_trigger_mode,
+                    ema_beta=args.late_source_recovery_trigger_ema_beta,
+                    patience=args.late_source_recovery_trigger_patience,
                 )
-            ):
+                late_source_recovery_trigger_value = (
+                    adaptive_late_source_recovery_trigger_ema
+                )
+            if late_source_recovery_trigger_value is not None and trigger_patience_satisfied:
                 adaptive_late_source_recovery_active = True
                 adaptive_late_source_recovery_trigger_step = step
                 late_source_recovery_triggered_this_step = True
@@ -8262,6 +8306,13 @@ def run_variant(
             if late_source_recovery_trigger_value is not None:
                 curve_row["late_source_recovery_trigger_value"] = (
                     late_source_recovery_trigger_value
+                )
+                curve_row["late_source_recovery_trigger_count"] = (
+                    adaptive_late_source_recovery_trigger_count
+                )
+            if late_source_recovery_trigger_raw_value is not None:
+                curve_row["late_source_recovery_trigger_raw_value"] = (
+                    late_source_recovery_trigger_raw_value
                 )
             if adaptive_late_source_recovery_trigger_step is not None:
                 curve_row["late_source_recovery_trigger_step"] = (
@@ -8946,9 +8997,21 @@ def run_variant(
     metrics["late_source_recovery_trigger_mode"] = (
         args.late_source_recovery_trigger_mode
     )
+    metrics["late_source_recovery_trigger_ema_beta"] = (
+        args.late_source_recovery_trigger_ema_beta
+    )
+    metrics["late_source_recovery_trigger_patience"] = (
+        args.late_source_recovery_trigger_patience
+    )
     metrics["late_source_recovery_min_step"] = args.late_source_recovery_min_step
     metrics["late_source_recovery_trigger_step"] = (
         adaptive_late_source_recovery_trigger_step
+    )
+    metrics["late_source_recovery_final_trigger_ema"] = (
+        adaptive_late_source_recovery_trigger_ema
+    )
+    metrics["late_source_recovery_final_trigger_count"] = (
+        adaptive_late_source_recovery_trigger_count
     )
     metrics["final_late_source_recovery_active"] = (
         late_source_recovery_active(
@@ -9957,6 +10020,24 @@ def parse_args() -> argparse.Namespace:
         help="Trigger when the selected metric is above or below the threshold.",
     )
     parser.add_argument(
+        "--late-source-recovery-trigger-ema-beta",
+        type=float,
+        default=0.0,
+        help=(
+            "EMA beta for adaptive late-source trigger smoothing. The default "
+            "0.0 uses the raw current metric."
+        ),
+    )
+    parser.add_argument(
+        "--late-source-recovery-trigger-patience",
+        type=int,
+        default=1,
+        help=(
+            "Number of consecutive smoothed trigger crossings required before "
+            "activating late source recovery."
+        ),
+    )
+    parser.add_argument(
         "--late-source-recovery-min-step",
         type=int,
         default=0,
@@ -10661,6 +10742,10 @@ def main() -> None:
         )
     if args.late_source_recovery_min_step < 0:
         raise ValueError("--late-source-recovery-min-step must be non-negative")
+    if not 0.0 <= args.late_source_recovery_trigger_ema_beta < 1.0:
+        raise ValueError("--late-source-recovery-trigger-ema-beta must be in [0, 1)")
+    if args.late_source_recovery_trigger_patience < 1:
+        raise ValueError("--late-source-recovery-trigger-patience must be positive")
     if (
         args.late_source_recovery_trigger_metric != "none"
         and args.late_source_recovery_start_step >= 0
@@ -11358,6 +11443,14 @@ def main() -> None:
             suffix_parts.append(args.late_source_recovery_trigger_metric)
             if args.late_source_recovery_min_step > 0:
                 suffix_parts.append(f"laterecovmin{args.late_source_recovery_min_step}")
+            if args.late_source_recovery_trigger_ema_beta > 0:
+                suffix_parts.append(
+                    f"laterecovema{args.late_source_recovery_trigger_ema_beta:g}"
+                )
+            if args.late_source_recovery_trigger_patience > 1:
+                suffix_parts.append(
+                    f"laterecovpat{args.late_source_recovery_trigger_patience}"
+                )
         if args.calculator_causal_gap_weight > 0:
             suffix_parts.append(f"causalgapw{args.calculator_causal_gap_weight:g}")
             suffix_parts.append(f"causalgapm{args.calculator_causal_gap_margin:g}")
@@ -11556,6 +11649,8 @@ def main() -> None:
         f"trigger_metric={args.late_source_recovery_trigger_metric} "
         f"trigger_threshold={args.late_source_recovery_trigger_threshold} "
         f"trigger_mode={args.late_source_recovery_trigger_mode} "
+        f"trigger_ema_beta={args.late_source_recovery_trigger_ema_beta} "
+        f"trigger_patience={args.late_source_recovery_trigger_patience} "
         f"min_step={args.late_source_recovery_min_step}"
     )
     print(
