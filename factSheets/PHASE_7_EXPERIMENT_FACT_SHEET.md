@@ -3878,3 +3878,59 @@ Interpretation:
 - This improves the scalability story for retention regularization, but it is
   still staged and actively anchored. It is not an anchor-free or from-scratch
   non-bottleneck solution.
+
+## 2026-05-28 Bottleneck-to-Additive Anchor Threshold Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-forty-sixth-task-Bottleneck-to-additive-anchor-threshold.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_bottleneck_to_additive_transfer_policy_anchor_threshold_unfreeze
+```
+
+Question:
+
+Is constant KL anchor `0.01` enough to preserve the transferred
+non-bottleneck calculator policy, or is it below the useful retention
+threshold?
+
+Configuration:
+
+- Continued from the adapted weak-source checkpoints.
+- Loaded with `--semantic-decoder-checkpoint-load-scope full_model`.
+- Removed `--freeze-calculator-policy`.
+- global LR `3e-4`;
+- `--result-policy-anchor-mode kl`;
+- anchor weight `0.01`;
+- no anchor decay;
+- answer loss weight `1`;
+- exact-grid natural `0..19`;
+- 400 steps.
+
+Result:
+
+| Run | Frozen adapted final | Anchor-0.1 final | Anchor-0.01 final | Best normal | Final injection-zero | Final forced-random | Final oracle | Final calc | Final anchor agreement |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` anchor `0.01` | `0.6050` | `0.8325` | `0.7850` | `0.7850` at `400` | `0.0050` | `0.1250` | `0.8200` | `0.7625` | `0.8825` |
+| `src5_add5` anchor `0.01` | `0.8175` | `0.9750` | `0.9375` | `0.9250` at `400` | `0.0000` | `0.0950` | `0.9525` | `0.6425` | `0.7050` |
+
+Decision:
+
+```text
+bottleneck_to_additive_anchor_0p01_threshold_mixed
+```
+
+Interpretation:
+
+- Anchor `0.01` avoided the full no-anchor collapse and kept injection-zero
+  near chance, so answers were still calculator dependent.
+- It did not cleanly preserve the transferred policy. Final calculator-result
+  accuracy and anchor agreement were materially worse than with anchor `0.1`,
+  especially for `src5_add5`.
+- Future schedules should treat `0.1` as the first plausible lightweight floor
+  in this setup, not assume anchor weights can be reduced to near zero.

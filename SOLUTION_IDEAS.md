@@ -323,6 +323,11 @@ and `0.1` preserved final calculator-result accuracy around `0.77-0.81` and
 kept injection-zero near chance; the best reduced-strength cells reached
 `0.8325` and `0.9750` final eval. This suggests a retention regularizer may be
 lightweight enough to scale, though it remains staged and active.
+The first threshold probe suggests `0.01` is too weak for clean retention:
+answer accuracy remained useful, but one cell's final calculator-result
+accuracy fell to `0.6425` and anchor agreement to `0.7050`. A practical
+retention schedule should probably floor around the `0.1` region or gate on
+calculator-result accuracy rather than decaying all the way to zero.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

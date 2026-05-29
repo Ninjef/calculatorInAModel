@@ -231,3 +231,9 @@ Conclusion: Anchor weights `1.0` and `0.1` at LR `3e-4` kept final calc near `0.
 Do not repeat: Same adapted `src4_add2/src5_add5`, anchor weights `1.0` or `0.1`, LR `3e-4`, 400-step full unfreeze as novelty.
 Next allowed test: Even weaker/floored/gated anchors, selective unfreeze, or source-policy training that reduces the need for an anchor.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-reduced-anchor-strength.md`
+
+MIXED: Constant KL anchor `0.01` is below the clean policy-retention region.
+Conclusion: Anchor `0.01` kept injection-zero near chance and final eval `0.7850/0.9375`, but final calc fell to `0.7625/0.6425` and anchor agreement to `0.8825/0.7050`.
+Do not repeat: Same adapted `src4_add2/src5_add5`, anchor weight `0.01`, LR `3e-4`, 400-step full unfreeze as novelty.
+Next allowed test: Floored or gated schedules around the `0.1` region, selective unfreezing, or policy acquisition that reduces active anchoring needs.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-anchor-threshold.md`

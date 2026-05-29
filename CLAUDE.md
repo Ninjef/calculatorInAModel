@@ -481,6 +481,18 @@ Injection-zero stayed near chance (`0.0000-0.0250`). This weakens the concern
 that the non-bottleneck handoff requires a very large anchor, but it is still
 not a from-scratch or anchor-free method.
 
+An even weaker anchor threshold test was mixed:
+`bottleneck_to_additive_anchor_0p01_threshold_mixed`. Constant KL anchor
+`0.01` still improved answer accuracy over frozen adapted baselines
+(`src4_add2` final eval `0.7850`, `src5_add5` `0.9375`) and kept
+injection-zero near chance (`0.0050/0.0000`), but calculator policy retention
+was no longer robust. Final calculator-result accuracy was `0.7625` for
+`src4_add2` and only `0.6425` for `src5_add5`, with anchor agreement falling
+to `0.8825/0.7050`. This suggests the useful constant-anchor region is around
+`0.1` or above for these handoff cells; `0.01` is a borderline/lightweight
+regularizer that can preserve causal dependence while allowing significant
+policy drift.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -607,6 +619,10 @@ Do not rerun these as next steps unless debugging new code:
 - result-policy KL anchor weights `1.0` or `0.1`, LR `3e-4`, 400-step full
   unfreeze from the adapted `src4_add2` or `src5_add5` checkpoints as novelty.
   Both preserved useful calculator-result accuracy with low injection-zero.
+- result-policy KL anchor weight `0.01`, LR `3e-4`, 400-step full unfreeze
+  from the adapted `src4_add2` or `src5_add5` checkpoints as novelty. It
+  avoided full collapse but allowed substantial policy drift, especially in
+  `src5_add5`.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -622,8 +638,8 @@ bottleneck-to-additive handoff that is stronger than a plain zero-injection
 loss-gap hinge, seed replication/unfreeze schedules for the frozen-policy
 bottleneck-to-additive handoff that specifically changes source checkpoint
 selection, downstream adaptation beyond just one longer continuation, or
-unfreezing with an even weaker/floored/gated policy-retention schedule or
-selective parameter set,
+unfreezing with a floored/gated policy-retention schedule near the `0.1`
+anchor-strength region or a selective parameter set,
 a Jacobian-conditioned state more substantial than the result-output
 `J^T answer_grad` feature, or a richer target construction that remains valid
 after upstream movement.

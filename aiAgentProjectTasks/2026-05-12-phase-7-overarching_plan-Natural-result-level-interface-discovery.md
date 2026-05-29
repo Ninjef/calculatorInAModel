@@ -1463,3 +1463,24 @@ This shows the active retention term need not be as large as the original
 anchor weight `10`. The result is still staged and anchored, but it makes the
 non-bottleneck handoff more plausible as a scalable training component than a
 large permanent policy lock.
+
+## Status Update: 2026-05-28, Bottleneck-to-Additive Anchor Threshold
+
+Constant anchor `0.01` produced a mixed threshold result:
+
+```text
+bottleneck_to_additive_anchor_0p01_threshold_mixed
+```
+
+The same adapted weak-source checkpoints, full policy unfreeze, LR `3e-4`,
+and no decay were used, but with KL anchor weight `0.01`.
+
+| Run | Final eval | Best normal | Final calc | Final injection-zero | Final anchor agreement |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` anchor `0.01` | `0.7850` | `0.7850` at `400` | `0.7625` | `0.0050` | `0.8825` |
+| `src5_add5` anchor `0.01` | `0.9375` | `0.9250` at `400` | `0.6425` | `0.0000` | `0.7050` |
+
+Anchor `0.01` avoided the full no-anchor collapse and kept answer accuracy
+calculator-dependent, but policy retention was materially weaker than anchor
+`0.1`. This makes anchor `0.1` a more plausible floor for future gated/floored
+retention schedules.
