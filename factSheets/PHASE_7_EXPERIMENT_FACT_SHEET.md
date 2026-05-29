@@ -4945,3 +4945,49 @@ Interpretation:
   final-source long adaptation (`0.7550`).
 - The gain is smaller than for `src5`, but forced-random remains near chance,
   so calculator dependence is retained.
+
+## 2026-05-29 Reduced Readout Budget Validation
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-sixty-sixth-task-Reduced-readout-budget-validation.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_reduced_readout_budget_validation
+```
+
+Question:
+
+Can the selected-source continuation recipe use fewer than 1600 stable-policy
+readout-adaptation steps while keeping calculator-dependent non-bottleneck
+accuracy above `0.90`?
+
+Result:
+
+| Run | Readout steps | Final eval | Best normal | Last injection-zero | Last forced-random | Last oracle | Last calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4` selected continued | `200` | `0.8775` | `0.9025` at `200` | `0.0000` | `0.0225` | `0.8400` | `0.8050` |
+| `src4` selected continued | `600` | `0.9025` | `0.9250` at `500` | `0.0025` | `0.0175` | `0.8625` | `0.8000` |
+| `src4` selected continued reference | `1600` | `0.9125` | `0.9475` at `1400` | `0.0075` | `0.0250` | `0.8825` | `0.8025` |
+| `src5` selected continued | `200` | `0.9275` | `0.9325` at `100` | `0.0000` | `0.0075` | `0.9450` | `0.8000` |
+| `src5` selected continued | `600` | `0.9325` | `0.9525` at `600` | `0.0000` | `0.0250` | `0.9300` | `0.8250` |
+| `src5` selected continued reference | `1600` | `0.9425` | `0.9625` at `800` | `0.0000` | `0.0225` | `0.9600` | `0.8275` |
+
+Decision:
+
+```text
+reduced_readout_budget_600_positive_200_mixed
+```
+
+Interpretation:
+
+- The 200-step stable readout budget is not robust: it passes `src5` but misses
+  the final-eval gate for `src4`.
+- The 600-step budget passes both tested selected lineages and keeps
+  calculator dependence under controls.
+- This cuts the stable readout-adaptation stage from 1600 to 600 steps for the
+  current selected-source continuation recipe.

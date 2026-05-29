@@ -345,3 +345,9 @@ Conclusion: `src4` step-1200 selected handoff improved from `0.7800` to `0.8150`
 Do not repeat: Same `src4` step-1200 selected handoff plus extra 800-step frozen-policy continuation plus no-anchor policy-backbone-frozen 1600-step adaptation as novelty.
 Next allowed test: Reduce handoff-probe/continuation cost, or optimize source acquisition for early handoff and continuation slope.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-src4-selected-source-continuation-fairness.md`
+
+MIXED-POSITIVE: Stable readout adaptation can be cut to 600 steps, but 200 steps is source-sensitive.
+Conclusion: From continued selected checkpoints, 200-step readout worked for `src5` (`0.9275`) but not `src4` (`0.8775`); 600-step readout passed both (`src4 0.9025`, `src5 0.9325`) with injection-zero near zero and forced-random near chance.
+Do not repeat: Same 200/600-step no-anchor policy-backbone-frozen readout adaptation from continued selected `src4` step-1200/add2 and `src5` step-1100/add5 checkpoints as novelty.
+Next allowed test: Reduce the 600-step handoff probe or 800-step frozen-policy continuation cost, or optimize source acquisition for early handoff/continuation slope.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-reduced-readout-budget-validation.md`
