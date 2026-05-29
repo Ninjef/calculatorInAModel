@@ -4442,3 +4442,63 @@ Interpretation:
 - Next work should prioritize source-policy acquisition/selection, stronger
   readout objectives for weak sources, or utility-aware adaptation under stable
   calculator use.
+
+## 2026-05-29 Source Checkpoint Selection Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-fifty-fifth-task-Source-checkpoint-selection-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_source_checkpoint_selection_gate
+```
+
+Question:
+
+Does selecting a better bottleneck source snapshot improve
+bottleneck-to-additive handoff versus using the unstable final weak-source
+checkpoint?
+
+Configuration:
+
+- Reproduced the `src5` bottleneck source with
+  `--checkpoint-every 100`.
+- Source used `calculator_bottleneck_mode=answer_decoder`,
+  `calculator_estimator=direct_feedback_alignment`,
+  `calculator_action_head=result_space`, frozen product semantic decoder, and
+  `result_policy_improvement_assignment_weight=10`.
+- Selected source step `1500` because source normal/calculator accuracy peaked
+  at `0.9200`; final step `1600` dropped to `0.8325`.
+- Transferred selected snapshot into additive `calculator_bottleneck_mode=none`
+  with compatible load, `--freeze-calculator-policy`, answer loss weight `1`,
+  CLI seed `5`, and 800 steps.
+
+Result:
+
+| Setup | Source checkpoint | Source normal | Additive final | Best normal | Final injection-zero | Final oracle | Final calc |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| old `src5_add5` frozen baseline | final source | `0.8325` | `0.5550` | `0.5725` at `800` | `0.0125` | `0.5600` | `0.8000` |
+| selected-snapshot handoff | step `1500` | `0.9200` | `0.6975` | `0.6925` at `800` | `0.0150` | `0.7025` | `0.9000` |
+
+Decision:
+
+```text
+bottleneck_to_additive_source_checkpoint_selection_partial
+```
+
+Interpretation:
+
+- Checkpoint selection is a real lever: the better source snapshot improved the
+  immediate frozen-policy handoff by `+0.1425`.
+- The causal signature stayed calculator-dependent because injection-zero
+  remained near chance while normal/oracle tracked each other.
+- The result is still far below the strong `src2` handoff and below later
+  stable-policy `src5` adaptation, so source normal/calculator accuracy is not
+  a sufficient source-quality metric.
+- Next work should test source-selection metrics beyond action accuracy,
+  source acquisition that produces handoff-friendly representations, or
+  utility-aware downstream/readout adaptation under stable calculator use.
