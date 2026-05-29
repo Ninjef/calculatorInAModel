@@ -318,6 +318,11 @@ A fast off-ramp did not work: decaying that anchor from `10` to `0` over
 calculator-result accuracy fell to `0.5950` and `0.3850`. Future anchor work
 should use slower/floored/gated schedules or selective unfreezing, not assume
 that the policy becomes self-sustaining once downstream readout improves.
+The anchor can be much weaker while still useful. Constant KL anchors `1.0`
+and `0.1` preserved final calculator-result accuracy around `0.77-0.81` and
+kept injection-zero near chance; the best reduced-strength cells reached
+`0.8325` and `0.9750` final eval. This suggests a retention regularizer may be
+lightweight enough to scale, though it remains staged and active.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

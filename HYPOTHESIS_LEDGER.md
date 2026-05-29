@@ -225,3 +225,9 @@ Conclusion: Decaying anchor weight `10 -> 0` over the first `200/400` unfreeze s
 Do not repeat: Same adapted `src4_add2/src5_add5`, anchor weight `10`, decay `200`, LR `3e-4`, 400-step full unfreeze as novelty.
 Next allowed test: Slower or floored anchor schedules, calculator-accuracy-gated unfreezing, selective unfreeze, or a source policy that is robust without anchoring.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-anchor-decay-offramp.md`
+
+PARTIAL: Reduced constant KL anchors can preserve non-bottleneck calculator use.
+Conclusion: Anchor weights `1.0` and `0.1` at LR `3e-4` kept final calc near `0.77-0.81`, final eval `0.7775/0.9925` for weight `1` and `0.8325/0.9750` for weight `0.1`, with injection-zero near chance.
+Do not repeat: Same adapted `src4_add2/src5_add5`, anchor weights `1.0` or `0.1`, LR `3e-4`, 400-step full unfreeze as novelty.
+Next allowed test: Even weaker/floored/gated anchors, selective unfreeze, or source-policy training that reduces the need for an anchor.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-reduced-anchor-strength.md`

@@ -1440,3 +1440,26 @@ the no-anchor tail. This means the constant-anchor result was a real retention
 constraint, not just a temporary optimization aid that can be removed after
 200 steps. Next unfreezing work should test slower/floored/gated anchors or a
 selective parameter set rather than repeating the same fast decay.
+
+## Status Update: 2026-05-28, Bottleneck-to-Additive Reduced Anchor Strength
+
+Reduced constant anchors produced a partial positive:
+
+```text
+bottleneck_to_additive_reduced_anchor_strength_partial
+```
+
+Using the same adapted weak-source checkpoints, full policy unfreeze, LR
+`3e-4`, and no decay, I tested KL anchor weights `1.0` and `0.1`.
+
+| Run | Final eval | Best normal | Final calc | Final injection-zero | Final anchor agreement |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` anchor `1.0` | `0.7775` | `0.7550` at `400` | `0.8050` | `0.0225` | `0.9625` |
+| `src5_add5` anchor `1.0` | `0.9925` | `0.9825` at `400` | `0.7925` | `0.0075` | `0.9625` |
+| `src4_add2` anchor `0.1` | `0.8325` | `0.8275` at `400` | `0.8075` | `0.0250` | `0.9225` |
+| `src5_add5` anchor `0.1` | `0.9750` | `0.9700` at `400` | `0.7725` | `0.0000` | `0.9075` |
+
+This shows the active retention term need not be as large as the original
+anchor weight `10`. The result is still staged and anchored, but it makes the
+non-bottleneck handoff more plausible as a scalable training component than a
+large permanent policy lock.

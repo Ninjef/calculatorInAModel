@@ -470,6 +470,17 @@ constant-anchor partial positive and, for `src5_add5`, worse than the frozen
 adapted baseline. The anchor can protect unfreezing while present; this
 decay schedule does not yet create a self-sustaining non-bottleneck policy.
 
+A reduced-strength constant-anchor sweep was positive:
+`bottleneck_to_additive_reduced_anchor_strength_partial`. With the same
+adapted checkpoints, LR `3e-4`, and full policy unfreeze, constant KL anchors
+of `1.0` and `0.1` both preserved useful calculator policies. Anchor `1.0`
+ended at final eval `0.7775/0.9925` for `src4_add2/src5_add5`, with final
+calculator-result accuracy `0.8050/0.7925`. Anchor `0.1` ended at
+`0.8325/0.9750`, with final calculator-result accuracy `0.8075/0.7725`.
+Injection-zero stayed near chance (`0.0000-0.0250`). This weakens the concern
+that the non-bottleneck handoff requires a very large anchor, but it is still
+not a from-scratch or anchor-free method.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -593,6 +604,9 @@ Do not rerun these as next steps unless debugging new code:
   steps, LR `3e-4`, 400-step full unfreeze from the adapted `src4_add2` or
   `src5_add5` checkpoints as novelty. It lost calculator-result accuracy after
   anchor shutoff.
+- result-policy KL anchor weights `1.0` or `0.1`, LR `3e-4`, 400-step full
+  unfreeze from the adapted `src4_add2` or `src5_add5` checkpoints as novelty.
+  Both preserved useful calculator-result accuracy with low injection-zero.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -608,8 +622,8 @@ bottleneck-to-additive handoff that is stronger than a plain zero-injection
 loss-gap hinge, seed replication/unfreeze schedules for the frozen-policy
 bottleneck-to-additive handoff that specifically changes source checkpoint
 selection, downstream adaptation beyond just one longer continuation, or
-unfreezing with a slower/floored/gated policy-retention schedule or selective
-parameter set,
+unfreezing with an even weaker/floored/gated policy-retention schedule or
+selective parameter set,
 a Jacobian-conditioned state more substantial than the result-output
 `J^T answer_grad` feature, or a richer target construction that remains valid
 after upstream movement.

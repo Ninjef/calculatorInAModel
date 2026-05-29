@@ -3819,3 +3819,62 @@ Interpretation:
   policy self-sustaining.
 - Next work should test slower/floored/gated anchors, selective unfreezing, or
   less prescriptive source-policy acquisition rather than repeating this decay.
+
+## 2026-05-28 Bottleneck-to-Additive Reduced Anchor Strength Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-forty-fifth-task-Bottleneck-to-additive-reduced-anchor-strength.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_bottleneck_to_additive_transfer_policy_anchor_strength_unfreeze
+```
+
+Question:
+
+Does non-bottleneck full-policy unfreeze require a large constant anchor, or
+can a weaker policy-retention term preserve calculator use?
+
+Configuration:
+
+- Continued from the adapted weak-source checkpoints.
+- Loaded with `--semantic-decoder-checkpoint-load-scope full_model`.
+- Removed `--freeze-calculator-policy`.
+- global LR `3e-4`;
+- `--result-policy-anchor-mode kl`;
+- anchor weights `1.0` and `0.1`;
+- no anchor decay;
+- answer loss weight `1`;
+- exact-grid natural `0..19`;
+- 400 steps.
+
+Result:
+
+| Run | Frozen adapted final | Anchor-10 final | Reduced-anchor final | Best normal | Final injection-zero | Final forced-random | Final oracle | Final calc | Final anchor agreement |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` anchor `1.0` | `0.6050` | `0.7475` | `0.7775` | `0.7550` at `400` | `0.0225` | `0.0950` | `0.8025` | `0.8050` | `0.9625` |
+| `src5_add5` anchor `1.0` | `0.8175` | `0.9525` | `0.9925` | `0.9825` at `400` | `0.0075` | `0.0475` | `0.9350` | `0.7925` | `0.9625` |
+| `src4_add2` anchor `0.1` | `0.6050` | `0.7475` | `0.8325` | `0.8275` at `400` | `0.0250` | `0.1100` | `0.8650` | `0.8075` | `0.9225` |
+| `src5_add5` anchor `0.1` | `0.8175` | `0.9525` | `0.9750` | `0.9700` at `400` | `0.0000` | `0.0525` | `0.9150` | `0.7725` | `0.9075` |
+
+Decision:
+
+```text
+bottleneck_to_additive_reduced_anchor_strength_partial
+```
+
+Interpretation:
+
+- Constant anchors `1.0` and `0.1` preserved useful calculator-result
+  accuracy, unlike no-anchor unfreeze and unlike the fast shutoff tail.
+- Lower anchor strength did not merely preserve policy; it improved final eval
+  over the original anchor-10 cells in this two-cell gate.
+- Injection-zero stayed near chance, so the answers remained calculator
+  dependent.
+- This improves the scalability story for retention regularization, but it is
+  still staged and actively anchored. It is not an anchor-free or from-scratch
+  non-bottleneck solution.
