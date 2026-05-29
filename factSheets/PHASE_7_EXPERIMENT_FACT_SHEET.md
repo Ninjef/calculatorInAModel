@@ -5122,3 +5122,61 @@ Interpretation:
   despite lower source normal/calculator accuracy.
 - This validates the 500-step selector on a third source family.
 - `src5` remains the reason not to cut the selector to 400 steps globally.
+
+## 2026-05-29 Periodic Review: Selected-Source Recipe
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-seventieth-task-Periodic-review-selected-source-recipe.md
+```
+
+Question:
+
+Have recent agents been re-running old Phase 7 experiments, or has the work
+progressively narrowed the calculator-in-non-bottleneck training recipe?
+
+Reviewed chain:
+
+- Source normal/calculator accuracy selector failure on `src2`, `src4`, and
+  `src5`.
+- Short handoff-probe selector validation.
+- Probe-selected stable-policy adaptation.
+- Continuation fairness for selected `src4/src5` lineages.
+- Readout, handoff-probe, and continuation budget reductions.
+- `src2` validation of the 500-step selector.
+
+Decision:
+
+```text
+periodic_review_selected_source_recipe_progressive
+```
+
+Current validated non-bottleneck recipe:
+
+1. Train bottleneck source with checkpoint snapshots.
+2. Select source checkpoint by a 500-step frozen-policy additive handoff probe.
+3. Run the selected 800-step frozen-policy handoff.
+4. For weak selected sources, keep an extra 800 frozen-policy continuation.
+5. Run 600-step no-anchor readout adaptation with
+   `--freeze-calculator-policy-backbone`.
+
+Current result anchors:
+
+| Source lineage | Selector | Continuation | Readout | Final eval | Controls |
+| --- | --- | ---: | ---: | ---: | --- |
+| `src4/add2` | step `1200` via 500-step-compatible probe | 800 | 600 | `0.9025` | injection-zero `0.0025`, forced-random `0.0175` |
+| `src5/add5` | step `1100` via 500-step-compatible probe | 800 | 600 | `0.9325` | injection-zero `0.0000`, forced-random `0.0250` |
+| `src2/add4` | final / step `1600` via 500-step probe | not required here | 800 frozen handoff | `0.9525` | validates against source-accuracy counterexample |
+
+Interpretation:
+
+- The recent work is progressive, not a rerun loop.
+- Source normal/calculator accuracy should remain an actively disproven
+  selector, not a default next test.
+- The next non-duplicative work should validate the 500-step selector on newly
+  acquired source checkpoints, or optimize source acquisition directly for
+  early handoff and continuation slope.
+- The major gaps remain: post-hoc selection, prescriptive bottleneck source
+  acquisition, the weak-source 800-step continuation cost, and no proof yet for
+  many calculators or much larger models.

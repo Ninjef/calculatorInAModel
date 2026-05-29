@@ -369,3 +369,9 @@ Conclusion: For `src2` additive seed `4`, 500-step handoff progress picks final/
 Do not repeat: Same `src2` step-1300 versus final additive seed-4 400/500/600-step trace audit as novelty.
 Next allowed test: Validate 500-step selection on new source checkpoints, or optimize source acquisition for early handoff/continuation slope directly.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-src2-500-step-selector-validation.md`
+
+SYNTHESIS: The selected-source non-bottleneck recipe is progressing, not looping.
+Conclusion: Recent work moved from disproving source-accuracy selection to validating a 500-step handoff selector on `src2/src4/src5`, keeping 800 continuation for weak sources, and reducing stable readout to 600 steps (`src4 0.9025`, `src5 0.9325`).
+Do not repeat: Existing source-accuracy selector tests, existing `src4/src5` 200/600 readout cuts, existing 600-step continuation cut, or existing `src2` 500-step selector trace as novelty.
+Next allowed test: Validate the 500-step selector on newly acquired source checkpoints, or train source acquisition directly for early handoff and continuation slope.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-periodic-review-selected-source-recipe.md`
