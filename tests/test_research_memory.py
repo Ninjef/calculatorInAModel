@@ -375,7 +375,10 @@ def test_agent_docs_require_memory_search_and_size_discipline():
     research_state = open("RESEARCH_STATE.md", encoding="utf-8").read()
 
     assert "python3 researchMemory/scripts/search_memory.py" in claude
+    assert "python3 researchMemory/scripts/search_memory_fast.py" in claude
     assert "python3 researchMemory/scripts/serve_memory.py" in claude
+    assert "Experiment Closeout" in claude
+    assert "generate_hypothesis_memories.py" in claude
     assert "BGE local semantic backend" in claude
     assert "hash backend" in claude
     assert "must not become append-only logs" in claude

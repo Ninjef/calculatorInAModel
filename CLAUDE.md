@@ -26,8 +26,8 @@ happened; `RESEARCH_STATE.md` answers what it means now.
   short, current, and decision-oriented.
 - `HYPOTHESIS_LEDGER.md`: tiny claims, outcomes, anti-rerun notes, and family
   status. It prevents local retesting.
-- `researchMemory/`: consolidated memories by research direction. These are
-  higher-level than the ledger and easier to retrieve by topic.
+- `researchMemory/`: direction memories plus generated hypothesis memories.
+  Direction files synthesize clusters; `hypotheses/` preserves tested claims.
 - `factSheets/`: durable experimental record by phase. These are archive and
   evidence, not the strategic compass.
 - `aiAgentWorkHistory/`: lab notebook entries for completed work.
@@ -40,6 +40,7 @@ happened; `RESEARCH_STATE.md` answers what it means now.
 
 ```bash
 python3 researchMemory/scripts/serve_memory.py
+python3 researchMemory/scripts/search_memory_fast.py "<experiment idea or question>"
 python3 researchMemory/scripts/search_memory.py "<experiment idea or question>"
 python3 researchMemory/scripts/build_memory_index.py
 ```
@@ -94,16 +95,15 @@ can be learned, retained, and transferred into a non-bottleneck model. The
 unsolved problem is scalable, non-prescriptive credit assignment into the
 calculator-query policy. Read `RESEARCH_STATE.md` before acting.
 
-## Contribution Rules
+## Experiment Closeout
 
-When doing research work:
+Before calling research work done:
 
 - Update `RESEARCH_STATE.md` only when the strategic picture changes.
 - Update `HYPOTHESIS_LEDGER.md` for each durable hypothesis outcome.
-- Update `researchMemory/` when a cluster of hypotheses should be remembered
-  as a direction-level lesson.
-- For every tested hypothesis, add/update a hypothesis memory document and
-  rebuild the semantic index.
+- Run `generate_hypothesis_memories.py` for every tested hypothesis outcome.
+- Update direction memories when a cluster becomes a durable lesson.
+- Rebuild the semantic index and spot-check retrieval for the new lesson.
 - Update the relevant phase fact sheet with durable experimental evidence.
 - Add a concise work-history entry under `aiAgentWorkHistory/`.
 - Add or update a `researchReviews/` memo after a major branch outcome, after
@@ -112,4 +112,5 @@ When doing research work:
 - Commit and push completed work.
 
 If your work cannot be summarized as a change to either the strategic state or
-the hypothesis ledger, it may be too local to run.
+the hypothesis ledger, it may be too local to run. Tooling work is allowed when
+it directly improves experiment reliability, memory retrieval, or review.
