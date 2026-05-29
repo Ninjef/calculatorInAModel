@@ -421,6 +421,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/085-a-forced-true-additive-readout-auxiliary-can-shape-transfer-geometry-during-bottleneck-sou",
+      "target": "researchMemory/hypotheses/phase7/085-a-forced-true-additive-readout-auxiliary-can-shape-transfer-geometry-during-bottleneck-sou.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -608,6 +613,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-source-assignment-weight5-transfer-probe.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-source-aux-gate.md",
       "type": "supported_by"
     },
     {
@@ -1249,6 +1259,13 @@
       "source_path": "researchMemory/hypotheses/phase7/084-simple-loss-ranked-neighborhood-expansion-rescues-sparse-policy-reweighted-t1-local-target.md",
       "status": "DISPROVEN",
       "title": "Simple loss-ranked neighborhood expansion rescues sparse `policy_reweighted_t1` local targets."
+    },
+    {
+      "id": "doc/085-a-forced-true-additive-readout-auxiliary-can-shape-transfer-geometry-during-bottleneck-sou",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/085-a-forced-true-additive-readout-auxiliary-can-shape-transfer-geometry-during-bottleneck-sou.md",
+      "status": "MIXED-POSITIVE",
+      "title": "A forced-true additive readout auxiliary can shape transfer geometry during bottleneck source acquisition."
     },
     {
       "id": "doc/phase7-direction-memory",

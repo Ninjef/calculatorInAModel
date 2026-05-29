@@ -6395,3 +6395,69 @@ Interpretation:
 - This reinforces the periodic review conclusion: do not keep replacing the
   handoff gate with cheap proxies unless they beat raw handoff exact under
   fresh-family validation.
+
+## 2026-05-29 Additive Forced-True Source Auxiliary Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-source-aux-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_additive_forced_true_aux/smoke
+runs/2026-05-29_phase7_additive_forced_true_aux/small_gate
+```
+
+Question:
+
+Can source acquisition directly optimize additive non-bottleneck readout
+geometry instead of only training source calculator accuracy and selecting
+checkpoints afterward?
+
+Implementation:
+
+- Added `--additive-forced-true-loss-weight` to `scripts/overfit_one_batch.py`.
+- During bottleneck source acquisition, the auxiliary temporarily switches the
+  same model to additive `calculator_bottleneck_mode="none"`, forces the true
+  calculator result class, and adds ordinary answer loss through the additive
+  downstream path.
+
+Small gate:
+
+- `operand_max=9`, `calculator_operand_vocab_size=20`, seed `13`, `100`
+  source steps.
+- Baseline and auxiliary branches used the same no-decay source stabilization:
+  improvement assignment `10`, entropy `0.05`, batch diversity `0.1`.
+- Auxiliary weight was `0.5`.
+
+Source results:
+
+| Branch | Source calc @100 | Source normal snapshot | Final eval exact |
+| --- | ---: | ---: | ---: |
+| baseline | `0.3500` | `0.3400` | `0.3800` |
+| forced-true aux | `0.2800` | `0.3200` | `0.2800` |
+
+Geometry probe on step-100 checkpoints:
+
+| Branch | Forced best=true | Forced top3=true | True loss | Best loss | 50-step slope final loss |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| baseline | `0.0000` | `0.0000` | `2.6463` | `2.6265` | `1.5305` |
+| forced-true aux | `0.5900` | `0.6900` | `0.8043` | `0.7881` | `0.7367` |
+
+Decision:
+
+```text
+additive_forced_true_source_aux_mixed_positive_small_gate
+```
+
+Interpretation:
+
+- The auxiliary really shaped additive readout geometry in the small gate.
+- The naive always-on version also competed with source calculator-policy
+  acquisition.
+- Next versions should be scheduled/gated or paired with a policy-retention
+  anchor, then verified on `operand_max=19` with targeted standalone 600-step
+  additive handoff gates.

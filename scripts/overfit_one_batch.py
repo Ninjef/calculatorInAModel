@@ -131,6 +131,7 @@ class TrainConfig:
     result_policy_anchor_gate_band: float
     result_policy_anchor_temperature: float
     result_policy_anchor_mode: str
+    additive_forced_true_loss_weight: float
     calculator_causal_gap_weight: float
     calculator_causal_gap_margin: float
     boundary_feedback_weight: float
@@ -769,6 +770,9 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_policy_anchor_top3_agreement",
         "result_policy_anchor_kl",
         "result_policy_anchor_mse",
+        "additive_forced_true_loss_weight",
+        "additive_forced_true_objective",
+        "additive_forced_true_loss",
         "calculator_causal_gap_weight",
         "calculator_causal_gap_margin",
         "calculator_causal_gap_objective",
@@ -3427,6 +3431,35 @@ def temporary_calculator_estimator(model: TinyGPT, estimator: str):
         model.cfg.calculator_estimator = old_cfg_estimator
         if model.calculator_hook is not None and old_hook_estimator is not None:
             model.calculator_hook.estimator = old_hook_estimator
+
+
+@contextmanager
+def temporary_calculator_bottleneck_mode(model: TinyGPT, mode: str):
+    old_mode = model.cfg.calculator_bottleneck_mode
+    model.cfg.calculator_bottleneck_mode = mode
+    try:
+        yield
+    finally:
+        model.cfg.calculator_bottleneck_mode = old_mode
+
+
+def additive_forced_true_result_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    if model.calculator_hook is None:
+        raise ValueError("additive forced-true loss requires a calculator hook")
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = true_a + true_b
+    with temporary_calculator_bottleneck_mode(model, "none"):
+        logits = model(batch.x, forced_calculator_result_class=true_sum)
+    per_example = masked_cross_entropy_per_example(logits, batch.y, batch.loss_mask)
+    loss = per_example.mean()
+    return loss, {
+        "additive_forced_true_loss": float(loss.detach().item()),
+    }
 
 
 def run_reinforce_gradient_diagnostic(
@@ -6760,6 +6793,7 @@ def run_variant(
         result_policy_anchor_gate_band=args.result_policy_anchor_gate_band,
         result_policy_anchor_temperature=args.result_policy_anchor_temperature,
         result_policy_anchor_mode=args.result_policy_anchor_mode,
+        additive_forced_true_loss_weight=args.additive_forced_true_loss_weight,
         calculator_causal_gap_weight=args.calculator_causal_gap_weight,
         calculator_causal_gap_margin=args.calculator_causal_gap_margin,
         boundary_feedback_weight=args.boundary_feedback_weight,
@@ -7522,6 +7556,9 @@ def run_variant(
         result_policy_stabilization_metrics: dict[str, float] = {}
         result_policy_anchor_objective_value = None
         result_policy_anchor_metrics: dict[str, float | str] = {}
+        additive_forced_true_loss_value = None
+        additive_forced_true_objective_value = None
+        additive_forced_true_metrics: dict[str, float] = {}
         calculator_causal_gap_objective_value = None
         calculator_causal_gap_metrics: dict[str, float] = {}
         boundary_feedback_loss_value = None
@@ -7844,6 +7881,36 @@ def run_variant(
                 current_result_policy_anchor_weight
                 * result_policy_anchor_objective
             )
+        if args.additive_forced_true_loss_weight > 0:
+            if use_reinforce:
+                raise ValueError(
+                    "additive forced-true objective is not supported with reinforce"
+                )
+            (
+                additive_forced_true_loss,
+                additive_forced_true_metrics,
+            ) = additive_forced_true_result_loss(
+                model,
+                batch,
+                num_digits=num_digits,
+            )
+            additive_forced_true_loss_value = float(
+                additive_forced_true_loss.detach().item()
+            )
+            additive_forced_true_objective = (
+                args.additive_forced_true_loss_weight
+                * additive_forced_true_loss
+            )
+            additive_forced_true_objective_value = float(
+                additive_forced_true_objective.detach().item()
+            )
+            additive_forced_true_metrics[
+                "additive_forced_true_loss_weight"
+            ] = float(args.additive_forced_true_loss_weight)
+            additive_forced_true_metrics[
+                "additive_forced_true_objective"
+            ] = additive_forced_true_objective_value
+            loss = loss + additive_forced_true_objective
         if args.calculator_causal_gap_weight > 0:
             if use_reinforce:
                 raise ValueError(
@@ -8064,6 +8131,8 @@ def run_variant(
                     result_policy_anchor_objective_value
                 )
                 curve_row.update(result_policy_anchor_metrics)
+            if args.additive_forced_true_loss_weight > 0:
+                curve_row.update(additive_forced_true_metrics)
             if args.calculator_causal_gap_weight > 0:
                 curve_row.update(calculator_causal_gap_metrics)
             if use_boundary_feedback:
@@ -8173,6 +8242,12 @@ def run_variant(
                     f" policy_anchor_agree={result_policy_anchor_metrics['result_policy_anchor_argmax_agreement']:.3f}"
                     f" policy_anchor_acc={result_policy_anchor_metrics['result_policy_anchor_current_argmax_accuracy']:.3f}"
                     if result_policy_anchor is not None
+                    else ""
+                )
+                + (
+                    f" additive_forced_true_loss={additive_forced_true_loss_value:.4f}"
+                    f" additive_forced_true_obj={additive_forced_true_objective_value:.4f}"
+                    if args.additive_forced_true_loss_weight > 0
                     else ""
                 )
                 + (
@@ -8654,6 +8729,9 @@ def run_variant(
         args.result_policy_anchor_temperature
     )
     metrics["result_policy_anchor_mode"] = args.result_policy_anchor_mode
+    metrics["additive_forced_true_loss_weight"] = (
+        args.additive_forced_true_loss_weight
+    )
     metrics["final_result_policy_anchor_weight"] = result_policy_anchor_weight_schedule(
         initial_weight=args.result_policy_anchor_weight,
         decay_steps=args.result_policy_anchor_decay_steps,
@@ -9547,6 +9625,17 @@ def parse_args() -> argparse.Namespace:
         help="Anchor to the initial result policy by KL over probabilities or logit MSE.",
     )
     parser.add_argument(
+        "--additive-forced-true-loss-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Source-acquisition auxiliary: temporarily disable the answer-decoder "
+            "bottleneck, force the true calculator result class, and train the "
+            "ordinary additive downstream path on answer loss. This changes "
+            "source training pressure toward additive handoff/readout geometry."
+        ),
+    )
+    parser.add_argument(
         "--calculator-causal-gap-weight",
         type=float,
         default=0.0,
@@ -10219,6 +10308,8 @@ def main() -> None:
         raise ValueError(
             "--action-loss-full-enum-min-probability-floor must be non-negative"
         )
+    if args.additive_forced_true_loss_weight < 0:
+        raise ValueError("--additive-forced-true-loss-weight must be non-negative")
     if args.action_loss_full_enum_chunk_size < 1:
         raise ValueError("--action-loss-full-enum-chunk-size must be positive")
     if args.expected_answer_loss_weight < 0:
@@ -10877,6 +10968,10 @@ def main() -> None:
                     suffix_parts.append(
                         f"rpolanchorgateband{args.result_policy_anchor_gate_band:g}"
                     )
+        if args.additive_forced_true_loss_weight > 0:
+            suffix_parts.append(
+                f"addforcedtrue{args.additive_forced_true_loss_weight:g}"
+            )
         if args.calculator_causal_gap_weight > 0:
             suffix_parts.append(f"causalgapw{args.calculator_causal_gap_weight:g}")
             suffix_parts.append(f"causalgapm{args.calculator_causal_gap_margin:g}")
@@ -11059,6 +11154,10 @@ def main() -> None:
         f"gate_metric={args.result_policy_anchor_gate_metric} "
         f"gate_mode={args.result_policy_anchor_gate_mode} "
         f"gate_band={args.result_policy_anchor_gate_band}"
+    )
+    print(
+        "additive forced-true auxiliary: "
+        f"loss_weight={args.additive_forced_true_loss_weight}"
     )
     print(
         "calculator causal gap: "

@@ -187,9 +187,14 @@ Memory:
   non-bottleneck gate; seed-10-style runs show hostile geometry can persist.
 - The source objective can keep improving learned calculator accuracy while
   worsening additive handoff geometry; seed 10 is the clearest warning.
-- The promising next direction is to train or regularize source acquisition
-  against downstream handoff/readout geometry directly, then verify with the
-  standalone 600-step handoff gate.
+- A first direct geometry objective is mixed-positive: a forced-true additive
+  readout auxiliary during bottleneck source acquisition made the true result
+  the best forced additive result on `59%` of a small `0..9` grid versus `0%`
+  baseline, but weakened source policy accuracy at the same budget.
+- The promising next direction is not another checkpoint selector; it is a
+  scheduled/gated or policy-anchored source objective that preserves source
+  calculator acquisition while shaping downstream handoff/readout geometry,
+  then verifying with the standalone 600-step handoff gate.
 
 Representative evidence:
 
@@ -198,6 +203,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-stabilized-source-seed10-replication.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-seed10-source-checkpoint-geometry-sweep.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-source-assignment-weight5-transfer-probe.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-source-aux-gate.md`
 
 ## Direction: Target Propagation / Local Targets
 

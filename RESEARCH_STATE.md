@@ -92,7 +92,10 @@ source policies directly for transfer/readout geometry.
 Active directions:
 
 - Source acquisition optimized against actual handoff/readout geometry, not
-  just source answer accuracy or cheap selector scores.
+  just source answer accuracy or cheap selector scores. A first
+  forced-true additive readout auxiliary shows this can shape transfer
+  geometry, but the naive always-on version competes with source policy
+  acquisition.
 - A genuinely different credit-assignment family such as target propagation,
   local targets, or another mechanism that constructs useful calculator-query
   targets without backpropagating through the calculator. The first
@@ -130,11 +133,11 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Design a source-acquisition objective or diagnostic that directly optimizes
-   or regularizes for additive handoff/readout geometry. It should change the
-   training pressure on source acquisition, not just rank completed
-   checkpoints, and it must be gated against standalone 600-step handoff
-   behavior.
+1. Refine the source-acquisition geometry objective: the always-on forced-true
+   additive auxiliary improves additive readout geometry in a small gate but
+   weakens source policy accuracy. The next version should be scheduled,
+   gated, or paired with a policy-retention/anchor term, and then verified
+   against the standalone 600-step additive handoff gate.
 2. Prototype a target-propagation/local-target style credit-assignment path
    beyond the current exact-grid local-target gates: naive uniform/top-k sparse
    sampling and simple loss-neighborhood expansion are not enough, so the next

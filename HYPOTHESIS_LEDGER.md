@@ -535,3 +535,9 @@ Conclusion: In a 200-step adaptive proposal gate, raw uniform `sampled_policy_re
 Do not repeat: The same seed-2 200-step adaptive neighborhood gate over `u8_b4_r2/u8_b4_r3/u12_b4_r2` as novelty.
 Next allowed test: Use a learned proposal or importance/bias-corrected sampled target; otherwise pivot to source-acquisition-for-handoff geometry instead of more local sampled-candidate variants.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-adaptive-local-target-proposal-gate.md`
+
+MIXED-POSITIVE: A forced-true additive readout auxiliary can shape transfer geometry during bottleneck source acquisition.
+Conclusion: In a reduced `operand_max=9`, 100-step seed-13 source gate, adding `--additive-forced-true-loss-weight 0.5` made the true result the best forced additive result on `0.5900` of the grid (`top3=0.6900`) versus baseline `0.0000`/`0.0000`, and lowered 50-step additive slope final loss (`0.7367` vs `1.5305`). It also weakened source policy acquisition at the same budget (`0.2800` source calc and `0.2800` final eval vs baseline `0.3500` calc and `0.3800` final eval).
+Do not repeat: The same small `operand_max=9`, 100-step seed-13 baseline vs aux-weight `0.5` source/geometry gate as novelty.
+Next allowed test: Use a scheduled/gated auxiliary or retention anchor to avoid competing with source policy acquisition, then verify on `operand_max=19` with targeted standalone 600-step additive handoff gates.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-source-aux-gate.md`
