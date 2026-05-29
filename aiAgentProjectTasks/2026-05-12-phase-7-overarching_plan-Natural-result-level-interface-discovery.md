@@ -1550,3 +1550,39 @@ This reproduced the earlier plain low-LR unfreeze failure despite freezing
 `result_proj`. The result policy can collapse through upstream representation
 drift alone, so selective unfreezing needs to protect the behavior or the whole
 policy path, not just the final action-head weights.
+
+## Status Update: 2026-05-28, Bottleneck-to-Additive Behavior-Gated Anchor
+
+Behavior-gated anchoring produced a partial positive:
+
+```text
+bottleneck_to_additive_behavior_gated_anchor_partial
+```
+
+Code change:
+
+- Added `--result-policy-anchor-gate-threshold`.
+- Added `--result-policy-anchor-gate-weight`.
+- Added `--result-policy-anchor-gate-metric`.
+- The effective anchor weight now can jump above the scheduled/base weight
+  when a chosen behavior metric falls below threshold.
+
+Experiment:
+
+- Same adapted weak-source checkpoints.
+- Full policy unfreeze, LR `3e-4`.
+- Base KL anchor `0.01`.
+- Gate metric `argmax_agreement`.
+- Gate threshold `0.9`.
+- Gate weight `0.1`.
+- 400 steps.
+
+| Run | Final eval | Best normal | Final calc | Final injection-zero | Final anchor agreement | Gate active rows | Mean effective weight |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` gated | `0.8050` | `0.8025` at `400` | `0.7700` | `0.0400` | `0.9025` | `4/9` | `0.0500` |
+| `src5_add5` gated | `0.9675` | `0.9525` at `350` | `0.7700` | `0.0000` | `0.8850` | `8/9` | `0.0900` |
+
+The gate improved policy retention over constant anchor `0.01`, especially for
+`src5_add5`, but did not beat constant anchor `0.1` in this two-cell gate. It
+is useful infrastructure for adaptive retention, but this simple threshold
+gate is not itself a better training recipe.

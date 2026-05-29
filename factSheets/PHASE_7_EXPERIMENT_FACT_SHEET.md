@@ -4062,3 +4062,71 @@ Interpretation:
 - Upstream representation drift alone is sufficient to break the transferred
   policy. Behavior-level retention, full policy-path freezing, or gated
   anchoring remains necessary.
+
+## 2026-05-28 Bottleneck-to-Additive Behavior-Gated Anchor Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-forty-ninth-task-Bottleneck-to-additive-behavior-gated-anchor.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_bottleneck_to_additive_transfer_policy_anchor_gated_unfreeze
+```
+
+Code change:
+
+- Added `--result-policy-anchor-gate-threshold`.
+- Added `--result-policy-anchor-gate-weight`.
+- Added `--result-policy-anchor-gate-metric`.
+- The anchor logs base weight, effective weight, gate metric/value, and gate
+  activation in the training curve.
+- Added focused unit coverage for the effective gated weight helper.
+
+Question:
+
+Can behavior-gated retention keep the anchor lightweight most of the time while
+boosting it when policy agreement begins to drift?
+
+Configuration:
+
+- Continued from the adapted weak-source checkpoints.
+- Loaded with `--semantic-decoder-checkpoint-load-scope full_model`.
+- Removed `--freeze-calculator-policy`.
+- global LR `3e-4`;
+- base `--result-policy-anchor-weight 0.01`;
+- `--result-policy-anchor-mode kl`;
+- `--result-policy-anchor-gate-threshold 0.9`;
+- `--result-policy-anchor-gate-weight 0.1`;
+- `--result-policy-anchor-gate-metric argmax_agreement`;
+- answer loss weight `1`;
+- exact-grid natural `0..19`;
+- 400 steps.
+
+Result:
+
+| Run | Frozen adapted final | Anchor-0.01 final | Anchor-0.1 final | Gated final | Best normal | Final injection-zero | Final forced-random | Final oracle | Final calc | Final agreement | Gate active rows | Mean effective weight |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` gated | `0.6050` | `0.7850` | `0.8325` | `0.8050` | `0.8025` at `400` | `0.0400` | `0.1025` | `0.8425` | `0.7700` | `0.9025` | `4/9` | `0.0500` |
+| `src5_add5` gated | `0.8175` | `0.9375` | `0.9750` | `0.9675` | `0.9525` at `350` | `0.0000` | `0.0575` | `0.9425` | `0.7700` | `0.8850` | `8/9` | `0.0900` |
+
+Decision:
+
+```text
+bottleneck_to_additive_behavior_gated_anchor_partial
+```
+
+Interpretation:
+
+- The gate activated when agreement fell below threshold and raised the
+  effective anchor as intended.
+- It improved over constant anchor `0.01` on policy retention and answer
+  accuracy.
+- It did not beat constant anchor `0.1`, so this first discrete threshold is
+  useful scheduling infrastructure rather than a better recipe.
+- Next adaptive-retention work should test a better metric, continuous weight
+  control, or coupling to calculator-result accuracy rather than repeating
+  this exact gate.

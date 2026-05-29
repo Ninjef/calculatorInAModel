@@ -3700,6 +3700,31 @@ def test_result_policy_anchor_weight_schedule_respects_floor() -> None:
         initial_weight=0.0, decay_steps=200, floor=0.1, step=200
     ) == pytest.approx(0.0)
 
+    weight, active = overfit_script.result_policy_anchor_effective_weight(
+        scheduled_weight=0.01,
+        gate_threshold=0.9,
+        gate_weight=0.1,
+        gate_metric_value=0.95,
+    )
+    assert weight == pytest.approx(0.01)
+    assert not active
+    weight, active = overfit_script.result_policy_anchor_effective_weight(
+        scheduled_weight=0.01,
+        gate_threshold=0.9,
+        gate_weight=0.1,
+        gate_metric_value=0.85,
+    )
+    assert weight == pytest.approx(0.1)
+    assert active
+    weight, active = overfit_script.result_policy_anchor_effective_weight(
+        scheduled_weight=0.2,
+        gate_threshold=0.9,
+        gate_weight=0.1,
+        gate_metric_value=0.85,
+    )
+    assert weight == pytest.approx(0.2)
+    assert active
+
 
 def test_adaptive_interface_selects_high_probability_operand_pair() -> None:
     script_path = Path("scripts/overfit_one_batch.py")

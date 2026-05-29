@@ -337,6 +337,11 @@ Freezing only the result-space action head is not enough: with `result_proj`
 locked and only upstream trainable, the transferred policy still collapsed.
 That points to the upstream representation feeding the head as the fragile
 state, so retention has to constrain behavior or the whole policy path.
+Behavior-gated anchoring is now available: the anchor can stay at a low base
+weight and jump when anchor agreement falls below a threshold. A first gate
+(`0.01`, agreement `<0.9 -> 0.1`) improved over constant `0.01`, but did not
+beat constant `0.1`. The knob is useful, but the gate needs a smarter metric or
+continuous schedule to matter.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

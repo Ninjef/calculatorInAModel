@@ -517,6 +517,21 @@ so upstream representation drift alone is sufficient to destroy the transferred
 result policy. Freezing result_proj is not a substitute for behavior-level
 policy retention.
 
+A behavior-gated anchor schedule was then implemented and tested:
+`bottleneck_to_additive_behavior_gated_anchor_partial`. The new
+`--result-policy-anchor-gate-threshold`, `--result-policy-anchor-gate-weight`,
+and `--result-policy-anchor-gate-metric` options keep the scheduled anchor
+weight unless the selected policy-retention metric falls below a threshold.
+With base anchor `0.01`, gate metric `argmax_agreement`, threshold `0.9`, and
+gate weight `0.1`, `src4_add2` ended at final eval `0.8050`, learned calc
+`0.7700`, injection-zero `0.0400`, and used the boosted weight on `4/9`
+logged rows. `src5_add5` ended at final eval `0.9675`, learned calc `0.7700`,
+injection-zero `0.0000`, and used the boosted weight on `8/9` rows. This
+improves policy retention over constant `0.01`, but is roughly comparable to
+constant `0.1` and slightly worse on final eval. Behavior gating is useful
+infrastructure for adaptive retention; this simple threshold is not yet better
+than a fixed lightweight anchor.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -655,6 +670,10 @@ Do not rerun these as next steps unless debugging new code:
   400-step full surrounding-model unfreeze from the adapted `src4_add2` or
   `src5_add5` checkpoints as novelty. Upstream drift still collapsed the
   learned result policy.
+- behavior-gated anchor with base `0.01`, gate threshold `0.9`, gate weight
+  `0.1`, gate metric `argmax_agreement`, LR `3e-4`, and 400-step full
+  unfreeze from the adapted `src4_add2` or `src5_add5` checkpoints as novelty.
+  It improved over constant `0.01` but did not beat constant `0.1`.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement

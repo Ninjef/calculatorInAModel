@@ -249,3 +249,9 @@ Conclusion: With `result_proj` frozen and only upstream trainable, adapted `src4
 Do not repeat: Same adapted `src4_add2/src5_add5`, `--freeze-calculator-action-head`, no anchor, LR `3e-4`, 400-step unfreeze as novelty.
 Next allowed test: Behavior-level anchoring/gating, freezing the upstream policy path, or a more targeted selective parameter set that prevents upstream representation drift.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-freeze-action-head.md`
+
+PARTIAL: Behavior-gated anchoring can reduce average anchor weight but does not beat fixed `0.1`.
+Conclusion: Base anchor `0.01` with agreement gate `<0.9 -> 0.1` ended with final calc `0.7700/0.7700` and final eval `0.8050/0.9675`; it improved over constant `0.01` but was roughly comparable to, not better than, constant `0.1`.
+Do not repeat: Same adapted `src4_add2/src5_add5`, base anchor `0.01`, gate threshold `0.9`, gate weight `0.1`, argmax-agreement gate, LR `3e-4`, 400-step full unfreeze as novelty.
+Next allowed test: Better gate metric/threshold, adaptive continuous weights, calculator-accuracy-gated retention, or source-policy acquisition that reduces active anchoring needs.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-behavior-gated-anchor.md`
