@@ -381,3 +381,9 @@ Conclusion: Fresh `src6` 500-step handoff scores pick step `1500` (`0.7200`) ove
 Do not repeat: Same `src6` step-1200/step-1500/final additive seed-6 frozen-policy 800-step comparison as novelty.
 Next allowed test: Use 600-step selection for fresh sources, run continuation/readout from fresh `src6` final, or optimize source acquisition for 600-step handoff/continuation slope.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-new-source-500-selector-validation.md`
+
+POSITIVE: The selected-source continuation/readout recipe clears the gate on fresh `src6`.
+Conclusion: Fresh `src6` final-source handoff was near-gate (`0.8975`); 800 frozen-policy continuation reached `0.9625`, and 600 policy-backbone-frozen readout reached `0.9850` with controls far below normal.
+Do not repeat: Same `src6` final-source continuation plus 600-step readout as novelty.
+Next allowed test: Replicate on another fresh source with 600-step selection, or optimize source acquisition for 600-step handoff/continuation slope.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-src6-selected-continuation-readout.md`

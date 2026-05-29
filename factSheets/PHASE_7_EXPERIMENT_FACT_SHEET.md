@@ -5244,3 +5244,56 @@ Interpretation:
   does not cleanly pass `0.90`; next useful work is continuation/readout from
   this near-gate source or source acquisition optimized for 600-step
   handoff/continuation slope.
+
+## 2026-05-29 `src6` Selected Continuation and Readout
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-seventy-second-task-Src6-selected-continuation-readout.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_src6_selected_continuation_readout
+```
+
+Question:
+
+Does the selected-source continuation/readout recipe rescue the fresh `src6`
+near-gate final-source handoff?
+
+Setup:
+
+- Started from fresh `src6` final-source 800-step frozen-policy handoff
+  (`0.8975` final eval).
+- Ran 800 more frozen-policy continuation steps at LR `3e-3`.
+- Ran 600 policy-backbone-frozen readout steps at LR `3e-4` from the continued
+  checkpoint.
+
+Result:
+
+| Stage | Final eval | Best snapshot | Injection-zero | Forced-random | Oracle | Calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| initial handoff | `0.8975` | `0.8975` at step `800` | `0.0469` | `0.0703` | `0.9063` | `0.8594` |
+| 800-step continuation | `0.9625` | `0.9675` at step `700` | `0.0234` | `0.0703` | `0.9375` | `0.8594` |
+| 600-step readout | `0.9850` | `0.9900` at step `500` | `0.0625` | `0.0547` | `0.9297` | `0.8594` |
+
+Decision:
+
+```text
+src6_selected_continuation_readout_positive
+```
+
+Interpretation:
+
+- The reduced selected-source recipe clears the non-bottleneck gate on a fresh
+  source family.
+- Continuation alone crossed the gate; the 600-step readout improved final
+  answer accuracy further.
+- Controls remain far below normal, so the run preserves calculator dependence
+  despite the non-bottleneck residual path.
+- The result does not repair the 500-step selector failure on `src6`; fresh
+  sources should still use 600-step selection or full confirmation until a
+  better proxy is validated.
