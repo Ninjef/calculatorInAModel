@@ -1,14 +1,16 @@
 """Build and query the local research-memory index.
 
-The index is intentionally rebuildable from markdown source files. The default
-backend is deterministic and offline for tests, but real semantic retrieval is
-available with the OpenAI embeddings backend.
+The index is intentionally rebuildable from markdown source files. Local
+semantic retrieval uses sentence-transformers by default. The deterministic
+hash backend exists for tests and no-dependency fallback.
 """
 
 from __future__ import annotations
 
 import argparse
+import contextlib
 import hashlib
+import io
 import json
 import os
 import re
@@ -22,8 +24,10 @@ import numpy as np
 
 
 DEFAULT_DIM = 256
-DEFAULT_BACKEND = "hash"
+DEFAULT_BACKEND = "sentence-transformers"
 DEFAULT_OPENAI_MODEL = "text-embedding-3-small"
+DEFAULT_LOCAL_MODEL = "BAAI/bge-small-en-v1.5"
+BGE_QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 INDEX_DIRNAME = "index"
 
 _TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9_\-/]*")
@@ -156,18 +160,76 @@ def embed_texts_openai(
     return np.vstack(embeddings).astype(np.float32)
 
 
+def local_texts_for_backend(texts: list[str], *, model: str, query: bool = False) -> list[str]:
+    if query and "bge-" in model.lower():
+        return [BGE_QUERY_PREFIX + text for text in texts]
+    return texts
+
+
+def embed_texts_sentence_transformers(
+    texts: list[str],
+    model: str = DEFAULT_LOCAL_MODEL,
+    query: bool = False,
+    local_files_only: bool = False,
+    batch_size: int = 32,
+) -> np.ndarray:
+    if not texts:
+        return np.zeros((0, 0), dtype=np.float32)
+    try:
+        from sentence_transformers import SentenceTransformer
+    except ImportError as exc:
+        raise RuntimeError(
+            "sentence-transformers is required for the local semantic backend. "
+            "Install it or use --backend hash/openai."
+        ) from exc
+    quiet_load = os.environ.get("RESEARCH_MEMORY_VERBOSE_MODEL_LOAD") != "1"
+    if quiet_load:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            encoder = SentenceTransformer(model, local_files_only=local_files_only)
+    else:
+        encoder = SentenceTransformer(model, local_files_only=local_files_only)
+    prepared = local_texts_for_backend(texts, model=model, query=query)
+    if quiet_load:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            embeddings = encoder.encode(
+                prepared,
+                batch_size=batch_size,
+                convert_to_numpy=True,
+                normalize_embeddings=True,
+                show_progress_bar=False,
+            )
+    else:
+        embeddings = encoder.encode(
+            prepared,
+            batch_size=batch_size,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )
+    return np.asarray(embeddings, dtype=np.float32)
+
+
 def embed_texts(
     texts: list[str],
     *,
     backend: str = DEFAULT_BACKEND,
     dim: int = DEFAULT_DIM,
-    model: str = DEFAULT_OPENAI_MODEL,
+    model: str = DEFAULT_LOCAL_MODEL,
     openai_dimensions: int | None = None,
+    query: bool = False,
+    local_files_only: bool = False,
 ) -> np.ndarray:
     if backend == "hash":
         return embed_texts_hash(texts, dim=dim)
     if backend == "openai":
         return embed_texts_openai(texts, model=model, dimensions=openai_dimensions)
+    if backend == "sentence-transformers":
+        return embed_texts_sentence_transformers(
+            texts,
+            model=model,
+            query=query,
+            local_files_only=local_files_only,
+        )
     raise ValueError(f"unknown embedding backend: {backend}")
 
 
@@ -178,6 +240,7 @@ def embed_query(
     dim: int,
     model: str,
     openai_dimensions: int | None,
+    local_files_only: bool = True,
 ) -> np.ndarray:
     return embed_texts(
         [query],
@@ -185,6 +248,8 @@ def embed_query(
         dim=dim,
         model=model,
         openai_dimensions=openai_dimensions,
+        query=True,
+        local_files_only=local_files_only,
     )[0]
 
 
@@ -225,6 +290,15 @@ def extract_status(lines: Iterable[str]) -> str:
         if stripped.lower().startswith("status:"):
             return stripped.split(":", 1)[1].strip() or "unknown"
     return "unknown"
+
+
+def extract_field(lines: Iterable[str], field: str) -> str | None:
+    prefix = f"{field.lower()}:"
+    for line in lines:
+        stripped = line.strip()
+        if stripped.lower().startswith(prefix):
+            return stripped.split(":", 1)[1].strip()
+    return None
 
 
 def extract_named_block(lines: list[str], heading: str) -> list[str]:
@@ -309,6 +383,18 @@ def generate_questions(title: str, status: str, summary: str) -> list[str]:
     return deduped
 
 
+def parse_question_block(lines: list[str]) -> list[str]:
+    question_lines = extract_named_block(lines, "questions:")
+    questions: list[str] = []
+    for line in question_lines:
+        stripped = line.strip()
+        if stripped.startswith("- "):
+            stripped = stripped[2:].strip()
+        if stripped:
+            questions.append(stripped)
+    return questions
+
+
 def parse_memory_markdown(path: Path, repo_root: Path) -> list[MemoryRecord]:
     relative_path = path.relative_to(repo_root).as_posix()
     markdown = path.read_text(encoding="utf-8")
@@ -316,18 +402,24 @@ def parse_memory_markdown(path: Path, repo_root: Path) -> list[MemoryRecord]:
     records: list[MemoryRecord] = []
 
     doc_title = sections[0][1] if sections else path.stem
-    doc_status = extract_status(markdown.splitlines())
-    doc_summary = compact_summary([], markdown.splitlines())
+    markdown_lines = markdown.splitlines()
+    doc_status = extract_status(markdown_lines)
+    doc_kind = extract_field(markdown_lines, "kind") or "memory_document"
+    summary_lines = extract_named_block(markdown_lines, "summary:")
+    doc_summary = compact_summary(summary_lines, markdown_lines)
+    doc_questions = parse_question_block(markdown_lines) or generate_questions(
+        doc_title, doc_status, doc_summary
+    )
     records.append(
         MemoryRecord(
             id=f"doc/{slugify(path.stem)}",
             title=doc_title,
-            kind="memory_document",
+            kind=doc_kind,
             status=doc_status,
             source_path=relative_path,
             source_anchor=markdown_anchor(doc_title),
             summary=doc_summary,
-            questions=generate_questions(doc_title, doc_status, doc_summary),
+            questions=doc_questions,
             relations=[{"type": "defined_in", "target": relative_path}],
             tags=[slugify(path.stem)],
             text=markdown,
@@ -363,8 +455,9 @@ def parse_memory_markdown(path: Path, repo_root: Path) -> list[MemoryRecord]:
 def discover_memory_files(memory_root: Path) -> list[Path]:
     return sorted(
         path
-        for path in memory_root.glob("*.md")
+        for path in memory_root.rglob("*.md")
         if path.name.lower() != "readme.md" and path.is_file()
+        and INDEX_DIRNAME not in path.parts
     )
 
 
@@ -400,8 +493,9 @@ def build_index(
     output_dir: Path,
     dim: int = DEFAULT_DIM,
     backend: str = DEFAULT_BACKEND,
-    model: str = DEFAULT_OPENAI_MODEL,
+    model: str = DEFAULT_LOCAL_MODEL,
     openai_dimensions: int | None = None,
+    local_files_only: bool = False,
 ) -> None:
     records = build_records(repo_root, memory_root)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -425,6 +519,8 @@ def build_index(
         dim=dim,
         model=model,
         openai_dimensions=openai_dimensions,
+        query=False,
+        local_files_only=local_files_only,
     )
     actual_dim = int(embedding_matrix.shape[1]) if embedding_matrix.size else dim
     np.savez_compressed(
@@ -436,7 +532,7 @@ def build_index(
     )
     metadata = {
         "backend": backend,
-        "model": model if backend == "openai" else "hashing-vectorizer",
+        "model": model if backend != "hash" else "hashing-vectorizer",
         "dim": actual_dim,
         "openai_dimensions": openai_dimensions,
         "record_count": len(records),
@@ -483,7 +579,7 @@ def load_metadata(index_dir: Path) -> dict[str, object]:
     metadata_path = index_dir / "metadata.json"
     if not metadata_path.exists():
         return {
-            "backend": DEFAULT_BACKEND,
+            "backend": "hash",
             "model": "hashing-vectorizer",
             "dim": DEFAULT_DIM,
             "openai_dimensions": None,
@@ -497,6 +593,7 @@ def search_index(
     top_k: int = 5,
     backend: str | None = None,
     model: str | None = None,
+    allow_download: bool = False,
 ) -> list[dict[str, object]]:
     records = load_records(index_dir)
     metadata = load_metadata(index_dir)
@@ -506,9 +603,9 @@ def search_index(
     view_kinds = data["view_kinds"].tolist()
     dim = int(metadata.get("dim") or (data["dim"][0] if "dim" in data else DEFAULT_DIM))
     selected_backend = backend or str(metadata.get("backend", DEFAULT_BACKEND))
-    selected_model = model or str(metadata.get("model", DEFAULT_OPENAI_MODEL))
+    selected_model = model or str(metadata.get("model", DEFAULT_LOCAL_MODEL))
     if selected_model == "hashing-vectorizer":
-        selected_model = DEFAULT_OPENAI_MODEL
+        selected_model = DEFAULT_LOCAL_MODEL
     openai_dimensions = metadata.get("openai_dimensions")
     openai_dimensions = int(openai_dimensions) if openai_dimensions is not None else None
 
@@ -518,6 +615,7 @@ def search_index(
         dim=dim,
         model=selected_model,
         openai_dimensions=openai_dimensions,
+        local_files_only=not allow_download,
     )
     scores = cosine_scores(query_embedding, embeddings)
     best_by_memory: dict[str, dict[str, object]] = {}
@@ -574,17 +672,27 @@ def build_arg_parser() -> argparse.ArgumentParser:
     build.add_argument("--memory-root", type=Path, default=None)
     build.add_argument("--output-dir", type=Path, default=None)
     build.add_argument("--dim", type=int, default=DEFAULT_DIM)
-    build.add_argument("--backend", choices=["hash", "openai"], default=DEFAULT_BACKEND)
-    build.add_argument("--model", default=DEFAULT_OPENAI_MODEL)
+    build.add_argument(
+        "--backend",
+        choices=["hash", "openai", "sentence-transformers"],
+        default=DEFAULT_BACKEND,
+    )
+    build.add_argument("--model", default=DEFAULT_LOCAL_MODEL)
     build.add_argument("--openai-dimensions", type=int, default=None)
+    build.add_argument("--local-files-only", action="store_true")
 
     search = subparsers.add_parser("search", help="search the memory index")
     search.add_argument("query")
     search.add_argument("--repo-root", type=Path, default=None)
     search.add_argument("--index-dir", type=Path, default=None)
     search.add_argument("--top-k", type=int, default=5)
-    search.add_argument("--backend", choices=["hash", "openai"], default=None)
+    search.add_argument(
+        "--backend",
+        choices=["hash", "openai", "sentence-transformers"],
+        default=None,
+    )
     search.add_argument("--model", default=None)
+    search.add_argument("--allow-download", action="store_true")
     search.add_argument("--json", action="store_true")
 
     return parser
@@ -605,6 +713,7 @@ def main(argv: list[str] | None = None) -> int:
             backend=args.backend,
             model=args.model,
             openai_dimensions=args.openai_dimensions,
+            local_files_only=args.local_files_only,
         )
         return 0
     if args.command == "search":
@@ -615,6 +724,7 @@ def main(argv: list[str] | None = None) -> int:
             top_k=args.top_k,
             backend=args.backend,
             model=args.model,
+            allow_download=args.allow_download,
         )
         if args.json:
             print(json.dumps(results, indent=2, sort_keys=True))

@@ -1,6 +1,401 @@
 {
   "edges": [
     {
+      "source": "doc/001-vanilla-result-space-policy-gradient-is-mainly-blocked-by-finite-sample-variance",
+      "target": "researchMemory/hypotheses/phase7/001-vanilla-result-space-policy-gradient-is-mainly-blocked-by-finite-sample-variance.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/002-decoder-calibration-alone-rescues-ordinary-expected-cost-discovery",
+      "target": "researchMemory/hypotheses/phase7/002-decoder-calibration-alone-rescues-ordinary-expected-cost-discovery.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/003-output-projection-boundary-feedback-is-sufficient-for-natural-result-space-discovery",
+      "target": "researchMemory/hypotheses/phase7/003-output-projection-boundary-feedback-is-sufficient-for-natural-result-space-discovery.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/004-one-fixed-random-direct-feedback-matrix-is-enough-to-clear-the-stage-0-result-head-gate",
+      "target": "researchMemory/hypotheses/phase7/004-one-fixed-random-direct-feedback-matrix-is-enough-to-clear-the-stage-0-result-head-gate.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/005-a-fit-once-linear-shadow-map-from-injection-gradients-to-boundary-result-logit-gradients-i",
+      "target": "researchMemory/hypotheses/phase7/005-a-fit-once-linear-shadow-map-from-injection-gradients-to-boundary-result-logit-gradients-i.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/006-same-batch-fit-once-linear-shadow-alignment-is-a-reliable-stage-0-gate",
+      "target": "researchMemory/hypotheses/phase7/006-same-batch-fit-once-linear-shadow-alignment-is-a-reliable-stage-0-gate.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/007-a-simple-online-mlp-shadow-module-with-injection-gradient-plus-result-logit-state-cleanly",
+      "target": "researchMemory/hypotheses/phase7/007-a-simple-online-mlp-shadow-module-with-injection-gradient-plus-result-logit-state-cleanly-.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/008-validation-selected-early-stopping-is-enough-to-rescue-the-simple-online-mlp-shadow-module",
+      "target": "researchMemory/hypotheses/phase7/008-validation-selected-early-stopping-is-enough-to-rescue-the-simple-online-mlp-shadow-module.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/009-fit-split-per-result-z-scored-shadow-targets-are-sufficient-to-clear-the-online-mlp-heldou",
+      "target": "researchMemory/hypotheses/phase7/009-fit-split-per-result-z-scored-shadow-targets-are-sufficient-to-clear-the-online-mlp-heldou.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/010-appending-raw-result-policy-state-features-rescues-target-normalized-online-mlp-shadow-fee",
+      "target": "researchMemory/hypotheses/phase7/010-appending-raw-result-policy-state-features-rescues-target-normalized-online-mlp-shadow-fee.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/011-fit-split-per-feature-z-score-standardization-rescues-target-normalized-online-mlp-shadow",
+      "target": "researchMemory/hypotheses/phase7/011-fit-split-per-feature-z-score-standardization-rescues-target-normalized-online-mlp-shadow-.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/012-directional-cosine-shadow-losses-alone-cleanly-clear-the-online-mlp-heldout-warmup-gate",
+      "target": "researchMemory/hypotheses/phase7/012-directional-cosine-shadow-losses-alone-cleanly-clear-the-online-mlp-heldout-warmup-gate.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/013-gap-penalized-validation-selection-alone-resolves-directional-loss-overfit",
+      "target": "researchMemory/hypotheses/phase7/013-gap-penalized-validation-selection-alone-resolves-directional-loss-overfit.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/014-simple-dropout-regularization-rescues-directional-loss-online-mlp-shadow-overfit",
+      "target": "researchMemory/hypotheses/phase7/014-simple-dropout-regularization-rescues-directional-loss-online-mlp-shadow-overfit.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/015-per-example-unit-norm-target-stabilization-rescues-directional-loss-online-mlp-shadow-over",
+      "target": "researchMemory/hypotheses/phase7/015-per-example-unit-norm-target-stabilization-rescues-directional-loss-online-mlp-shadow-over.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/016-fit-split-result-prototype-target-averaging-cleanly-rescues-directional-loss-online-mlp-sh",
+      "target": "researchMemory/hypotheses/phase7/016-fit-split-result-prototype-target-averaging-cleanly-rescues-directional-loss-online-mlp-sh.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/017-appending-the-raw-result-projection-input-rescues-directional-loss-online-mlp-shadow-overf",
+      "target": "researchMemory/hypotheses/phase7/017-appending-the-raw-result-projection-input-rescues-directional-loss-online-mlp-shadow-overf.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/018-train-time-validation-prediction-loss-regularization-rescues-directional-loss-online-mlp-s",
+      "target": "researchMemory/hypotheses/phase7/018-train-time-validation-prediction-loss-regularization-rescues-directional-loss-online-mlp-s.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/019-direct-validation-model-gradient-regularization-can-clear-stage-0b-but-a-fixed-calibrated",
+      "target": "researchMemory/hypotheses/phase7/019-direct-validation-model-gradient-regularization-can-clear-stage-0b-but-a-fixed-calibrated-.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/020-simple-fixed-module-feedback-l2-clamping-rescues-validation-gradient-online-shadow-stage-1",
+      "target": "researchMemory/hypotheses/phase7/020-simple-fixed-module-feedback-l2-clamping-rescues-validation-gradient-online-shadow-stage-1.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/021-periodic-on-policy-shadow-refresh-alone-rescues-validation-gradient-online-shadow-stage-1",
+      "target": "researchMemory/hypotheses/phase7/021-periodic-on-policy-shadow-refresh-alone-rescues-validation-gradient-online-shadow-stage-1.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/022-soft-result-policy-entropy-batch-diversity-stabilization-rescues-refreshed-online-shadow-s",
+      "target": "researchMemory/hypotheses/phase7/022-soft-result-policy-entropy-batch-diversity-stabilization-rescues-refreshed-online-shadow-s.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/023-bounding-actual-optimizer-parameter-step-l2-norm-rescues-refreshed-online-shadow-stage-1",
+      "target": "researchMemory/hypotheses/phase7/023-bounding-actual-optimizer-parameter-step-l2-norm-rescues-refreshed-online-shadow-stage-1.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/024-hard-path-answer-loss-step-acceptance-rescues-refreshed-online-shadow-stage-1",
+      "target": "researchMemory/hypotheses/phase7/024-hard-path-answer-loss-step-acceptance-rescues-refreshed-online-shadow-stage-1.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/025-hard-path-answer-loss-line-search-over-proposed-shadow-step-scales-rescues-refreshed-onlin",
+      "target": "researchMemory/hypotheses/phase7/025-hard-path-answer-loss-line-search-over-proposed-shadow-step-scales-rescues-refreshed-onlin.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/026-output-jacobian-conditioned-shadow-features-improve-stage-0b-but-do-not-rescue-refreshed-o",
+      "target": "researchMemory/hypotheses/phase7/026-output-jacobian-conditioned-shadow-features-improve-stage-0b-but-do-not-rescue-refreshed-o.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/027-hard-answer-loss-improvement-assignments-can-produce-stage-1-lift",
+      "target": "researchMemory/hypotheses/phase7/027-hard-answer-loss-improvement-assignments-can-produce-stage-1-lift.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/028-plain-linear-target-off-decay-lets-answer-loss-retain-the-hard-improvement-assignment-inte",
+      "target": "researchMemory/hypotheses/phase7/028-plain-linear-target-off-decay-lets-answer-loss-retain-the-hard-improvement-assignment-inte.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/029-always-on-hard-improvement-assignment-can-train-a-natural-result-space-calculator-interfac",
+      "target": "researchMemory/hypotheses/phase7/029-always-on-hard-improvement-assignment-can-train-a-natural-result-space-calculator-interfac.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/030-the-bottleneck-hard-assignment-signal-transfers-directly-to-an-additive-non-bottleneck-mod",
+      "target": "researchMemory/hypotheses/phase7/030-the-bottleneck-hard-assignment-signal-transfers-directly-to-an-additive-non-bottleneck-mod.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/031-a-zero-injection-causal-gap-hinge-is-enough-to-make-non-bottleneck-hard-assignment-learn-c",
+      "target": "researchMemory/hypotheses/phase7/031-a-zero-injection-causal-gap-hinge-is-enough-to-make-non-bottleneck-hard-assignment-learn-c.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/032-a-frozen-bottleneck-trained-result-policy-can-be-handed-to-an-additive-non-bottleneck-mode",
+      "target": "researchMemory/hypotheses/phase7/032-a-frozen-bottleneck-trained-result-policy-can-be-handed-to-an-additive-non-bottleneck-mode.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/033-frozen-handoff-replicates-for-a-strong-source-checkpoint-but-is-sensitive-to-source-checkp",
+      "target": "researchMemory/hypotheses/phase7/033-frozen-handoff-replicates-for-a-strong-source-checkpoint-but-is-sensitive-to-source-checkp.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/034-longer-downstream-adaptation-helps-weak-frozen-handoffs-but-does-not-erase-source-sensitiv",
+      "target": "researchMemory/hypotheses/phase7/034-longer-downstream-adaptation-helps-weak-frozen-handoffs-but-does-not-erase-source-sensitiv.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/035-low-lr-full-policy-unfreezing-preserves-adapted-non-bottleneck-calculator-use",
+      "target": "researchMemory/hypotheses/phase7/035-low-lr-full-policy-unfreezing-preserves-adapted-non-bottleneck-calculator-use.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/036-result-policy-anchoring-can-make-full-policy-unfreeze-useful-after-staged-handoff",
+      "target": "researchMemory/hypotheses/phase7/036-result-policy-anchoring-can-make-full-policy-unfreeze-useful-after-staged-handoff.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/037-a-fast-kl-anchor-off-ramp-makes-the-adapted-non-bottleneck-policy-self-sustaining",
+      "target": "researchMemory/hypotheses/phase7/037-a-fast-kl-anchor-off-ramp-makes-the-adapted-non-bottleneck-policy-self-sustaining.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/038-reduced-constant-kl-anchors-can-preserve-non-bottleneck-calculator-use",
+      "target": "researchMemory/hypotheses/phase7/038-reduced-constant-kl-anchors-can-preserve-non-bottleneck-calculator-use.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/039-constant-kl-anchor-0-01-is-below-the-clean-policy-retention-region",
+      "target": "researchMemory/hypotheses/phase7/039-constant-kl-anchor-0-01-is-below-the-clean-policy-retention-region.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/040-a-nonzero-anchor-floor-rescues-the-failed-zero-off-ramp-pattern",
+      "target": "researchMemory/hypotheses/phase7/040-a-nonzero-anchor-floor-rescues-the-failed-zero-off-ramp-pattern.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/041-freezing-only-the-calculator-action-head-preserves-transferred-policy-during-unfreeze",
+      "target": "researchMemory/hypotheses/phase7/041-freezing-only-the-calculator-action-head-preserves-transferred-policy-during-unfreeze.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/042-behavior-gated-anchoring-can-reduce-average-anchor-weight-but-does-not-beat-fixed-0-1",
+      "target": "researchMemory/hypotheses/phase7/042-behavior-gated-anchoring-can-reduce-average-anchor-weight-but-does-not-beat-fixed-0-1.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/043-simple-calculator-accuracy-gated-anchoring-is-threshold-sensitive-and-does-not-beat-fixed",
+      "target": "researchMemory/hypotheses/phase7/043-simple-calculator-accuracy-gated-anchoring-is-threshold-sensitive-and-does-not-beat-fixed-.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/044-continuous-calculator-accuracy-anchor-control-can-lower-average-retention-weight-but-is-no",
+      "target": "researchMemory/hypotheses/phase7/044-continuous-calculator-accuracy-anchor-control-can-lower-average-retention-weight-but-is-no.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/045-freezing-the-policy-backbone-prevents-no-anchor-policy-collapse-but-action-head-readout-ad",
+      "target": "researchMemory/hypotheses/phase7/045-freezing-the-policy-backbone-prevents-no-anchor-policy-collapse-but-action-head-readout-ad.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/046-tiny-anchoring-is-redundant-when-the-policy-backbone-is-frozen",
+      "target": "researchMemory/hypotheses/phase7/046-tiny-anchoring-is-redundant-when-the-policy-backbone-is-frozen.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/047-longer-stable-policy-readout-adaptation-helps-good-sources-but-does-not-erase-weak-source",
+      "target": "researchMemory/hypotheses/phase7/047-longer-stable-policy-readout-adaptation-helps-good-sources-but-does-not-erase-weak-source-.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/048-source-checkpoint-selection-improves-weak-source-handoff-but-source-action-accuracy-is-not",
+      "target": "researchMemory/hypotheses/phase7/048-source-checkpoint-selection-improves-weak-source-handoff-but-source-action-accuracy-is-not.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/049-highest-source-normal-calculator-accuracy-is-a-reliable-source-checkpoint-selector",
+      "target": "researchMemory/hypotheses/phase7/049-highest-source-normal-calculator-accuracy-is-a-reliable-source-checkpoint-selector.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/050-short-additive-handoff-progress-predicts-final-handoff-better-than-source-accuracy",
+      "target": "researchMemory/hypotheses/phase7/050-short-additive-handoff-progress-predicts-final-handoff-better-than-source-accuracy.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/051-the-initial-frozen-state-readout-probe-was-a-reliable-handoff-proxy",
+      "target": "researchMemory/hypotheses/phase7/051-the-initial-frozen-state-readout-probe-was-a-reliable-handoff-proxy.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/052-a-600-step-handoff-probe-can-select-a-better-source-checkpoint-than-source-accuracy",
+      "target": "researchMemory/hypotheses/phase7/052-a-600-step-handoff-probe-can-select-a-better-source-checkpoint-than-source-accuracy.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/053-the-600-step-handoff-probe-rescues-weak-src4-source-selection",
+      "target": "researchMemory/hypotheses/phase7/053-the-600-step-handoff-probe-rescues-weak-src4-source-selection.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/054-probe-selected-sources-help-later-stable-policy-adaptation-for-weak-handoffs-but-are-not-a",
+      "target": "researchMemory/hypotheses/phase7/054-probe-selected-sources-help-later-stable-policy-adaptation-for-weak-handoffs-but-are-not-a.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/055-the-src5-source-accuracy-selected-step-1500-checkpoint-is-the-better-long-adaptation-candi",
+      "target": "researchMemory/hypotheses/phase7/055-the-src5-source-accuracy-selected-step-1500-checkpoint-is-the-better-long-adaptation-candi.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/056-the-old-src5-final-source-long-adaptation-advantage-was-mostly-a-continuation-depth-fairne",
+      "target": "researchMemory/hypotheses/phase7/056-the-old-src5-final-source-long-adaptation-advantage-was-mostly-a-continuation-depth-fairne.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/057-fair-continuation-also-improves-the-weak-src4-selected-source-lineage",
+      "target": "researchMemory/hypotheses/phase7/057-fair-continuation-also-improves-the-weak-src4-selected-source-lineage.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/058-stable-readout-adaptation-can-be-cut-to-600-steps-but-200-steps-is-source-sensitive",
+      "target": "researchMemory/hypotheses/phase7/058-stable-readout-adaptation-can-be-cut-to-600-steps-but-200-steps-is-source-sensitive.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/059-the-source-selection-handoff-probe-can-be-cut-to-500-steps-on-current-candidates-but-not-t",
+      "target": "researchMemory/hypotheses/phase7/059-the-source-selection-handoff-probe-can-be-cut-to-500-steps-on-current-candidates-but-not-t.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/060-reducing-the-frozen-policy-continuation-from-800-to-600-steps-is-source-sensitive",
+      "target": "researchMemory/hypotheses/phase7/060-reducing-the-frozen-policy-continuation-from-800-to-600-steps-is-source-sensitive.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/061-the-500-step-handoff-selector-validates-on-the-src2-source-accuracy-counterexample",
+      "target": "researchMemory/hypotheses/phase7/061-the-500-step-handoff-selector-validates-on-the-src2-source-accuracy-counterexample.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/062-the-selected-source-non-bottleneck-recipe-is-progressing-not-looping",
+      "target": "researchMemory/hypotheses/phase7/062-the-selected-source-non-bottleneck-recipe-is-progressing-not-looping.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/063-the-500-step-selector-does-not-generalize-cleanly-to-fresh-src6",
+      "target": "researchMemory/hypotheses/phase7/063-the-500-step-selector-does-not-generalize-cleanly-to-fresh-src6.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/064-the-selected-source-continuation-readout-recipe-clears-the-gate-on-fresh-src6",
+      "target": "researchMemory/hypotheses/phase7/064-the-selected-source-continuation-readout-recipe-clears-the-gate-on-fresh-src6.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/065-the-600-step-selector-replicated-on-fresh-src7-but-the-reduced-recipe-did-not-clear-the-ga",
+      "target": "researchMemory/hypotheses/phase7/065-the-600-step-selector-replicated-on-fresh-src7-but-the-reduced-recipe-did-not-clear-the-ga.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/066-decaying-small-entropy-batch-diversity-source-stabilization-to-zero-will-rescue-weak-fresh",
+      "target": "researchMemory/hypotheses/phase7/066-decaying-small-entropy-batch-diversity-source-stabilization-to-zero-will-rescue-weak-fresh.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/067-keeping-entropy-diversity-source-stabilization-active-fixes-collapse-initial-handoff-is-we",
+      "target": "researchMemory/hypotheses/phase7/067-keeping-entropy-diversity-source-stabilization-active-fixes-collapse-initial-handoff-is-we.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/068-the-no-decay-stabilized-final-source-lineage-clears-the-non-bottleneck-gate-after-continua",
+      "target": "researchMemory/hypotheses/phase7/068-the-no-decay-stabilized-final-source-lineage-clears-the-non-bottleneck-gate-after-continua.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/069-the-no-decay-stabilized-source-can-use-600-step-continuation-and-still-clear-the-non-bottl",
+      "target": "researchMemory/hypotheses/phase7/069-the-no-decay-stabilized-source-can-use-600-step-continuation-and-still-clear-the-non-bottl.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/070-the-no-decay-stabilized-source-continuation-budget-can-be-cut-to-400-steps-but-not-300-by",
+      "target": "researchMemory/hypotheses/phase7/070-the-no-decay-stabilized-source-continuation-budget-can-be-cut-to-400-steps-but-not-300-by-.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/071-no-decay-stabilized-source-acquisition-reliably-implies-transferable-non-bottleneck-geomet",
+      "target": "researchMemory/hypotheses/phase7/071-no-decay-stabilized-source-acquisition-reliably-implies-transferable-non-bottleneck-geomet.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/072-the-seed-10-transfer-failure-is-only-a-bad-final-checkpoint-selection-artifact",
+      "target": "researchMemory/hypotheses/phase7/072-the-seed-10-transfer-failure-is-only-a-bad-final-checkpoint-selection-artifact.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/073-a-direct-additive-handoff-geometry-probe-can-replace-the-400-600-step-handoff-selector",
+      "target": "researchMemory/hypotheses/phase7/073-a-direct-additive-handoff-geometry-probe-can-replace-the-400-600-step-handoff-selector.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/074-additive-forced-result-geometry-can-select-source-checkpoints-inside-known-source-families",
+      "target": "researchMemory/hypotheses/phase7/074-additive-forced-result-geometry-can-select-source-checkpoints-inside-known-source-families.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/075-a-25-50-100-step-downstream-loss-slope-proxy-can-replace-the-additive-handoff-selector",
+      "target": "researchMemory/hypotheses/phase7/075-a-25-50-100-step-downstream-loss-slope-proxy-can-replace-the-additive-handoff-selector.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/076-lowering-the-hard-improvement-assignment-source-weight-from-10-to-5-rescues-transfer-hosti",
+      "target": "researchMemory/hypotheses/phase7/076-lowering-the-hard-improvement-assignment-source-weight-from-10-to-5-rescues-transfer-hosti.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/077-a-simple-learned-ridge-selector-over-early-handoff-trace-features-can-replace-the-500-600",
+      "target": "researchMemory/hypotheses/phase7/077-a-simple-learned-ridge-selector-over-early-handoff-trace-features-can-replace-the-500-600-.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/078-logging-only-in-training-additive-handoff-probes-are-implemented",
+      "target": "researchMemory/hypotheses/phase7/078-logging-only-in-training-additive-handoff-probes-are-implemented.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/079-a-500-step-in-training-additive-handoff-probe-is-not-yet-a-reliable-source-checkpoint-sele",
+      "target": "researchMemory/hypotheses/phase7/079-a-500-step-in-training-additive-handoff-probe-is-not-yet-a-reliable-source-checkpoint-sele.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -202,6 +597,559 @@
     }
   ],
   "nodes": [
+    {
+      "id": "doc/001-vanilla-result-space-policy-gradient-is-mainly-blocked-by-finite-sample-variance",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/001-vanilla-result-space-policy-gradient-is-mainly-blocked-by-finite-sample-variance.md",
+      "status": "DISPROVEN",
+      "title": "Vanilla result-space policy gradient is mainly blocked by finite-sample variance."
+    },
+    {
+      "id": "doc/002-decoder-calibration-alone-rescues-ordinary-expected-cost-discovery",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/002-decoder-calibration-alone-rescues-ordinary-expected-cost-discovery.md",
+      "status": "DISPROVEN",
+      "title": "Decoder calibration alone rescues ordinary expected-cost discovery."
+    },
+    {
+      "id": "doc/003-output-projection-boundary-feedback-is-sufficient-for-natural-result-space-discovery",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/003-output-projection-boundary-feedback-is-sufficient-for-natural-result-space-discovery.md",
+      "status": "DISPROVEN",
+      "title": "Output-projection boundary feedback is sufficient for natural result-space discovery."
+    },
+    {
+      "id": "doc/004-one-fixed-random-direct-feedback-matrix-is-enough-to-clear-the-stage-0-result-head-gate",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/004-one-fixed-random-direct-feedback-matrix-is-enough-to-clear-the-stage-0-result-head-gate.md",
+      "status": "DISPROVEN",
+      "title": "One fixed-random direct-feedback matrix is enough to clear the Stage 0 result-head gate."
+    },
+    {
+      "id": "doc/005-a-fit-once-linear-shadow-map-from-injection-gradients-to-boundary-result-logit-gradients-i",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/005-a-fit-once-linear-shadow-map-from-injection-gradients-to-boundary-result-logit-gradients-i.md",
+      "status": "DISPROVEN",
+      "title": "A fit-once linear shadow map from injection gradients to boundary result-logit gradients is enough for early natural result discovery."
+    },
+    {
+      "id": "doc/006-same-batch-fit-once-linear-shadow-alignment-is-a-reliable-stage-0-gate",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/006-same-batch-fit-once-linear-shadow-alignment-is-a-reliable-stage-0-gate.md",
+      "status": "DISPROVEN",
+      "title": "Same-batch fit-once linear shadow alignment is a reliable Stage 0 gate."
+    },
+    {
+      "id": "doc/007-a-simple-online-mlp-shadow-module-with-injection-gradient-plus-result-logit-state-cleanly",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/007-a-simple-online-mlp-shadow-module-with-injection-gradient-plus-result-logit-state-cleanly-.md",
+      "status": "DISPROVEN",
+      "title": "A simple online MLP shadow module with injection-gradient plus result-logit state cleanly passes the heldout warmup gate."
+    },
+    {
+      "id": "doc/008-validation-selected-early-stopping-is-enough-to-rescue-the-simple-online-mlp-shadow-module",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/008-validation-selected-early-stopping-is-enough-to-rescue-the-simple-online-mlp-shadow-module.md",
+      "status": "DISPROVEN",
+      "title": "Validation-selected early stopping is enough to rescue the simple online MLP shadow module."
+    },
+    {
+      "id": "doc/009-fit-split-per-result-z-scored-shadow-targets-are-sufficient-to-clear-the-online-mlp-heldou",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/009-fit-split-per-result-z-scored-shadow-targets-are-sufficient-to-clear-the-online-mlp-heldou.md",
+      "status": "DISPROVEN",
+      "title": "Fit-split per-result z-scored shadow targets are sufficient to clear the online MLP heldout warmup gate."
+    },
+    {
+      "id": "doc/010-appending-raw-result-policy-state-features-rescues-target-normalized-online-mlp-shadow-fee",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/010-appending-raw-result-policy-state-features-rescues-target-normalized-online-mlp-shadow-fee.md",
+      "status": "DISPROVEN",
+      "title": "Appending raw result policy-state features rescues target-normalized online MLP shadow feedback."
+    },
+    {
+      "id": "doc/011-fit-split-per-feature-z-score-standardization-rescues-target-normalized-online-mlp-shadow",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/011-fit-split-per-feature-z-score-standardization-rescues-target-normalized-online-mlp-shadow-.md",
+      "status": "DISPROVEN",
+      "title": "Fit-split per-feature z-score standardization rescues target-normalized online MLP shadow feedback."
+    },
+    {
+      "id": "doc/012-directional-cosine-shadow-losses-alone-cleanly-clear-the-online-mlp-heldout-warmup-gate",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/012-directional-cosine-shadow-losses-alone-cleanly-clear-the-online-mlp-heldout-warmup-gate.md",
+      "status": "DISPROVEN",
+      "title": "Directional cosine shadow losses alone cleanly clear the online MLP heldout warmup gate."
+    },
+    {
+      "id": "doc/013-gap-penalized-validation-selection-alone-resolves-directional-loss-overfit",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/013-gap-penalized-validation-selection-alone-resolves-directional-loss-overfit.md",
+      "status": "DISPROVEN",
+      "title": "Gap-penalized validation selection alone resolves directional-loss overfit."
+    },
+    {
+      "id": "doc/014-simple-dropout-regularization-rescues-directional-loss-online-mlp-shadow-overfit",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/014-simple-dropout-regularization-rescues-directional-loss-online-mlp-shadow-overfit.md",
+      "status": "DISPROVEN",
+      "title": "Simple dropout regularization rescues directional-loss online MLP shadow overfit."
+    },
+    {
+      "id": "doc/015-per-example-unit-norm-target-stabilization-rescues-directional-loss-online-mlp-shadow-over",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/015-per-example-unit-norm-target-stabilization-rescues-directional-loss-online-mlp-shadow-over.md",
+      "status": "DISPROVEN",
+      "title": "Per-example unit-norm target stabilization rescues directional-loss online MLP shadow overfit."
+    },
+    {
+      "id": "doc/016-fit-split-result-prototype-target-averaging-cleanly-rescues-directional-loss-online-mlp-sh",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/016-fit-split-result-prototype-target-averaging-cleanly-rescues-directional-loss-online-mlp-sh.md",
+      "status": "DISPROVEN",
+      "title": "Fit-split result-prototype target averaging cleanly rescues directional-loss online MLP shadow overfit."
+    },
+    {
+      "id": "doc/017-appending-the-raw-result-projection-input-rescues-directional-loss-online-mlp-shadow-overf",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/017-appending-the-raw-result-projection-input-rescues-directional-loss-online-mlp-shadow-overf.md",
+      "status": "DISPROVEN",
+      "title": "Appending the raw result-projection input rescues directional-loss online MLP shadow overfit."
+    },
+    {
+      "id": "doc/018-train-time-validation-prediction-loss-regularization-rescues-directional-loss-online-mlp-s",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/018-train-time-validation-prediction-loss-regularization-rescues-directional-loss-online-mlp-s.md",
+      "status": "DISPROVEN",
+      "title": "Train-time validation prediction-loss regularization rescues directional-loss online MLP shadow overfit."
+    },
+    {
+      "id": "doc/019-direct-validation-model-gradient-regularization-can-clear-stage-0b-but-a-fixed-calibrated",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/019-direct-validation-model-gradient-regularization-can-clear-stage-0b-but-a-fixed-calibrated-.md",
+      "status": "PARTIAL",
+      "title": "Direct validation model-gradient regularization can clear Stage 0B, but a fixed calibrated module does not produce Stage 1 lift."
+    },
+    {
+      "id": "doc/020-simple-fixed-module-feedback-l2-clamping-rescues-validation-gradient-online-shadow-stage-1",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/020-simple-fixed-module-feedback-l2-clamping-rescues-validation-gradient-online-shadow-stage-1.md",
+      "status": "DISPROVEN",
+      "title": "Simple fixed-module feedback L2 clamping rescues validation-gradient online shadow Stage 1."
+    },
+    {
+      "id": "doc/021-periodic-on-policy-shadow-refresh-alone-rescues-validation-gradient-online-shadow-stage-1",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/021-periodic-on-policy-shadow-refresh-alone-rescues-validation-gradient-online-shadow-stage-1.md",
+      "status": "DISPROVEN",
+      "title": "Periodic on-policy shadow refresh alone rescues validation-gradient online shadow Stage 1."
+    },
+    {
+      "id": "doc/022-soft-result-policy-entropy-batch-diversity-stabilization-rescues-refreshed-online-shadow-s",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/022-soft-result-policy-entropy-batch-diversity-stabilization-rescues-refreshed-online-shadow-s.md",
+      "status": "DISPROVEN",
+      "title": "Soft result-policy entropy/batch-diversity stabilization rescues refreshed online-shadow Stage 1."
+    },
+    {
+      "id": "doc/023-bounding-actual-optimizer-parameter-step-l2-norm-rescues-refreshed-online-shadow-stage-1",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/023-bounding-actual-optimizer-parameter-step-l2-norm-rescues-refreshed-online-shadow-stage-1.md",
+      "status": "DISPROVEN",
+      "title": "Bounding actual optimizer parameter-step L2 norm rescues refreshed online-shadow Stage 1."
+    },
+    {
+      "id": "doc/024-hard-path-answer-loss-step-acceptance-rescues-refreshed-online-shadow-stage-1",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/024-hard-path-answer-loss-step-acceptance-rescues-refreshed-online-shadow-stage-1.md",
+      "status": "DISPROVEN",
+      "title": "Hard-path answer-loss step acceptance rescues refreshed online-shadow Stage 1."
+    },
+    {
+      "id": "doc/025-hard-path-answer-loss-line-search-over-proposed-shadow-step-scales-rescues-refreshed-onlin",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/025-hard-path-answer-loss-line-search-over-proposed-shadow-step-scales-rescues-refreshed-onlin.md",
+      "status": "DISPROVEN",
+      "title": "Hard-path answer-loss line search over proposed shadow step scales rescues refreshed online-shadow Stage 1."
+    },
+    {
+      "id": "doc/026-output-jacobian-conditioned-shadow-features-improve-stage-0b-but-do-not-rescue-refreshed-o",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/026-output-jacobian-conditioned-shadow-features-improve-stage-0b-but-do-not-rescue-refreshed-o.md",
+      "status": "PARTIAL",
+      "title": "Output-Jacobian-conditioned shadow features improve Stage 0B but do not rescue refreshed online-shadow Stage 1."
+    },
+    {
+      "id": "doc/027-hard-answer-loss-improvement-assignments-can-produce-stage-1-lift",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/027-hard-answer-loss-improvement-assignments-can-produce-stage-1-lift.md",
+      "status": "PARTIAL",
+      "title": "Hard answer-loss improvement assignments can produce Stage 1 lift."
+    },
+    {
+      "id": "doc/028-plain-linear-target-off-decay-lets-answer-loss-retain-the-hard-improvement-assignment-inte",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/028-plain-linear-target-off-decay-lets-answer-loss-retain-the-hard-improvement-assignment-inte.md",
+      "status": "DISPROVEN",
+      "title": "Plain linear target-off decay lets answer loss retain the hard improvement-assignment interface."
+    },
+    {
+      "id": "doc/029-always-on-hard-improvement-assignment-can-train-a-natural-result-space-calculator-interfac",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/029-always-on-hard-improvement-assignment-can-train-a-natural-result-space-calculator-interfac.md",
+      "status": "PARTIAL",
+      "title": "Always-on hard improvement assignment can train a natural result-space calculator interface across seeds."
+    },
+    {
+      "id": "doc/030-the-bottleneck-hard-assignment-signal-transfers-directly-to-an-additive-non-bottleneck-mod",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/030-the-bottleneck-hard-assignment-signal-transfers-directly-to-an-additive-non-bottleneck-mod.md",
+      "status": "DISPROVEN",
+      "title": "The bottleneck hard-assignment signal transfers directly to an additive non-bottleneck model."
+    },
+    {
+      "id": "doc/031-a-zero-injection-causal-gap-hinge-is-enough-to-make-non-bottleneck-hard-assignment-learn-c",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/031-a-zero-injection-causal-gap-hinge-is-enough-to-make-non-bottleneck-hard-assignment-learn-c.md",
+      "status": "DISPROVEN",
+      "title": "A zero-injection causal-gap hinge is enough to make non-bottleneck hard assignment learn calculator use."
+    },
+    {
+      "id": "doc/032-a-frozen-bottleneck-trained-result-policy-can-be-handed-to-an-additive-non-bottleneck-mode",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/032-a-frozen-bottleneck-trained-result-policy-can-be-handed-to-an-additive-non-bottleneck-mode.md",
+      "status": "PARTIAL",
+      "title": "A frozen bottleneck-trained result policy can be handed to an additive non-bottleneck model."
+    },
+    {
+      "id": "doc/033-frozen-handoff-replicates-for-a-strong-source-checkpoint-but-is-sensitive-to-source-checkp",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/033-frozen-handoff-replicates-for-a-strong-source-checkpoint-but-is-sensitive-to-source-checkp.md",
+      "status": "PARTIAL",
+      "title": "Frozen handoff replicates for a strong source checkpoint but is sensitive to source checkpoint quality."
+    },
+    {
+      "id": "doc/034-longer-downstream-adaptation-helps-weak-frozen-handoffs-but-does-not-erase-source-sensitiv",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/034-longer-downstream-adaptation-helps-weak-frozen-handoffs-but-does-not-erase-source-sensitiv.md",
+      "status": "PARTIAL",
+      "title": "Longer downstream adaptation helps weak frozen handoffs but does not erase source sensitivity."
+    },
+    {
+      "id": "doc/035-low-lr-full-policy-unfreezing-preserves-adapted-non-bottleneck-calculator-use",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/035-low-lr-full-policy-unfreezing-preserves-adapted-non-bottleneck-calculator-use.md",
+      "status": "DISPROVEN",
+      "title": "Low-LR full-policy unfreezing preserves adapted non-bottleneck calculator use."
+    },
+    {
+      "id": "doc/036-result-policy-anchoring-can-make-full-policy-unfreeze-useful-after-staged-handoff",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/036-result-policy-anchoring-can-make-full-policy-unfreeze-useful-after-staged-handoff.md",
+      "status": "PARTIAL",
+      "title": "Result-policy anchoring can make full-policy unfreeze useful after staged handoff."
+    },
+    {
+      "id": "doc/037-a-fast-kl-anchor-off-ramp-makes-the-adapted-non-bottleneck-policy-self-sustaining",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/037-a-fast-kl-anchor-off-ramp-makes-the-adapted-non-bottleneck-policy-self-sustaining.md",
+      "status": "DISPROVEN",
+      "title": "A fast KL-anchor off-ramp makes the adapted non-bottleneck policy self-sustaining."
+    },
+    {
+      "id": "doc/038-reduced-constant-kl-anchors-can-preserve-non-bottleneck-calculator-use",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/038-reduced-constant-kl-anchors-can-preserve-non-bottleneck-calculator-use.md",
+      "status": "PARTIAL",
+      "title": "Reduced constant KL anchors can preserve non-bottleneck calculator use."
+    },
+    {
+      "id": "doc/039-constant-kl-anchor-0-01-is-below-the-clean-policy-retention-region",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/039-constant-kl-anchor-0-01-is-below-the-clean-policy-retention-region.md",
+      "status": "MIXED",
+      "title": "Constant KL anchor `0.01` is below the clean policy-retention region."
+    },
+    {
+      "id": "doc/040-a-nonzero-anchor-floor-rescues-the-failed-zero-off-ramp-pattern",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/040-a-nonzero-anchor-floor-rescues-the-failed-zero-off-ramp-pattern.md",
+      "status": "PARTIAL",
+      "title": "A nonzero anchor floor rescues the failed zero-off-ramp pattern."
+    },
+    {
+      "id": "doc/041-freezing-only-the-calculator-action-head-preserves-transferred-policy-during-unfreeze",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/041-freezing-only-the-calculator-action-head-preserves-transferred-policy-during-unfreeze.md",
+      "status": "DISPROVEN",
+      "title": "Freezing only the calculator action head preserves transferred policy during unfreeze."
+    },
+    {
+      "id": "doc/042-behavior-gated-anchoring-can-reduce-average-anchor-weight-but-does-not-beat-fixed-0-1",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/042-behavior-gated-anchoring-can-reduce-average-anchor-weight-but-does-not-beat-fixed-0-1.md",
+      "status": "PARTIAL",
+      "title": "Behavior-gated anchoring can reduce average anchor weight but does not beat fixed `0.1`."
+    },
+    {
+      "id": "doc/043-simple-calculator-accuracy-gated-anchoring-is-threshold-sensitive-and-does-not-beat-fixed",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/043-simple-calculator-accuracy-gated-anchoring-is-threshold-sensitive-and-does-not-beat-fixed-.md",
+      "status": "MIXED",
+      "title": "Simple calculator-accuracy-gated anchoring is threshold-sensitive and does not beat fixed `0.1`."
+    },
+    {
+      "id": "doc/044-continuous-calculator-accuracy-anchor-control-can-lower-average-retention-weight-but-is-no",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/044-continuous-calculator-accuracy-anchor-control-can-lower-average-retention-weight-but-is-no.md",
+      "status": "PARTIAL",
+      "title": "Continuous calculator-accuracy anchor control can lower average retention weight but is not a clean fixed-`0.1` replacement."
+    },
+    {
+      "id": "doc/045-freezing-the-policy-backbone-prevents-no-anchor-policy-collapse-but-action-head-readout-ad",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/045-freezing-the-policy-backbone-prevents-no-anchor-policy-collapse-but-action-head-readout-ad.md",
+      "status": "PARTIAL",
+      "title": "Freezing the policy backbone prevents no-anchor policy collapse, but action-head/readout adaptation alone is weaker than anchored unfreezing."
+    },
+    {
+      "id": "doc/046-tiny-anchoring-is-redundant-when-the-policy-backbone-is-frozen",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/046-tiny-anchoring-is-redundant-when-the-policy-backbone-is-frozen.md",
+      "status": "NO-GAIN",
+      "title": "Tiny anchoring is redundant when the policy backbone is frozen."
+    },
+    {
+      "id": "doc/047-longer-stable-policy-readout-adaptation-helps-good-sources-but-does-not-erase-weak-source",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/047-longer-stable-policy-readout-adaptation-helps-good-sources-but-does-not-erase-weak-source-.md",
+      "status": "MIXED",
+      "title": "Longer stable-policy readout adaptation helps good sources but does not erase weak-source sensitivity."
+    },
+    {
+      "id": "doc/048-source-checkpoint-selection-improves-weak-source-handoff-but-source-action-accuracy-is-not",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/048-source-checkpoint-selection-improves-weak-source-handoff-but-source-action-accuracy-is-not.md",
+      "status": "PARTIAL",
+      "title": "Source checkpoint selection improves weak-source handoff but source action accuracy is not sufficient."
+    },
+    {
+      "id": "doc/049-highest-source-normal-calculator-accuracy-is-a-reliable-source-checkpoint-selector",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/049-highest-source-normal-calculator-accuracy-is-a-reliable-source-checkpoint-selector.md",
+      "status": "DISPROVEN",
+      "title": "Highest source normal/calculator accuracy is a reliable source checkpoint selector."
+    },
+    {
+      "id": "doc/050-short-additive-handoff-progress-predicts-final-handoff-better-than-source-accuracy",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/050-short-additive-handoff-progress-predicts-final-handoff-better-than-source-accuracy.md",
+      "status": "PARTIAL",
+      "title": "Short additive handoff progress predicts final handoff better than source accuracy."
+    },
+    {
+      "id": "doc/051-the-initial-frozen-state-readout-probe-was-a-reliable-handoff-proxy",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/051-the-initial-frozen-state-readout-probe-was-a-reliable-handoff-proxy.md",
+      "status": "DISPROVEN",
+      "title": "The initial frozen-state readout probe was a reliable handoff proxy."
+    },
+    {
+      "id": "doc/052-a-600-step-handoff-probe-can-select-a-better-source-checkpoint-than-source-accuracy",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/052-a-600-step-handoff-probe-can-select-a-better-source-checkpoint-than-source-accuracy.md",
+      "status": "POSITIVE",
+      "title": "A 600-step handoff probe can select a better source checkpoint than source accuracy."
+    },
+    {
+      "id": "doc/053-the-600-step-handoff-probe-rescues-weak-src4-source-selection",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/053-the-600-step-handoff-probe-rescues-weak-src4-source-selection.md",
+      "status": "POSITIVE",
+      "title": "The 600-step handoff probe rescues weak `src4` source selection."
+    },
+    {
+      "id": "doc/054-probe-selected-sources-help-later-stable-policy-adaptation-for-weak-handoffs-but-are-not-a",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/054-probe-selected-sources-help-later-stable-policy-adaptation-for-weak-handoffs-but-are-not-a.md",
+      "status": "MIXED-POSITIVE",
+      "title": "Probe-selected sources help later stable-policy adaptation for weak handoffs, but are not a universal long-adaptation selector."
+    },
+    {
+      "id": "doc/055-the-src5-source-accuracy-selected-step-1500-checkpoint-is-the-better-long-adaptation-candi",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/055-the-src5-source-accuracy-selected-step-1500-checkpoint-is-the-better-long-adaptation-candi.md",
+      "status": "DISPROVEN",
+      "title": "The `src5` source-accuracy-selected step-1500 checkpoint is the better long-adaptation candidate."
+    },
+    {
+      "id": "doc/056-the-old-src5-final-source-long-adaptation-advantage-was-mostly-a-continuation-depth-fairne",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/056-the-old-src5-final-source-long-adaptation-advantage-was-mostly-a-continuation-depth-fairne.md",
+      "status": "POSITIVE",
+      "title": "The old `src5` final-source long-adaptation advantage was mostly a continuation-depth fairness issue."
+    },
+    {
+      "id": "doc/057-fair-continuation-also-improves-the-weak-src4-selected-source-lineage",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/057-fair-continuation-also-improves-the-weak-src4-selected-source-lineage.md",
+      "status": "POSITIVE",
+      "title": "Fair continuation also improves the weak `src4` selected-source lineage."
+    },
+    {
+      "id": "doc/058-stable-readout-adaptation-can-be-cut-to-600-steps-but-200-steps-is-source-sensitive",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/058-stable-readout-adaptation-can-be-cut-to-600-steps-but-200-steps-is-source-sensitive.md",
+      "status": "MIXED-POSITIVE",
+      "title": "Stable readout adaptation can be cut to 600 steps, but 200 steps is source-sensitive."
+    },
+    {
+      "id": "doc/059-the-source-selection-handoff-probe-can-be-cut-to-500-steps-on-current-candidates-but-not-t",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/059-the-source-selection-handoff-probe-can-be-cut-to-500-steps-on-current-candidates-but-not-t.md",
+      "status": "MIXED-POSITIVE",
+      "title": "The source-selection handoff probe can be cut to 500 steps on current candidates, but not to 400."
+    },
+    {
+      "id": "doc/060-reducing-the-frozen-policy-continuation-from-800-to-600-steps-is-source-sensitive",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/060-reducing-the-frozen-policy-continuation-from-800-to-600-steps-is-source-sensitive.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Reducing the frozen-policy continuation from 800 to 600 steps is source-sensitive."
+    },
+    {
+      "id": "doc/061-the-500-step-handoff-selector-validates-on-the-src2-source-accuracy-counterexample",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/061-the-500-step-handoff-selector-validates-on-the-src2-source-accuracy-counterexample.md",
+      "status": "POSITIVE",
+      "title": "The 500-step handoff selector validates on the `src2` source-accuracy counterexample."
+    },
+    {
+      "id": "doc/062-the-selected-source-non-bottleneck-recipe-is-progressing-not-looping",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/062-the-selected-source-non-bottleneck-recipe-is-progressing-not-looping.md",
+      "status": "SYNTHESIS",
+      "title": "The selected-source non-bottleneck recipe is progressing, not looping."
+    },
+    {
+      "id": "doc/063-the-500-step-selector-does-not-generalize-cleanly-to-fresh-src6",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/063-the-500-step-selector-does-not-generalize-cleanly-to-fresh-src6.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "The 500-step selector does not generalize cleanly to fresh `src6`."
+    },
+    {
+      "id": "doc/064-the-selected-source-continuation-readout-recipe-clears-the-gate-on-fresh-src6",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/064-the-selected-source-continuation-readout-recipe-clears-the-gate-on-fresh-src6.md",
+      "status": "POSITIVE",
+      "title": "The selected-source continuation/readout recipe clears the gate on fresh `src6`."
+    },
+    {
+      "id": "doc/065-the-600-step-selector-replicated-on-fresh-src7-but-the-reduced-recipe-did-not-clear-the-ga",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/065-the-600-step-selector-replicated-on-fresh-src7-but-the-reduced-recipe-did-not-clear-the-ga.md",
+      "status": "MIXED",
+      "title": "The 600-step selector replicated on fresh `src7`, but the reduced recipe did not clear the gate."
+    },
+    {
+      "id": "doc/066-decaying-small-entropy-batch-diversity-source-stabilization-to-zero-will-rescue-weak-fresh",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/066-decaying-small-entropy-batch-diversity-source-stabilization-to-zero-will-rescue-weak-fresh.md",
+      "status": "DISPROVEN",
+      "title": "Decaying small entropy/batch-diversity source stabilization to zero will rescue weak fresh-source acquisition."
+    },
+    {
+      "id": "doc/067-keeping-entropy-diversity-source-stabilization-active-fixes-collapse-initial-handoff-is-we",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/067-keeping-entropy-diversity-source-stabilization-active-fixes-collapse-initial-handoff-is-we.md",
+      "status": "MIXED-POSITIVE",
+      "title": "Keeping entropy/diversity source stabilization active fixes collapse; initial handoff is weak, but continuation/readout can unlock the source."
+    },
+    {
+      "id": "doc/068-the-no-decay-stabilized-final-source-lineage-clears-the-non-bottleneck-gate-after-continua",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/068-the-no-decay-stabilized-final-source-lineage-clears-the-non-bottleneck-gate-after-continua.md",
+      "status": "POSITIVE",
+      "title": "The no-decay stabilized final-source lineage clears the non-bottleneck gate after continuation/readout."
+    },
+    {
+      "id": "doc/069-the-no-decay-stabilized-source-can-use-600-step-continuation-and-still-clear-the-non-bottl",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/069-the-no-decay-stabilized-source-can-use-600-step-continuation-and-still-clear-the-non-bottl.md",
+      "status": "POSITIVE",
+      "title": "The no-decay stabilized source can use 600-step continuation and still clear the non-bottleneck gate."
+    },
+    {
+      "id": "doc/070-the-no-decay-stabilized-source-continuation-budget-can-be-cut-to-400-steps-but-not-300-by",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/070-the-no-decay-stabilized-source-continuation-budget-can-be-cut-to-400-steps-but-not-300-by-.md",
+      "status": "MIXED-POSITIVE",
+      "title": "The no-decay stabilized source continuation budget can be cut to 400 steps, but not 300 by final eval."
+    },
+    {
+      "id": "doc/071-no-decay-stabilized-source-acquisition-reliably-implies-transferable-non-bottleneck-geomet",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/071-no-decay-stabilized-source-acquisition-reliably-implies-transferable-non-bottleneck-geomet.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "No-decay stabilized source acquisition reliably implies transferable non-bottleneck geometry."
+    },
+    {
+      "id": "doc/072-the-seed-10-transfer-failure-is-only-a-bad-final-checkpoint-selection-artifact",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/072-the-seed-10-transfer-failure-is-only-a-bad-final-checkpoint-selection-artifact.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "The seed-10 transfer failure is only a bad final-checkpoint selection artifact."
+    },
+    {
+      "id": "doc/073-a-direct-additive-handoff-geometry-probe-can-replace-the-400-600-step-handoff-selector",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/073-a-direct-additive-handoff-geometry-probe-can-replace-the-400-600-step-handoff-selector.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "A direct additive handoff geometry probe can replace the 400/600-step handoff selector."
+    },
+    {
+      "id": "doc/074-additive-forced-result-geometry-can-select-source-checkpoints-inside-known-source-families",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/074-additive-forced-result-geometry-can-select-source-checkpoints-inside-known-source-families.md",
+      "status": "DISPROVEN",
+      "title": "Additive forced-result geometry can select source checkpoints inside known source families."
+    },
+    {
+      "id": "doc/075-a-25-50-100-step-downstream-loss-slope-proxy-can-replace-the-additive-handoff-selector",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/075-a-25-50-100-step-downstream-loss-slope-proxy-can-replace-the-additive-handoff-selector.md",
+      "status": "DISPROVEN",
+      "title": "A 25/50/100-step downstream loss-slope proxy can replace the additive handoff selector."
+    },
+    {
+      "id": "doc/076-lowering-the-hard-improvement-assignment-source-weight-from-10-to-5-rescues-transfer-hosti",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/076-lowering-the-hard-improvement-assignment-source-weight-from-10-to-5-rescues-transfer-hosti.md",
+      "status": "DISPROVEN",
+      "title": "Lowering the hard improvement-assignment source weight from `10` to `5` rescues transfer-hostile seed-10 geometry."
+    },
+    {
+      "id": "doc/077-a-simple-learned-ridge-selector-over-early-handoff-trace-features-can-replace-the-500-600",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/077-a-simple-learned-ridge-selector-over-early-handoff-trace-features-can-replace-the-500-600-.md",
+      "status": "DISPROVEN",
+      "title": "A simple learned ridge selector over early handoff trace features can replace the 500/600-step handoff gate."
+    },
+    {
+      "id": "doc/078-logging-only-in-training-additive-handoff-probes-are-implemented",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/078-logging-only-in-training-additive-handoff-probes-are-implemented.md",
+      "status": "TOOLING",
+      "title": "Logging-only in-training additive handoff probes are implemented."
+    },
+    {
+      "id": "doc/079-a-500-step-in-training-additive-handoff-probe-is-not-yet-a-reliable-source-checkpoint-sele",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/079-a-500-step-in-training-additive-handoff-probe-is-not-yet-a-reliable-source-checkpoint-sele.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "A 500-step in-training additive handoff probe is not yet a reliable source-checkpoint selector."
+    },
     {
       "id": "doc/phase7-direction-memory",
       "kind": "memory_document",

@@ -35,24 +35,40 @@ When a new experiment changes a direction-level conclusion:
 Agents should read the relevant memory before proposing local variants in that
 direction.
 
+## Hypothesis Memory Documents
+
+Every tested hypothesis should have a full-text memory document. Generate or
+refresh these from `HYPOTHESIS_LEDGER.md`:
+
+```bash
+python3 researchMemory/scripts/generate_hypothesis_memories.py
+```
+
+Generated docs live under `researchMemory/hypotheses/`. They contain the full
+text, summary, questions, status, source pointer, and anti-rerun fields.
+
 ## Vector And Graph Index
 
-The local index is rebuildable from these markdown memories. For real semantic
-retrieval, build it with OpenAI embeddings:
+The local index is rebuildable from markdown memories and generated hypothesis
+docs. By default it uses local BGE embeddings:
+
+```bash
+python3 researchMemory/scripts/build_memory_index.py
+```
+
+The BGE backend embeds titles, summaries, questions, and compact document text;
+queries use the BGE retrieval prefix automatically.
+
+OpenAI embeddings remain available as an optional cloud backend:
 
 ```bash
 python3 researchMemory/scripts/build_memory_index.py --backend openai --model text-embedding-3-small
 ```
 
-This requires `OPENAI_API_KEY`. The OpenAI API docs describe embeddings as
-vector representations whose distances measure relatedness, and
-`text-embedding-3-small` / `text-embedding-3-large` are current embedding
-models.
-
 For offline tests or no-key environments, use the fallback hashing backend:
 
 ```bash
-python3 researchMemory/scripts/build_memory_index.py
+python3 researchMemory/scripts/build_memory_index.py --backend hash
 ```
 
 Search it before proposing experiments:
@@ -60,6 +76,9 @@ Search it before proposing experiments:
 ```bash
 python3 researchMemory/scripts/search_memory.py "Should we try more REINFORCE?"
 ```
+
+Search uses cached local model files by default. If the model is not cached on
+a new machine, rebuild the index first or pass `--allow-download`.
 
 The generated files live under `researchMemory/index/`:
 
@@ -71,8 +90,8 @@ The generated files live under `researchMemory/index/`:
 - `graph.json`: graph-like nodes and relation edges.
 
 The fallback hash embeddings are not semantic embeddings. They exist so the
-guardrail is testable without network access. Use the OpenAI backend when you
-want semantic retrieval.
+guardrail is testable without network access. Use BGE or OpenAI for semantic
+retrieval.
 
 To scaffold a new memory file:
 

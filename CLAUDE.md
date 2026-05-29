@@ -40,14 +40,14 @@ happened; `RESEARCH_STATE.md` answers what it means now.
 
 ```bash
 python3 researchMemory/scripts/search_memory.py "<experiment idea or question>"
-python3 researchMemory/scripts/build_memory_index.py --backend openai --model text-embedding-3-small
+python3 researchMemory/scripts/build_memory_index.py
 ```
 
-Before proposing an experiment, search the vector/graph memory index. For real
-semantic retrieval, rebuild with OpenAI embeddings. The committed hash backend
-index is only an offline fallback for tests/no-key environments. Read the top
-matching memories and linked evidence; paused directions require a new
-mechanism and strategic-doc updates.
+Before proposing an experiment, search the vector/graph memory index. Rebuild
+with the default BGE local semantic backend when the index is stale. The
+`hash backend` is only an offline fallback for tests/no-key environments. Read top
+memories and evidence; paused directions require a new mechanism and strategic
+updates.
 
 Do not rediscover or present oracle calculator success as progress. Oracle
 calculator outputs, oracle-at-eval recovery, injection-zero controls, and
@@ -100,6 +100,8 @@ When doing research work:
 - Update `HYPOTHESIS_LEDGER.md` for each durable hypothesis outcome.
 - Update `researchMemory/` when a cluster of hypotheses should be remembered
   as a direction-level lesson.
+- For every tested hypothesis, add/update a hypothesis memory document and
+  rebuild the semantic index.
 - Update the relevant phase fact sheet with durable experimental evidence.
 - Add a concise work-history entry under `aiAgentWorkHistory/`.
 - Add or update a `researchReviews/` memo after a major branch outcome, after
