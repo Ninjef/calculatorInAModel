@@ -6988,3 +6988,52 @@ Interpretation:
 - Even fixed step-600 missed the high non-bottleneck gate on this seed, so the
   late recovery branch still needs either a stronger transition signal or a
   more robust source-acquisition objective.
+
+## 2026-05-29 Forced-Loss Adaptive Recovery Trigger
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-forced-loss-adaptive-recovery-trigger.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_scheduled_source_adaptive_recovery_replication/seed17_adaptive_forcedloss005_steps631_cpu
+runs/2026-05-29_phase7_scheduled_source_adaptive_recovery_replication/seed17_handoff600_from_adaptive_forcedloss005_cpu
+```
+
+Question:
+
+Can a geometry/objective metric trigger recovery better than raw source
+argmax accuracy on the hard seed-17 source?
+
+Results:
+
+| Run | Source final | Handoff final / step-600 normal | Injection-zero | Forced-random | Learned calc | Notes |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| adaptive `additive_forced_true_loss <= 0.05`, min step 500 | `0.7225` | `0.7625` / `0.7825` | `0.0450` | `0.0325` | `0.7350` | trigger step `500`, final LR multiplier `0.1`, final forced-true weight `0.1` |
+
+Comparison:
+
+| Seed-17 branch | Source final | Handoff final |
+| --- | ---: | ---: |
+| raw source-accuracy trigger, no fire | `0.6100` | `0.6825` |
+| forced-loss trigger | `0.7225` | `0.7625` |
+| fixed step-600 control | `0.7450` | `0.7675` |
+
+Decision:
+
+```text
+forced_loss_adaptive_recovery_trigger_mixed
+```
+
+Interpretation:
+
+- Forced-true loss is a better one-metric transition signal than raw source
+  argmax accuracy on this seed: it fired and almost matched the fixed step-600
+  control.
+- It still missed the high non-bottleneck gate, so the branch needs either a
+  smoothed/conjunctive trigger or a stronger source objective rather than more
+  single-threshold tuning.

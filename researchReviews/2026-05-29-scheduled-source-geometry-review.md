@@ -208,3 +208,22 @@ Updated steering: raw source-argmax thresholding is not validated. The next
 adaptive transition should use smoothing, patience, a conjunction with
 geometry/loss, or another trigger family; otherwise return to scalable
 assignment work rather than tuning this exact threshold.
+
+## Addendum: Forced-Loss Adaptive Trigger
+
+A different one-metric trigger recovered most of the fixed-step control on the
+hard seed:
+
+- `additive_forced_true_loss <= 0.05` with min step `500` fired at step `500`.
+- The source ended at `0.7225`, versus `0.6100` for the raw source-accuracy
+  trigger that never fired and `0.7450` for fixed step-600 recovery.
+- The trusted 600-step handoff reached `0.7625` final eval / `0.7825`
+  step-600 snapshot, with injection-zero `0.0450`, forced-random `0.0325`,
+  and learned calc `0.7350`.
+- This nearly matched fixed step-600 handoff (`0.7675`) and clearly beat the
+  no-trigger source-accuracy branch (`0.6825`), but still missed the high gate.
+
+Updated steering: forced-true loss is a better adaptive signal than raw source
+accuracy on seed 17, but a single threshold is probably not enough. The next
+transition test should combine maturity signals or shift back toward scalable
+assignment mechanisms.

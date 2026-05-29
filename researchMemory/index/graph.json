@@ -471,6 +471,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/095-forced-true-loss-is-a-better-adaptive-recovery-trigger-than-raw-source-accuracy-on-seed-17",
+      "target": "researchMemory/hypotheses/phase7/095-forced-true-loss-is-a-better-adaptive-recovery-trigger-than-raw-source-accuracy-on-seed-17.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -708,6 +713,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-fresh-adaptive-recovery-trigger-replication.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-forced-loss-adaptive-recovery-trigger.md",
       "type": "supported_by"
     },
     {
@@ -1424,6 +1434,13 @@
       "source_path": "researchMemory/hypotheses/phase7/094-the-simple-source-accuracy-adaptive-recovery-trigger-does-not-replicate-on-a-fresh-seed.md",
       "status": "MIXED-NEGATIVE",
       "title": "The simple source-accuracy adaptive recovery trigger does not replicate on a fresh seed."
+    },
+    {
+      "id": "doc/095-forced-true-loss-is-a-better-adaptive-recovery-trigger-than-raw-source-accuracy-on-seed-17",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/095-forced-true-loss-is-a-better-adaptive-recovery-trigger-than-raw-source-accuracy-on-seed-17.md",
+      "status": "MIXED",
+      "title": "Forced-true loss is a better adaptive recovery trigger than raw source accuracy on seed 17, but it does not clear the gate."
     },
     {
       "id": "doc/phase7-direction-memory",

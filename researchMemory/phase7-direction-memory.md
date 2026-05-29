@@ -237,6 +237,11 @@ Memory:
   step-600 control did better (`0.7450` source, `0.7675` handoff) but still
   missed the high gate. Do not treat raw argmax source accuracy as a validated
   adaptive transition criterion.
+- Forced-true loss is a better one-metric trigger on the hard seed 17:
+  `additive_forced_true_loss <= 0.05` fired at step `500`, improved source final
+  to `0.7225`, and reached `0.7625` trusted 600-step handoff with low controls.
+  This mostly matched the fixed step-600 control (`0.7675`) and beat the
+  no-trigger source-accuracy branch (`0.6825`), but still missed the high gate.
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -257,6 +262,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-automated-scheduled-source-recovery.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-adaptive-source-recovery-trigger.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-fresh-adaptive-recovery-trigger-replication.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-forced-loss-adaptive-recovery-trigger.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 
 ## Direction: Target Propagation / Local Targets
