@@ -119,13 +119,14 @@ Active directions:
   hard-seed handoff to `0.8025`, but still missed the high gate. A hard
   conjunctive gate requiring source accuracy `>=0.70` never fired on the same
   seed and fell back to the weak no-recovery handoff (`0.6825`).
-- A genuinely different credit-assignment family such as target propagation,
-  local targets, or another mechanism that constructs useful calculator-query
-  targets without backpropagating through the calculator. The first
-  local-target gates are positive, including answer-only retention for
-  `policy_reweighted_t1`, but still depend on broad forced-result scoring.
-  Naive sparse sampled candidates underperform unless coverage approaches the
-  full result vocabulary.
+- A genuinely different credit-assignment family such as target propagation or
+  local targets. Exact `policy_reweighted_t1` is positive and survives
+  answer-only retention, but full enumeration is not scalable. Naive sparse
+  sampling and low-loss neighborhoods failed; a new replay-memory proposal is
+  the first useful approximation: it scores only `8` fresh results per step,
+  reuses cached per-prompt losses, beats raw uniform `u32` at 200 steps
+  (`0.5900` vs `0.3350` exact calc), and reaches `0.8600` calc / `0.8750`
+  sampled normal after an 800+200 retention gate.
 - A lower-cost assignment method only if it changes scalability of the
   successful hard-assignment branch, not merely another proxy selector.
 
@@ -156,14 +157,11 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Return to scalable assignment or source objectives that improve transfer
-   geometry directly. One-metric trigger tuning is depleted on seed 17, and a
-   hard source-accuracy conjunction was too conservative.
-2. Prototype a target-propagation/local-target style credit-assignment path
-   beyond the current exact-grid local-target gates: naive uniform/top-k sparse
-   sampling and simple loss-neighborhood expansion are not enough, so the next
-   approximation needs a learned proposal or bias/variance correction that
-   improves true-result coverage without near-full enumeration.
+1. Stress-test replay-memory local targets for scalability: lower fresh scoring
+   budgets, reset/age stale memories, and test whether the proposal generalizes
+   beyond a fixed exhaustive grid. This is promising but still transductive.
+2. In parallel, keep source objectives aimed at actual handoff/readout geometry,
+   not one-metric recovery triggers or cheap selectors.
 3. If trying to reduce hard-assignment cost, state the scalability hypothesis
    up front and compare against the exact-grid assignment ceiling rather than
    only against prior cheap selectors.

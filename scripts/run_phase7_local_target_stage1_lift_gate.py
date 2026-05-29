@@ -48,6 +48,7 @@ def parse_branch_specs(text: str) -> list[str]:
         "policy_reweighted_t",
         "sampled_policy_reweighted_t",
         "adaptive_policy_reweighted_t",
+        "memory_policy_reweighted_t",
         "logit_descent_p",
     )
     for branch in branches:
@@ -106,6 +107,28 @@ def parse_adaptive_policy_reweighted_branch(branch: str) -> tuple[float, int, in
     if radius < 0:
         raise ValueError("adaptive branch radius must be non-negative")
     return temperature, uniform_samples, beam, radius
+
+
+def parse_memory_policy_reweighted_branch(branch: str) -> tuple[float, int, int]:
+    prefix = "memory_policy_reweighted_t"
+    if not branch.startswith(prefix):
+        raise ValueError(f"not a memory policy-reweighted branch: {branch!r}")
+    parts = branch.removeprefix(prefix).split("_")
+    if len(parts) != 3 or not parts[1].startswith("u") or not parts[2].startswith("m"):
+        raise ValueError(
+            "memory policy-reweighted branch must look like "
+            "'memory_policy_reweighted_t1_u8_m24'"
+        )
+    temperature = float(parts[0].replace("p", "."))
+    uniform_samples = int(parts[1].removeprefix("u"))
+    memory_candidates = int(parts[2].removeprefix("m"))
+    if temperature <= 0:
+        raise ValueError("memory policy-reweighted temperature must be positive")
+    if uniform_samples < 1:
+        raise ValueError("memory branch needs at least one fresh uniform sample")
+    if memory_candidates < 0:
+        raise ValueError("memory candidate count must be non-negative")
+    return temperature, uniform_samples, memory_candidates
 
 
 def sample_uniform_result_candidates(
@@ -401,12 +424,108 @@ def adaptive_policy_reweighted_loss(
     }
 
 
+def memory_policy_reweighted_loss(
+    model,
+    batch,
+    *,
+    branch: str,
+    args: argparse.Namespace,
+    state: dict[str, Any],
+) -> tuple[torch.Tensor, dict[str, float | str]]:
+    temperature, uniform_samples, memory_candidates = (
+        parse_memory_policy_reweighted_branch(branch)
+    )
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    result_vocab_size = result_logits.shape[-1]
+    batch_size = batch.x.shape[0]
+    if "loss_table" not in state:
+        state["loss_table"] = result_logits.new_full(
+            (batch_size, result_vocab_size), float("inf")
+        )
+        state["seen_table"] = torch.zeros(
+            (batch_size, result_vocab_size),
+            device=batch.x.device,
+            dtype=torch.bool,
+        )
+    loss_table: torch.Tensor = state["loss_table"]
+    seen_table: torch.Tensor = state["seen_table"]
+    if loss_table.shape != (batch_size, result_vocab_size):
+        raise ValueError("memory branch state shape changed across batches")
+
+    fresh_candidates = sample_uniform_result_candidates(
+        batch_size=batch_size,
+        result_vocab_size=result_vocab_size,
+        count=uniform_samples,
+        device=batch.x.device,
+    )
+    fresh_losses = score_forced_candidate_result_classes(
+        model,
+        batch,
+        fresh_candidates,
+        chunk_size=args.result_chunk_size,
+    )
+    row_idx = torch.arange(batch_size, device=batch.x.device).unsqueeze(1)
+    loss_table[row_idx, fresh_candidates] = fresh_losses
+    seen_table[row_idx, fresh_candidates] = True
+
+    if memory_candidates > 0:
+        memory_count = min(memory_candidates, result_vocab_size)
+        ranked_losses = loss_table.masked_fill(~seen_table, float("inf"))
+        memory_losses, memory_result_classes = ranked_losses.topk(
+            k=memory_count,
+            largest=False,
+            dim=-1,
+        )
+        candidates = torch.cat([fresh_candidates, memory_result_classes], dim=-1)
+        candidate_losses = torch.cat([fresh_losses, memory_losses], dim=-1)
+    else:
+        candidates = fresh_candidates
+        candidate_losses = fresh_losses
+
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=args.digits)
+    true_sum = true_a + true_b
+    observed_true_coverage = (
+        seen_table.gather(1, true_sum.unsqueeze(-1)).squeeze(-1).float().mean().item()
+    )
+    observed_counts = seen_table.sum(dim=-1).to(torch.float32)
+    loss, metrics = dense_unique_candidate_policy_reweighted_loss(
+        model=model,
+        batch=batch,
+        result_logits=result_logits,
+        candidates=candidates,
+        candidate_losses=candidate_losses,
+        temperature=temperature,
+        min_probability_floor=args.min_probability_floor,
+        digits=args.digits,
+        metrics={
+            "branch_loss_mode": branch,
+            "target_family": "memory_policy_reweighted",
+            "target_temperature": float(temperature),
+            "target_uniform_samples": int(uniform_samples),
+            "target_memory_candidates": int(memory_candidates),
+            "target_fresh_scored_results": int(fresh_candidates.shape[1]),
+            "target_observed_results": float(observed_counts.mean().item()),
+            "target_observed_fraction": float(
+                (observed_counts / result_vocab_size).mean().item()
+            ),
+            "target_observed_true_candidate_coverage": float(
+                observed_true_coverage
+            ),
+        },
+    )
+    return loss, {
+        "branch_loss": float(loss.detach().item()),
+        **metrics,
+    }
+
+
 def branch_loss(
     model,
     batch,
     *,
     branch: str,
     args: argparse.Namespace,
+    state: dict[str, Any] | None = None,
 ) -> tuple[torch.Tensor, dict[str, float | str]]:
     if branch == "hard_boundary":
         loss, metrics = result_boundary_target_loss(
@@ -442,6 +561,12 @@ def branch_loss(
         return sampled_policy_reweighted_loss(model, batch, branch=branch, args=args)
     if branch.startswith("adaptive_policy_reweighted_t"):
         return adaptive_policy_reweighted_loss(model, batch, branch=branch, args=args)
+    if branch.startswith("memory_policy_reweighted_t"):
+        if state is None:
+            raise ValueError("memory policy-reweighted branch requires state")
+        return memory_policy_reweighted_loss(
+            model, batch, branch=branch, args=args, state=state
+        )
 
     result_logits, _, _, _ = calculator_read_result_logits(model, batch)
     full_losses = score_forced_result_classes_chunked(
@@ -625,12 +750,17 @@ def train_branch(
             )
         rows.append(row)
 
-    initial_loss, initial_metrics = branch_loss(model, batch, branch=branch, args=args)
+    branch_state: dict[str, Any] = {}
+    initial_loss, initial_metrics = branch_loss(
+        model, batch, branch=branch, args=args, state=branch_state
+    )
     append_snapshot(0, initial_metrics, phase="target", phase_step=0)
     for step in range(1, args.steps + 1):
         model.train()
         optimizer.zero_grad(set_to_none=True)
-        loss, metrics = branch_loss(model, batch, branch=branch, args=args)
+        loss, metrics = branch_loss(
+            model, batch, branch=branch, args=args, state=branch_state
+        )
         loss.backward()
         if args.grad_clip > 0:
             torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)

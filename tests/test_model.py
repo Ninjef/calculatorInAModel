@@ -4448,6 +4448,32 @@ def test_strict_phase6_runner_threads_semantic_decoder_only_scope(tmp_path: Path
     assert command[scope_flag + 1] == "semantic_decoder_only"
 
 
+def test_phase7_memory_local_target_branch_parser() -> None:
+    script_path = Path("scripts/run_phase7_local_target_stage1_lift_gate.py")
+    spec = importlib.util.spec_from_file_location("phase7_local_target_runner", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+
+    assert runner.parse_branch_specs(
+        "memory_policy_reweighted_t1_u8_m24,sampled_policy_reweighted_t1_k0_u32"
+    ) == [
+        "memory_policy_reweighted_t1_u8_m24",
+        "sampled_policy_reweighted_t1_k0_u32",
+    ]
+    assert runner.parse_memory_policy_reweighted_branch(
+        "memory_policy_reweighted_t1_u8_m24"
+    ) == (1.0, 8, 24)
+    assert runner.parse_memory_policy_reweighted_branch(
+        "memory_policy_reweighted_t0p5_u4_m28"
+    ) == (0.5, 4, 28)
+    with pytest.raises(ValueError, match="at least one fresh uniform"):
+        runner.parse_memory_policy_reweighted_branch(
+            "memory_policy_reweighted_t1_u0_m24"
+        )
+
+
 def test_phase6_decay_runner_threads_scope_and_decay_flags(tmp_path: Path) -> None:
     script_path = Path("scripts/run_phase6_strict_local_target_decay_boundary.py")
     spec = importlib.util.spec_from_file_location("phase6_decay_runner", script_path)

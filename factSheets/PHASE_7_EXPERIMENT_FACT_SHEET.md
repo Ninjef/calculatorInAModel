@@ -7147,3 +7147,61 @@ Interpretation:
   return to scalable assignment or source objectives that improve
   handoff/readout geometry directly unless a different transition signal
   family is proposed up front.
+
+## 2026-05-29 Replay-Memory Local-Target Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-replay-memory-local-target-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_memory_local_target_gate/smoke_op3
+runs/2026-05-29_phase7_memory_local_target_gate/memory_u8_m24_vs_uniform_u32_200
+runs/2026-05-29_phase7_memory_local_target_gate/memory_u8_m24_retention_800_200
+```
+
+Question:
+
+Can `policy_reweighted_t1` be approximated by scoring only a few fresh result
+candidates per step and reusing cached forced-result losses from earlier
+steps?
+
+Tooling:
+
+- Added `memory_policy_reweighted_t<T>_u<U>_m<M>` branches to the local-target
+  Stage 1 runner.
+- Each step scores `U` fresh uniform result classes, stores observed
+  per-prompt forced-result losses, and builds the target from the fresh
+  candidates plus `M` low-loss cached candidates.
+
+200-step comparison:
+
+| Branch | Fresh scored / step | Target width | Exact-grid calc | Sampled normal | True coverage | Target argmax | Injection-zero | Forced-random |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `sampled_policy_reweighted_t1_k0_u32` | `32` | `32` | `0.3350` | `0.3438` | `0.8450` | `0.8350` | `0.0234` | `0.0156` |
+| `memory_policy_reweighted_t1_u8_m24` | `8` | `32` | `0.5900` | `0.5391` | `1.0000` | `0.9850` | `0.0234` | `0.0156` |
+
+800+200 retention:
+
+| Branch | Target exact calc | Target sampled normal | Retention exact calc | Retention sampled normal | Injection-zero | Forced-random |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `memory_policy_reweighted_t1_u8_m24` | `0.9600` | `0.9766` | `0.8600` | `0.8750` | `0.0234` | `0.0156` |
+
+Decision:
+
+```text
+replay_memory_local_target_positive_but_transductive
+```
+
+Interpretation:
+
+- Replay memory is the first sparse local-target approximation to beat raw
+  uniform `u32` decisively while scoring fewer fresh results per step.
+- The result is not yet a scalable proof: on a fixed exhaustive grid, the
+  memory eventually observes all `39` result classes for each prompt. Next
+  tests should stress lower fresh scoring, stale-loss aging/rescoring, and
+  generalization beyond fixed prompt identities.

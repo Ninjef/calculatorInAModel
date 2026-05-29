@@ -129,3 +129,31 @@ Keep target propagation/local targets active, but narrow the allowed work:
   different target construction;
 - absent that, pivot mainline compute to source acquisition optimized for
   additive handoff/readout geometry.
+
+## Addendum: Replay-Memory Proposal
+
+A first nontrivial approximation worked after this review.
+
+The new `memory_policy_reweighted_t1_u8_m24` branch scores `8` fresh uniform
+result candidates per step, caches observed forced-result losses per prompt,
+and builds the target from fresh candidates plus `24` low-loss cached
+candidates.
+
+Results:
+
+- At 200 steps, replay memory beat raw uniform `u32` while using one quarter
+  the fresh scoring per step: exact-grid calc `0.5900` and sampled normal
+  `0.5391` versus `0.3350`/`0.3438`.
+- Its final target true-candidate coverage was `1.0000`, target argmax
+  accuracy `0.9850`, and controls stayed low (`0.0234` injection-zero,
+  `0.0156` forced-random).
+- In an 800+200 retention gate, replay memory reached target `0.9600` exact
+  calc / `0.9766` sampled normal and retained `0.8600` calc / `0.8750`
+  sampled normal under answer-only training.
+
+Updated steering: replay memory deserves follow-up because it changes the
+candidate mechanism rather than rerunning a sparse count ladder. The important
+caveat is that the current test is transductive: on the fixed exhaustive grid,
+the memory eventually observes all `39` result classes. The next tests should
+stress lower fresh scoring, stale-loss aging/rescoring, and generalization
+beyond a fixed prompt grid before treating this as scalable.

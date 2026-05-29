@@ -277,7 +277,7 @@ Representative evidence:
 
 ## Direction: Target Propagation / Local Targets
 
-Status: active candidate with Stage 1 retention partial positive
+Status: active candidate with first scalable-approximation positive
 
 Memory:
 
@@ -304,12 +304,15 @@ Memory:
 - A simple adaptive loss-neighborhood proposal was negative: at similar scoring
   budgets it underperformed raw uniform `u32` because expansion clustered into
   fewer unique candidates and lower true-result coverage.
-- The result is not yet a scalable or non-prescriptive method. The tested
-  targets still need broad forced-result scoring.
-- Next work should prioritize a learned candidate proposal or bias/variance
-  correction for `policy_reweighted_t1`; otherwise pivot back to source
-  acquisition for handoff geometry. Do not rerun raw uniform/top-k ladders or
-  simple low-loss-neighborhood expansion as novelty.
+- A replay-memory proposal is the first positive sparse approximation: scoring
+  `8` fresh uniform results per step and reusing cached low-loss candidates
+  beat raw uniform `u32` at 200 steps (`0.5900` vs `0.3350` exact-grid calc)
+  and reached `0.8600` calc / `0.8750` sampled normal after an 800+200
+  answer-only retention gate.
+- The result is promising but still transductive: on the fixed exhaustive grid
+  the memory eventually observes all `39` result classes. Next work should test
+  lower fresh scoring, stale-loss aging/rescoring, or learned/generalized
+  proposal memory before claiming scalability.
 
 Representative evidence:
 
@@ -321,3 +324,4 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-local-target-convergence-retention-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-sampled-local-target-approximation-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-adaptive-local-target-proposal-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-local-target-gate.md`
