@@ -116,6 +116,7 @@ class TrainConfig:
     result_policy_stabilization_decay_steps: int
     result_policy_anchor_weight: float
     result_policy_anchor_decay_steps: int
+    result_policy_anchor_floor: float
     result_policy_anchor_temperature: float
     result_policy_anchor_mode: str
     calculator_causal_gap_weight: float
@@ -736,6 +737,7 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_policy_anchor_objective",
         "result_policy_anchor_loss",
         "result_policy_anchor_weight",
+        "result_policy_anchor_floor",
         "result_policy_anchor_mode",
         "result_policy_anchor_temperature",
         "result_policy_anchor_argmax_agreement",
@@ -1091,6 +1093,17 @@ def result_policy_stabilization_weight(
     if decay_steps <= 0:
         return initial_weight
     return initial_weight * max(0.0, 1.0 - (step / decay_steps))
+
+
+def result_policy_anchor_weight_schedule(
+    *, initial_weight: float, decay_steps: int, floor: float, step: int
+) -> float:
+    if initial_weight <= 0:
+        return 0.0
+    if decay_steps <= 0:
+        return initial_weight
+    decayed = initial_weight * max(0.0, 1.0 - (step / decay_steps))
+    return max(floor, decayed)
 
 
 def capture_result_policy_anchor(
@@ -6516,6 +6529,7 @@ def run_variant(
         ),
         result_policy_anchor_weight=args.result_policy_anchor_weight,
         result_policy_anchor_decay_steps=args.result_policy_anchor_decay_steps,
+        result_policy_anchor_floor=args.result_policy_anchor_floor,
         result_policy_anchor_temperature=args.result_policy_anchor_temperature,
         result_policy_anchor_mode=args.result_policy_anchor_mode,
         calculator_causal_gap_weight=args.calculator_causal_gap_weight,
@@ -7519,9 +7533,10 @@ def run_variant(
             loss = loss + result_policy_stabilization_objective
         if result_policy_anchor is not None:
             current_result_policy_anchor_weight = (
-                result_policy_stabilization_weight(
+                result_policy_anchor_weight_schedule(
                     initial_weight=args.result_policy_anchor_weight,
                     decay_steps=args.result_policy_anchor_decay_steps,
+                    floor=args.result_policy_anchor_floor,
                     step=step,
                 )
             )
@@ -7545,6 +7560,9 @@ def run_variant(
             )
             result_policy_anchor_metrics["result_policy_anchor_weight"] = float(
                 current_result_policy_anchor_weight
+            )
+            result_policy_anchor_metrics["result_policy_anchor_floor"] = float(
+                args.result_policy_anchor_floor
             )
             result_policy_anchor_metrics["result_policy_anchor_objective"] = (
                 result_policy_anchor_objective_value
@@ -8294,13 +8312,15 @@ def run_variant(
     metrics["result_policy_anchor_decay_steps"] = (
         args.result_policy_anchor_decay_steps
     )
+    metrics["result_policy_anchor_floor"] = args.result_policy_anchor_floor
     metrics["result_policy_anchor_temperature"] = (
         args.result_policy_anchor_temperature
     )
     metrics["result_policy_anchor_mode"] = args.result_policy_anchor_mode
-    metrics["final_result_policy_anchor_weight"] = result_policy_stabilization_weight(
+    metrics["final_result_policy_anchor_weight"] = result_policy_anchor_weight_schedule(
         initial_weight=args.result_policy_anchor_weight,
         decay_steps=args.result_policy_anchor_decay_steps,
+        floor=args.result_policy_anchor_floor,
         step=args.steps,
     )
     if result_policy_anchor is not None:
@@ -9063,7 +9083,19 @@ def parse_args() -> argparse.Namespace:
         "--result-policy-anchor-decay-steps",
         type=int,
         default=0,
-        help="Linearly decay result-policy anchor weight to zero; 0 keeps it constant.",
+        help=(
+            "Linearly decay result-policy anchor weight to "
+            "--result-policy-anchor-floor; 0 keeps it constant."
+        ),
+    )
+    parser.add_argument(
+        "--result-policy-anchor-floor",
+        type=float,
+        default=0.0,
+        help=(
+            "Minimum result-policy anchor weight after decay; only used with "
+            "decay steps."
+        ),
     )
     parser.add_argument(
         "--result-policy-anchor-temperature",
@@ -9983,6 +10015,15 @@ def main() -> None:
         raise ValueError("--result-policy-anchor-weight must be non-negative")
     if args.result_policy_anchor_decay_steps < 0:
         raise ValueError("--result-policy-anchor-decay-steps must be non-negative")
+    if args.result_policy_anchor_floor < 0:
+        raise ValueError("--result-policy-anchor-floor must be non-negative")
+    if (
+        args.result_policy_anchor_floor > 0
+        and args.result_policy_anchor_weight <= 0
+    ):
+        raise ValueError("--result-policy-anchor-floor requires anchor weight")
+    if args.result_policy_anchor_floor > args.result_policy_anchor_weight:
+        raise ValueError("--result-policy-anchor-floor cannot exceed anchor weight")
     if args.result_policy_anchor_temperature <= 0:
         raise ValueError("--result-policy-anchor-temperature must be positive")
     if args.result_policy_anchor_weight > 0:
@@ -10314,6 +10355,10 @@ def main() -> None:
                 suffix_parts.append(
                     f"rpolanchordcy{args.result_policy_anchor_decay_steps}"
                 )
+            if args.result_policy_anchor_floor > 0:
+                suffix_parts.append(
+                    f"rpolanchorfloor{args.result_policy_anchor_floor:g}"
+                )
         if args.calculator_causal_gap_weight > 0:
             suffix_parts.append(f"causalgapw{args.calculator_causal_gap_weight:g}")
             suffix_parts.append(f"causalgapm{args.calculator_causal_gap_margin:g}")
@@ -10477,7 +10522,8 @@ def main() -> None:
         f"weight={args.result_policy_anchor_weight} "
         f"mode={args.result_policy_anchor_mode} "
         f"temperature={args.result_policy_anchor_temperature} "
-        f"decay_steps={args.result_policy_anchor_decay_steps}"
+        f"decay_steps={args.result_policy_anchor_decay_steps} "
+        f"floor={args.result_policy_anchor_floor}"
     )
     print(
         "calculator causal gap: "

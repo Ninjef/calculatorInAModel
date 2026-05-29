@@ -3934,3 +3934,68 @@ Interpretation:
   especially for `src5_add5`.
 - Future schedules should treat `0.1` as the first plausible lightweight floor
   in this setup, not assume anchor weights can be reduced to near zero.
+
+## 2026-05-28 Bottleneck-to-Additive Anchor Floor Schedule Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-forty-seventh-task-Bottleneck-to-additive-anchor-floor-schedule.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_bottleneck_to_additive_transfer_policy_anchor_floor_unfreeze
+```
+
+Code change:
+
+- Added `--result-policy-anchor-floor`.
+- The result-policy anchor schedule can now decay to a nonzero floor instead
+  of only to zero.
+- Added a focused schedule unit test.
+
+Question:
+
+Can a floored schedule keep the useful lightweight retention of anchor `0.1`
+while allowing early stronger protection and avoiding the failed zero-off-ramp?
+
+Configuration:
+
+- Continued from the adapted weak-source checkpoints.
+- Loaded with `--semantic-decoder-checkpoint-load-scope full_model`.
+- Removed `--freeze-calculator-policy`.
+- global LR `3e-4`;
+- `--result-policy-anchor-mode kl`;
+- anchor weight `1.0`;
+- `--result-policy-anchor-decay-steps 200`;
+- `--result-policy-anchor-floor 0.1`;
+- answer loss weight `1`;
+- exact-grid natural `0..19`;
+- 400 steps.
+
+Result:
+
+| Run | Frozen adapted final | Anchor-0.1 final | Floor-schedule final | Best normal | Final injection-zero | Final forced-random | Final oracle | Final calc | Final anchor weight | Final anchor agreement |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` floor `0.1` | `0.6050` | `0.8325` | `0.7925` | `0.7725` at `200` | `0.0250` | `0.1000` | `0.8000` | `0.8175` | `0.1000` | `0.9225` |
+| `src5_add5` floor `0.1` | `0.8175` | `0.9750` | `0.9775` | `0.9650` at `350` | `0.0075` | `0.0550` | `0.9300` | `0.7800` | `0.1000` | `0.8975` |
+
+Decision:
+
+```text
+bottleneck_to_additive_anchor_floor_schedule_partial
+```
+
+Interpretation:
+
+- The nonzero floor avoided the policy-collapse pattern seen when the anchor
+  decayed to zero.
+- It preserved calculator dependence and useful calculator-result accuracy in
+  both cells.
+- It did not outperform constant anchor `0.1` in this two-cell gate, so the
+  floor mechanism is useful scheduling infrastructure rather than a new
+  performance breakthrough.
+- Next work should prefer calculator-accuracy-gated retention, adaptive floors,
+  selective unfreezing, or less prescriptive source-policy acquisition.

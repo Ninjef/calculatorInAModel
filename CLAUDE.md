@@ -493,6 +493,18 @@ to `0.8825/0.7050`. This suggests the useful constant-anchor region is around
 regularizer that can preserve causal dependence while allowing significant
 policy drift.
 
+A floored anchor schedule was then implemented and tested:
+`bottleneck_to_additive_anchor_floor_schedule_partial`. The new
+`--result-policy-anchor-floor` lets the anchor decay to a nonzero floor rather
+than all the way to zero. With anchor `1.0 -> 0.1` over `200` steps, then
+`0.1` for the remaining `200` steps, `src4_add2` ended at final eval
+`0.7925`, learned calc `0.8175`, and injection-zero `0.0250`; `src5_add5`
+ended at final eval `0.9775`, learned calc `0.7800`, and injection-zero
+`0.0075`. This rescues the failed zero-off-ramp pattern, but it did not beat
+constant anchor `0.1` in this two-cell gate. The important practical result is
+that a lightweight nonzero floor is enough to preserve calculator dependence,
+while decaying to zero is not.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -623,6 +635,10 @@ Do not rerun these as next steps unless debugging new code:
   from the adapted `src4_add2` or `src5_add5` checkpoints as novelty. It
   avoided full collapse but allowed substantial policy drift, especially in
   `src5_add5`.
+- result-policy KL anchor `1.0` decayed to floor `0.1` over `200` steps, LR
+  `3e-4`, 400-step full unfreeze from the adapted `src4_add2` or `src5_add5`
+  checkpoints as novelty. It preserved calculator dependence but did not beat
+  constant anchor `0.1`.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -638,8 +654,8 @@ bottleneck-to-additive handoff that is stronger than a plain zero-injection
 loss-gap hinge, seed replication/unfreeze schedules for the frozen-policy
 bottleneck-to-additive handoff that specifically changes source checkpoint
 selection, downstream adaptation beyond just one longer continuation, or
-unfreezing with a floored/gated policy-retention schedule near the `0.1`
-anchor-strength region or a selective parameter set,
+unfreezing with calculator-accuracy-gated retention, an adaptive floor around
+the `0.1` anchor-strength region, or a selective parameter set,
 a Jacobian-conditioned state more substantial than the result-output
 `J^T answer_grad` feature, or a richer target construction that remains valid
 after upstream movement.

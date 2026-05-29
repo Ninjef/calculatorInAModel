@@ -3674,6 +3674,33 @@ def test_training_adaptive_interface_weight_schedule_respects_floor() -> None:
     ) == pytest.approx(0.0)
 
 
+def test_result_policy_anchor_weight_schedule_respects_floor() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_script_result_anchor_floor", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    assert overfit_script.result_policy_anchor_weight_schedule(
+        initial_weight=1.0, decay_steps=200, floor=0.1, step=0
+    ) == pytest.approx(1.0)
+    assert overfit_script.result_policy_anchor_weight_schedule(
+        initial_weight=1.0, decay_steps=200, floor=0.1, step=100
+    ) == pytest.approx(0.5)
+    assert overfit_script.result_policy_anchor_weight_schedule(
+        initial_weight=1.0, decay_steps=200, floor=0.1, step=200
+    ) == pytest.approx(0.1)
+    assert overfit_script.result_policy_anchor_weight_schedule(
+        initial_weight=1.0, decay_steps=0, floor=0.1, step=200
+    ) == pytest.approx(1.0)
+    assert overfit_script.result_policy_anchor_weight_schedule(
+        initial_weight=0.0, decay_steps=200, floor=0.1, step=200
+    ) == pytest.approx(0.0)
+
+
 def test_adaptive_interface_selects_high_probability_operand_pair() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_script_adaptive_select", script_path)

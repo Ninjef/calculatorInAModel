@@ -1484,3 +1484,37 @@ Anchor `0.01` avoided the full no-anchor collapse and kept answer accuracy
 calculator-dependent, but policy retention was materially weaker than anchor
 `0.1`. This makes anchor `0.1` a more plausible floor for future gated/floored
 retention schedules.
+
+## Status Update: 2026-05-28, Bottleneck-to-Additive Anchor Floor Schedule
+
+I added and tested a floored anchor schedule:
+
+```text
+bottleneck_to_additive_anchor_floor_schedule_partial
+```
+
+Code change:
+
+- Added `--result-policy-anchor-floor`.
+- Result-policy anchors can now decay linearly to a nonzero floor instead of
+  always decaying to zero.
+
+Experiment:
+
+- Same adapted weak-source checkpoints.
+- Full policy unfreeze, LR `3e-4`.
+- KL anchor `1.0`.
+- `--result-policy-anchor-decay-steps 200`.
+- `--result-policy-anchor-floor 0.1`.
+- 400 steps.
+
+| Run | Final eval | Best normal | Final calc | Final injection-zero | Final anchor weight | Final anchor agreement |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` floor `0.1` | `0.7925` | `0.7725` at `200` | `0.8175` | `0.0250` | `0.1000` | `0.9225` |
+| `src5_add5` floor `0.1` | `0.9775` | `0.9650` at `350` | `0.7800` | `0.0075` | `0.1000` | `0.8975` |
+
+The nonzero floor preserved calculator dependence and avoided the failed
+zero-off-ramp drift. It did not outperform constant anchor `0.1`, so the
+result mainly establishes useful scheduling infrastructure and confirms that
+future off-ramps should not decay below the lightweight retention region unless
+they are gated by calculator-result accuracy.

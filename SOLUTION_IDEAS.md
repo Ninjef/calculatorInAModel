@@ -328,6 +328,11 @@ answer accuracy remained useful, but one cell's final calculator-result
 accuracy fell to `0.6425` and anchor agreement to `0.7050`. A practical
 retention schedule should probably floor around the `0.1` region or gate on
 calculator-result accuracy rather than decaying all the way to zero.
+A floored schedule now exists: `--result-policy-anchor-floor` lets the anchor
+decay to a lightweight nonzero floor. Anchor `1.0 -> 0.1` preserved calculator
+dependence and strong `src5` answer accuracy, but did not beat simply keeping
+anchor `0.1` constant. The next interesting version is adaptive/gated
+retention, not another fixed floor.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 
