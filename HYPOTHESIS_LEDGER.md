@@ -357,3 +357,9 @@ Conclusion: Existing traces show 400-step probe would pick `src5` step-1500, but
 Do not repeat: Same trace audit over existing `src5` 1100/1400/1500/final and `src4` 1000/1200/final handoff probes as novelty.
 Next allowed test: Validate 500-step selection on new source checkpoints, reduce the 800-step continuation cost, or optimize source acquisition for early handoff/continuation slope.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-shorter-handoff-probe-trace-audit.md`
+
+MIXED-NEGATIVE: Reducing the frozen-policy continuation from 800 to 600 steps is source-sensitive.
+Conclusion: With 600-step readout after reduced continuation, `src5` still passed (`0.9275` vs `0.9325` reference), but weak `src4` fell below gate (`0.8750` vs `0.9025` reference) despite retained calculator dependence.
+Do not repeat: Same 600-step continuation plus 600-step policy-backbone-frozen readout from selected `src4` step-1200/add2 and `src5` step-1100/add5 checkpoints as novelty.
+Next allowed test: Keep 800 continuation for weak sources, test 700-step continuation only for fine-grained tuning, or optimize source acquisition for continuation slope.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-reduced-continuation-budget-validation.md`

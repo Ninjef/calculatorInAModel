@@ -5041,3 +5041,45 @@ Interpretation:
   600-step probe on both audited source families.
 - This is a trace audit and should be validated on new source checkpoints before
   treating 500 steps as a general selector.
+
+## 2026-05-29 Reduced Continuation Budget Validation
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-sixty-eighth-task-Reduced-continuation-budget-validation.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_reduced_continuation_budget_validation
+```
+
+Question:
+
+Can the extra frozen-policy continuation stage be reduced from 800 to 600 steps
+while keeping the reduced 600-step stable readout stage?
+
+Result:
+
+| Run | Continuation steps | Readout steps | Continuation final | Readout final | Readout best normal | Last injection-zero | Last forced-random | Last oracle | Last calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4` reduced | `600` | `600` | `0.7950` | `0.8750` | `0.8975` at `500` | `0.0000` | `0.0200` | `0.8625` | `0.8000` |
+| `src4` reference | `800` | `600` | `0.8150` | `0.9025` | `0.9250` at `500` | `0.0025` | `0.0175` | `0.8625` | `0.8000` |
+| `src5` reduced | `600` | `600` | `0.8850` | `0.9275` | `0.9525` at `600` | `0.0000` | `0.0275` | `0.9350` | `0.8250` |
+| `src5` reference | `800` | `600` | `0.8800` | `0.9325` | `0.9525` at `600` | `0.0000` | `0.0250` | `0.9300` | `0.8250` |
+
+Decision:
+
+```text
+reduced_continuation_budget_600_source_sensitive_negative
+```
+
+Interpretation:
+
+- The 600-step continuation is enough for `src5`, but not for weak `src4`.
+- The reduced `src4` chain remains calculator-dependent under controls, but
+  misses the `0.90` final-eval gate.
+- The current validated recipe should keep 800 continuation steps for weak
+  selected sources.
