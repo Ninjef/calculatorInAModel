@@ -321,3 +321,9 @@ Conclusion: Reproduced `src4` with snapshots; 600-step probe selected step `1200
 Do not repeat: Same `src4` step `1000/1200/final`, additive seed `2`, frozen-policy handoff-probe comparison as novelty.
 Next allowed test: Use probe score during source acquisition, reduce probe cost, or test whether probe-selected sources reduce later anchor/long-adaptation needs.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-handoff-probe-selector-src4.md`
+
+MIXED-POSITIVE: Probe-selected sources help later stable-policy adaptation for weak handoffs, but are not a universal long-adaptation selector.
+Conclusion: 1600-step no-anchor `--freeze-calculator-policy-backbone` adaptation from probe-selected checkpoints lifted `src4` from old final-source long adaptation `0.7550` to `0.8900`, but `src5` reached `0.9250`, below the old final-source long adaptation `0.9500`.
+Do not repeat: Same probe-selected `src4` step-1200/add2 or `src5` step-1100/add5 frozen handoff checkpoint into no-anchor policy-backbone-frozen 1600-step adaptation as novelty.
+Next allowed test: Add a second-stage long-adaptation/readout-compatibility selector, optimize source acquisition for both 600-step handoff slope and later readout adaptability, or reduce the handoff-probe cost.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-probe-selected-policy-backbone-adaptation.md`

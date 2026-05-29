@@ -4766,3 +4766,52 @@ Interpretation:
 - This also beats the old continued final-source baseline `0.6050`.
 - The result reinforces that source handoff quality is not source action
   accuracy; the useful selector is downstream handoff geometry.
+
+## 2026-05-29 Probe-Selected Policy-Backbone Adaptation
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-sixty-second-task-Probe-selected-policy-backbone-adaptation.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_probe_selected_policy_backbone_adaptation
+```
+
+Question:
+
+Do checkpoints selected by the 600-step additive handoff probe reduce later
+anchor or long-adaptation needs under stable-policy adaptation?
+
+Result:
+
+| Run | Frozen handoff final | Adapted final eval | Adapted best normal | Last injection-zero | Last forced-random | Last oracle | Last calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4` step-1200 selected | `0.7800` | `0.8900` | `0.8975` at `1400` | `0.0000` | `0.0175` | `0.8675` | `0.8225` |
+| `src5` step-1100 selected | `0.7950` | `0.9250` | `0.9325` at `1600` | `0.0000` | `0.0150` | `0.9525` | `0.8275` |
+
+Comparison:
+
+| Seed pair | Selected-source adapted final | Old final-source adapted final |
+| --- | ---: | ---: |
+| `src4/add2` | `0.8900` | `0.7550` |
+| `src5/add5` | `0.9250` | `0.9500` |
+
+Decision:
+
+```text
+probe_selected_policy_backbone_adaptation_mixed_positive
+```
+
+Interpretation:
+
+- Probe-selected `src4` plus stable-policy readout adaptation strongly beats
+  the old final-source long-adaptation result.
+- Probe-selected `src5` remains strong and calculator-dependent, but does not
+  beat the older final-source long-adaptation result.
+- The 600-step handoff probe is a useful source-quality metric, but downstream
+  long-adaptation quality likely needs an additional readout-compatibility
+  criterion.
