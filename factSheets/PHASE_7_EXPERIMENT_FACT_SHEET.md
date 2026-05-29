@@ -5360,3 +5360,60 @@ Interpretation:
   selector can choose the best available checkpoint, but weak source families
   still need better acquisition objectives or stronger handoff/continuation
   slope.
+
+## 2026-05-29 Source Acquisition Stabilization Variant
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-seventy-fourth-task-Source-acquisition-stabilization-variant.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_source_acquisition_stabilization_variant
+```
+
+Question:
+
+Can small entropy plus batch-diversity regularization stabilize fresh
+bottleneck source acquisition enough to improve the weak-source boundary before
+downstream non-bottleneck handoff?
+
+Setup:
+
+- Current direct-feedback result-space bottleneck source recipe.
+- Added `result_policy_entropy_weight=0.05` and
+  `result_policy_batch_diversity_weight=0.1`.
+- Decayed all result-policy stabilization terms to zero over 1200 steps.
+- Exact-grid natural `0..19`, frozen product semantic decoder, CLI seed `9`,
+  1600 source steps.
+
+Result:
+
+| Step | Source normal | Injection-zero | Oracle | Learned calc |
+| --- | ---: | ---: | ---: | ---: |
+| `700` | `0.7050` | `0.0650` | `1.0000` | `0.7050` |
+| `900` | `0.7050` | `0.0525` | `1.0000` | `0.7050` |
+| `1200` | `0.5800` | `0.0400` | `1.0000` | `0.5800` |
+| `1300` | `0.1900` | `0.0575` | `1.0000` | `0.1900` |
+| `1600` | `0.2175` | `0.0300` | `1.0000` | `0.2175` |
+| final eval | `0.1825` | `0.0703` | `1.0000` | `0.2266` |
+
+Decision:
+
+```text
+source_acquisition_entropy_diversity_decay_negative
+```
+
+Interpretation:
+
+- The variant did not improve source acquisition; it peaked at `0.7050` before
+  the decay completed and collapsed after all result-policy stabilization terms
+  reached zero.
+- No downstream handoff was run because the source curve failed the
+  acquisition gate and would mostly retest weak-source transfer.
+- Pure decay-to-zero source stabilization is a dead end here. If these terms
+  are reused, keep a nonzero floor, add anchoring, or optimize directly for a
+  handoff/continuation proxy.

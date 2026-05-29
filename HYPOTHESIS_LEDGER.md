@@ -393,3 +393,9 @@ Conclusion: On weak fresh `src7`, 600-step handoff selection picked step `1400` 
 Do not repeat: Same `src7` step-1000/step-1400/final handoff comparison or step-1400 continuation/readout chain as novelty.
 Next allowed test: Optimize source acquisition for 600-step handoff/continuation slope, or use fresh-source replications only as planned acquisition gates.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-src7-600-selector-replication.md`
+
+DISPROVEN: Decaying small entropy/batch-diversity source stabilization to zero will rescue weak fresh-source acquisition.
+Conclusion: Fresh seed-9 source acquisition with entropy `0.05`, batch diversity `0.1`, improvement assignment `10`, and decay-to-zero over 1200 steps peaked at `0.7050` around steps `700/900`, then collapsed to final `0.1825`.
+Do not repeat: Same decay-to-zero source-only recipe with answer loss off as novelty.
+Next allowed test: Keep a nonzero source-objective floor, add policy anchoring, or optimize source acquisition for 600-step handoff/continuation slope.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-source-acquisition-stabilization-variant.md`
