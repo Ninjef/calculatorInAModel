@@ -75,16 +75,21 @@ step `1400` checkpoint. But even the better final-source handoff is weak:
 
 ## Decision
 
-Label:
+Initial handoff label:
 
 ```text
 source_acquisition_entropy_diversity_nodecay_source_positive_transfer_negative
 ```
 
-No downstream continuation/readout was run. The handoff signal is too weak to
-justify spending the full recipe, and the more important result is already
-resolved: persistent entropy/diversity source stabilization improves bottleneck
-source accuracy but does not produce handoff-friendly source geometry.
+Follow-up continuation/readout is recorded in:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-stabilized-source-continuation-readout.md
+```
+
+That follow-up showed the initial weak handoff was not the final story:
+800-step frozen-policy continuation cleared the non-bottleneck gate, and a
+600-step readout raised the lineage to `0.9575`.
 
 ## Interpretation
 
@@ -94,8 +99,9 @@ no-decay objective appears to bias the source toward a high-accuracy protocol
 that the additive non-bottleneck downstream path cannot easily read out.
 
 This strengthens the current Phase 7 direction: source acquisition should be
-optimized for 600-step handoff or continuation slope, not just bottleneck
-source accuracy or source-policy diversity.
+evaluated by continuation/readout slope, not just bottleneck source accuracy or
+early handoff accuracy. The no-decay source was initially handoff-weak, but its
+frozen calculator signal was usable after continuation.
 
 ## Anti-Rerun Note
 
@@ -104,13 +110,14 @@ additive seed-9 handoff comparison as novelty.
 
 Next useful tests:
 
-- add a handoff/continuation proxy to the source-acquisition objective;
-- test a source-policy anchor/floor that preserves handoff-friendly geometry,
-  not merely source accuracy;
+- replicate the no-decay source/continuation/readout chain on another fresh
+  seed;
+- reduce the continuation cost for no-decay stabilized sources;
 - inspect why the high-source-normal step `1400` has worse additive transfer
   than final despite slightly better bottleneck accuracy.
 
 ## Verification
 
 The source run and both handoff candidates completed and wrote metrics under
-the run root above. No code changed.
+the run root above. Later continuation/readout follow-up also completed; see
+the follow-up work history file.

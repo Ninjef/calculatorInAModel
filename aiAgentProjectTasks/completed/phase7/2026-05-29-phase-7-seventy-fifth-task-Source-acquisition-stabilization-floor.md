@@ -39,12 +39,11 @@ than the higher-source-normal step `1400`, but only reached `0.6500`.
 source_acquisition_entropy_diversity_nodecay_source_positive_transfer_negative
 ```
 
-Persistent source stabilization fixes the collapse but does not produce
-handoff-friendly source geometry. Continuation/readout was skipped because the
-best handoff was below the recent weak-source boundary.
+Persistent source stabilization fixes the collapse, but initial additive
+handoff was weak. A later follow-up task showed that the final-source lineage
+does become useful after frozen-policy continuation plus readout.
 
 ## Next
 
-Optimize source acquisition for 600-step handoff/continuation slope, or add a
-handoff-aware proxy/anchor rather than only improving bottleneck source
-accuracy.
+See the follow-up continuation/readout task for the final outcome of this
+lineage.

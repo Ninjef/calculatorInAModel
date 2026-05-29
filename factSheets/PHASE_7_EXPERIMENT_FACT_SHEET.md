@@ -5478,8 +5478,64 @@ Interpretation:
 - High bottleneck source accuracy still does not imply additive handoff
   quality: step `1400` had the best source normal (`0.9100`) but transferred
   worse than final (`0.4425` vs `0.6500`).
-- The best handoff is below the recent weak `src7` handoff (`0.7325`) whose
-  full continuation/readout chain still missed the `0.90` gate, so downstream
-  continuation/readout was intentionally skipped.
-- Source acquisition needs a handoff/continuation-aware objective or proxy,
-  not only persistent entropy/diversity pressure.
+- Follow-up continuation/readout showed the final-source lineage is usable:
+  direct readout was partial, but 800-step continuation and 600-step readout
+  cleared the non-bottleneck gate.
+- Source acquisition needs a continuation/readout-aware objective or proxy,
+  not only persistent entropy/diversity pressure or source normal accuracy.
+
+## 2026-05-29 Stabilized Source Continuation and Readout
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-seventy-sixth-task-Stabilized-source-continuation-readout.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_source_acquisition_stabilization_floor
+```
+
+Question:
+
+Can the no-decay stabilized source lineage clear the non-bottleneck gate after
+continuation/readout, despite weak initial additive handoff?
+
+Setup:
+
+- Started from the no-decay final-source additive handoff (`0.6500` final,
+  learned calc `0.8750`).
+- Ran a direct 600-step policy-backbone-frozen readout diagnostic.
+- Ran the standard 800-step frozen-policy continuation.
+- Ran the standard 600-step policy-backbone-frozen readout from the continued
+  checkpoint.
+
+Result:
+
+| Stage | Final eval | Best snapshot | Injection-zero | Forced-random | Oracle | Calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| final-source handoff | `0.6500` | `0.7025` | `0.0000` | `0.0859` | `0.7422` | `0.8750` |
+| direct 600-step readout | `0.8000` | `0.8425` | `0.0234` | `0.0938` | `0.8281` | `0.8750` |
+| 800-step continuation | `0.9050` | `0.9350` | `0.0078` | `0.0938` | `0.9141` | `0.8750` |
+| 600-step readout | `0.9575` | `0.9625` | `0.0156` | `0.0859` | `0.9375` | `0.8750` |
+
+Decision:
+
+```text
+stabilized_source_continuation_readout_positive
+```
+
+Interpretation:
+
+- The no-decay stabilized source clears the non-bottleneck gate after
+  continuation/readout.
+- Initial additive handoff alone underestimates this source family: final
+  handoff was only `0.6500`, but frozen-policy continuation reached `0.9050`
+  and post-continuation readout reached `0.9575`.
+- Controls remain far below normal, so the additive answer path remains
+  calculator-dependent.
+- Next useful work is replication on another no-decay stabilized source,
+  continuation-cost reduction for this source family, or a cheaper proxy for
+  continuation/readout slope.
