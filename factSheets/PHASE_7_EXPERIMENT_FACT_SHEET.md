@@ -5083,3 +5083,42 @@ Interpretation:
   misses the `0.90` final-eval gate.
 - The current validated recipe should keep 800 continuation steps for weak
   selected sources.
+
+## 2026-05-29 `src2` 500-Step Selector Validation
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-sixty-ninth-task-Src2-500-step-selector-validation.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_source_checkpoint_selection_replication
+```
+
+Question:
+
+Does the shortened 500-step handoff selector also work on the `src2`
+source-accuracy counterexample?
+
+Result:
+
+| Candidate | Source normal/calc | Normal @ 400 | Normal @ 500 | Normal @ 600 | Normal @ 800 | Final handoff |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| step `1300` | `0.9475` | `0.4100` | `0.5875` | `0.7200` | `0.8875` | `0.8675` |
+| final / step `1600` | `0.9150` | `0.5700` | `0.6900` | `0.8025` | `0.9325` | `0.9525` |
+
+Decision:
+
+```text
+src2_500_step_selector_validation_positive
+```
+
+Interpretation:
+
+- The 500-step selector picks the known better final checkpoint on `src2`,
+  despite lower source normal/calculator accuracy.
+- This validates the 500-step selector on a third source family.
+- `src5` remains the reason not to cut the selector to 400 steps globally.

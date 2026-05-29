@@ -363,3 +363,9 @@ Conclusion: With 600-step readout after reduced continuation, `src5` still passe
 Do not repeat: Same 600-step continuation plus 600-step policy-backbone-frozen readout from selected `src4` step-1200/add2 and `src5` step-1100/add5 checkpoints as novelty.
 Next allowed test: Keep 800 continuation for weak sources, test 700-step continuation only for fine-grained tuning, or optimize source acquisition for continuation slope.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-reduced-continuation-budget-validation.md`
+
+POSITIVE: The 500-step handoff selector validates on the `src2` source-accuracy counterexample.
+Conclusion: For `src2` additive seed `4`, 500-step handoff progress picks final/source step-1600 (`0.6900`) over source-accuracy-favored step-1300 (`0.5875`), matching final handoff (`0.9525` vs `0.8675`).
+Do not repeat: Same `src2` step-1300 versus final additive seed-4 400/500/600-step trace audit as novelty.
+Next allowed test: Validate 500-step selection on new source checkpoints, or optimize source acquisition for early handoff/continuation slope directly.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-src2-500-step-selector-validation.md`
