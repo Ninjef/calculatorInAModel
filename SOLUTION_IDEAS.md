@@ -333,6 +333,10 @@ decay to a lightweight nonzero floor. Anchor `1.0 -> 0.1` preserved calculator
 dependence and strong `src5` answer accuracy, but did not beat simply keeping
 anchor `0.1` constant. The next interesting version is adaptive/gated
 retention, not another fixed floor.
+Freezing only the result-space action head is not enough: with `result_proj`
+locked and only upstream trainable, the transferred policy still collapsed.
+That points to the upstream representation feeding the head as the fragile
+state, so retention has to constrain behavior or the whole policy path.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

@@ -3929,6 +3929,43 @@ def test_freeze_semantic_decoder_preserves_decoder_but_not_interface() -> None:
     assert not model.answer_decoder.weight.requires_grad
 
 
+def test_freeze_calculator_action_head_preserves_surrounding_model() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_script_action_head_freeze", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_estimator="ste",
+        calculator_action_head="result_space",
+        calculator_bottleneck_mode="none",
+    )
+    model = TinyGPT(cfg)
+    assert model.calculator_hook is not None
+
+    overfit_script.freeze_calculator_action_head_parameters(model)
+
+    assert not model.calculator_hook.result_proj.weight.requires_grad
+    assert not model.calculator_hook.result_proj.bias.requires_grad
+    assert model.tok_emb.weight.requires_grad
+    assert model.blocks[0].attn.qkv.weight.requires_grad
+    assert model.calculator_hook.output_proj.weight.requires_grad
+
+
 def test_semantic_decoder_checkpoint_load_scope_is_opt_in(tmp_path: Path) -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_script_load_scope", script_path)

@@ -1518,3 +1518,35 @@ zero-off-ramp drift. It did not outperform constant anchor `0.1`, so the
 result mainly establishes useful scheduling infrastructure and confirms that
 future off-ramps should not decay below the lightweight retention region unless
 they are gated by calculator-result accuracy.
+
+## Status Update: 2026-05-28, Bottleneck-to-Additive Freeze Action Head
+
+Freezing only the calculator action head was negative:
+
+```text
+bottleneck_to_additive_freeze_action_head_unfreeze_negative
+```
+
+Code change:
+
+- Added `--freeze-calculator-action-head`.
+- For result-space policies this freezes `calculator_hook.result_proj` while
+  leaving surrounding model parameters trainable.
+
+Experiment:
+
+- Same adapted weak-source checkpoints.
+- Full model load, no `--freeze-calculator-policy`.
+- `--freeze-calculator-action-head`.
+- No result-policy anchor.
+- LR `3e-4`, 400 steps.
+
+| Run | Final eval | Best normal | Final calc | Final injection-zero | Trainable groups |
+| --- | ---: | ---: | ---: | ---: | --- |
+| `src4_add2` freeze action head | `0.5200` | `0.6500` at `0` | `0.3000` | `0.0225` | `upstream` |
+| `src5_add5` freeze action head | `0.8100` | `0.8325` at `0` | `0.2525` | `0.0225` | `upstream` |
+
+This reproduced the earlier plain low-LR unfreeze failure despite freezing
+`result_proj`. The result policy can collapse through upstream representation
+drift alone, so selective unfreezing needs to protect the behavior or the whole
+policy path, not just the final action-head weights.

@@ -3999,3 +3999,66 @@ Interpretation:
   performance breakthrough.
 - Next work should prefer calculator-accuracy-gated retention, adaptive floors,
   selective unfreezing, or less prescriptive source-policy acquisition.
+
+## 2026-05-28 Bottleneck-to-Additive Freeze Action Head Gate
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-28-phase-7-forty-eighth-task-Bottleneck-to-additive-freeze-action-head.md
+```
+
+Run root:
+
+```text
+runs/2026-05-28_phase7_bottleneck_to_additive_selective_unfreeze
+```
+
+Code change:
+
+- Added `--freeze-calculator-action-head`.
+- For `calculator_action_head=result_space`, this freezes only
+  `calculator_hook.result_proj`.
+- Added a focused unit test verifying the action head is frozen while
+  surrounding model parameters remain trainable.
+
+Question:
+
+Is the result-projection head itself the fragile part of policy collapse, or
+can upstream representation drift destroy the transferred policy even if the
+head is frozen?
+
+Configuration:
+
+- Continued from the adapted weak-source checkpoints.
+- Loaded with `--semantic-decoder-checkpoint-load-scope full_model`.
+- Removed `--freeze-calculator-policy`.
+- Added `--freeze-calculator-action-head`.
+- No result-policy anchor.
+- global LR `3e-4`;
+- answer loss weight `1`;
+- exact-grid natural `0..19`;
+- 400 steps.
+
+Result:
+
+| Run | Frozen adapted final | Plain unfreeze final | Freeze-action-head final | Best normal | Final injection-zero | Final forced-random | Final oracle | Final calc | Trainable groups |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `src4_add2` freeze action head | `0.6050` | `0.5200` | `0.5200` | `0.6500` at `0` | `0.0225` | `0.1200` | `0.7100` | `0.3000` | `upstream` |
+| `src5_add5` freeze action head | `0.8175` | `0.8100` | `0.8100` | `0.8325` at `0` | `0.0225` | `0.1125` | `0.7900` | `0.2525` | `upstream` |
+
+Decision:
+
+```text
+bottleneck_to_additive_freeze_action_head_unfreeze_negative
+```
+
+Interpretation:
+
+- Freezing only `result_proj` did not preserve the learned calculator-result
+  policy.
+- The final metrics matched the earlier low-LR no-anchor unfreeze collapse,
+  while metrics reported only `upstream` as trainable.
+- Upstream representation drift alone is sufficient to break the transferred
+  policy. Behavior-level retention, full policy-path freezing, or gated
+  anchoring remains necessary.

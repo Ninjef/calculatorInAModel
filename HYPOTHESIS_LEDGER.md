@@ -243,3 +243,9 @@ Conclusion: Anchor `1.0 -> 0.1` over 200 steps kept final calc `0.8175/0.7800`, 
 Do not repeat: Same adapted `src4_add2/src5_add5`, anchor `1.0`, decay `200`, floor `0.1`, LR `3e-4`, 400-step full unfreeze as novelty.
 Next allowed test: Calculator-accuracy-gated retention, adaptive floors, selective unfreeze, or source-policy acquisition that reduces active anchoring needs.
 Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-anchor-floor-schedule.md`
+
+DISPROVEN: Freezing only the calculator action head preserves transferred policy during unfreeze.
+Conclusion: With `result_proj` frozen and only upstream trainable, adapted `src4_add2/src5_add5` still collapsed to final calc `0.3000/0.2525` and final eval `0.5200/0.8100`, matching the earlier plain unfreeze failure.
+Do not repeat: Same adapted `src4_add2/src5_add5`, `--freeze-calculator-action-head`, no anchor, LR `3e-4`, 400-step unfreeze as novelty.
+Next allowed test: Behavior-level anchoring/gating, freezing the upstream policy path, or a more targeted selective parameter set that prevents upstream representation drift.
+Source: `aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-freeze-action-head.md`

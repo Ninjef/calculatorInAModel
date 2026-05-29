@@ -505,6 +505,18 @@ constant anchor `0.1` in this two-cell gate. The important practical result is
 that a lightweight nonzero floor is enough to preserve calculator dependence,
 while decaying to zero is not.
 
+A selective action-head freeze was negative:
+`bottleneck_to_additive_freeze_action_head_unfreeze_negative`. A new
+`--freeze-calculator-action-head` option freezes only the calculator action
+head (`result_proj` for result-space runs) while leaving the surrounding model
+trainable. Running the adapted weak-source handoffs with no anchor and LR
+`3e-4` reproduced the earlier low-LR unfreeze collapse: `src4_add2` ended at
+final eval `0.5200`, learned calc `0.3000`; `src5_add5` ended at final eval
+`0.8100`, learned calc `0.2525`. The trainable groups were only `upstream`,
+so upstream representation drift alone is sufficient to destroy the transferred
+result policy. Freezing result_proj is not a substitute for behavior-level
+policy retention.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -639,6 +651,10 @@ Do not rerun these as next steps unless debugging new code:
   `3e-4`, 400-step full unfreeze from the adapted `src4_add2` or `src5_add5`
   checkpoints as novelty. It preserved calculator dependence but did not beat
   constant anchor `0.1`.
+- freezing only the calculator action head with LR `3e-4`, no anchor, and
+  400-step full surrounding-model unfreeze from the adapted `src4_add2` or
+  `src5_add5` checkpoints as novelty. Upstream drift still collapsed the
+  learned result policy.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
@@ -655,7 +671,8 @@ loss-gap hinge, seed replication/unfreeze schedules for the frozen-policy
 bottleneck-to-additive handoff that specifically changes source checkpoint
 selection, downstream adaptation beyond just one longer continuation, or
 unfreezing with calculator-accuracy-gated retention, an adaptive floor around
-the `0.1` anchor-strength region, or a selective parameter set,
+the `0.1` anchor-strength region, or a more restrictive selective parameter set
+than freezing the action head alone,
 a Jacobian-conditioned state more substantial than the result-output
 `J^T answer_grad` feature, or a richer target construction that remains valid
 after upstream movement.

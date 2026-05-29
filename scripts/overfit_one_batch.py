@@ -170,6 +170,7 @@ class TrainConfig:
     freeze_semantic_decoder: bool
     freeze_upstream_encoder: bool
     freeze_calculator_policy: bool
+    freeze_calculator_action_head: bool
     trainable_parameter_groups: list[dict[str, object]]
     reinforce_baseline_mode: str
     reinforce_num_samples_per_prompt: int
@@ -5929,6 +5930,20 @@ def freeze_calculator_policy_parameters(model: TinyGPT) -> None:
             param.requires_grad = False
 
 
+def freeze_calculator_action_head_parameters(model: TinyGPT) -> None:
+    if model.calculator_hook is None:
+        return
+    if model.cfg.calculator_action_head == "result_space":
+        for param in model.calculator_hook.result_proj.parameters():
+            param.requires_grad = False
+    elif model.cfg.calculator_action_head == "joint_pair":
+        for param in model.calculator_hook.pair_proj.parameters():
+            param.requires_grad = False
+    else:
+        for param in model.calculator_hook.input_proj.parameters():
+            param.requires_grad = False
+
+
 def adaptive_optimizer_param_groups(
     model: TinyGPT,
     *,
@@ -6379,6 +6394,8 @@ def run_variant(
         freeze_upstream_encoder_parameters(model)
     if args.freeze_calculator_policy:
         freeze_calculator_policy_parameters(model)
+    if args.freeze_calculator_action_head:
+        freeze_calculator_action_head_parameters(model)
     trainable_groups = trainable_parameter_summary(model)
     exhaustive_grid_batch = None
     exhaustive_grid_size = None
@@ -6617,6 +6634,7 @@ def run_variant(
         freeze_semantic_decoder=args.freeze_semantic_decoder,
         freeze_upstream_encoder=args.freeze_upstream_encoder,
         freeze_calculator_policy=args.freeze_calculator_policy,
+        freeze_calculator_action_head=args.freeze_calculator_action_head,
         trainable_parameter_groups=trainable_groups,
         reinforce_baseline_mode=args.reinforce_baseline_mode,
         reinforce_num_samples_per_prompt=args.reinforce_num_samples_per_prompt,
@@ -8463,6 +8481,7 @@ def run_variant(
     metrics["freeze_semantic_decoder"] = args.freeze_semantic_decoder
     metrics["freeze_upstream_encoder"] = args.freeze_upstream_encoder
     metrics["freeze_calculator_policy"] = args.freeze_calculator_policy
+    metrics["freeze_calculator_action_head"] = args.freeze_calculator_action_head
     metrics["aux_operand_loss_grad_upstream"] = args.aux_operand_loss_grad_upstream
     metrics["trainable_parameter_groups"] = trainable_groups
     metrics["final_aux_operand_loss_weight"] = auxiliary_operand_weight(
@@ -9472,6 +9491,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--freeze-calculator-action-head",
+        action="store_true",
+        help=(
+            "Freeze only the calculator action head "
+            "(result_proj, pair_proj, or input_proj depending on action head) "
+            "while leaving surrounding model parameters trainable."
+        ),
+    )
+    parser.add_argument(
         "--calculator-read-position",
         choices=["eq", "operands", "operand_spans"],
         default="eq",
@@ -10364,6 +10392,8 @@ def main() -> None:
             suffix_parts.append(f"causalgapm{args.calculator_causal_gap_margin:g}")
         if args.calculator_result_head_hidden_size > 0:
             suffix_parts.append(f"rhead{args.calculator_result_head_hidden_size}")
+        if args.freeze_calculator_action_head:
+            suffix_parts.append("freezeactionhead")
         if args.calculator_estimator == "gumbel_concrete_interface":
             suffix_parts.append(
                 f"rtemp{args.relaxed_calculator_temperature:g}"
