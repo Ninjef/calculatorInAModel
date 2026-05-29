@@ -4502,3 +4502,57 @@ Interpretation:
 - Next work should test source-selection metrics beyond action accuracy,
   source acquisition that produces handoff-friendly representations, or
   utility-aware downstream/readout adaptation under stable calculator use.
+
+## 2026-05-29 Source Selection Metric Replication
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-fifty-sixth-task-Source-selection-metric-replication.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_source_checkpoint_selection_replication
+```
+
+Question:
+
+Does selecting the highest source-normal-accuracy checkpoint reliably select a
+better bottleneck-to-additive handoff source?
+
+Configuration:
+
+- Reproduced the strong `src2` bottleneck source with
+  `--checkpoint-every 100`.
+- Source used `calculator_bottleneck_mode=answer_decoder`,
+  `calculator_estimator=direct_feedback_alignment`,
+  `calculator_action_head=result_space`, frozen product semantic decoder, and
+  `result_policy_improvement_assignment_weight=10`.
+- Compared additive seed `4` frozen-policy transfer from source step `1300`
+  versus reproduced source final.
+
+Result:
+
+| Setup | Source checkpoint | Source normal | Additive final | Best normal | Final injection-zero | Final forced-random | Final oracle | Final calc |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| selected-source handoff | step `1300` | `0.9475` | `0.8675` | `0.8875` at `800` | `0.0400` | `0.0450` | `0.8875` | `0.9250` |
+| final-source control | final / step `1600` | `0.9150` | `0.9525` | `0.9325` at `800` | `0.0200` | `0.0425` | `0.9600` | `0.9150` |
+
+Decision:
+
+```text
+bottleneck_to_additive_source_accuracy_selector_negative
+```
+
+Interpretation:
+
+- The final-source control reproduced the old strong `src2_add4` result.
+- The higher source-accuracy step-1300 checkpoint transferred substantially
+  worse than the lower source-accuracy final checkpoint.
+- Source checkpoint selection is still important, but source normal/calculator
+  accuracy alone is now an actively disproven selector.
+- Next work should measure handoff geometry directly, such as short-transfer
+  slope, oracle-vs-normal gap after short adaptation, or a linear/readout probe
+  on the frozen source/additive state.

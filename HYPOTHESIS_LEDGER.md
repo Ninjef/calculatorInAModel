@@ -291,3 +291,9 @@ Conclusion: Reproducing `src5` with checkpoint snapshots and transferring the so
 Do not repeat: Same `src5` step-1500 selected-source checkpoint into additive seed `5`, frozen-policy, 800-step handoff as novelty.
 Next allowed test: Source-selection metrics beyond normal/calc accuracy, source acquisition for handoff-friendly geometry, stronger selected-source replication, or utility-aware stable-policy readout adaptation.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-source-checkpoint-selection-gate.md`
+
+DISPROVEN: Highest source normal/calculator accuracy is a reliable source checkpoint selector.
+Conclusion: Reproduced `src2` with checkpoints; source step `1300` had higher source normal/calc (`0.9475`) than final (`0.9150`) but transferred worse into additive seed `4` (`0.8675` vs final-control `0.9525`).
+Do not repeat: Same `src2` step-1300 versus final additive seed-4 frozen-policy 800-step transfer as novelty.
+Next allowed test: Source-quality probes for handoff geometry, source acquisition optimized for transfer/readout learnability, or selected-source replication with a selector beyond source accuracy.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-source-selection-metric-replication.md`
