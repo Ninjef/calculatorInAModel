@@ -4860,3 +4860,46 @@ Interpretation:
   sufficient selector.
 - The old final-source long-adaptation result remains a separate lineage gap to
   inspect.
+
+## 2026-05-29 Selected-Source Continuation Fairness
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-sixty-fourth-task-Selected-source-continuation-fairness.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_selected_source_continuation_fairness
+```
+
+Question:
+
+Was the old `src5` final-source long-adaptation advantage caused by the
+checkpoint itself, or by the extra frozen-policy continuation before long
+stable-policy adaptation?
+
+Result:
+
+| Run | Start final | Continued final | Long final eval | Long best normal | Last injection-zero | Last forced-random | Last oracle | Last calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| old `src5` final-source lineage | `0.5550` | `0.8175` | `0.9500` | `0.9625` at `1500` | `0.0025` | `0.0350` | `0.9050` | `0.8325` |
+| selected `src5` step-1100 lineage | `0.7950` | `0.8800` | `0.9425` | `0.9625` at `800` | `0.0000` | `0.0225` | `0.9600` | `0.8275` |
+
+Decision:
+
+```text
+selected_source_continuation_fairness_positive
+```
+
+Interpretation:
+
+- The old final-source advantage was mostly a continuation-depth fairness issue,
+  not evidence that the final-source checkpoint was intrinsically superior.
+- With the same extra frozen-policy continuation, the 600-step handoff-probe-
+  selected `src5` step-1100 lineage nearly matched the old final-source long
+  adaptation result.
+- The continued selected lineage remained calculator-dependent: injection-zero
+  was `0.0000`, and forced-random was near chance at `0.0225`.

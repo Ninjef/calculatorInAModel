@@ -333,3 +333,9 @@ Conclusion: Starting from the existing step-1500 800-step frozen handoff and ada
 Do not repeat: Same `src5` step-1500 800-step frozen handoff into no-anchor policy-backbone-frozen 1600-step adaptation as novelty.
 Next allowed test: Compare against the exact old final-source checkpoint lineage, inspect reproduced-versus-old final-source differences, or optimize source acquisition for downstream readout compatibility.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-long-adaptation-selector-probe.md`
+
+POSITIVE: The old `src5` final-source long-adaptation advantage was mostly a continuation-depth fairness issue.
+Conclusion: Giving the handoff-probe-selected `src5` step-1100 lineage the same extra 800-step frozen-policy continuation lifted it from `0.7950` to `0.8800`, then 1600-step stable-policy adaptation reached `0.9425`, nearly matching the old final-source `0.9500`.
+Do not repeat: Same `src5` step-1100 selected handoff plus extra 800-step frozen-policy continuation plus no-anchor policy-backbone-frozen 1600-step adaptation as novelty.
+Next allowed test: Apply the fair continuation recipe to `src4` step-1200, or optimize source acquisition for early handoff and continuation slope.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-selected-source-continuation-fairness.md`
