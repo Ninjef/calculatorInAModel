@@ -429,3 +429,9 @@ Conclusion: Fresh CLI seed `10` reached source final `0.9000` and learned calc `
 Do not repeat: Same seed-10 no-decay source, final-source handoff, direct readout, or 800-step continuation as novelty.
 Next allowed test: Compare seed-9 positive vs seed-10 negative geometry, build a transfer/readout proxy, or optimize source acquisition for continuation/readout geometry.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-stabilized-source-seed10-replication.md`
+
+MIXED-NEGATIVE: The seed-10 transfer failure is only a bad final-checkpoint selection artifact.
+Conclusion: Earlier seed-10 checkpoints improved 600-step handoff over final (`0.4475/0.4325/0.4225` vs `0.3375`), but all stayed below seed-9 final reference (`0.5250` at 600 and `0.6500` final eval); frozen-state linear probing was not a valid selector because it ranked seed-10 final highest (`0.4500`) despite worst handoff.
+Do not repeat: Same seed-10 step `1000`/`1300`/`1400` 600-step handoff sweep or frozen-state linear probe over these checkpoints as novelty.
+Next allowed test: Build an additive learning-slope or injection-to-answer geometry proxy, or optimize source acquisition for early handoff slope.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-seed10-source-checkpoint-geometry-sweep.md`

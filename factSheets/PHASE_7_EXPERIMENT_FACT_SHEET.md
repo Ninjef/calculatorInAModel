@@ -5692,3 +5692,61 @@ Interpretation:
   not learn to use it.
 - Next useful work is comparing seed-9 positive vs seed-10 negative geometry
   to build a cheap transfer/readout proxy or source-acquisition objective.
+
+## 2026-05-29 Seed-10 Source Checkpoint Geometry Sweep
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-eightieth-task-Seed10-source-checkpoint-geometry-sweep.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_seed10_source_checkpoint_handoff_sweep
+```
+
+Question:
+
+Was the seed-10 no-decay stabilized transfer failure mainly caused by choosing
+the final source checkpoint, and can the existing frozen-state linear readout
+probe serve as a cheap transfer proxy?
+
+Setup:
+
+- Ran 600-step frozen-policy additive handoff probes from seed-10 source
+  checkpoints `1000`, `1300`, and `1400`.
+- Compared with existing seed-10 final-source and seed-9 positive final-source
+  handoff traces.
+- Ran `scripts/run_frozen_state_readout_probe.py` over seed-9 final plus
+  seed-10 `1000`/`1300`/`1400`/final checkpoints using `read_pair` and
+  `layer2_pair`.
+
+Result:
+
+| Source | 600-step handoff | Final eval | Injection-zero | Oracle | Calc | Frozen-state best |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| seed-9 final reference | `0.5250` | `0.6500` | `0.0150` | `0.5275` | `0.8750` | `0.3625` |
+| seed-10 step `1000` | `0.4475` | `0.4450` | `0.0125` | `0.4175` | `0.7300` | `0.2750` |
+| seed-10 step `1300` | `0.4325` | `0.4200` | `0.0725` | `0.4250` | `0.8275` | `0.3125` |
+| seed-10 step `1400` | `0.4225` | `0.4025` | `0.0175` | `0.4250` | `0.8625` | `0.4375` |
+| seed-10 final reference | `0.3375` | `0.3275` | `0.0650` | `0.3300` | `0.9250` | `0.4500` |
+
+Decision:
+
+```text
+seed10_checkpoint_selection_partial_geometry_negative
+```
+
+Interpretation:
+
+- Source-checkpoint selection still matters: seed-10 step `1000` transfers
+  better than seed-10 final.
+- But the seed-10 lineage remains transfer-weak relative to seed-9, so the
+  failure is not only a bad final-checkpoint artifact.
+- The existing frozen-state linear sum probe is not a valid transfer selector:
+  it ranks seed-10 final highest even though seed-10 final has the worst
+  handoff.
+- Next useful proxy should measure additive learning slope or
+  injection-to-answer geometry directly.
