@@ -37,7 +37,19 @@ direction.
 
 ## Vector And Graph Index
 
-The local index is rebuildable from these markdown memories:
+The local index is rebuildable from these markdown memories. For real semantic
+retrieval, build it with OpenAI embeddings:
+
+```bash
+python3 researchMemory/scripts/build_memory_index.py --backend openai --model text-embedding-3-small
+```
+
+This requires `OPENAI_API_KEY`. The OpenAI API docs describe embeddings as
+vector representations whose distances measure relatedness, and
+`text-embedding-3-small` / `text-embedding-3-large` are current embedding
+models.
+
+For offline tests or no-key environments, use the fallback hashing backend:
 
 ```bash
 python3 researchMemory/scripts/build_memory_index.py
@@ -53,13 +65,14 @@ The generated files live under `researchMemory/index/`:
 
 - `memories.jsonl`: memory records with title, summary, generated questions,
   source pointer, status, and relations.
-- `embeddings.npz`: deterministic local vector embeddings for titles,
-  summaries, generated questions, and compact document text.
+- `metadata.json`: embedding backend/model metadata.
+- `embeddings.npz`: vector embeddings for titles, summaries, generated
+  questions, and compact document text.
 - `graph.json`: graph-like nodes and relation edges.
 
-The embeddings are offline hashing embeddings by default so the guardrail is
-testable without network access. They are a retrieval aid, not the source of
-truth.
+The fallback hash embeddings are not semantic embeddings. They exist so the
+guardrail is testable without network access. Use the OpenAI backend when you
+want semantic retrieval.
 
 To scaffold a new memory file:
 

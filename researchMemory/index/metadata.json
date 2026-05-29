@@ -1,0 +1,8 @@
+{
+  "backend": "hash",
+  "dim": 256,
+  "model": "hashing-vectorizer",
+  "openai_dimensions": null,
+  "record_count": 11,
+  "view_count": 86
+}

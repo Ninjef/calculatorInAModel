@@ -38,15 +38,16 @@ happened; `RESEARCH_STATE.md` answers what it means now.
 
 ## Strategic Guardrails
 
-Before proposing an experiment, search the vector/graph memory index:
-
 ```bash
 python3 researchMemory/scripts/search_memory.py "<experiment idea or question>"
+python3 researchMemory/scripts/build_memory_index.py --backend openai --model text-embedding-3-small
 ```
 
-Read the top matching memories and their linked evidence. If the proposed work
-belongs to a paused direction, do not proceed unless it introduces a new
-mechanism and updates the strategic docs accordingly.
+Before proposing an experiment, search the vector/graph memory index. For real
+semantic retrieval, rebuild with OpenAI embeddings. The committed hash backend
+index is only an offline fallback for tests/no-key environments. Read the top
+matching memories and linked evidence; paused directions require a new
+mechanism and strategic-doc updates.
 
 Do not rediscover or present oracle calculator success as progress. Oracle
 calculator outputs, oracle-at-eval recovery, injection-zero controls, and
@@ -87,13 +88,9 @@ strategy review instead of running it.
 ## Current Bottom Line
 
 The architecture can use a calculator, and scaffolded calculator-use policies
-can be learned, retained, and transferred into a non-bottleneck model.
-
-The unsolved problem is scalable, non-prescriptive credit assignment into the
-calculator-query policy. Ordinary answer-loss discovery and many local proxy
-variants have not solved this.
-
-Read `RESEARCH_STATE.md` for the latest detailed state before acting.
+can be learned, retained, and transferred into a non-bottleneck model. The
+unsolved problem is scalable, non-prescriptive credit assignment into the
+calculator-query policy. Read `RESEARCH_STATE.md` before acting.
 
 ## Contribution Rules
 

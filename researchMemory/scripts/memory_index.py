@@ -1,9 +1,8 @@
 """Build and query the local research-memory index.
 
-The index is intentionally rebuildable from markdown source files. The
-embedding backend is deterministic and offline so tests and future agents do
-not depend on network access or an external model. A stronger embedding model
-can replace `embed_text` later without changing the JSONL/graph shape.
+The index is intentionally rebuildable from markdown source files. The default
+backend is deterministic and offline for tests, but real semantic retrieval is
+available with the OpenAI embeddings backend.
 """
 
 from __future__ import annotations
@@ -11,8 +10,10 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import math
+import os
 import re
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterable
@@ -21,6 +22,8 @@ import numpy as np
 
 
 DEFAULT_DIM = 256
+DEFAULT_BACKEND = "hash"
+DEFAULT_OPENAI_MODEL = "text-embedding-3-small"
 INDEX_DIRNAME = "index"
 
 _TOKEN_RE = re.compile(r"[a-z0-9][a-z0-9_\-/]*")
@@ -68,7 +71,7 @@ def tokenize(text: str) -> list[str]:
     return _TOKEN_RE.findall(text.lower())
 
 
-def embed_text(text: str, dim: int = DEFAULT_DIM) -> np.ndarray:
+def embed_text_hash(text: str, dim: int = DEFAULT_DIM) -> np.ndarray:
     """Return a deterministic signed hashing embedding."""
 
     vector = np.zeros(dim, dtype=np.float32)
@@ -84,6 +87,105 @@ def embed_text(text: str, dim: int = DEFAULT_DIM) -> np.ndarray:
     if norm > 0.0:
         vector /= norm
     return vector
+
+
+def normalize_vector(vector: Iterable[float]) -> np.ndarray:
+    array = np.array(list(vector), dtype=np.float32)
+    norm = float(np.linalg.norm(array))
+    if norm > 0.0:
+        array /= norm
+    return array
+
+
+def embed_texts_hash(texts: list[str], dim: int = DEFAULT_DIM) -> np.ndarray:
+    if not texts:
+        return np.zeros((0, dim), dtype=np.float32)
+    return np.vstack([embed_text_hash(text, dim=dim) for text in texts]).astype(np.float32)
+
+
+def openai_api_key() -> str:
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        raise RuntimeError(
+            "OPENAI_API_KEY is required for semantic OpenAI embeddings. "
+            "Use --backend hash only for offline tests/fallback."
+        )
+    return api_key
+
+
+def embed_texts_openai(
+    texts: list[str],
+    model: str = DEFAULT_OPENAI_MODEL,
+    dimensions: int | None = None,
+    batch_size: int = 128,
+) -> np.ndarray:
+    """Embed text with the OpenAI embeddings API.
+
+    Uses only the standard library so the repo does not need a new dependency.
+    """
+
+    if not texts:
+        return np.zeros((0, dimensions or 0), dtype=np.float32)
+    api_key = openai_api_key()
+    endpoint = "https://api.openai.com/v1/embeddings"
+    embeddings: list[np.ndarray] = []
+    for start in range(0, len(texts), batch_size):
+        batch = texts[start : start + batch_size]
+        payload: dict[str, object] = {"model": model, "input": batch}
+        if dimensions is not None:
+            payload["dimensions"] = dimensions
+        request = urllib.request.Request(
+            endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=60) as response:
+                response_data = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"OpenAI embeddings request failed: {exc.code} {body}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"OpenAI embeddings request failed: {exc}") from exc
+        batch_data = sorted(response_data["data"], key=lambda item: item["index"])
+        embeddings.extend(normalize_vector(item["embedding"]) for item in batch_data)
+    return np.vstack(embeddings).astype(np.float32)
+
+
+def embed_texts(
+    texts: list[str],
+    *,
+    backend: str = DEFAULT_BACKEND,
+    dim: int = DEFAULT_DIM,
+    model: str = DEFAULT_OPENAI_MODEL,
+    openai_dimensions: int | None = None,
+) -> np.ndarray:
+    if backend == "hash":
+        return embed_texts_hash(texts, dim=dim)
+    if backend == "openai":
+        return embed_texts_openai(texts, model=model, dimensions=openai_dimensions)
+    raise ValueError(f"unknown embedding backend: {backend}")
+
+
+def embed_query(
+    query: str,
+    *,
+    backend: str,
+    dim: int,
+    model: str,
+    openai_dimensions: int | None,
+) -> np.ndarray:
+    return embed_texts(
+        [query],
+        backend=backend,
+        dim=dim,
+        model=model,
+        openai_dimensions=openai_dimensions,
+    )[0]
 
 
 def cosine_scores(query_embedding: np.ndarray, embeddings: np.ndarray) -> np.ndarray:
@@ -292,7 +394,15 @@ def view_texts(record: MemoryRecord) -> list[tuple[str, str]]:
     return [(kind, text) for kind, text in views if text.strip()]
 
 
-def build_index(repo_root: Path, memory_root: Path, output_dir: Path, dim: int = DEFAULT_DIM) -> None:
+def build_index(
+    repo_root: Path,
+    memory_root: Path,
+    output_dir: Path,
+    dim: int = DEFAULT_DIM,
+    backend: str = DEFAULT_BACKEND,
+    model: str = DEFAULT_OPENAI_MODEL,
+    openai_dimensions: int | None = None,
+) -> None:
     records = build_records(repo_root, memory_root)
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -303,23 +413,37 @@ def build_index(repo_root: Path, memory_root: Path, output_dir: Path, dim: int =
 
     view_memory_ids: list[str] = []
     view_kinds: list[str] = []
-    embeddings: list[np.ndarray] = []
+    view_strings: list[str] = []
     for record in records:
         for kind, text in view_texts(record):
             view_memory_ids.append(record.id)
             view_kinds.append(kind)
-            embeddings.append(embed_text(text, dim=dim))
-    embedding_matrix = (
-        np.vstack(embeddings).astype(np.float32)
-        if embeddings
-        else np.zeros((0, dim), dtype=np.float32)
+            view_strings.append(text)
+    embedding_matrix = embed_texts(
+        view_strings,
+        backend=backend,
+        dim=dim,
+        model=model,
+        openai_dimensions=openai_dimensions,
     )
+    actual_dim = int(embedding_matrix.shape[1]) if embedding_matrix.size else dim
     np.savez_compressed(
         output_dir / "embeddings.npz",
         embeddings=embedding_matrix,
         memory_ids=np.array(view_memory_ids, dtype=object),
         view_kinds=np.array(view_kinds, dtype=object),
-        dim=np.array([dim], dtype=np.int32),
+        dim=np.array([actual_dim], dtype=np.int32),
+    )
+    metadata = {
+        "backend": backend,
+        "model": model if backend == "openai" else "hashing-vectorizer",
+        "dim": actual_dim,
+        "openai_dimensions": openai_dimensions,
+        "record_count": len(records),
+        "view_count": len(view_strings),
+    }
+    (output_dir / "metadata.json").write_text(
+        json.dumps(metadata, indent=2, sort_keys=True) + "\n", encoding="utf-8"
     )
 
     graph = {
@@ -355,15 +479,46 @@ def load_records(index_dir: Path) -> dict[str, dict[str, object]]:
     return records
 
 
-def search_index(index_dir: Path, query: str, top_k: int = 5) -> list[dict[str, object]]:
+def load_metadata(index_dir: Path) -> dict[str, object]:
+    metadata_path = index_dir / "metadata.json"
+    if not metadata_path.exists():
+        return {
+            "backend": DEFAULT_BACKEND,
+            "model": "hashing-vectorizer",
+            "dim": DEFAULT_DIM,
+            "openai_dimensions": None,
+        }
+    return json.loads(metadata_path.read_text(encoding="utf-8"))
+
+
+def search_index(
+    index_dir: Path,
+    query: str,
+    top_k: int = 5,
+    backend: str | None = None,
+    model: str | None = None,
+) -> list[dict[str, object]]:
     records = load_records(index_dir)
+    metadata = load_metadata(index_dir)
     data = np.load(index_dir / "embeddings.npz", allow_pickle=True)
     embeddings = data["embeddings"]
     memory_ids = data["memory_ids"].tolist()
     view_kinds = data["view_kinds"].tolist()
-    dim = int(data["dim"][0]) if "dim" in data else DEFAULT_DIM
+    dim = int(metadata.get("dim") or (data["dim"][0] if "dim" in data else DEFAULT_DIM))
+    selected_backend = backend or str(metadata.get("backend", DEFAULT_BACKEND))
+    selected_model = model or str(metadata.get("model", DEFAULT_OPENAI_MODEL))
+    if selected_model == "hashing-vectorizer":
+        selected_model = DEFAULT_OPENAI_MODEL
+    openai_dimensions = metadata.get("openai_dimensions")
+    openai_dimensions = int(openai_dimensions) if openai_dimensions is not None else None
 
-    query_embedding = embed_text(query, dim=dim)
+    query_embedding = embed_query(
+        query,
+        backend=selected_backend,
+        dim=dim,
+        model=selected_model,
+        openai_dimensions=openai_dimensions,
+    )
     scores = cosine_scores(query_embedding, embeddings)
     best_by_memory: dict[str, dict[str, object]] = {}
     for score, memory_id, view_kind in zip(scores.tolist(), memory_ids, view_kinds):
@@ -419,12 +574,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     build.add_argument("--memory-root", type=Path, default=None)
     build.add_argument("--output-dir", type=Path, default=None)
     build.add_argument("--dim", type=int, default=DEFAULT_DIM)
+    build.add_argument("--backend", choices=["hash", "openai"], default=DEFAULT_BACKEND)
+    build.add_argument("--model", default=DEFAULT_OPENAI_MODEL)
+    build.add_argument("--openai-dimensions", type=int, default=None)
 
     search = subparsers.add_parser("search", help="search the memory index")
     search.add_argument("query")
     search.add_argument("--repo-root", type=Path, default=None)
     search.add_argument("--index-dir", type=Path, default=None)
     search.add_argument("--top-k", type=int, default=5)
+    search.add_argument("--backend", choices=["hash", "openai"], default=None)
+    search.add_argument("--model", default=None)
     search.add_argument("--json", action="store_true")
 
     return parser
@@ -442,11 +602,20 @@ def main(argv: list[str] | None = None) -> int:
             memory_root=(args.memory_root or memory_root).resolve(),
             output_dir=(args.output_dir or output_dir).resolve(),
             dim=args.dim,
+            backend=args.backend,
+            model=args.model,
+            openai_dimensions=args.openai_dimensions,
         )
         return 0
     if args.command == "search":
         index_dir = (args.index_dir or output_dir).resolve()
-        results = search_index(index_dir=index_dir, query=args.query, top_k=args.top_k)
+        results = search_index(
+            index_dir=index_dir,
+            query=args.query,
+            top_k=args.top_k,
+            backend=args.backend,
+            model=args.model,
+        )
         if args.json:
             print(json.dumps(results, indent=2, sort_keys=True))
         else:

@@ -9,6 +9,7 @@ from researchMemory.scripts.add_memory import main as add_memory_main
 from researchMemory.scripts.memory_index import (
     build_index,
     build_records,
+    embed_query,
     search_index,
 )
 
@@ -95,12 +96,16 @@ def test_build_index_writes_vectors_and_graph_then_searches(tmp_path):
     ]
     embeddings = np.load(output_dir / "embeddings.npz", allow_pickle=True)
     graph = json.loads((output_dir / "graph.json").read_text(encoding="utf-8"))
+    metadata = json.loads((output_dir / "metadata.json").read_text(encoding="utf-8"))
 
     assert {memory["id"] for memory in memories} >= {
         "direction/plain-answer-loss-discovery",
         "direction/target-propagation",
     }
     assert embeddings["embeddings"].shape[1] == 64
+    assert metadata["backend"] == "hash"
+    assert metadata["model"] == "hashing-vectorizer"
+    assert metadata["view_count"] == len(embeddings["memory_ids"])
     assert len(embeddings["memory_ids"]) >= len(memories)
     assert any(node["id"] == "direction/target-propagation" for node in graph["nodes"])
     node_ids = {node["id"] for node in graph["nodes"]}
@@ -151,6 +156,73 @@ def test_search_cli_returns_relevant_memory(tmp_path):
     assert "source:" in completed.stdout
 
 
+def test_search_uses_semantic_backend_from_metadata(tmp_path, monkeypatch):
+    (tmp_path / "CLAUDE.md").write_text("test", encoding="utf-8")
+    memory_root = write_memory(tmp_path)
+    output_dir = memory_root / "index"
+
+    calls = []
+
+    def fake_openai(texts, model, dimensions=None, batch_size=128):
+        calls.append((list(texts), model, dimensions, batch_size))
+        rows = []
+        for text in texts:
+            lowered = text.lower()
+            if lowered.startswith("# test direction memory"):
+                rows.append([0.0, 0.0, 1.0])
+            elif "target propagation" in lowered or "local targets" in lowered:
+                rows.append([1.0, 0.0, 0.0])
+            elif "reinforce" in lowered or "answer loss" in lowered:
+                rows.append([0.0, 1.0, 0.0])
+            else:
+                rows.append([0.0, 0.0, 1.0])
+        return np.array(rows, dtype=np.float32)
+
+    monkeypatch.setattr(
+        "researchMemory.scripts.memory_index.embed_texts_openai",
+        fake_openai,
+    )
+
+    build_index(
+        tmp_path,
+        memory_root,
+        output_dir,
+        backend="openai",
+        model="text-embedding-3-small",
+        openai_dimensions=3,
+    )
+    metadata = json.loads((output_dir / "metadata.json").read_text(encoding="utf-8"))
+    assert metadata["backend"] == "openai"
+    assert metadata["model"] == "text-embedding-3-small"
+    assert metadata["openai_dimensions"] == 3
+
+    results = search_index(
+        output_dir,
+        "Could local targets help credit assignment?",
+        top_k=1,
+    )
+
+    assert results[0]["record"]["id"] == "direction/target-propagation"
+    assert len(calls) >= 2
+
+
+def test_openai_backend_requires_api_key_without_mock(monkeypatch):
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    try:
+        embed_query(
+            "semantic query",
+            backend="openai",
+            dim=3,
+            model="text-embedding-3-small",
+            openai_dimensions=3,
+        )
+    except RuntimeError as exc:
+        assert "OPENAI_API_KEY" in str(exc)
+    else:
+        raise AssertionError("OpenAI backend should require OPENAI_API_KEY")
+
+
 def test_add_memory_scaffolds_compact_file(tmp_path):
     memory_root = tmp_path / "researchMemory"
 
@@ -179,6 +251,8 @@ def test_agent_docs_require_memory_search_and_size_discipline():
     research_state = open("RESEARCH_STATE.md", encoding="utf-8").read()
 
     assert "python3 researchMemory/scripts/search_memory.py" in claude
+    assert "--backend openai" in claude
+    assert "hash backend" in claude
     assert "must not become append-only logs" in claude
     assert "Keep `CLAUDE.md` under about `120` lines" in claude
     assert "Keep `RESEARCH_STATE.md` under about `200` lines" in claude
