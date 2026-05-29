@@ -5639,3 +5639,56 @@ Interpretation:
   use final eval for the gate.
 - This is a scalability improvement for this lineage, but the 400/500 boundary
   needs replication on another stabilized source before changing defaults.
+
+## 2026-05-29 Stabilized Source Seed-10 Replication
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-seventy-ninth-task-Stabilized-source-seed10-replication.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_stabilized_source_replication
+```
+
+Question:
+
+Does the no-decay stabilized source recipe replicate on a fresh seed, including
+the downstream non-bottleneck continuation/readout behavior?
+
+Setup:
+
+- Trained a fresh no-decay stabilized bottleneck source with CLI seed `10`.
+- Ran an 800-step frozen-policy additive handoff from the final source.
+- Ran a direct 600-step policy-backbone-frozen readout diagnostic.
+- Ran an 800-step frozen-policy continuation diagnostic.
+
+Result:
+
+| Stage | Final eval | Best snapshot | Injection-zero | Forced-random | Oracle | Calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| source final | `0.9000` | `0.8850` | `0.0391` | n/a | `1.0000` | `0.8984` |
+| handoff | `0.3275` | `0.3375` | `0.0313` | `0.0938` | `0.4141` | `0.8984` |
+| direct readout | `0.4275` | `0.4350` | n/a | n/a | n/a | n/a |
+| continuation | `0.4350` | `0.4250` | `0.0078` | `0.1250` | `0.4922` | `0.8984` |
+
+Decision:
+
+```text
+stabilized_source_seed10_source_positive_transfer_negative
+```
+
+Interpretation:
+
+- No-decay stabilization replicated source acquisition: final source eval was
+  `0.9000` and learned calc was `0.8984`.
+- The downstream positive did not replicate: handoff, direct readout, and
+  800-step continuation all stayed far below the `0.90` non-bottleneck gate.
+- This is a source-geometry boundary, not a calculator-policy failure: the
+  learned calculator result remained high, but the additive downstream path did
+  not learn to use it.
+- Next useful work is comparing seed-9 positive vs seed-10 negative geometry
+  to build a cheap transfer/readout proxy or source-acquisition objective.

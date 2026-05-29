@@ -423,3 +423,9 @@ Conclusion: 600-step readout from continuation checkpoints reached final eval `0
 Do not repeat: Same no-decay stabilized `600/500/400/300` continuation-checkpoint readout ladder as novelty.
 Next allowed test: Replicate the 400/500 boundary on another no-decay stabilized source, validate a readout-snapshot selector, or build a cheap continuation-budget proxy.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-stabilized-source-continuation-boundary.md`
+
+MIXED-NEGATIVE: No-decay stabilized source acquisition reliably implies transferable non-bottleneck geometry.
+Conclusion: Fresh CLI seed `10` reached source final `0.9000` and learned calc `0.8984`, but final-source handoff reached only `0.3275`, direct readout `0.4275`, and 800-step continuation `0.4350`.
+Do not repeat: Same seed-10 no-decay source, final-source handoff, direct readout, or 800-step continuation as novelty.
+Next allowed test: Compare seed-9 positive vs seed-10 negative geometry, build a transfer/readout proxy, or optimize source acquisition for continuation/readout geometry.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-stabilized-source-seed10-replication.md`
