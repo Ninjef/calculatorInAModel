@@ -109,26 +109,37 @@ def parse_adaptive_policy_reweighted_branch(branch: str) -> tuple[float, int, in
     return temperature, uniform_samples, beam, radius
 
 
-def parse_memory_policy_reweighted_branch(branch: str) -> tuple[float, int, int]:
+def parse_memory_policy_reweighted_branch(branch: str) -> tuple[float, int, int, int]:
     prefix = "memory_policy_reweighted_t"
     if not branch.startswith(prefix):
         raise ValueError(f"not a memory policy-reweighted branch: {branch!r}")
     parts = branch.removeprefix(prefix).split("_")
-    if len(parts) != 3 or not parts[1].startswith("u") or not parts[2].startswith("m"):
+    if (
+        len(parts) not in (3, 4)
+        or not parts[1].startswith("u")
+        or not parts[2].startswith("m")
+        or (len(parts) == 4 and not parts[3].startswith("r"))
+    ):
         raise ValueError(
             "memory policy-reweighted branch must look like "
-            "'memory_policy_reweighted_t1_u8_m24'"
+            "'memory_policy_reweighted_t1_u8_m24' or "
+            "'memory_policy_reweighted_t1_u2_m30_r4'"
         )
     temperature = float(parts[0].replace("p", "."))
     uniform_samples = int(parts[1].removeprefix("u"))
     memory_candidates = int(parts[2].removeprefix("m"))
+    rescore_candidates = int(parts[3].removeprefix("r")) if len(parts) == 4 else 0
     if temperature <= 0:
         raise ValueError("memory policy-reweighted temperature must be positive")
     if uniform_samples < 1:
         raise ValueError("memory branch needs at least one fresh uniform sample")
     if memory_candidates < 0:
         raise ValueError("memory candidate count must be non-negative")
-    return temperature, uniform_samples, memory_candidates
+    if rescore_candidates < 0:
+        raise ValueError("memory rescore count must be non-negative")
+    if rescore_candidates > memory_candidates:
+        raise ValueError("memory rescore count cannot exceed memory candidate count")
+    return temperature, uniform_samples, memory_candidates, rescore_candidates
 
 
 def sample_uniform_result_candidates(
@@ -432,7 +443,7 @@ def memory_policy_reweighted_loss(
     args: argparse.Namespace,
     state: dict[str, Any],
 ) -> tuple[torch.Tensor, dict[str, float | str]]:
-    temperature, uniform_samples, memory_candidates = (
+    temperature, uniform_samples, memory_candidates, rescore_candidates = (
         parse_memory_policy_reweighted_branch(branch)
     )
     result_logits, _, _, _ = calculator_read_result_logits(model, batch)
@@ -476,9 +487,23 @@ def memory_policy_reweighted_loss(
             largest=False,
             dim=-1,
         )
+        rescore_count = min(rescore_candidates, memory_count)
+        if rescore_count > 0:
+            rescore_candidates_tensor = memory_result_classes[:, :rescore_count]
+            rescored_losses = score_forced_candidate_result_classes(
+                model,
+                batch,
+                rescore_candidates_tensor,
+                chunk_size=args.result_chunk_size,
+            )
+            loss_table[row_idx, rescore_candidates_tensor] = rescored_losses
+            seen_table[row_idx, rescore_candidates_tensor] = True
+            memory_losses = memory_losses.clone()
+            memory_losses[:, :rescore_count] = rescored_losses
         candidates = torch.cat([fresh_candidates, memory_result_classes], dim=-1)
         candidate_losses = torch.cat([fresh_losses, memory_losses], dim=-1)
     else:
+        rescore_count = 0
         candidates = fresh_candidates
         candidate_losses = fresh_losses
 
@@ -504,6 +529,10 @@ def memory_policy_reweighted_loss(
             "target_uniform_samples": int(uniform_samples),
             "target_memory_candidates": int(memory_candidates),
             "target_fresh_scored_results": int(fresh_candidates.shape[1]),
+            "target_rescored_results": int(rescore_count),
+            "target_forced_scores_per_step": int(
+                fresh_candidates.shape[1] + rescore_count
+            ),
             "target_observed_results": float(observed_counts.mean().item()),
             "target_observed_fraction": float(
                 (observed_counts / result_vocab_size).mean().item()

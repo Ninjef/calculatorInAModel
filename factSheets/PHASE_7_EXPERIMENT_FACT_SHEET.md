@@ -7257,3 +7257,62 @@ Interpretation:
 - `u2_m30` does not retain as well as `u8_m24`; next work should address stale
   cached losses or transductive prompt identity memory rather than run more
   simple budget sweeps.
+
+## 2026-05-29 Replay-Memory Rescore Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-replay-memory-rescore-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_memory_local_target_gate/smoke_rescore_op3
+runs/2026-05-29_phase7_memory_local_target_gate/rescore_budget_200
+runs/2026-05-29_phase7_memory_local_target_gate/memory_u2_m30_r2_retention_800_200
+```
+
+Question:
+
+Is stale cached loss the reason low-fresh replay memory retains worse, and can
+simple top-cached-candidate rescoring fix it?
+
+Tooling:
+
+- Added optional `_rN` replay-memory branch syntax, e.g.
+  `memory_policy_reweighted_t1_u2_m30_r4`.
+- The suffix rescoring count refreshes the top `N` cached candidates each step
+  before constructing the target.
+
+200-step comparison:
+
+| Branch | Forced scores / step | Exact-grid calc | Sampled normal | True coverage | Target argmax | Injection-zero | Forced-random |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `memory_policy_reweighted_t1_u2_m30` | `2` | `0.6025` | `0.6016` | `0.9925` | `0.9600` | `0.0234` | `0.0156` |
+| `memory_policy_reweighted_t1_u2_m30_r2` | `4` | `0.6025` | `0.6016` | `0.9925` | `0.9600` | `0.0234` | `0.0156` |
+| `memory_policy_reweighted_t1_u2_m30_r4` | `6` | `0.5300` | `0.5781` | `0.9925` | `0.9600` | `0.0234` | `0.0156` |
+| `memory_policy_reweighted_t1_u2_m30_r8` | `10` | `0.4675` | `0.4609` | `0.9925` | `0.9625` | `0.0234` | `0.0156` |
+| `memory_policy_reweighted_t1_u8_m24` | `8` | `0.5900` | `0.5391` | `1.0000` | `0.9850` | `0.0234` | `0.0156` |
+
+800+200 retention:
+
+| Branch | Forced scores / step | Target exact calc | Target sampled normal | Retention exact calc | Retention sampled normal | Injection-zero | Forced-random |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `memory_policy_reweighted_t1_u2_m30_r2` | `4` | `0.9000` | `0.8750` | `0.7850` | `0.7656` | `0.0234` | `0.0156` |
+
+Decision:
+
+```text
+simple_replay_memory_rescoring_no_benefit
+```
+
+Interpretation:
+
+- Light rescoring exactly tied no-rescore while costing more forced-result
+  scores per step.
+- Heavier rescoring hurt the short gate.
+- Simple top-cached-candidate rescoring is not the fix for the retention
+  tradeoff; next replay-memory work should use finite/reset memory,
+  streaming/non-exhaustive prompts, or learned/generalized candidate memory.

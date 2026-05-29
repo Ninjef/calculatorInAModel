@@ -496,6 +496,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/100-simple-top-cached-candidate-rescoring-does-not-improve-replay-memory-local-target-retentio",
+      "target": "researchMemory/hypotheses/phase7/100-simple-top-cached-candidate-rescoring-does-not-improve-replay-memory-local-target-retentio.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -808,6 +813,11 @@
     {
       "source": "direction/target-propagation-local-targets",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-replay-memory-lower-budget-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-replay-memory-rescore-gate.md",
       "type": "supported_by"
     },
     {
@@ -1509,6 +1519,13 @@
       "source_path": "researchMemory/hypotheses/phase7/099-replay-memory-local-targets-still-work-with-only-2-fresh-forced-result-scores-per-step-but.md",
       "status": "POSITIVE",
       "title": "Replay-memory local targets still work with only 2 fresh forced-result scores per step, but retention weakens."
+    },
+    {
+      "id": "doc/100-simple-top-cached-candidate-rescoring-does-not-improve-replay-memory-local-target-retentio",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/100-simple-top-cached-candidate-rescoring-does-not-improve-replay-memory-local-target-retentio.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Simple top-cached-candidate rescoring does not improve replay-memory local-target retention."
     },
     {
       "id": "doc/phase7-direction-memory",

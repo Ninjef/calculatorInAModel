@@ -314,10 +314,13 @@ Memory:
   normal, while `u1_m31` weakened to `0.4075`/`0.4219`. The long `u2_m30`
   retention gate was positive but weaker than `u8_m24`: `0.7850` calc /
   `0.7656` normal after answer-only retention.
+- Simple cached-candidate rescoring did not improve that retention weakness:
+  `u2_m30_r2` tied no-rescore in both 200-step and 800+200 gates, while
+  heavier `r4/r8` rescoring hurt short-gate learning.
 - The result is promising but still transductive: on the fixed exhaustive grid
   the memory eventually observes all `39` result classes. Next work should test
-  stale-loss aging/rescoring, memory reset, streaming/non-exhaustive prompts,
-  or learned/generalized proposal memory before claiming scalability.
+  memory reset, streaming/non-exhaustive prompts, or learned/generalized
+  proposal memory before claiming scalability.
 
 Representative evidence:
 
@@ -331,3 +334,4 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-adaptive-local-target-proposal-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-local-target-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-lower-budget-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-rescore-gate.md`

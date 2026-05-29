@@ -4464,13 +4464,20 @@ def test_phase7_memory_local_target_branch_parser() -> None:
     ]
     assert runner.parse_memory_policy_reweighted_branch(
         "memory_policy_reweighted_t1_u8_m24"
-    ) == (1.0, 8, 24)
+    ) == (1.0, 8, 24, 0)
     assert runner.parse_memory_policy_reweighted_branch(
         "memory_policy_reweighted_t0p5_u4_m28"
-    ) == (0.5, 4, 28)
+    ) == (0.5, 4, 28, 0)
+    assert runner.parse_memory_policy_reweighted_branch(
+        "memory_policy_reweighted_t1_u2_m30_r4"
+    ) == (1.0, 2, 30, 4)
     with pytest.raises(ValueError, match="at least one fresh uniform"):
         runner.parse_memory_policy_reweighted_branch(
             "memory_policy_reweighted_t1_u0_m24"
+        )
+    with pytest.raises(ValueError, match="cannot exceed"):
+        runner.parse_memory_policy_reweighted_branch(
+            "memory_policy_reweighted_t1_u2_m4_r8"
         )
 
 

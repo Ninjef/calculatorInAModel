@@ -625,3 +625,9 @@ Conclusion: A lower fresh-score budget sweep compared raw uniform `u32` with rep
 Do not repeat: The same seed-2 lower-budget sweep over `u8_m24/u4_m28/u2_m30/u1_m31` or the same `u2_m30` 800+200 retention gate as novelty.
 Next allowed test: Move from budget sweeps to scalability stressors: stale-cache aging/rescoring, memory reset, streaming/non-exhaustive prompts, or learned/generalized candidate memory. Treat `u2_m30` as the best current low-fresh-score point and `u1_m31` as below the useful budget floor at 200 steps.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-lower-budget-gate.md`
+
+MIXED-NEGATIVE: Simple top-cached-candidate rescoring does not improve replay-memory local-target retention.
+Conclusion: Adding optional `_rN` cached-candidate rescoring to replay-memory branches showed no benefit for the best low-fresh branch. At 200 steps, `memory_policy_reweighted_t1_u2_m30_r2` exactly tied no-rescore `u2_m30` (`0.6025` exact calc / `0.6016` sampled normal) at double the forced-score cost (`4` vs `2` scores per step), while heavier rescoring was worse: `r4` reached `0.5300` calc / `0.5781` normal and `r8` reached `0.4675` / `0.4609`. The 800+200 `r2` retention gate also exactly tied no-rescore `u2_m30`: target `0.9000` calc / `0.8750` normal and retention `0.7850` calc / `0.7656` normal.
+Do not repeat: The same seed-2 `u2_m30` rescore sweep over `r2/r4/r8` or the same `u2_m30_r2` 800+200 retention gate as novelty.
+Next allowed test: Stop simple rescore-count tweaking. Attack transduction directly with finite/reset memory, streaming/non-exhaustive prompts, or learned/generalized candidate memory.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-rescore-gate.md`

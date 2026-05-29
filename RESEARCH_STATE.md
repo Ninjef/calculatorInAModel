@@ -128,7 +128,8 @@ Active directions:
   retains `0.8600` calc / `0.8750` sampled normal after an 800+200 gate. A
   lower-budget `u2_m30` point improves the 200-step gate to `0.6025` calc /
   `0.6016` sampled normal, but retains less strongly (`0.7850` calc /
-  `0.7656` normal).
+  `0.7656` normal). Light cached-candidate rescoring ties `u2_m30`; heavier
+  rescoring hurts.
 - Lower-cost assignment is useful only when it changes scalability, not merely
   proxy selection.
 
@@ -159,10 +160,9 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Stress-test replay-memory beyond fixed-grid transduction: reset/age stale
-   memories, rescore cached candidates, and test generalization beyond prompt
-   identities. The lower fresh-score curve is positive through `u2`; `u1`
-   weakens.
+1. Stress-test replay-memory beyond fixed-grid transduction: reset/age memory,
+   streaming/non-exhaustive prompts, or generalized proposals. Simple cached
+   rescoring did not fix retention.
 2. In parallel, keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. If trying to reduce hard-assignment cost, state the scalability hypothesis

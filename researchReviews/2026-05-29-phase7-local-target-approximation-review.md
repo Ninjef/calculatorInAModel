@@ -178,3 +178,24 @@ novelty. Treat `u2_m30` as the best current low-fresh-score point and `u1_m31`
 as below the useful 200-step budget floor. The next replay-memory work should
 attack transduction directly: stale-cache aging/rescoring, memory reset,
 streaming/non-exhaustive prompts, or learned/generalized candidate memory.
+
+## Addendum: Cached-Candidate Rescoring
+
+Simple top-cached-candidate rescoring did not fix the low-budget retention
+tradeoff:
+
+- Added optional `_rN` syntax to replay-memory branches, e.g.
+  `memory_policy_reweighted_t1_u2_m30_r4`.
+- At 200 steps, `u2_m30_r2` exactly tied no-rescore `u2_m30` at
+  `0.6025` exact calc / `0.6016` sampled normal while doubling forced-score
+  cost from `2` to `4` per step.
+- Heavier rescoring hurt the short gate: `r4` reached `0.5300` calc /
+  `0.5781` normal, and `r8` reached `0.4675` / `0.4609`.
+- The 800+200 `u2_m30_r2` retention gate also exactly tied no-rescore:
+  target `0.9000` calc / `0.8750` normal and retention `0.7850` calc /
+  `0.7656` normal.
+
+Updated steering: stale-cache rescoring by itself is not the missing piece.
+Do not spend more turns tuning rescore counts. The next replay-memory work
+should target the transductive assumption directly: finite/reset memory,
+streaming/non-exhaustive prompts, or learned/generalized candidate memory.
