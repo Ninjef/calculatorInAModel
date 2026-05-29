@@ -7379,3 +7379,75 @@ Interpretation:
 - Do not tune reset intervals as the next fix. The next local-target
   scalability test should use streaming/non-exhaustive prompts or
   learned/generalized proposal memory.
+
+## 2026-05-29 Replay-Memory Streaming Prompt Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-replay-memory-streaming-prompt-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_local_target_gate/smoke_streaming_op3
+runs/2026-05-29_phase7_local_target_gate/streaming_b16_200
+runs/2026-05-29_phase7_local_target_gate/streaming_b16_800
+runs/2026-05-29_phase7_local_target_gate/streaming_b64_200
+```
+
+Question:
+
+Does replay memory keep its fixed-grid advantage when target training uses
+sampled minibatches instead of scoring the entire exhaustive prompt grid every
+step?
+
+Tooling:
+
+- Added `--streaming-train-batch-size`.
+- Streaming mode trains on freshly sampled fixed-width arithmetic minibatches
+  while evaluating on the exhaustive grid.
+- Replay-memory branches use prompt-keyed caches in streaming mode.
+
+Streaming batch `16`, 200 steps:
+
+| Branch | Exact-grid calc | Sampled normal | Target coverage | Observed results | Prompt entries |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `policy_reweighted_t1` | `0.1100` | `0.1016` | `1.0000` | n/a | n/a |
+| `sampled_policy_reweighted_t1_k0_u32` | `0.0700` | `0.0703` | `0.7500` | n/a | n/a |
+| `memory_policy_reweighted_t1_u2_m30` | `0.0475` | `0.0156` | `0.5625` | `15.3750` | `400` |
+| `memory_policy_reweighted_t1_u8_m24` | `0.0950` | `0.1016` | `0.8750` | `34.8125` | `400` |
+
+Streaming batch `16`, 800 steps:
+
+| Branch | Exact-grid calc | Sampled normal | Target coverage | Observed results | Prompt entries |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `policy_reweighted_t1` | `0.2450` | `0.2578` | `1.0000` | n/a | n/a |
+| `sampled_policy_reweighted_t1_k0_u32` | `0.2450` | `0.2578` | `0.7500` | n/a | n/a |
+| `memory_policy_reweighted_t1_u2_m30` | `0.1850` | `0.2031` | `0.7500` | `32.5000` | `400` |
+| `memory_policy_reweighted_t1_u8_m24` | `0.2650` | `0.2500` | `1.0000` | `38.9375` | `400` |
+
+Streaming batch `64`, 200 steps:
+
+| Branch | Exact-grid calc | Sampled normal | Target coverage | Observed results | Prompt entries |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `policy_reweighted_t1` | `0.1650` | `0.2031` | `1.0000` | n/a | n/a |
+| `sampled_policy_reweighted_t1_k0_u32` | `0.1475` | `0.1484` | `0.7969` | n/a | n/a |
+| `memory_policy_reweighted_t1_u2_m30` | `0.0975` | `0.1172` | `0.7656` | `31.4531` | `400` |
+| `memory_policy_reweighted_t1_u8_m24` | `0.1475` | `0.2031` | `1.0000` | `38.9688` | `400` |
+
+Decision:
+
+```text
+streaming_prompt_replay_memory_no_strong_fixed_grid_lift
+```
+
+Interpretation:
+
+- Streaming minibatches make the whole local-target setup much slower than the
+  exhaustive-grid gate.
+- Prompt-keyed `u8_m24` can roughly match the streaming exact/raw baselines,
+  but it does not preserve the strong fixed-grid advantage. `u2_m30` is weak.
+- The next local-target scalability work needs a learned/generalized proposal,
+  estimator correction, or a different target construction.

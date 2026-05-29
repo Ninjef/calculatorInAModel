@@ -222,3 +222,26 @@ Updated steering: do not tune reset intervals as the next local fix. Treat
 plain replay memory as a useful but transductive approximation. The next
 local-target scalability test should use streaming/non-exhaustive prompts or a
 learned/generalized proposal that cannot rely on a durable per-prompt cache.
+
+## Addendum: Streaming Prompt Stress
+
+Streaming minibatches removed the strong fixed-grid replay-memory lift:
+
+- Added `--streaming-train-batch-size`, which trains on freshly sampled
+  minibatches while evaluating on the full grid. Replay-memory branches switch
+  to prompt-keyed caches in this mode so rows cannot reuse another prompt's
+  cache.
+- At 200 steps with batch `16`, exact `policy_reweighted_t1` reached only
+  `0.1100` exact calc, raw uniform `u32` `0.0700`, `u2_m30` `0.0475`, and
+  `u8_m24` `0.0950`.
+- At 800 steps with batch `16`, exact and raw `u32` both reached `0.2450`
+  exact calc / `0.2578` sampled normal. `u8_m24` was comparable at `0.2650`
+  calc / `0.2500` normal, while `u2_m30` lagged at `0.1850` / `0.2031`.
+- A batch-64, 200-step check stayed weak: exact `0.1650` calc, raw `u32`
+  `0.1475`, `u8_m24` `0.1475`, and `u2_m30` `0.0975`.
+
+Updated steering: prompt-keyed replay memory is not the scalable answer. It is
+still a useful clue that cached candidate proposals can matter, but next
+local-target work needs a learned/generalized proposal, estimator correction,
+or a different target construction. Otherwise, mainline compute should return
+to source objectives that improve additive handoff/readout geometry.

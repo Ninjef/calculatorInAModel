@@ -3,6 +3,7 @@ import csv
 from dataclasses import asdict
 import importlib.util
 import json
+import random
 import sys
 from pathlib import Path
 
@@ -4485,6 +4486,59 @@ def test_phase7_memory_local_target_branch_parser() -> None:
         runner.parse_memory_policy_reweighted_branch(
             "memory_policy_reweighted_t1_u2_m4_r8"
         )
+
+
+def test_phase7_streaming_batch_and_prompt_memory_tables() -> None:
+    script_path = Path("scripts/run_phase7_local_target_stage1_lift_gate.py")
+    spec = importlib.util.spec_from_file_location("phase7_local_target_runner", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    runner = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(runner)
+
+    stream_batch = runner.random_range_batch(
+        batch_size=5,
+        digits=2,
+        operand_max=3,
+        answer_format="sum",
+        rng=random.Random(0),
+        device="cpu",
+    )
+    assert stream_batch.x.shape[0] == 5
+
+    batch = runner.exhaustive_batch(
+        digits=2,
+        operand_max=1,
+        answer_format="sum",
+        device="cpu",
+    )
+    state: dict[str, object] = {}
+    loss_table, seen_table, metrics, keys = runner.load_prompt_keyed_memory_tables(
+        state=state,
+        batch=batch,
+        result_vocab_size=8,
+    )
+    assert metrics["target_memory_key_mode"] == "prompt"
+    assert metrics["target_new_prompt_fraction"] == 1.0
+    loss_table[0, 3] = 1.25
+    seen_table[0, 3] = True
+    runner.save_prompt_keyed_memory_tables(
+        state=state,
+        keys=keys,
+        loss_table=loss_table,
+        seen_table=seen_table,
+    )
+    reloaded_loss, reloaded_seen, reloaded_metrics, _ = (
+        runner.load_prompt_keyed_memory_tables(
+            state=state,
+            batch=batch,
+            result_vocab_size=8,
+        )
+    )
+    assert reloaded_metrics["target_prompt_memory_entries"] == 4
+    assert reloaded_metrics["target_new_prompt_fraction"] == 0.0
+    assert reloaded_loss[0, 3].item() == pytest.approx(1.25)
+    assert bool(reloaded_seen[0, 3].item())
 
 
 def test_phase6_decay_runner_threads_scope_and_decay_flags(tmp_path: Path) -> None:

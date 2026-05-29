@@ -322,10 +322,15 @@ Memory:
   while `reset100` reached only `0.4575` / `0.4453` and `reset50` only
   `0.2575` / `0.2812`, even though target true-candidate coverage mostly
   recovered between resets.
+- Streaming minibatches with prompt-keyed caches removed the strong replay
+  lift. At 800 steps with batch `16`, exact `policy_reweighted_t1` and raw
+  uniform `u32` both reached `0.2450` exact calc, `u8_m24` was only comparable
+  at `0.2650`, and `u2_m30` lagged at `0.1850`.
 - The result is promising but still transductive: on the fixed exhaustive grid
-  the memory eventually observes all `39` result classes. Reset/rescore tweaks
-  are not enough; next work should test streaming/non-exhaustive prompts or
-  learned/generalized proposal memory before claiming scalability.
+  the memory eventually observes all `39` result classes. Reset/rescore and
+  prompt-keyed streaming variants are not enough; next local-target work needs
+  learned/generalized proposal memory, estimator correction, or a different
+  target construction.
 
 Representative evidence:
 
@@ -341,3 +346,4 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-lower-budget-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-rescore-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-reset-stress-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-streaming-prompt-gate.md`

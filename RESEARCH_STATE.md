@@ -130,8 +130,10 @@ Active directions:
   `0.6016` sampled normal, but retains less strongly (`0.7850` calc /
   `0.7656` normal). Light cached-candidate rescoring ties `u2_m30`; heavier
   rescoring hurts. Reset memory exposes the transductive dependency: at 199
-  steps, `reset100` fell to `0.4575` calc / `0.4453` normal and `reset50` to
-  `0.2575` / `0.2812` despite mostly restored target coverage.
+  steps, `reset100` fell to `0.4575` / `0.4453` and `reset50` to `0.2575` /
+  `0.2812` despite mostly restored target coverage. Streaming removes the
+  strong lift: at 800 batch-16 steps, exact/raw `u32` reached `0.2450` calc,
+  `u8_m24` `0.2650`, and `u2_m30` `0.1850`.
 - Lower-cost assignment is useful only when it changes scalability, not merely
   proxy selection.
 
@@ -162,9 +164,9 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Stress-test replay-memory beyond fixed-grid transduction with streaming
-   prompts or learned/generalized proposals. Rescoring did not help and resets
-   hurt.
+1. Move replay-memory work to learned/generalized proposals or a different
+   target construction. Rescoring, resets, and streaming prompts do not turn
+   fixed-grid replay memory into a scalable method.
 2. In parallel, keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. If trying to reduce hard-assignment cost, state the scalability hypothesis

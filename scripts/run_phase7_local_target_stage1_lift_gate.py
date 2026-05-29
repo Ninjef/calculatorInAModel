@@ -31,11 +31,60 @@ from scripts.run_phase7_local_target_propagation_gate import (  # noqa: E402
     target_weights_policy_reweighted,
     write_rows,
 )
-from src.data import ANSWER_FORMATS  # noqa: E402
+from src.data import (  # noqa: E402
+    ANSWER_FORMATS,
+    ArithmeticBatch,
+    answer_target,
+    make_loss_mask,
+    max_sequence_length,
+    pad_sequence,
+    tokenize,
+)
 from src.model import masked_cross_entropy  # noqa: E402
 
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
+
+
+def random_range_batch(
+    *,
+    batch_size: int,
+    digits: int,
+    operand_max: int,
+    answer_format: str,
+    rng: random.Random,
+    device: str,
+) -> ArithmeticBatch:
+    seq_len = max_sequence_length(digits, answer_format=answer_format)
+    samples: list[list[int]] = []
+    masks: list[list[int]] = []
+    for _ in range(batch_size):
+        a = rng.randint(0, operand_max)
+        b = rng.randint(0, operand_max)
+        prompt = f"{a:0{digits}d}+{b:0{digits}d}="
+        ids = tokenize(
+            prompt
+            + answer_target(
+                a,
+                b,
+                digits,
+                answer_format=answer_format,
+                fixed_width=True,
+            )
+        )
+        samples.append(pad_sequence(ids, seq_len))
+        masks.append(pad_sequence(make_loss_mask(ids), seq_len, pad_id=0))
+    tokens = torch.tensor(samples, dtype=torch.long, device=device)
+    loss_mask = torch.tensor(masks, dtype=torch.bool, device=device)
+    return ArithmeticBatch(
+        x=tokens[:, :-1],
+        y=tokens[:, 1:],
+        loss_mask=loss_mask[:, 1:],
+    )
+
+
+def prompt_keys_from_batch(batch: ArithmeticBatch) -> list[tuple[int, ...]]:
+    return [tuple(row.tolist()) for row in batch.x.detach().cpu()]
 
 
 def parse_branch_specs(text: str) -> list[str]:
@@ -216,6 +265,66 @@ def score_forced_candidate_result_classes(
         if was_training:
             model.train()
     return torch.cat(losses, dim=-1)
+
+
+def load_prompt_keyed_memory_tables(
+    *,
+    state: dict[str, Any],
+    batch: ArithmeticBatch,
+    result_vocab_size: int,
+) -> tuple[torch.Tensor, torch.Tensor, dict[str, float | str], list[tuple[int, ...]]]:
+    loss_map = state.setdefault("prompt_loss_table", {})
+    seen_map = state.setdefault("prompt_seen_table", {})
+    keys = prompt_keys_from_batch(batch)
+    loss_rows: list[torch.Tensor] = []
+    seen_rows: list[torch.Tensor] = []
+    new_prompts = 0
+    for key in keys:
+        loss_row = loss_map.get(key)
+        seen_row = seen_map.get(key)
+        if loss_row is None or seen_row is None:
+            new_prompts += 1
+            loss_row = batch.x.new_full(
+                (result_vocab_size,),
+                0,
+                dtype=torch.float32,
+            ).fill_(float("inf"))
+            seen_row = torch.zeros(
+                result_vocab_size,
+                dtype=torch.bool,
+                device=batch.x.device,
+            )
+        else:
+            loss_row = loss_row.to(batch.x.device)
+            seen_row = seen_row.to(batch.x.device)
+        loss_rows.append(loss_row)
+        seen_rows.append(seen_row)
+    state["prompt_memory_entries"] = len(loss_map)
+    return (
+        torch.stack(loss_rows, dim=0),
+        torch.stack(seen_rows, dim=0),
+        {
+            "target_memory_key_mode": "prompt",
+            "target_prompt_memory_entries": int(len(loss_map)),
+            "target_new_prompt_fraction": float(new_prompts / max(1, len(keys))),
+        },
+        keys,
+    )
+
+
+def save_prompt_keyed_memory_tables(
+    *,
+    state: dict[str, Any],
+    keys: list[tuple[int, ...]],
+    loss_table: torch.Tensor,
+    seen_table: torch.Tensor,
+) -> None:
+    loss_map = state.setdefault("prompt_loss_table", {})
+    seen_map = state.setdefault("prompt_seen_table", {})
+    for idx, key in enumerate(keys):
+        loss_map[key] = loss_table[idx].detach().clone()
+        seen_map[key] = seen_table[idx].detach().clone()
+    state["prompt_memory_entries"] = len(loss_map)
 
 
 def dense_unique_candidate_policy_reweighted_loss(
@@ -473,30 +582,47 @@ def memory_policy_reweighted_loss(
     result_logits, _, _, _ = calculator_read_result_logits(model, batch)
     result_vocab_size = result_logits.shape[-1]
     batch_size = batch.x.shape[0]
-    if "loss_table" not in state:
-        state["loss_table"] = result_logits.new_full(
-            (batch_size, result_vocab_size), float("inf")
-        )
-        state["seen_table"] = torch.zeros(
-            (batch_size, result_vocab_size),
-            device=batch.x.device,
-            dtype=torch.bool,
-        )
-    loss_table: torch.Tensor = state["loss_table"]
-    seen_table: torch.Tensor = state["seen_table"]
-    if loss_table.shape != (batch_size, result_vocab_size):
-        raise ValueError("memory branch state shape changed across batches")
-
     call_index = int(state.get("target_loss_calls", 0))
     reset_count = int(state.get("reset_count", 0))
     did_reset = False
     if reset_interval > 0 and call_index > 0 and call_index % reset_interval == 0:
-        loss_table.fill_(float("inf"))
-        seen_table.zero_()
+        if args.streaming_train_batch_size > 0:
+            state["prompt_loss_table"] = {}
+            state["prompt_seen_table"] = {}
+            state["prompt_memory_entries"] = 0
+        elif "loss_table" in state:
+            state["loss_table"].fill_(float("inf"))
+            state["seen_table"].zero_()
         reset_count += 1
         state["reset_count"] = reset_count
         did_reset = True
     state["target_loss_calls"] = call_index + 1
+    if args.streaming_train_batch_size > 0:
+        loss_table, seen_table, key_metrics, prompt_keys = load_prompt_keyed_memory_tables(
+            state=state,
+            batch=batch,
+            result_vocab_size=result_vocab_size,
+        )
+    else:
+        prompt_keys = []
+        key_metrics = {
+            "target_memory_key_mode": "row",
+            "target_prompt_memory_entries": 0,
+            "target_new_prompt_fraction": 0.0,
+        }
+        if "loss_table" not in state:
+            state["loss_table"] = result_logits.new_full(
+                (batch_size, result_vocab_size), float("inf")
+            )
+            state["seen_table"] = torch.zeros(
+                (batch_size, result_vocab_size),
+                device=batch.x.device,
+                dtype=torch.bool,
+            )
+        loss_table = state["loss_table"]
+        seen_table = state["seen_table"]
+        if loss_table.shape != (batch_size, result_vocab_size):
+            raise ValueError("memory branch state shape changed across batches")
 
     fresh_candidates = sample_uniform_result_candidates(
         batch_size=batch_size,
@@ -541,6 +667,16 @@ def memory_policy_reweighted_loss(
         rescore_count = 0
         candidates = fresh_candidates
         candidate_losses = fresh_losses
+    if args.streaming_train_batch_size > 0:
+        save_prompt_keyed_memory_tables(
+            state=state,
+            keys=prompt_keys,
+            loss_table=loss_table,
+            seen_table=seen_table,
+        )
+        key_metrics["target_prompt_memory_entries"] = int(
+            state.get("prompt_memory_entries", 0)
+        )
 
     true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=args.digits)
     true_sum = true_a + true_b
@@ -578,6 +714,7 @@ def memory_policy_reweighted_loss(
             "target_observed_true_candidate_coverage": float(
                 observed_true_coverage
             ),
+            **key_metrics,
         },
     )
     return loss, {
@@ -754,10 +891,11 @@ def train_branch(
     branch: str,
     args: argparse.Namespace,
     device: str,
-    batch,
+    eval_batch,
 ) -> dict[str, Any]:
     random.seed(args.seed)
     torch.manual_seed(args.seed)
+    train_rng = random.Random(args.seed + 7919)
     model = build_model(args, device=device)
     initial_state = deepcopy(model.state_dict())
     optimizer = torch.optim.AdamW(
@@ -770,6 +908,18 @@ def train_branch(
         )
     )
     rows: list[dict[str, Any]] = []
+
+    def next_train_batch() -> ArithmeticBatch:
+        if args.streaming_train_batch_size > 0:
+            return random_range_batch(
+                batch_size=args.streaming_train_batch_size,
+                digits=args.digits,
+                operand_max=args.operand_max,
+                answer_format=args.answer_format,
+                rng=train_rng,
+                device=device,
+            )
+        return eval_batch
 
     def append_snapshot(
         step: int,
@@ -784,7 +934,7 @@ def train_branch(
             "step": int(step),
             "phase_step": int(phase_step),
             **train_metrics,
-            **exact_grid_policy_metrics(model, batch, digits=args.digits),
+            **exact_grid_policy_metrics(model, eval_batch, digits=args.digits),
         }
         run_sampled_controls = (
             step == 0
@@ -818,15 +968,17 @@ def train_branch(
         rows.append(row)
 
     branch_state: dict[str, Any] = {}
+    train_batch = next_train_batch()
     initial_loss, initial_metrics = branch_loss(
-        model, batch, branch=branch, args=args, state=branch_state
+        model, train_batch, branch=branch, args=args, state=branch_state
     )
     append_snapshot(0, initial_metrics, phase="target", phase_step=0)
     for step in range(1, args.steps + 1):
         model.train()
         optimizer.zero_grad(set_to_none=True)
+        train_batch = next_train_batch()
         loss, metrics = branch_loss(
-            model, batch, branch=branch, args=args, state=branch_state
+            model, train_batch, branch=branch, args=args, state=branch_state
         )
         loss.backward()
         if args.grad_clip > 0:
@@ -849,7 +1001,8 @@ def train_branch(
         for retention_step in range(1, args.retention_steps + 1):
             model.train()
             optimizer.zero_grad(set_to_none=True)
-            loss, metrics = answer_only_loss(model, batch)
+            train_batch = next_train_batch()
+            loss, metrics = answer_only_loss(model, train_batch)
             loss.backward()
             if args.grad_clip > 0:
                 torch.nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
@@ -887,7 +1040,7 @@ def train_branch(
 
 def run(args: argparse.Namespace) -> dict[str, Any]:
     device = pick_device()
-    batch = exhaustive_batch(
+    eval_batch = exhaustive_batch(
         digits=args.digits,
         operand_max=args.operand_max,
         answer_format=args.answer_format,
@@ -895,14 +1048,16 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
     )
     branches = parse_branch_specs(args.branches)
     results = [
-        train_branch(branch=branch, args=args, device=device, batch=batch)
+        train_branch(branch=branch, args=args, device=device, eval_batch=eval_batch)
         for branch in branches
     ]
     return {
         "diagnostic": "local_target_stage1_lift_gate",
         "device": device,
         "seed": int(args.seed),
-        "batch_size": int(batch.x.shape[0]),
+        "batch_size": int(eval_batch.x.shape[0]),
+        "train_mode": "streaming" if args.streaming_train_batch_size > 0 else "exhaustive_grid",
+        "streaming_train_batch_size": int(args.streaming_train_batch_size),
         "operand_max": int(args.operand_max),
         "steps": int(args.steps),
         "retention_steps": int(args.retention_steps),
@@ -936,6 +1091,7 @@ def main() -> int:
     parser.add_argument("--mlp-expansion", type=int, default=1)
     parser.add_argument("--calculator-hook-after-layer", type=int, default=1)
     parser.add_argument("--steps", type=int, default=200)
+    parser.add_argument("--streaming-train-batch-size", type=int, default=0)
     parser.add_argument("--retention-steps", type=int, default=0)
     parser.add_argument("--eval-every", type=int, default=25)
     parser.add_argument("--retention-eval-every", type=int, default=25)
@@ -969,6 +1125,8 @@ def main() -> int:
 
     if args.steps < 1:
         raise ValueError("--steps must be positive")
+    if args.streaming_train_batch_size < 0:
+        raise ValueError("--streaming-train-batch-size must be non-negative")
     if args.retention_steps < 0:
         raise ValueError("--retention-steps must be non-negative")
     if args.eval_every < 1:

@@ -506,6 +506,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/102-streaming-minibatches-remove-replay-memory-s-strong-fixed-grid-local-target-lift",
+      "target": "researchMemory/hypotheses/phase7/102-streaming-minibatches-remove-replay-memory-s-strong-fixed-grid-local-target-lift.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -828,6 +833,11 @@
     {
       "source": "direction/target-propagation-local-targets",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-replay-memory-reset-stress-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-replay-memory-streaming-prompt-gate.md",
       "type": "supported_by"
     },
     {
@@ -1543,6 +1553,13 @@
       "source_path": "researchMemory/hypotheses/phase7/101-finite-reset-windows-expose-replay-memory-s-fixed-grid-transductive-dependence.md",
       "status": "MIXED-NEGATIVE",
       "title": "Finite reset windows expose replay-memory's fixed-grid transductive dependence."
+    },
+    {
+      "id": "doc/102-streaming-minibatches-remove-replay-memory-s-strong-fixed-grid-local-target-lift",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/102-streaming-minibatches-remove-replay-memory-s-strong-fixed-grid-local-target-lift.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Streaming minibatches remove replay-memory's strong fixed-grid local-target lift."
     },
     {
       "id": "doc/phase7-direction-memory",
