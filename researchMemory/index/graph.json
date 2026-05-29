@@ -1,0 +1,283 @@
+{
+  "edges": [
+    {
+      "source": "doc/phase7-direction-memory",
+      "target": "researchMemory/phase7-direction-memory.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "direction/oracle-and-wiring-checks",
+      "target": "CLAUDE.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/oracle-and-wiring-checks",
+      "target": "factSheets/PHASE_7_EXPERIMENT_FACT_SHEET.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/oracle-and-wiring-checks",
+      "target": "researchMemory/phase7-direction-memory.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "direction/generic-retention-after-teaching",
+      "target": "RESEARCH_STATE.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/generic-retention-after-teaching",
+      "target": "factSheets/PHASE_7_EXPERIMENT_FACT_SHEET.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/generic-retention-after-teaching",
+      "target": "researchMemory/phase7-direction-memory.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "direction/plain-answer-loss-discovery",
+      "target": "aiAgentWorkHistory/phase7/2026-05-14-exact-result-marginal-answer-loss-gradient-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/plain-answer-loss-discovery",
+      "target": "aiAgentWorkHistory/phase7/2026-05-14-gradient-friendly-result-decoder-alignment-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/plain-answer-loss-discovery",
+      "target": "HYPOTHESIS_LEDGER.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/plain-answer-loss-discovery",
+      "target": "researchMemory/phase7-direction-memory.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "direction/direct-feedback-and-shadow-gradients",
+      "target": "aiAgentWorkHistory/phase7/2026-05-28-boundary-feedback-gradient-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/direct-feedback-and-shadow-gradients",
+      "target": "aiAgentWorkHistory/phase7/2026-05-28-linear-shadow-feedback-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/direct-feedback-and-shadow-gradients",
+      "target": "aiAgentWorkHistory/phase7/2026-05-28-online-shadow-feedback-validation-gradient-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/direct-feedback-and-shadow-gradients",
+      "target": "HYPOTHESIS_LEDGER.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/direct-feedback-and-shadow-gradients",
+      "target": "researchMemory/phase7-direction-memory.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-convergence-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "HYPOTHESIS_LEDGER.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "researchMemory/phase7-direction-memory.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "direction/non-bottleneck-direct-training",
+      "target": "aiAgentWorkHistory/phase7/2026-05-28-non-bottleneck-hard-assignment-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/non-bottleneck-direct-training",
+      "target": "aiAgentWorkHistory/phase7/2026-05-28-non-bottleneck-causal-gap-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/non-bottleneck-direct-training",
+      "target": "researchMemory/phase7-direction-memory.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "direction/bottleneck-to-additive-handoff",
+      "target": "aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-transfer-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/bottleneck-to-additive-handoff",
+      "target": "aiAgentWorkHistory/phase7/2026-05-28-bottleneck-to-additive-transfer-replication.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/bottleneck-to-additive-handoff",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-src6-selected-continuation-readout.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/bottleneck-to-additive-handoff",
+      "target": "researchMemory/phase7-direction-memory.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "direction/source-checkpoint-selection",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-handoff-probe-selector-validation.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-checkpoint-selection",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-additive-geometry-selector-validation.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-checkpoint-selection",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-handoff-trace-learned-selector-audit.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-checkpoint-selection",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-intraining-probe-source-selection-validation.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-checkpoint-selection",
+      "target": "researchMemory/phase7-direction-memory.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-source-acquisition-stabilization-floor.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-stabilized-source-continuation-readout.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-stabilized-source-seed10-replication.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-source-assignment-weight5-transfer-probe.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "researchMemory/phase7-direction-memory.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "SOLUTION_IDEAS.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "RESEARCH_STATE.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "researchMemory/phase7-direction-memory.md",
+      "type": "defined_in"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "doc/phase7-direction-memory",
+      "kind": "memory_document",
+      "source_path": "researchMemory/phase7-direction-memory.md",
+      "status": "active synthesis",
+      "title": "Phase 7 Direction Memory"
+    },
+    {
+      "id": "direction/oracle-and-wiring-checks",
+      "kind": "direction_memory",
+      "source_path": "researchMemory/phase7-direction-memory.md",
+      "status": "paused",
+      "title": "Oracle And Wiring Checks"
+    },
+    {
+      "id": "direction/generic-retention-after-teaching",
+      "kind": "direction_memory",
+      "source_path": "researchMemory/phase7-direction-memory.md",
+      "status": "paused",
+      "title": "Generic Retention After Teaching"
+    },
+    {
+      "id": "direction/plain-answer-loss-discovery",
+      "kind": "direction_memory",
+      "source_path": "researchMemory/phase7-direction-memory.md",
+      "status": "paused without a new mechanism",
+      "title": "Plain Answer-Loss Discovery"
+    },
+    {
+      "id": "direction/direct-feedback-and-shadow-gradients",
+      "kind": "direction_memory",
+      "source_path": "researchMemory/phase7-direction-memory.md",
+      "status": "paused without a new dynamics mechanism",
+      "title": "Direct Feedback And Shadow Gradients"
+    },
+    {
+      "id": "direction/hard-improvement-assignment",
+      "kind": "direction_memory",
+      "source_path": "researchMemory/phase7-direction-memory.md",
+      "status": "active but constrained",
+      "title": "Hard Improvement Assignment"
+    },
+    {
+      "id": "direction/non-bottleneck-direct-training",
+      "kind": "direction_memory",
+      "source_path": "researchMemory/phase7-direction-memory.md",
+      "status": "paused unless adding a new causal-use mechanism",
+      "title": "Non-Bottleneck Direct Training"
+    },
+    {
+      "id": "direction/bottleneck-to-additive-handoff",
+      "kind": "direction_memory",
+      "source_path": "researchMemory/phase7-direction-memory.md",
+      "status": "active but constrained",
+      "title": "Bottleneck-To-Additive Handoff"
+    },
+    {
+      "id": "direction/source-checkpoint-selection",
+      "kind": "direction_memory",
+      "source_path": "researchMemory/phase7-direction-memory.md",
+      "status": "paused for cheap proxies; actual handoff gates remain trusted",
+      "title": "Source Checkpoint Selection"
+    },
+    {
+      "id": "direction/source-acquisition-for-transfer-geometry",
+      "kind": "direction_memory",
+      "source_path": "researchMemory/phase7-direction-memory.md",
+      "status": "active",
+      "title": "Source Acquisition For Transfer Geometry"
+    },
+    {
+      "id": "direction/target-propagation-local-targets",
+      "kind": "direction_memory",
+      "source_path": "researchMemory/phase7-direction-memory.md",
+      "status": "active candidate",
+      "title": "Target Propagation / Local Targets"
+    }
+  ]
+}

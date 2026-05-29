@@ -38,6 +38,16 @@ happened; `RESEARCH_STATE.md` answers what it means now.
 
 ## Strategic Guardrails
 
+Before proposing an experiment, search the vector/graph memory index:
+
+```bash
+python3 researchMemory/scripts/search_memory.py "<experiment idea or question>"
+```
+
+Read the top matching memories and their linked evidence. If the proposed work
+belongs to a paused direction, do not proceed unless it introduces a new
+mechanism and updates the strategic docs accordingly.
+
 Do not rediscover or present oracle calculator success as progress. Oracle
 calculator outputs, oracle-at-eval recovery, injection-zero controls, and
 forced-random controls are wiring checks only.

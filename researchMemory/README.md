@@ -34,3 +34,35 @@ When a new experiment changes a direction-level conclusion:
 
 Agents should read the relevant memory before proposing local variants in that
 direction.
+
+## Vector And Graph Index
+
+The local index is rebuildable from these markdown memories:
+
+```bash
+python3 researchMemory/scripts/build_memory_index.py
+```
+
+Search it before proposing experiments:
+
+```bash
+python3 researchMemory/scripts/search_memory.py "Should we try more REINFORCE?"
+```
+
+The generated files live under `researchMemory/index/`:
+
+- `memories.jsonl`: memory records with title, summary, generated questions,
+  source pointer, status, and relations.
+- `embeddings.npz`: deterministic local vector embeddings for titles,
+  summaries, generated questions, and compact document text.
+- `graph.json`: graph-like nodes and relation edges.
+
+The embeddings are offline hashing embeddings by default so the guardrail is
+testable without network access. They are a retrieval aid, not the source of
+truth.
+
+To scaffold a new memory file:
+
+```bash
+python3 researchMemory/scripts/add_memory.py "New Direction" --status candidate --date YYYY-MM-DD
+```
