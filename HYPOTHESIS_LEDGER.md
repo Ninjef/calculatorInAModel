@@ -303,3 +303,9 @@ Conclusion: Across six non-continued frozen-policy transfer cells, normal accura
 Do not repeat: Same trace audit over the current frozen-policy transfer cells as novelty.
 Next allowed test: Use a 400/600-step handoff probe for checkpoint selection, build a cheaper readout/linear proxy for that probe, or optimize source acquisition for early additive handoff slope.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-short-handoff-probe-audit.md`
+
+PARTIAL: Frozen-state readout probes may proxy handoff geometry.
+Conclusion: A linear sum probe on additive-compatible frozen `=` residuals correlated with known final additive handoff at `0.9643/0.9659` across five source checkpoints and correctly ranked `src2_final` above misleading higher-source-accuracy `src2_step1300`.
+Do not repeat: Same five-checkpoint frozen-state readout probe as novelty.
+Next allowed test: Validate the readout probe on unseen source checkpoints, use it to select among candidate sources before transfer, or optimize source acquisition for probe score.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-frozen-state-readout-probe.md`

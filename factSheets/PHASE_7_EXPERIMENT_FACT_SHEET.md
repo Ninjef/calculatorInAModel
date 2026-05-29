@@ -4613,3 +4613,57 @@ Interpretation:
 - The probe is still not fully scalable because it requires partial downstream
   training. Next work should build a cheaper readout or linear proxy for this
   handoff-geometry signal.
+
+## 2026-05-29 Frozen-State Readout Probe
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-fifty-eighth-task-Frozen-state-readout-probe.md
+```
+
+Question:
+
+Can a linear probe on frozen additive-compatible source states proxy handoff
+geometry more cheaply than a 400/600-step additive transfer probe?
+
+Probe:
+
+- Loaded bottleneck source checkpoints into additive-compatible models with
+  compatible tensors only.
+- Ran the exact `0..19` grid once with diagnostics.
+- Trained a tiny linear classifier on frozen `=` residual states to predict the
+  true sum class with a deterministic `320/80` train/eval split.
+- Discarded answer-position features because teacher-forced full-sequence
+  inputs leak answer tokens there.
+
+Result:
+
+| Source | Known final additive handoff | Read-`=` probe eval | Layer-2 `=` probe eval |
+| --- | ---: | ---: | ---: |
+| `src2_final` | `0.9525` | `0.5875` | `0.5750` |
+| `src2_step1300` | `0.8675` | `0.5000` | `0.5125` |
+| `src5_step1500` | `0.6975` | `0.3125` | `0.3125` |
+| `src5_final` | `0.5550` | `0.2625` | `0.2625` |
+| `src4_final` | `0.3025` | `0.1625` | `0.1625` |
+
+Correlation with known final additive handoff:
+
+| Probe | Correlation |
+| --- | ---: |
+| read-`=` residual linear probe | `0.9643` |
+| layer-2 `=` residual linear probe | `0.9659` |
+
+Decision:
+
+```text
+bottleneck_to_additive_frozen_state_readout_probe_partial
+```
+
+Interpretation:
+
+- The frozen-state readout probe tracks handoff quality in this small audit.
+- It correctly ranks `src2_final` above `src2_step1300`, unlike source
+  normal/calculator accuracy.
+- It is cheaper than a partial downstream transfer, but it is still supervised
+  and not yet validated on unseen source checkpoints.
