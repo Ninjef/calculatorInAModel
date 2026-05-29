@@ -558,6 +558,19 @@ but landed just below fixed `0.1`/discrete accuracy gates. This is a useful
 adaptive-retention control and a partial positive, not yet a clean replacement
 for fixed lightweight anchoring.
 
+Selective policy-backbone freezing was then added and tested:
+`bottleneck_to_additive_policy_backbone_freeze_partial`. The new
+`--freeze-calculator-policy-backbone` freezes token/position embeddings and
+blocks before the calculator hook while leaving the calculator action head
+trainable. With no anchor and LR `3e-4`, adapted weak-source `src4_add2`
+improved from frozen-adapted final eval `0.6050` to `0.7250` while preserving
+learned calculator accuracy `0.8200`; `src5_add5` improved from `0.8175` to
+`0.8700` while preserving learned calculator accuracy `0.8025`. This avoids
+the catastrophic no-anchor/action-head-freeze collapse, where learned calc fell
+to about `0.25-0.30`, but it is still weaker than lightweight anchored
+unfreezing. The upstream policy representation is the fragile part; freezing
+it is useful, but action-head/readout adaptation alone is not enough.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -710,6 +723,10 @@ Do not rerun these as next steps unless debugging new code:
   full unfreeze from the adapted `src4_add2` or `src5_add5` checkpoints as
   novelty. It improved `src4` at lower mean anchor weight but did not beat
   fixed `0.1` across both cells.
+- `--freeze-calculator-policy-backbone`, no anchor, LR `3e-4`, 400-step
+  unfreeze from the adapted `src4_add2` or `src5_add5` checkpoints as novelty.
+  It preserved learned calculator accuracy and improved answer accuracy over
+  frozen-adapted baselines, but did not beat lightweight anchored unfreezing.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement

@@ -4267,3 +4267,66 @@ Interpretation:
   not yet a clean replacement for fixed lightweight anchoring. Further work
   should avoid simple band sweeps and instead add answer-utility awareness,
   change selective unfreezing, or improve source-policy acquisition.
+
+## 2026-05-29 Bottleneck-to-Additive Policy-Backbone Freeze
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-fifty-second-task-Bottleneck-to-additive-policy-backbone-freeze.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_bottleneck_to_additive_transfer_policy_backbone_freeze_unfreeze
+```
+
+Code change:
+
+- Added `--freeze-calculator-policy-backbone`.
+- Added `freeze_calculator_policy_backbone_parameters`.
+- Added unit coverage verifying that the pre-hook policy path is frozen while
+  the result action head remains trainable.
+
+Question:
+
+Can selective unfreezing avoid upstream representation drift without requiring
+an explicit result-policy anchor?
+
+Configuration:
+
+- Continued from the adapted weak-source checkpoints.
+- Loaded with `--semantic-decoder-checkpoint-load-scope full_model`.
+- Removed `--freeze-calculator-policy`.
+- Added `--freeze-calculator-policy-backbone`.
+- No result-policy anchor.
+- global LR `3e-4`;
+- answer loss weight `1`;
+- exact-grid natural `0..19`;
+- 400 steps.
+
+Result:
+
+| Run | Frozen adapted final | Plain unfreeze final | Freeze-action-head final | Policy-backbone freeze final | Best normal | Final injection-zero | Final forced-random | Final oracle | Final calc | Trainable groups |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `src4_add2` policy-backbone freeze | `0.6050` | `0.5200` | `0.5200` | `0.7250` | `0.7250` at `400` | `0.0400` | `0.0950` | `0.7675` | `0.8200` | `calculator_hook.result_proj`, `upstream` |
+| `src5_add5` policy-backbone freeze | `0.8175` | `0.8100` | `0.8100` | `0.8700` | `0.8750` at `300` | `0.0075` | `0.0375` | `0.8850` | `0.8025` | `calculator_hook.result_proj`, `upstream` |
+
+Decision:
+
+```text
+bottleneck_to_additive_policy_backbone_freeze_partial
+```
+
+Interpretation:
+
+- Freezing the policy backbone prevented the no-anchor policy collapse seen in
+  plain low-LR unfreeze and action-head-only freezing.
+- Learned calculator-result accuracy stayed around `0.80-0.82`, and
+  injection-zero remained near chance.
+- Final answer accuracy improved over the frozen-adapted weak baselines in both
+  cells.
+- It still trailed lightweight anchored unfreezing, so action-head/readout
+  adaptation with a stable pre-hook representation is useful but not sufficient
+  as the whole handoff recipe.

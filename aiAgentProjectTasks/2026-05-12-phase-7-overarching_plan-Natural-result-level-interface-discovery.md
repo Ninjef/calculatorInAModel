@@ -1660,3 +1660,40 @@ weight. It did not beat the fixed `0.1` or discrete accuracy gates on
 fixed lightweight anchoring. Next work should avoid simple band sweeps and
 instead change the retention signal, the movable parameter set, or source
 policy acquisition.
+
+## Status Update: 2026-05-29, Bottleneck-to-Additive Policy-Backbone Freeze
+
+Selective policy-backbone freezing produced a partial positive:
+
+```text
+bottleneck_to_additive_policy_backbone_freeze_partial
+```
+
+Code change:
+
+- Added `--freeze-calculator-policy-backbone`.
+- This freezes token/position embeddings and blocks before the calculator hook.
+- Unlike `--freeze-calculator-policy`, it leaves the calculator action head
+  trainable.
+
+Experiment:
+
+- Same adapted weak-source checkpoints.
+- Full model load.
+- Removed `--freeze-calculator-policy`.
+- Added `--freeze-calculator-policy-backbone`.
+- No result-policy anchor.
+- LR `3e-4`.
+- 400 steps.
+
+| Run | Frozen adapted final | Policy-backbone freeze final | Best normal | Final calc | Final injection-zero | Trainable groups |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| `src4_add2` policy-backbone freeze | `0.6050` | `0.7250` | `0.7250` at `400` | `0.8200` | `0.0400` | `calculator_hook.result_proj`, `upstream` |
+| `src5_add5` policy-backbone freeze | `0.8175` | `0.8700` | `0.8750` at `300` | `0.8025` | `0.0075` | `calculator_hook.result_proj`, `upstream` |
+
+This avoids the catastrophic no-anchor/action-head-freeze collapse: learned
+calculator accuracy stayed around `0.80` instead of falling to `0.25-0.30`.
+It also improved final answer accuracy over the frozen-adapted baselines for
+both weak cells. However, it remains below lightweight anchored unfreezing, so
+stable policy-backbone freezing is useful but not sufficient as the whole
+handoff recipe.

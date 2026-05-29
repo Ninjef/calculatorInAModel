@@ -358,6 +358,15 @@ slightly beyond fixed `0.1` while using mean anchor weight `0.0385`, but
 useful retention controller, not as the final scalable method. Further anchor
 work should add answer-utility awareness or change what parameters move,
 rather than just sweeping bands.
+Selective policy-backbone freezing is also available through
+`--freeze-calculator-policy-backbone`. It freezes embeddings and pre-hook
+blocks while leaving the result action head trainable. On adapted weak
+bottleneck-to-additive handoffs, it preserved learned calculator accuracy
+without any anchor and improved answer accuracy over the frozen-adapted
+baseline, but it still trailed lightweight anchored unfreezing. This supports
+the diagnosis that upstream representation drift is the dangerous failure
+mode; future selective-unfreeze ideas should combine stable policy backbones
+with better readout/action-head adaptation or a small utility-aware anchor.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

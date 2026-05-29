@@ -175,6 +175,7 @@ class TrainConfig:
     freeze_semantic_decoder: bool
     freeze_upstream_encoder: bool
     freeze_calculator_policy: bool
+    freeze_calculator_policy_backbone: bool
     freeze_calculator_action_head: bool
     trainable_parameter_groups: list[dict[str, object]]
     reinforce_baseline_mode: str
@@ -5955,12 +5956,7 @@ def freeze_upstream_encoder_parameters(model: TinyGPT) -> None:
 def freeze_calculator_policy_parameters(model: TinyGPT) -> None:
     if model.calculator_hook is None:
         return
-    for module in [model.tok_emb, model.pos_emb]:
-        for param in module.parameters():
-            param.requires_grad = False
-    for block in list(model.blocks)[: model.cfg.calculator_hook_after_layer]:
-        for param in block.parameters():
-            param.requires_grad = False
+    freeze_calculator_policy_backbone_parameters(model)
     if model.cfg.calculator_action_head == "result_space":
         for param in model.calculator_hook.result_proj.parameters():
             param.requires_grad = False
@@ -5969,6 +5965,17 @@ def freeze_calculator_policy_parameters(model: TinyGPT) -> None:
             param.requires_grad = False
     else:
         for param in model.calculator_hook.input_proj.parameters():
+            param.requires_grad = False
+
+
+def freeze_calculator_policy_backbone_parameters(model: TinyGPT) -> None:
+    if model.calculator_hook is None:
+        return
+    for module in [model.tok_emb, model.pos_emb]:
+        for param in module.parameters():
+            param.requires_grad = False
+    for block in list(model.blocks)[: model.cfg.calculator_hook_after_layer]:
+        for param in block.parameters():
             param.requires_grad = False
 
 
@@ -6436,6 +6443,8 @@ def run_variant(
         freeze_upstream_encoder_parameters(model)
     if args.freeze_calculator_policy:
         freeze_calculator_policy_parameters(model)
+    if args.freeze_calculator_policy_backbone:
+        freeze_calculator_policy_backbone_parameters(model)
     if args.freeze_calculator_action_head:
         freeze_calculator_action_head_parameters(model)
     trainable_groups = trainable_parameter_summary(model)
@@ -6683,6 +6692,7 @@ def run_variant(
         freeze_semantic_decoder=args.freeze_semantic_decoder,
         freeze_upstream_encoder=args.freeze_upstream_encoder,
         freeze_calculator_policy=args.freeze_calculator_policy,
+        freeze_calculator_policy_backbone=args.freeze_calculator_policy_backbone,
         freeze_calculator_action_head=args.freeze_calculator_action_head,
         trainable_parameter_groups=trainable_groups,
         reinforce_baseline_mode=args.reinforce_baseline_mode,
@@ -8579,6 +8589,9 @@ def run_variant(
     metrics["freeze_semantic_decoder"] = args.freeze_semantic_decoder
     metrics["freeze_upstream_encoder"] = args.freeze_upstream_encoder
     metrics["freeze_calculator_policy"] = args.freeze_calculator_policy
+    metrics["freeze_calculator_policy_backbone"] = (
+        args.freeze_calculator_policy_backbone
+    )
     metrics["freeze_calculator_action_head"] = args.freeze_calculator_action_head
     metrics["aux_operand_loss_grad_upstream"] = args.aux_operand_loss_grad_upstream
     metrics["trainable_parameter_groups"] = trainable_groups
@@ -9630,6 +9643,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--freeze-calculator-policy-backbone",
+        action="store_true",
+        help=(
+            "Freeze embeddings and blocks before the calculator hook while "
+            "leaving the calculator action head trainable. Useful for testing "
+            "whether policy-head adaptation can work without upstream "
+            "representation drift."
+        ),
+    )
+    parser.add_argument(
         "--freeze-calculator-action-head",
         action="store_true",
         help=(
@@ -10572,6 +10595,8 @@ def main() -> None:
             suffix_parts.append(f"causalgapm{args.calculator_causal_gap_margin:g}")
         if args.calculator_result_head_hidden_size > 0:
             suffix_parts.append(f"rhead{args.calculator_result_head_hidden_size}")
+        if args.freeze_calculator_policy_backbone:
+            suffix_parts.append("freezepolicybackbone")
         if args.freeze_calculator_action_head:
             suffix_parts.append("freezeactionhead")
         if args.calculator_estimator == "gumbel_concrete_interface":

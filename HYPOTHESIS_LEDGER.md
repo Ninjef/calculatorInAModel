@@ -267,3 +267,9 @@ Conclusion: Linear gate with base `0.01`, threshold `0.85`, band `0.10`, and max
 Do not repeat: Same adapted `src4_add2/src5_add5`, base `0.01`, linear `current_argmax_accuracy` gate threshold `0.85`, band `0.10`, gate weight `0.1`, LR `3e-4`, 400-step full unfreeze as novelty.
 Next allowed test: Source-policy acquisition, selective policy-path unfreezing, or a retention controller that combines calculator accuracy with answer utility instead of metric-only anchor scaling.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-bottleneck-to-additive-continuous-anchor-gate.md`
+
+PARTIAL: Freezing the policy backbone prevents no-anchor policy collapse, but action-head/readout adaptation alone is weaker than anchored unfreezing.
+Conclusion: `--freeze-calculator-policy-backbone` with no anchor preserved final learned calc `0.8200/0.8025` and improved adapted weak handoffs to final eval `0.7250/0.8700`, but stayed below lightweight anchor results.
+Do not repeat: Same adapted `src4_add2/src5_add5`, no anchor, `--freeze-calculator-policy-backbone`, LR `3e-4`, 400-step unfreeze as novelty.
+Next allowed test: Combine policy-backbone freezing with lightweight/utility-aware retention, improve source-policy acquisition, or test whether a different movable parameter set improves readout without policy drift.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-bottleneck-to-additive-policy-backbone-freeze.md`
