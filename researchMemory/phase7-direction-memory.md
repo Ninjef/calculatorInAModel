@@ -195,11 +195,14 @@ Memory:
   forced-true additive auxiliary to step `50` improved source calc/final eval
   over baseline (`0.3900`/`0.4000` vs `0.3500`/`0.3800`) while retaining
   strong additive geometry (`forced_best_true=0.5100` vs baseline `0.0000`).
-- The promising next direction is not another checkpoint selector; scale the
-  scheduled geometry objective to `operand_max=19` with source-only
-  checkpointing first, then verify promising checkpoints with the standalone
-  600-step handoff gate. If larger runs drift late, add a behavior gate or
-  policy-retention anchor.
+- The first full-grid scheduled gate is positive: at matched 200-step
+  `operand_max=19` source checkpoints, scheduled aux nearly tied source
+  accuracy but improved forced-result geometry (`forced_best_true=0.2125` vs
+  `0.0000`) and standalone 600-step handoff (`0.4150` final eval vs `0.2525`).
+- The promising next direction is not another checkpoint selector; extend the
+  scheduled geometry objective to longer full-grid source horizons
+  (`400/600/800`) and verify with the standalone 600-step handoff gate. If
+  larger runs drift late, add a behavior gate or policy-retention anchor.
 
 Representative evidence:
 
@@ -210,6 +213,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-source-assignment-weight5-transfer-probe.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-source-aux-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-schedule-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-op19-gate.md`
 
 ## Direction: Target Propagation / Local Targets
 

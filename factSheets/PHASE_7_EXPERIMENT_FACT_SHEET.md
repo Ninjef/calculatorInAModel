@@ -6524,3 +6524,81 @@ Interpretation:
 - It retained most of the additive readout-geometry benefit.
 - Next test should scale to `operand_max=19` using source-only checkpointing
   first, then verify with targeted standalone 600-step additive handoff.
+
+## 2026-05-29 Additive Forced-True Schedule Op19 Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-op19-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_additive_forced_true_schedule/op19_gate
+runs/2026-05-29_phase7_additive_forced_true_schedule/op19_gate_steps200
+```
+
+Question:
+
+Does the scheduled forced-true additive source objective still improve transfer
+geometry on the real `operand_max=19` grid, and does that survive the trusted
+standalone 600-step frozen-policy additive handoff gate?
+
+Source setup:
+
+- `operand_max=19`, seed `13`, frozen product answer-decoder semantic
+  checkpoint.
+- No-decay source stabilization: improvement assignment `10`, entropy `0.05`,
+  batch diversity `0.1`.
+- Baseline had no forced-true additive auxiliary.
+- Scheduled branch used `--additive-forced-true-loss-weight 0.5` and
+  `--additive-forced-true-start-step 50`.
+
+Source results:
+
+| Horizon | Branch | Train calc | Snapshot normal | Final eval exact |
+| ---: | --- | ---: | ---: | ---: |
+| `100` | baseline | `0.2150` | `0.2100` | `0.2200` |
+| `100` | always-on aux | `0.2325` | `0.2225` | `0.2025` |
+| `100` | scheduled aux | `0.2050` | `0.2050` | `0.2150` |
+| `200` | baseline | `0.2875` | `0.2550` | `0.2825` |
+| `200` | scheduled aux | `0.2800` | `0.2575` | `0.2750` |
+
+200-step geometry probe:
+
+| Branch | Forced best=true | Forced top3=true | True loss | Best loss | 50-step slope final loss |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| baseline | `0.0000` | `0.0000` | `2.6754` | `2.6544` | `1.8058` |
+| scheduled aux | `0.2125` | `0.4025` | `1.1805` | `1.0946` | `1.0360` |
+
+Standalone 600-step handoff verification:
+
+```text
+runs/2026-05-29_phase7_additive_forced_true_schedule/op19_gate_steps200/handoff600_baseline_step200
+runs/2026-05-29_phase7_additive_forced_true_schedule/op19_gate_steps200/handoff600_scheduled_step200
+```
+
+| Source | Handoff step 0 | Handoff step 600 | Final eval | Injection-zero final | Oracle final | Learned calc final |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| baseline step 200 | `0.0000` | `0.2625` | `0.2525` | `0.0000` | `0.2109` | `0.2813` |
+| scheduled step 200 | `0.0425` | `0.3925` | `0.4150` | `0.0469` | `0.3672` | `0.2813` |
+
+Decision:
+
+```text
+additive_forced_true_schedule_op19_handoff_positive
+```
+
+Interpretation:
+
+- The scheduled forced-true additive objective did not materially improve
+  source calculator accuracy by step 200.
+- It did materially improve additive transfer geometry and standalone handoff.
+- This validates source acquisition optimized for additive readout geometry as
+  an active branch, but the absolute handoff is still below the successful
+  staged-transfer recipes.
+- Next test should extend scheduled source acquisition to longer horizons
+  around `400/600/800` and verify selected checkpoints with the standalone
+  600-step handoff gate.

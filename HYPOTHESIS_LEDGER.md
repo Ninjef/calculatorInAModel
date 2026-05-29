@@ -547,3 +547,9 @@ Conclusion: On the same reduced `operand_max=9`, 100-step seed-13 gate, turning 
 Do not repeat: The same small `operand_max=9`, seed-13, 100-step, start-step-50 schedule gate as novelty.
 Next allowed test: Scale to `operand_max=19` with source-only checkpointing first, then verify promising scheduled-aux checkpoints with targeted standalone 600-step additive handoff.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-schedule-gate.md`
+
+POSITIVE: The scheduled forced-true additive source objective improves full-grid standalone handoff.
+Conclusion: On `operand_max=19`, seed-13, 200-step source acquisition, scheduled aux (`weight=0.5`, start step `50`) approximately tied baseline source policy (`0.2800` vs `0.2875` train calc; `0.2750` vs `0.2825` final eval) but strongly improved additive geometry (`forced_best_true=0.2125` vs `0.0000`, 50-step slope loss `1.0360` vs `1.8058`) and the trusted 600-step frozen-policy handoff (`0.4150` final eval / `0.3925` step-600 snapshot vs baseline `0.2525` / `0.2625`).
+Do not repeat: The same seed-13, `operand_max=19`, 200-step baseline vs scheduled step-50 source gate plus 600-step handoff as novelty.
+Next allowed test: Extend scheduled source acquisition to longer horizons (`400/600/800`) and verify selected checkpoints with standalone 600-step additive handoff; add a policy-retention anchor if source accuracy drifts.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-true-op19-gate.md`
