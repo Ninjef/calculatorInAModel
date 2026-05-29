@@ -5297,3 +5297,66 @@ Interpretation:
 - The result does not repair the 500-step selector failure on `src6`; fresh
   sources should still use 600-step selection or full confirmation until a
   better proxy is validated.
+
+## 2026-05-29 `src7` 600-Step Selector Replication
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-seventy-third-task-Src7-600-selector-replication.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_src7_600_selector_replication
+```
+
+Question:
+
+Does 600-step handoff selection and the reduced selected-source recipe
+replicate on another fresh source family?
+
+Setup:
+
+- Trained fresh bottleneck `src7` with checkpoint snapshots.
+- Probed step `1000`, step `1400`, and final with 800-step additive
+  frozen-policy handoffs.
+- Continued the 600-step-selected winner, step `1400`, for 800 more
+  frozen-policy steps.
+- Ran 600 policy-backbone-frozen readout steps from the continued checkpoint.
+
+Source and handoff results:
+
+| Candidate | Source normal | Normal @ 600 | Normal @ 800 | Final handoff | Final injection-zero | Final forced-random | Final oracle | Final calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| step `1000` | `0.7075` | `0.4850` | `0.5450` | `0.5375` | `0.0000` | `0.0234` | `0.6563` | `0.7266` |
+| step `1400` | `0.7500` | `0.5025` | `0.6600` | `0.7325` | `0.0234` | `0.0391` | `0.7188` | `0.7891` |
+| final | `0.8100` | `0.4150` | `0.5200` | `0.5000` | `0.0000` | `0.0078` | `0.5313` | `0.7344` |
+
+Selected continuation/readout:
+
+| Stage | Final eval | Best snapshot | Injection-zero | Forced-random | Oracle | Calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| selected handoff | `0.7325` | `0.6600` at handoff step `800` | `0.0234` | `0.0391` | `0.7188` | `0.7891` |
+| 800-step continuation | `0.8125` | `0.8050` at step `700` | `0.0469` | `0.0391` | `0.7734` | `0.7891` |
+| 600-step readout | `0.8825` | `0.8650` at step `400` | `0.0625` | `0.0703` | `0.8125` | `0.7891` |
+
+Decision:
+
+```text
+src7_600_step_selector_positive_recipe_boundary_negative
+```
+
+Interpretation:
+
+- The 600-step selector replicated: it picked step `1400`, which also won the
+  full 800-step handoff.
+- Source normal accuracy alone would have picked the final checkpoint, which
+  transferred worse.
+- The reduced selected-source recipe improved the selected lineage but did not
+  clear the `0.90` non-bottleneck gate.
+- This points to source acquisition quality as the next limiting factor: a
+  selector can choose the best available checkpoint, but weak source families
+  still need better acquisition objectives or stronger handoff/continuation
+  slope.
