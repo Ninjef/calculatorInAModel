@@ -4620,6 +4620,7 @@ Task:
 
 ```text
 aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-fifty-eighth-task-Frozen-state-readout-probe.md
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-fifty-ninth-task-Frozen-state-readout-probe-script.md
 ```
 
 Question:
@@ -4629,41 +4630,48 @@ geometry more cheaply than a 400/600-step additive transfer probe?
 
 Probe:
 
+- Added `scripts/run_frozen_state_readout_probe.py` to make the probe reusable.
 - Loaded bottleneck source checkpoints into additive-compatible models with
   compatible tensors only.
 - Ran the exact `0..19` grid once with diagnostics.
-- Trained a tiny linear classifier on frozen `=` residual states to predict the
+- Trained tiny linear classifiers on non-answer frozen features to predict the
   true sum class with a deterministic `320/80` train/eval split.
-- Discarded answer-position features because teacher-forced full-sequence
-  inputs leak answer tokens there.
+- The reusable script fixed two scratch-analysis problems: it uses the real
+  `EQ_ID` instead of a hardcoded token id, and it avoids output-directory
+  collisions for checkpoint snapshots.
 
 Result:
 
-| Source | Known final additive handoff | Read-`=` probe eval | Layer-2 `=` probe eval |
-| --- | ---: | ---: | ---: |
-| `src2_final` | `0.9525` | `0.5875` | `0.5750` |
-| `src2_step1300` | `0.8675` | `0.5000` | `0.5125` |
-| `src5_step1500` | `0.6975` | `0.3125` | `0.3125` |
-| `src5_final` | `0.5550` | `0.2625` | `0.2625` |
-| `src4_final` | `0.3025` | `0.1625` | `0.1625` |
+| Source | Known final additive handoff | Read-`=` | Read-pair | Layer-1 pair | Layer-2 pair | Best safe probe |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src2_final` | `0.9525` | `0.0250` | `0.5125` | `0.5125` | `0.5500` | `0.5500` |
+| `src2_step1300` | `0.8675` | `0.0250` | `0.5000` | `0.5000` | `0.5000` | `0.5000` |
+| `src5_step1500` | `0.6975` | `0.1625` | `0.3375` | `0.3375` | `0.3375` | `0.3375` |
+| `src5_final` | `0.5550` | `0.1750` | `0.3250` | `0.3250` | `0.3375` | `0.3375` |
+| `src4_final` | `0.3025` | `0.0125` | `0.5000` | `0.5000` | `0.5000` | `0.5000` |
 
 Correlation with known final additive handoff:
 
 | Probe | Correlation |
 | --- | ---: |
-| read-`=` residual linear probe | `0.9643` |
-| layer-2 `=` residual linear probe | `0.9659` |
+| read-`=` residual linear probe | `-0.1218` |
+| read-pair residual linear probe | `0.2118` |
+| layer-1 pair residual linear probe | `0.2118` |
+| layer-2 pair residual linear probe | `0.2865` |
+| best safe probe per checkpoint | `0.2865` |
 
 Decision:
 
 ```text
-bottleneck_to_additive_frozen_state_readout_probe_partial
+bottleneck_to_additive_frozen_state_readout_probe_negative
 ```
 
 Interpretation:
 
-- The frozen-state readout probe tracks handoff quality in this small audit.
-- It correctly ranks `src2_final` above `src2_step1300`, unlike source
-  normal/calculator accuracy.
-- It is cheaper than a partial downstream transfer, but it is still supervised
-  and not yet validated on unseen source checkpoints.
+- The initial scratch result was invalid because it probed the wrong/leaky
+  position.
+- Corrected non-answer probes do not reliably rank handoff quality.
+- `src4_final` remains the key counterexample: safe pair probes score it near
+  the strong `src2` sources despite poor additive handoff.
+- The reusable script is useful infrastructure, but simple frozen-state linear
+  sum separability is not the missing handoff-quality metric.

@@ -19,10 +19,10 @@ handoff.
 Decision:
 
 ```text
-bottleneck_to_additive_frozen_state_readout_probe_partial
+bottleneck_to_additive_frozen_state_readout_probe_negative
 ```
 
-The clean `=` residual probe correlated with known final additive handoff at
-about `0.96` across five source checkpoints and correctly ranked
-`src2_final` above the misleading higher-source-accuracy `src2_step1300`
-checkpoint. It is promising but needs validation on unseen checkpoints.
+The original scratch result was invalid: it used the wrong token id for `=`,
+selecting a wrong/leaky position. The reusable script validation corrected this
+and found that safe non-answer probes do not reliably predict handoff quality.
+Best safe probe correlation with known final handoff was only `0.2865`.

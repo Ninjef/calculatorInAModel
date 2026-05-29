@@ -1,5 +1,6 @@
 import argparse
 import csv
+from dataclasses import asdict
 import importlib.util
 import json
 import sys
@@ -13,6 +14,12 @@ from src.model import CalculatorHook, GPTConfig, HardAddSTE, TinyGPT, masked_cro
 from scripts.summarize_matched_retention_ladder import (
     select_checkpoint,
     summarize_runs,
+)
+from scripts.run_frozen_state_readout_probe import (
+    collect_features,
+    exact_grid_inputs,
+    load_probe_model,
+    output_dir_for_checkpoint,
 )
 
 
@@ -241,6 +248,77 @@ def test_causal_mask_does_not_leak_future_tokens() -> None:
         lb = model(b)
 
     assert torch.allclose(la[:, :-1, :], lb[:, :-1, :], atol=1e-6)
+
+
+def test_frozen_state_probe_exact_grid_inputs() -> None:
+    x, targets = exact_grid_inputs(
+        digits=1,
+        operand_max=1,
+        answer_format="sum",
+        device="cpu",
+    )
+
+    assert targets.tolist() == [0, 1, 1, 2]
+    assert x.shape[0] == 4
+    assert (x == EQ_ID).sum(dim=1).tolist() == [1, 1, 1, 1]
+
+
+def test_frozen_state_probe_additive_compatible_load(tmp_path: Path) -> None:
+    torch.manual_seed(0)
+    cfg = _small_calculator_cfg(
+        estimator="direct_feedback_alignment",
+        bottleneck_mode="answer_decoder",
+        answer_decoder_interaction="product",
+    )
+    model = TinyGPT(cfg)
+    checkpoint = tmp_path / "weights.pt"
+    torch.save(
+        {
+            "config": {"model": asdict(cfg)},
+            "model_state_dict": model.state_dict(),
+        },
+        checkpoint,
+    )
+
+    loaded, _, loaded_tensors, skipped = load_probe_model(
+        checkpoint,
+        device="cpu",
+        additive_compatible=True,
+    )
+
+    assert loaded.cfg.calculator_bottleneck_mode == "none"
+    assert loaded.cfg.calculator_estimator == "ste"
+    assert loaded.cfg.answer_decoder_interaction == "none"
+    assert loaded_tensors > 0
+    assert any("answer_decoder" in name for name in skipped)
+
+
+def test_frozen_state_probe_collects_operand_pair_features() -> None:
+    torch.manual_seed(0)
+    cfg = _small_calculator_cfg()
+    cfg.calculator_read_position = "operand_spans"
+    cfg.calculator_read_span_width = 1
+    model = TinyGPT(cfg)
+    x, _ = exact_grid_inputs(
+        digits=1,
+        operand_max=1,
+        answer_format="sum",
+        device="cpu",
+    )
+
+    features = collect_features(model, x)
+
+    assert features["read_a"].shape == (4, cfg.n_embd)
+    assert features["read_b"].shape == (4, cfg.n_embd)
+    assert features["read_pair"].shape == (4, cfg.n_embd * 2)
+
+
+def test_frozen_state_probe_output_dirs_avoid_snapshot_collisions() -> None:
+    root = Path("/tmp/out")
+    a = Path("runs/a/checkpoint_snapshots/step_00100_weights.pt")
+    b = Path("runs/b/checkpoint_snapshots/step_00100_weights.pt")
+
+    assert output_dir_for_checkpoint(root, a) != output_dir_for_checkpoint(root, b)
 
 
 def test_calculator_off_preserves_forward_and_generate_contracts() -> None:

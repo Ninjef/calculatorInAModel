@@ -1,5 +1,20 @@
 # 2026-05-29 Frozen-State Readout Probe
 
+## Correction
+
+The original scratch analysis for this task used a hardcoded token id for `=`.
+The real `EQ_ID` is `11`, while the scratch command used `12`, which selected
+a wrong/leaky token position. The reusable script added later fixed this and
+invalidated the initial positive interpretation.
+
+The corrected decision is:
+
+```text
+bottleneck_to_additive_frozen_state_readout_probe_negative
+```
+
+Safe non-answer frozen-state probes did not reliably predict handoff quality.
+
 ## Goal
 
 Find a cheaper proxy for the short additive handoff probe. The previous audit
@@ -32,22 +47,25 @@ Answer-position features were discarded after inspection because teacher-forced
 full-sequence inputs leak answer tokens at those positions. The clean probe
 uses only the `=` read position.
 
-## Results
+## Corrected Results
 
-| Source | Known final additive handoff | Read-`=` probe eval | Layer-2 `=` probe eval |
-| --- | ---: | ---: | ---: |
-| `src2_final` | `0.9525` | `0.5875` | `0.5750` |
-| `src2_step1300` | `0.8675` | `0.5000` | `0.5125` |
-| `src5_step1500` | `0.6975` | `0.3125` | `0.3125` |
-| `src5_final` | `0.5550` | `0.2625` | `0.2625` |
-| `src4_final` | `0.3025` | `0.1625` | `0.1625` |
+| Source | Known final additive handoff | Read-`=` | Read-pair | Layer-1 pair | Layer-2 pair | Best safe probe |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src2_final` | `0.9525` | `0.0250` | `0.5125` | `0.5125` | `0.5500` | `0.5500` |
+| `src2_step1300` | `0.8675` | `0.0250` | `0.5000` | `0.5000` | `0.5000` | `0.5000` |
+| `src5_step1500` | `0.6975` | `0.1625` | `0.3375` | `0.3375` | `0.3375` | `0.3375` |
+| `src5_final` | `0.5550` | `0.1750` | `0.3250` | `0.3250` | `0.3375` | `0.3375` |
+| `src4_final` | `0.3025` | `0.0125` | `0.5000` | `0.5000` | `0.5000` | `0.5000` |
 
 Correlations with known final additive handoff:
 
 | Probe | Correlation |
 | --- | ---: |
-| read-`=` residual linear probe | `0.9643` |
-| layer-2 `=` residual linear probe | `0.9659` |
+| read-`=` residual linear probe | `-0.1218` |
+| read-pair residual linear probe | `0.2118` |
+| layer-1 pair residual linear probe | `0.2118` |
+| layer-2 pair residual linear probe | `0.2865` |
+| best safe probe per checkpoint | `0.2865` |
 
 The probe also ranks the `src2` source-selection failure correctly:
 `src2_final` scores above `src2_step1300`, even though `src2_step1300` had
@@ -58,30 +76,29 @@ higher source normal/calculator accuracy.
 Label:
 
 ```text
-bottleneck_to_additive_frozen_state_readout_probe_partial
+bottleneck_to_additive_frozen_state_readout_probe_negative
 ```
 
-A frozen-state linear readout probe is a promising cheaper proxy for handoff
-geometry. In this small audit, it tracked known final handoff better than
-source normal/calculator accuracy and did not require hundreds of downstream
-adaptation steps.
+The initial positive was an artifact. Correct non-answer probes do not reliably
+predict handoff quality: `src4_final` scores near the strong `src2` sources on
+pair probes while transferring poorly.
 
-This is not yet a validated selector. The sample is small, the probe trains on
-the exact grid, and it still uses supervised sum labels. It should be validated
-against new source checkpoints before replacing the 400/600-step handoff probe.
+The reusable script remains useful infrastructure, but simple frozen-state
+linear sum separability should not replace the 400/600-step handoff probe.
 
 ## Anti-Regression Note
 
 Do not repeat this exact five-checkpoint frozen-state readout probe as novelty.
+Do not use the wrong-token/leaky answer-position scratch result.
 Next useful tests are:
 
-- use the readout probe to select among unseen source checkpoints, then confirm
-  with a short or full additive transfer;
-- turn the one-off probe into a reusable diagnostic script if it remains useful;
-- optimize source acquisition for the readout-probe score instead of source
-  action accuracy alone.
+- build a better non-leaky geometry proxy;
+- use 400/600-step handoff probes for checkpoint selection until a cheaper
+  proxy is proven;
+- optimize source acquisition for early additive handoff slope rather than
+  source action accuracy alone.
 
 ## Verification
 
-No code changed. The probe was run as an analysis command over existing source
-checkpoints and used only frozen model states.
+`scripts/run_frozen_state_readout_probe.py` now reproduces the corrected safe
+probe and avoids checkpoint-snapshot output collisions.
