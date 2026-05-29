@@ -396,6 +396,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/080-local-target-propagation-style-result-boundary-targets-can-pass-stage-0-but-sharp-settings",
+      "target": "researchMemory/hypotheses/phase7/080-local-target-propagation-style-result-boundary-targets-can-pass-stage-0-but-sharp-settings.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -537,6 +542,11 @@
     },
     {
       "source": "direction/source-checkpoint-selection",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-new-source-500-selector-validation.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-checkpoint-selection",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-additive-geometry-selector-validation.md",
       "type": "supported_by"
     },
@@ -572,6 +582,11 @@
     },
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-seed10-source-checkpoint-geometry-sweep.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-source-assignment-weight5-transfer-probe.md",
       "type": "supported_by"
     },
@@ -588,6 +603,11 @@
     {
       "source": "direction/target-propagation-local-targets",
       "target": "RESEARCH_STATE.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-local-target-propagation-gate.md",
       "type": "supported_by"
     },
     {
@@ -1151,6 +1171,13 @@
       "title": "A 500-step in-training additive handoff probe is not yet a reliable source-checkpoint selector."
     },
     {
+      "id": "doc/080-local-target-propagation-style-result-boundary-targets-can-pass-stage-0-but-sharp-settings",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/080-local-target-propagation-style-result-boundary-targets-can-pass-stage-0-but-sharp-settings.md",
+      "status": "PARTIAL",
+      "title": "Local-target propagation style result-boundary targets can pass Stage 0, but sharp settings mostly recover the full-enum boundary teacher."
+    },
+    {
       "id": "doc/phase7-direction-memory",
       "kind": "memory_document",
       "source_path": "researchMemory/phase7-direction-memory.md",
@@ -1224,7 +1251,7 @@
       "id": "direction/target-propagation-local-targets",
       "kind": "direction_memory",
       "source_path": "researchMemory/phase7-direction-memory.md",
-      "status": "active candidate",
+      "status": "active candidate with Stage 0 partial",
       "title": "Target Propagation / Local Targets"
     }
   ]

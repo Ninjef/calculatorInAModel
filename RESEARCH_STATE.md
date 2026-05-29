@@ -27,7 +27,10 @@ transferred into a non-bottleneck model. We have not shown scalable,
 non-prescriptive, answer-loss-only discovery of the calculator-query policy.
 
 The current bottleneck is credit assignment into the calculator-query policy,
-not downstream answer decoding and not calculator wiring.
+not downstream answer decoding and not calculator wiring. Within the staged
+transfer branch, the current bottleneck is source acquisition for additive
+handoff/readout geometry, not source calculator accuracy or another cheap
+checkpoint selector.
 
 ## What Is Proven
 
@@ -70,8 +73,10 @@ The best known non-bottleneck recipe is staged:
 
 1. Train a bottleneck source policy with hard improvement assignment and
    stabilization.
-2. Select or verify source checkpoints with actual additive handoff behavior,
-   preferably a standalone 600-step frozen-policy handoff gate.
+2. Select or verify source checkpoints with actual additive handoff behavior.
+   For fresh source families, prefer a standalone 600-step frozen-policy
+   handoff gate; 500-step and embedded probes are logging/triage only until
+   reconfirmed by the 600-step gate.
 3. Transfer into additive non-bottleneck mode.
 4. Freeze or protect the calculator policy.
 5. Train downstream/readout and, when needed, continuation/readout stages.
@@ -87,7 +92,7 @@ source policies directly for transfer/readout geometry.
 Active directions:
 
 - Source acquisition optimized against actual handoff/readout geometry, not
-  just source answer accuracy.
+  just source answer accuracy or cheap selector scores.
 - A genuinely different credit-assignment family such as target propagation,
   local targets, or another mechanism that constructs useful calculator-query
   targets without backpropagating through the calculator.
@@ -108,7 +113,9 @@ These branches should not continue without a new mechanism:
   validation selection, dropout, or loss shape.
 - Cheap source selectors based on frozen-state readout, forced-result geometry,
   25/50/100-step loss slope, simple ridge over early traces, or 500-step
-  embedded probe normal score alone.
+  embedded probe normal score alone. Use these only for logging, rejection
+  warnings, or hypothesis generation unless validated against fresh-family
+  600-step handoff outcomes.
 - Source accuracy as a source-checkpoint selector.
 - Slight weight/seed/length changes to already failed source-stabilization
   recipes unless tied to a new transfer-geometry objective.
@@ -116,8 +123,10 @@ These branches should not continue without a new mechanism:
 ## Next 1-3 Experiments
 
 1. Design a source-acquisition objective or diagnostic that directly optimizes
-   or regularizes for additive handoff/readout geometry, then gate it against
-   the existing 600-step handoff behavior.
+   or regularizes for additive handoff/readout geometry. It should change the
+   training pressure on source acquisition, not just rank completed
+   checkpoints, and it must be gated against standalone 600-step handoff
+   behavior.
 2. Prototype a target-propagation/local-target style credit-assignment path
    for calculator queries, with a small Stage 0 alignment or feasibility gate
    before any long run.

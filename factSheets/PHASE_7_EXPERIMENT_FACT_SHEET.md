@@ -1,5 +1,52 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-29 Local-Target Propagation Stage 0 Gate
+
+Task/work log:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-local-target-propagation-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_local_target_propagation_gate/full_grid_seed2_final
+```
+
+Code:
+
+```text
+scripts/run_phase7_local_target_propagation_gate.py
+```
+
+Result:
+
+```text
+local_target_propagation_stage0_partial_positive
+```
+
+Exact-grid Stage 0 tested current-policy-reweighted forced-loss targets and
+local logit-descent targets against the hard best-result boundary ceiling.
+Ordinary expected answer-loss remained anti-aligned with the boundary ceiling
+(`-0.1045` result-proj cosine, `-0.0034` upstream cosine). Sharp
+policy-reweighted targets aligned almost exactly with the hard boundary
+ceiling (`t=0.25`: `~1.0/~1.0`), and the softer `t=1.0` target still aligned
+strongly (`0.9355` result-proj, `0.8766` upstream) while retaining target
+entropy (`2.72` effective results). Logit-descent targets also aligned for
+weak proximity (`p=0.01`: `~1.0/~1.0`; `p=0.1`: `0.9998/0.9997`), but
+stronger proximity fell back toward the failed expected-loss direction
+(`p=1.0`: `-0.0895/-0.0028`).
+
+Interpretation:
+
+- Local-target propagation style targets pass a Stage 0 feasibility gate.
+- The result is not scalable yet because the diagnostic still scores every
+  forced result class.
+- The sharpest settings mostly recover the known boundary teacher, so the next
+  useful test is a short Stage 1 lift gate for softer aligned settings such as
+  `policy_reweighted_t1` or `logit_descent_p0.1`.
+
 ## Direction
 
 Phase 7 tests natural `0..19` result-level calculator use.

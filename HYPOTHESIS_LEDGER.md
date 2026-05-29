@@ -25,7 +25,7 @@ future agents to infer it from chronology.
 | Bottleneck-to-additive staged handoff | Active but constrained | Proves non-bottleneck viability, but source quality and policy protection remain bottlenecks. |
 | Cheap source-checkpoint selectors | Paused | Frozen-state, geometry, short-slope, ridge, and embedded 500-step probes are not reliable replacements for actual handoff gates. |
 | Source acquisition for transfer geometry | Active | Current best strategic direction if it directly targets handoff/readout behavior. |
-| Target propagation / local targets | Active candidate | Worth a gated prototype because it changes the credit-assignment family. |
+| Target propagation / local targets | Active candidate | Stage 0 local-target gate is partially positive, but tested forms still use full forced-result scoring and sharp settings mostly recover the boundary teacher. |
 
 Rule: if a proposed experiment belongs to a paused family, it needs a new
 mechanism and should be reconciled with `RESEARCH_STATE.md` before running.
@@ -505,3 +505,9 @@ Conclusion: On fresh no-decay source seed `11`, in-training probe normal @500 ch
 Do not repeat: Same source step `400` vs step `800`, 500-step embedded probe plus standalone 600-step verification as novelty.
 Next allowed test: Treat embedded 500-step probes as logging/triage only, verify with standalone 600-step handoffs, or run embedded probes with 600 steps / richer trend metrics before using them for selection.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-intraining-probe-source-selection-validation.md`
+
+PARTIAL: Local-target propagation style result-boundary targets can pass Stage 0, but sharp settings mostly recover the full-enum boundary teacher.
+Conclusion: A new exact-grid Stage 0 diagnostic found that current-policy-reweighted forced-loss targets align with the hard boundary ceiling when sharp (`t=0.25` result/upstream cosine `~1.0/~1.0`) and remain strongly aligned at `t=1.0` (`0.9355/0.8766`), while ordinary expected answer loss stayed anti-aligned (`-0.1045/-0.0034`). Local logit-descent targets also aligned when weakly proximal (`p=0.01` `~1.0/~1.0`, `p=0.1` `0.9998/0.9997`), but a stronger proximity setting collapsed toward the failed expected-loss direction (`p=1.0` `-0.0895/-0.0028`).
+Do not repeat: The same seed-2 exact-grid Stage 0 sweep over policy-reweighted temperatures `0.25/0.5/1/2` and logit-descent proximity `0.01/0.1/1` as novelty.
+Next allowed test: If continuing this family, run a short Stage 1 lift gate for the softer aligned settings (`policy_reweighted_t1` or `logit_descent_p0.1`) against the hard-boundary ceiling, then design an approximation that avoids full result-class enumeration before calling it scalable.
+Source: `aiAgentWorkHistory/phase7/2026-05-29-local-target-propagation-gate.md`

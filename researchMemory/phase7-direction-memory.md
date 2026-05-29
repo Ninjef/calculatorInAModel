@@ -156,16 +156,21 @@ Memory:
 
 - Source normal/calculator accuracy is not a reliable selector.
 - Actual 600-step frozen-policy additive handoff is the most reliable tested
-  source-checkpoint gate.
+  source-checkpoint gate for fresh families.
 - Several cheaper proxies failed or were mixed: frozen-state readout,
   forced-result geometry, 25/50/100-step loss slope, ridge over early handoff
-  traces, and 500-step embedded probe normal score.
+  traces, 500-step standalone selection on fresh `src6`, and 500-step embedded
+  probe normal score on fresh seed `11`.
 - Embedded probes are useful logging/triage, but 500-step normal alone is not
   validated as a selector.
+- Selector-cost reduction is no longer the default frontier. New selector work
+  must either beat the 600-step gate on fresh families or change source
+  training pressure directly.
 
 Representative evidence:
 
 - `aiAgentWorkHistory/phase7/2026-05-29-handoff-probe-selector-validation.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-new-source-500-selector-validation.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-geometry-selector-validation.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-handoff-trace-learned-selector-audit.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-intraining-probe-source-selection-validation.md`
@@ -180,19 +185,23 @@ Memory:
   seeds, but high source performance does not guarantee transfer.
 - Seed-9-style no-decay stabilization plus continuation/readout can clear the
   non-bottleneck gate; seed-10-style runs show hostile geometry can persist.
+- The source objective can keep improving learned calculator accuracy while
+  worsening additive handoff geometry; seed 10 is the clearest warning.
 - The promising next direction is to train or regularize source acquisition
-  against downstream handoff/readout geometry directly.
+  against downstream handoff/readout geometry directly, then verify with the
+  standalone 600-step handoff gate.
 
 Representative evidence:
 
 - `aiAgentWorkHistory/phase7/2026-05-29-source-acquisition-stabilization-floor.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-stabilized-source-continuation-readout.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-stabilized-source-seed10-replication.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-seed10-source-checkpoint-geometry-sweep.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-source-assignment-weight5-transfer-probe.md`
 
 ## Direction: Target Propagation / Local Targets
 
-Status: active candidate
+Status: active candidate with Stage 0 partial
 
 Memory:
 
@@ -200,10 +209,19 @@ Memory:
   answer-loss and shadow-gradient families.
 - It is strategically interesting because it changes the credit-assignment
   family rather than tuning another proxy.
-- Any first test should have a small feasibility/Stage 0 gate before long
-  training.
+- The first exact-grid Stage 0 gate is partially positive: sharp
+  current-policy-reweighted targets and weakly proximal logit-descent targets
+  produce gradients aligned with the hard boundary ceiling, while expected
+  answer loss remains anti-aligned.
+- The result is not yet a scalable or non-prescriptive method. The tested
+  targets still use full forced-result scoring, and the sharpest settings
+  mostly recover the known boundary teacher.
+- Next work should be a short Stage 1 lift gate for softer aligned settings,
+  or a real approximation to these local targets that avoids full result-class
+  enumeration.
 
 Representative evidence:
 
 - `SOLUTION_IDEAS.md`
 - `RESEARCH_STATE.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-local-target-propagation-gate.md`
