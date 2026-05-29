@@ -1728,3 +1728,31 @@ final answer accuracy relative to no-anchor policy-backbone freezing. The next
 selective-freeze work should focus on downstream/readout adaptation under a
 stable policy, answer-utility-aware retention, or source-policy acquisition,
 not tiny fixed action-policy anchoring.
+
+## Status Update: 2026-05-29, Policy-Backbone Long Adaptation
+
+Longer stable-policy adaptation produced a mixed source-quality result:
+
+```text
+bottleneck_to_additive_policy_backbone_long_adaptation_mixed
+```
+
+Experiment:
+
+- Same adapted weak-source checkpoints.
+- Full model load.
+- Added `--freeze-calculator-policy-backbone`.
+- No result-policy anchor.
+- LR `3e-4`.
+- 1600 steps.
+
+| Run | 400-step backbone final | 1600-step final | Best normal | Final calc | Final injection-zero | Final forced-random |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| `src4_add2` policy-backbone long | `0.7250` | `0.7550` | `0.7600` at `1100` | `0.8550` | `0.0525` | `0.0900` |
+| `src5_add5` policy-backbone long | `0.8700` | `0.9500` | `0.9625` at `1500` | `0.8325` | `0.0025` | `0.0350` |
+
+Longer readout adaptation under a stable calculator policy can make `src5` a
+strong non-bottleneck handoff without an anchor. It does not rescue `src4`,
+despite high final learned calculator accuracy, so the next bottleneck is
+source-policy handoff quality or a stronger downstream/readout objective, not
+simply more stable-policy training time.

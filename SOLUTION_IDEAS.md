@@ -373,6 +373,12 @@ slightly trailed no-anchor policy-backbone freezing. This says the missing
 piece in that branch is not action-head retention. Look instead at downstream
 readout adaptation under stable policy, answer-utility-aware retention, or
 better source policies.
+Longer stable-policy readout adaptation gave a split result: `src5_add5`
+reached `0.9500` final eval after 1600 steps with learned calc still `0.8325`,
+but `src4_add2` only reached `0.7550` despite learned calc `0.8550`. This
+supports source-quality selection/acquisition as a next bottleneck: if the
+source policy's representation is handoff-friendly, stable readout adaptation
+can work without an anchor; if it is not, more time alone does not fix it.
 
 ### 7. **Target propagation (and Difference Target Propagation)**
 

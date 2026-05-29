@@ -4386,3 +4386,59 @@ Interpretation:
 - The missing ingredient for this branch is downstream/readout adaptation under
   a stable policy, answer-utility-aware retention, or better source-policy
   acquisition, not fixed tiny action-policy anchoring.
+
+## 2026-05-29 Policy-Backbone Long Adaptation
+
+Task:
+
+```text
+aiAgentProjectTasks/completed/phase7/2026-05-29-phase-7-fifty-fourth-task-Bottleneck-to-additive-policy-backbone-long-adaptation.md
+```
+
+Run root:
+
+```text
+runs/2026-05-29_phase7_bottleneck_to_additive_transfer_policy_backbone_freeze_long_adaptation
+```
+
+Question:
+
+If the calculator policy backbone is stable and calculator use is preserved,
+does longer downstream/readout adaptation close the weak-source handoff gap?
+
+Configuration:
+
+- Continued from the adapted weak-source checkpoints.
+- Loaded with `--semantic-decoder-checkpoint-load-scope full_model`.
+- Added `--freeze-calculator-policy-backbone`.
+- No result-policy anchor.
+- global LR `3e-4`;
+- answer loss weight `1`;
+- exact-grid natural `0..19`;
+- 1600 steps.
+
+Result:
+
+| Run | 400-step backbone final | Long final eval | Best normal | Final injection-zero | Final forced-random | Final oracle | Final calc | Trainable groups |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| `src4_add2` policy-backbone long | `0.7250` | `0.7550` | `0.7600` at `1100` | `0.0525` | `0.0900` | `0.7325` | `0.8550` | `calculator_hook.result_proj`, `upstream` |
+| `src5_add5` policy-backbone long | `0.8700` | `0.9500` | `0.9625` at `1500` | `0.0025` | `0.0350` | `0.9050` | `0.8325` | `calculator_hook.result_proj`, `upstream` |
+
+Decision:
+
+```text
+bottleneck_to_additive_policy_backbone_long_adaptation_mixed
+```
+
+Interpretation:
+
+- Stable-policy long adaptation made `src5_add5` a strong non-bottleneck
+  handoff without an anchor.
+- `src4_add2` stayed weak even though learned calculator-result accuracy rose
+  to `0.8550`.
+- The split suggests that downstream/readout adaptation can work when source
+  representations are handoff-friendly, but more time alone does not erase
+  weak-source sensitivity.
+- Next work should prioritize source-policy acquisition/selection, stronger
+  readout objectives for weak sources, or utility-aware adaptation under stable
+  calculator use.

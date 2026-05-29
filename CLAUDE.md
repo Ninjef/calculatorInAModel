@@ -584,6 +584,17 @@ The anchor loss stayed near zero, showing that backbone freezing already kept
 the action policy nearly unchanged; the remaining bottleneck is downstream
 readout/adaptation, not action-head drift.
 
+Longer no-anchor policy-backbone-freeze adaptation was then tested:
+`bottleneck_to_additive_policy_backbone_long_adaptation_mixed`. Extending the
+same stable-policy setup to `1600` steps gave a strong result for `src5_add5`
+but not for `src4_add2`. `src5_add5` improved from the 400-step backbone-freeze
+final eval `0.8700` to `0.9500` final eval, best normal `0.9625`, final learned
+calculator accuracy `0.8325`, and injection-zero `0.0025`. `src4_add2`
+improved only from `0.7250` to `0.7550` final eval, best normal `0.7600`,
+while final learned calculator accuracy stayed high at `0.8550`. Stable
+policy plus longer readout training can make a handoff strong when source
+quality is good enough, but it does not erase weak-source sensitivity.
+
 Do not rerun these as next steps unless debugging new code:
 
 - oracle/readout checks for natural `0..19`;
@@ -744,6 +755,10 @@ Do not rerun these as next steps unless debugging new code:
   `0.01`, LR `3e-4`, 400-step unfreeze from the adapted `src4_add2` or
   `src5_add5` checkpoints as novelty. Anchor agreement stayed near `1.0` and
   it did not improve over no-anchor policy-backbone freezing.
+- `--freeze-calculator-policy-backbone`, no anchor, LR `3e-4`, 1600-step
+  adaptation from the adapted `src4_add2` or `src5_add5` checkpoints as
+  novelty. It lifted `src5` to strong answer accuracy while `src4` stayed weak,
+  so longer stable-policy readout adaptation does not erase source sensitivity.
 
 Next best step: improve shadow generalization by changing the target
 construction or learned-gradient update path so local gradient agreement
