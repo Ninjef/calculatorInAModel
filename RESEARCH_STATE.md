@@ -111,9 +111,9 @@ Active directions:
   local targets. Exact `policy_reweighted_t1` is positive and survives
   retention, but full enumeration is not scalable. Simple proposal
   approximation is now paused after sparse/adaptive, replay-memory, corrected,
-  online learned, and pretrained learned variants failed scalability stress.
-  Continue only with a different estimator, different target construction, or
-  explicitly streaming/generalizing learned proposal.
+  online learned, pretrained learned, and sparse pairwise-preference variants
+  failed scalability or Stage 1 stress. Continue only with a materially
+  different estimator/target construction or explicit streaming validation.
 - Less-prescriptive answer-derived target construction. The old full-grid
   result-boundary target source transfers causally into the trusted additive
   frozen-policy gate (`0.8825` final, `0.8425` step-600 normal, zero-injection
@@ -153,9 +153,9 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Do not run more simple local-target proposal variants; continue local
-   targets only via estimator/target-construction changes or a learned proposal
-   with an explicit streaming/generalization validation objective.
+1. Do not run more simple local-target proposal or pairwise-preference variants;
+   continue local targets only via materially different target construction,
+   estimator changes, or explicit streaming/generalization validation.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as a benchmark;

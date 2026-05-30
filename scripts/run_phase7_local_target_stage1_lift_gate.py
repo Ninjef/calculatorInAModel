@@ -100,6 +100,7 @@ def parse_branch_specs(text: str) -> list[str]:
         "adaptive_policy_reweighted_t",
         "memory_policy_reweighted_t",
         "learned_policy_reweighted_t",
+        "sampled_pairwise_preference_u",
         "logit_descent_p",
     )
     for branch in branches:
@@ -281,6 +282,30 @@ def parse_learned_policy_reweighted_branch(
         proposal_epochs,
         pretrain_batches,
     )
+
+
+def parse_sampled_pairwise_preference_branch(branch: str) -> tuple[int, float]:
+    prefix = "sampled_pairwise_preference_u"
+    if not branch.startswith(prefix):
+        raise ValueError(f"not a sampled pairwise-preference branch: {branch!r}")
+    parts = branch.removeprefix(prefix).split("_")
+    if len(parts) not in {1, 2}:
+        raise ValueError(
+            "sampled pairwise-preference branch must look like "
+            "'sampled_pairwise_preference_u8' or "
+            "'sampled_pairwise_preference_u8_g0p01'"
+        )
+    uniform_samples = int(parts[0])
+    min_gap = 0.0
+    if len(parts) == 2:
+        if not parts[1].startswith("g"):
+            raise ValueError("pairwise-preference gap suffix must start with 'g'")
+        min_gap = float(parts[1].removeprefix("g").replace("p", "."))
+    if uniform_samples < 2:
+        raise ValueError("sampled pairwise-preference needs at least two candidates")
+    if min_gap < 0:
+        raise ValueError("sampled pairwise-preference gap must be non-negative")
+    return uniform_samples, min_gap
 
 
 def sample_uniform_result_candidates(
@@ -1222,6 +1247,81 @@ def learned_policy_reweighted_loss(
     }
 
 
+def sampled_pairwise_preference_loss(
+    model,
+    batch,
+    *,
+    branch: str,
+    args: argparse.Namespace,
+) -> tuple[torch.Tensor, dict[str, float | str]]:
+    uniform_samples, min_gap = parse_sampled_pairwise_preference_branch(branch)
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    result_vocab_size = result_logits.shape[-1]
+    batch_size = batch.x.shape[0]
+    candidates = sample_uniform_result_candidates(
+        batch_size=batch_size,
+        result_vocab_size=result_vocab_size,
+        count=uniform_samples,
+        device=batch.x.device,
+    )
+    candidate_losses = score_forced_candidate_result_classes(
+        model,
+        batch,
+        candidates,
+        chunk_size=args.result_chunk_size,
+    )
+    candidate_logits = result_logits.gather(1, candidates)
+    logit_diff = candidate_logits.unsqueeze(2) - candidate_logits.unsqueeze(1)
+    loss_diff = candidate_losses.unsqueeze(2) - candidate_losses.unsqueeze(1)
+    pair_mask = loss_diff.abs() > min_gap
+    preference_targets = (loss_diff < 0).to(logit_diff.dtype)
+    if bool(pair_mask.any().item()):
+        loss = torch.nn.functional.binary_cross_entropy_with_logits(
+            logit_diff[pair_mask],
+            preference_targets[pair_mask],
+        )
+    else:
+        loss = result_logits.sum() * 0.0
+
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=args.digits)
+    true_sum = true_a + true_b
+    sampled_best = candidates.gather(
+        1,
+        candidate_losses.argmin(dim=-1, keepdim=True),
+    ).squeeze(-1)
+    true_mask = candidates == true_sum.unsqueeze(-1)
+    selected_probs = result_logits.softmax(dim=-1).gather(1, candidates)
+    sampled_best_probability = selected_probs.gather(
+        1,
+        candidate_losses.argmin(dim=-1, keepdim=True),
+    ).squeeze(-1)
+    pair_count = pair_mask.reshape(batch_size, -1).sum(dim=-1).to(torch.float32)
+    return loss, {
+        "branch_loss_mode": branch,
+        "branch_loss": float(loss.detach().item()),
+        "target_family": "sampled_pairwise_preference",
+        "target_uniform_samples": int(uniform_samples),
+        "target_min_loss_gap": float(min_gap),
+        "target_scored_results": int(candidates.shape[1]),
+        "target_scored_fraction": float(candidates.shape[1] / result_vocab_size),
+        "target_pairwise_pairs": float(pair_count.mean().item()),
+        "target_pairwise_pair_fraction": float(
+            pair_count.mean().item() / max(1, candidates.shape[1] * (candidates.shape[1] - 1))
+        ),
+        "target_true_candidate_coverage": float(true_mask.any(dim=-1).float().mean().item()),
+        "target_sampled_best_accuracy": float(
+            (sampled_best == true_sum).float().mean().item()
+        ),
+        "target_sampled_best_probability": float(
+            sampled_best_probability.mean().item()
+        ),
+        "target_candidate_best_loss": float(
+            candidate_losses.min(dim=-1).values.mean().item()
+        ),
+        "target_candidate_mean_loss": float(candidate_losses.mean().item()),
+    }
+
+
 def branch_loss(
     model,
     batch,
@@ -1278,6 +1378,8 @@ def branch_loss(
         return learned_policy_reweighted_loss(
             model, batch, branch=branch, args=args, state=state
         )
+    if branch.startswith("sampled_pairwise_preference_u"):
+        return sampled_pairwise_preference_loss(model, batch, branch=branch, args=args)
 
     result_logits, _, _, _ = calculator_read_result_logits(model, batch)
     full_losses = score_forced_result_classes_chunked(

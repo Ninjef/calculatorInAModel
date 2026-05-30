@@ -4526,13 +4526,28 @@ def test_phase7_memory_local_target_branch_parser() -> None:
     spec.loader.exec_module(runner)
 
     assert runner.parse_branch_specs(
-        "memory_policy_reweighted_t1_u8_m24,sampled_policy_reweighted_t1_k0_u32,corrected_policy_reweighted_t1_u8_bmean,learned_policy_reweighted_t1_u8_p24_h32_e1"
+        "memory_policy_reweighted_t1_u8_m24,sampled_policy_reweighted_t1_k0_u32,corrected_policy_reweighted_t1_u8_bmean,learned_policy_reweighted_t1_u8_p24_h32_e1,sampled_pairwise_preference_u8"
     ) == [
         "memory_policy_reweighted_t1_u8_m24",
         "sampled_policy_reweighted_t1_k0_u32",
         "corrected_policy_reweighted_t1_u8_bmean",
         "learned_policy_reweighted_t1_u8_p24_h32_e1",
+        "sampled_pairwise_preference_u8",
     ]
+    assert runner.parse_sampled_pairwise_preference_branch(
+        "sampled_pairwise_preference_u8"
+    ) == (8, 0.0)
+    assert runner.parse_sampled_pairwise_preference_branch(
+        "sampled_pairwise_preference_u16_g0p25"
+    ) == (16, 0.25)
+    with pytest.raises(ValueError, match="at least two"):
+        runner.parse_sampled_pairwise_preference_branch(
+            "sampled_pairwise_preference_u1"
+        )
+    with pytest.raises(ValueError, match="gap"):
+        runner.parse_sampled_pairwise_preference_branch(
+            "sampled_pairwise_preference_u8_g-1"
+        )
     assert runner.parse_learned_policy_reweighted_branch(
         "learned_policy_reweighted_t1_u8_p24_h32_e1"
     ) == (1.0, 8, 24, 32, 1, 0)

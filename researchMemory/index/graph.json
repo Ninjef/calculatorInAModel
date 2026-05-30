@@ -586,6 +586,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/118-sparse-sampled-pairwise-preference-targets-do-not-train-result-space-calculator-use",
+      "target": "researchMemory/hypotheses/phase7/118-sparse-sampled-pairwise-preference-targets-do-not-train-result-space-calculator-use.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -983,6 +988,11 @@
     {
       "source": "direction/target-propagation-local-targets",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-pretrained-learned-proposal-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-sampled-pairwise-preference-target-gate.md",
       "type": "supported_by"
     },
     {
@@ -1815,6 +1825,13 @@
       "source_path": "researchMemory/hypotheses/phase7/117-hidden-output-boundary-critic-family-is-not-the-scalable-result-boundary-bridge.md",
       "status": "REVIEW, paused.",
       "title": "Hidden-output boundary critic family is not the scalable result-boundary bridge."
+    },
+    {
+      "id": "doc/118-sparse-sampled-pairwise-preference-targets-do-not-train-result-space-calculator-use",
+      "kind": "memory_document",
+      "source_path": "researchMemory/hypotheses/phase7/118-sparse-sampled-pairwise-preference-targets-do-not-train-result-space-calculator-use.md",
+      "status": "DISPROVEN.",
+      "title": "Sparse sampled pairwise-preference targets do not train result-space calculator use."
     },
     {
       "id": "doc/phase7-direction-memory",

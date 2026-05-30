@@ -408,12 +408,18 @@ Memory:
   small 800-step streaming exact-calc nudge over raw `u32` (`0.2625` vs
   `0.2350`) but hurt sampled normal badly (`0.1797` vs `0.2734`), and `_w20`
   / `_w50` did not lift the 200-step streaming screen.
+- A sparse pairwise-preference target is negative as a different target
+  construction: `sampled_pairwise_preference_u8/u16` stayed at `0.0050` exact
+  calc, and `u32` reached only `0.0425` calc / `0.0234` sampled normal despite
+  true-candidate coverage `0.8450`, while same-budget policy-reweighted `u32`
+  reached `0.3350` / `0.3438`.
 - Local-target proposal branch review: pause simple proposal approximation as
   a mainline branch. Exact `policy_reweighted_t1` remains a useful ceiling, but
   raw/adaptive candidates, fixed replay, imputed sparse targets, online learned
-  proposals, and random-prompt proposal pretraining have all failed scalability
-  stress. Continue only with a different estimator, different target
-  construction, or learned proposal validation explicitly tied to
+  proposals, random-prompt proposal pretraining, and simple pairwise
+  preferences have all failed scalability or Stage 1 stress. Continue only
+  with a different estimator, materially different target construction, or
+  learned proposal validation explicitly tied to
   streaming/full-grid generalization.
 
 Representative evidence:
@@ -435,4 +441,5 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-corrected-sparse-local-target-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-learned-proposal-local-target-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-pretrained-learned-proposal-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-sampled-pairwise-preference-target-gate.md`
 - `researchReviews/2026-05-29-local-target-proposal-branch-review.md`

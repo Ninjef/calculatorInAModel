@@ -8125,3 +8125,52 @@ Review interpretation:
 - Pause pointwise/pairwise/hybrid hidden-output critic variants. Continue only
   with different target construction, uncertainty-aware compute allocation, or
   a stronger generalization mechanism.
+
+## 2026-05-30 Sampled Pairwise Preference Target Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-sampled-pairwise-preference-target-gate.md
+```
+
+Run:
+
+```text
+runs/2026-05-30_phase7_sampled_pairwise_preference_gate/fixed_grid_200
+```
+
+Question:
+
+Can sparse answer-derived pairwise preferences train the result-space policy
+without selecting the full-enum best result?
+
+Tooling:
+
+- Added `sampled_pairwise_preference_uN[_gG]` to
+  `scripts/run_phase7_local_target_stage1_lift_gate.py`.
+- Focused parser test: `1 passed, 118 deselected`.
+
+Results:
+
+| Branch | Scored results | True candidate coverage | Sampled best true | Final exact calc | Final sampled normal |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| pairwise `u8` | `8` | `0.1850` | `0.1850` | `0.0050` | `0.0078` |
+| pairwise `u16` | `16` | `0.4050` | `0.4050` | `0.0050` | `0.0078` |
+| pairwise `u32` | `32` | `0.8450` | `0.8450` | `0.0425` | `0.0234` |
+| policy-reweighted `u32` | `32` | `0.8450` | n/a | `0.3350` | `0.3438` |
+
+Decision:
+
+```text
+sampled_pairwise_preference_target_negative
+```
+
+Interpretation:
+
+- Simple sparse pairwise preferences do not produce Stage 1 lift.
+- The negative is not just candidate coverage: pairwise `u32` saw the true
+  result in `84.5%` of prompts but barely improved, while the same-budget
+  policy-reweighted target reproduced its known lift.
+- Do not continue with simple pairwise preference candidate-count or loss-gap
+  sweeps as novelty.
