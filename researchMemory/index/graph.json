@@ -766,6 +766,16 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/154-static-soft-result-boundary-targets-improve-source-acquisition-over-hard-best-targets",
+      "target": "researchMemory/hypotheses/phase7/154-static-soft-result-boundary-targets-improve-source-acquisition-over-hard-best-targets.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/155-static-result-boundary-approximation-is-paused-after-critic-proposal-adaptive-and-soft-tar",
+      "target": "researchMemory/hypotheses/phase7/155-static-result-boundary-approximation-is-paused-after-critic-proposal-adaptive-and-soft-tar.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1197,7 +1207,17 @@
     },
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-result-boundary-soft-target-training-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "researchReviews/2026-05-30-result-boundary-approximation-review.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md",
       "type": "supported_by"
     },
     {
@@ -2427,6 +2447,20 @@
       "source_path": "researchMemory/hypotheses/phase7/153-adaptive-result-boundary-proposal-expansion-has-useful-margin-signal-but-not-enough-levera.md",
       "status": "MIXED-NEGATIVE",
       "title": "Adaptive result-boundary proposal expansion has useful margin signal but not enough leverage."
+    },
+    {
+      "id": "doc/154-static-soft-result-boundary-targets-improve-source-acquisition-over-hard-best-targets",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/154-static-soft-result-boundary-targets-improve-source-acquisition-over-hard-best-targets.md",
+      "status": "DISPROVEN",
+      "title": "Static soft result-boundary targets improve source acquisition over hard-best targets."
+    },
+    {
+      "id": "doc/155-static-result-boundary-approximation-is-paused-after-critic-proposal-adaptive-and-soft-tar",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/155-static-result-boundary-approximation-is-paused-after-critic-proposal-adaptive-and-soft-tar.md",
+      "status": "REVIEW",
+      "title": "Static result-boundary approximation is paused after critic, proposal, adaptive, and soft-target gates."
     },
     {
       "id": "doc/phase7-direction-memory",

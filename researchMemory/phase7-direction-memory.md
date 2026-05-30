@@ -521,6 +521,16 @@ Memory:
   and `0.97` vs `0.91` at mean `12/39`. But fixed top-16 remains stronger
   (`0.96-1.00`), ensemble training cost is high, and std/LCB uncertainty are
   weaker than margin. Do not run threshold/beta/fraction sweeps as novelty.
+- Static soft result-boundary targets are also negative. In the matched
+  200-step full-grid upstream-open source gate, hard-best reached `0.5450`
+  learned calc / `0.5475` final eval; soft `t=1` reached only `0.2900` /
+  `0.2775`, and broad soft `t=4` reached `0.1350` / `0.1275`. Temperature
+  softening diluted rather than improved the answer-derived teaching signal.
+- Steering review: static result-boundary approximation is paused. The branch
+  has now tested direct critics, proposal rescoring, adaptive expansion, and
+  soft targets. Continue only with evolving-checkpoint validation, calibrated
+  proposal learning, uncertainty/regret set targets, or a genuinely different
+  less-prescriptive credit-assignment mechanism.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -577,7 +587,9 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-amortized-critic-diagnostic.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-uncertainty-proposal-diagnostic.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-adaptive-proposal-diagnostic.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-soft-target-training-gate.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
+- `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-sampled-hard-assignment-cost-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-exact-assignment-refresh-cadence-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-unique-sampled-assignment-coverage-gate.md`

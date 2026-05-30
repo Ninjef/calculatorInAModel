@@ -951,3 +951,15 @@ Conclusion: Added adaptive top-8-to-top-16 expansion metrics to the result-bound
 Do not repeat: Do not spend more mainline turns on threshold, beta, or expand-fraction sweeps over this same static fixed-grid diagnostic. The useful result is the margin-vs-random comparison and the remaining gap to fixed top-16.
 Next allowed test: Change the mechanism: a calibrated proposal model validated across evolving checkpoints, a soft/set target that tolerates missing the exact argmin, or a source-training gate that uses a materially different target construction rather than static top-k expansion.
 Source: `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-adaptive-proposal-diagnostic.md`
+
+DISPROVEN: Static soft result-boundary targets improve source acquisition over hard-best targets.
+Conclusion: Tested existing `soft_result` result-boundary target construction on the matched full-grid upstream-open 200-step source gate. Temperature probe showed `t=1` is meaningfully soft (`0.8003` true-result target mass, `2.72` effective results), while `t=4` is broad (`0.1336` true mass, `28.35` effective results). Training was worse than the matched hard-best comparator: hard-best step-200 learned calc `0.5450` / final eval `0.5475`; soft `t=1` learned calc `0.2900` / final eval `0.2775`; soft `t=4` learned calc `0.1350` / final eval `0.1275`. Simple temperature-softened full-enum targets tolerate uncertainty by diluting the signal, not by improving scalable source learning.
+Do not repeat: Do not run static `soft_result` temperature ladders on the same full-grid result-boundary source gate as novelty.
+Next allowed test: If using result-boundary targets, change the mechanism materially: uncertainty/regret-based set targets, evolving-checkpoint proposal validation, or a proposal model that reduces enumeration without merely softening the full-enum teacher.
+Source: `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-soft-target-training-gate.md`
+
+REVIEW: Static result-boundary approximation is paused after critic, proposal, adaptive, and soft-target gates.
+Conclusion: The answer-derived result-boundary source still transfers causally, but static approximations have hit a local boundary. Direct hidden/output critics miss heldout argmins, proposal rescoring needs broad candidate sets, adaptive expansion has only modest margin signal, and static soft-result targets train worse than hard-best. This cluster should not keep consuming mainline compute through small static variants.
+Do not repeat: Do not continue pointwise/rank critic variants, top-k/beta/ensemble/threshold/fraction sweeps, or static soft-target temperature ladders as novelty.
+Next allowed test: Evolving-state/generalization validation, genuinely different uncertainty/regret set targets, calibrated proposal learning, or a different less-prescriptive credit-assignment family.
+Source: `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`

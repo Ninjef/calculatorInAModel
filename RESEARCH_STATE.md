@@ -114,10 +114,9 @@ Active directions:
   `0.0000`, learned calc `0.9922`). This shows true-result forced-margin is
   not strictly required for staged transfer, but full forced-result enumeration
   and frozen transfer remain unsolved scalability/prescriptiveness issues.
-  Hidden/output critics cannot directly replace enumeration (`0.40` best
-  argmin recovery). Proposal-rescoring is stronger but costly: top-8 recovers
-  `0.79-0.84`; fixed top-16 recovers `0.96-1.00`; adaptive expansion reaches
-  `0.91-0.97` at `10-12/39`, but ensemble cost is high and LCB/std were weak.
+  Static approximations are paused: hidden/output critics miss (`0.40` best
+  argmin), proposal-rescoring is costly (`16/39` for `0.96-1.00`), adaptive
+  expansion has modest leverage, and soft targets train worse than hard-best.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
@@ -171,11 +170,10 @@ These branches should not continue without a new mechanism:
 4. If reducing hard-assignment cost, state the scalability hypothesis, compare
    against exact-grid, avoid more uniform count/fixed-refresh ladders, and use
    routing validation, op39 compute stress, or a changed estimator.
-5. Use answer-derived result-boundary transfer as a bridge, not a recipe: next
-   work should replace forced-result enumeration. Do not continue pointwise/rank
-   hidden-output critic variants or static proposal count tweaks; use
-   adaptive compute, different target construction, or validation across
-   evolving model states.
+5. Use answer-derived result-boundary transfer as a bridge, not a recipe. Do
+   not continue static critic/proposal/soft-target variants; use evolving-state
+   validation, materially different target construction, or another
+   credit-assignment family.
 
 ## What Would Change Our Mind
 

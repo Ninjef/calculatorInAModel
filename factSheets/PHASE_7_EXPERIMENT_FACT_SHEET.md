@@ -8351,6 +8351,55 @@ Interpretation:
   result-boundary approximation needs a different target construction,
   calibrated proposal model, or evolving-checkpoint validation.
 
+Soft target training follow-up:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-result-boundary-soft-target-training-gate.md
+runs/2026-05-30_phase7_result_boundary_soft_target_probe/t1
+runs/2026-05-30_phase7_result_boundary_soft_target_probe/t4
+runs/2026-05-30_phase7_result_boundary_soft_target_probe/t16
+runs/2026-05-30_phase7_result_boundary_soft_target_training/hard_matched_step200
+runs/2026-05-30_phase7_result_boundary_soft_target_training/t1_step200
+runs/2026-05-30_phase7_result_boundary_soft_target_training/t4_step200
+```
+
+- Tested whether existing `soft_result` boundary targets could tolerate
+  uncertainty better than hard-best CE.
+- Target sharpness:
+
+| Target | Temperature | True-result target mass | Effective results |
+| --- | ---: | ---: | ---: |
+| hard-best | `0.25` | `0.9999` | `1.001` |
+| soft | `1.0` | `0.8003` | `2.722` |
+| soft | `4.0` | `0.1336` | `28.347` |
+| soft | `16.0` | `0.0412` | `38.164` |
+
+- Matched 200-step full-grid upstream-open training:
+
+| Target | Step-200 learned calc | Step-200 snapshot normal | Final eval |
+| --- | ---: | ---: | ---: |
+| hard-best `t=0.25` | `0.5450` | `0.5925` | `0.5475` |
+| soft `t=1.0` | `0.2900` | `0.2775` | `0.2775` |
+| soft `t=4.0` | `0.1350` | `0.1325` | `0.1275` |
+
+Interpretation:
+
+- Static temperature-softened result-boundary targets train worse than the
+  hard-best target, even when the target is only moderately soft (`t=1`).
+- Do not run more static soft-result temperature ladders as novelty.
+
+Static approximation steering review:
+
+```text
+researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md
+```
+
+- Static result-boundary approximation is paused after hidden/output critics,
+  proposal rescoring, adaptive expansion, and soft-target training.
+- Continue only with evolving-checkpoint validation, calibrated proposal
+  learning, uncertainty/regret set targets, or a different less-prescriptive
+  credit-assignment mechanism.
+
 Review:
 
 ```text
