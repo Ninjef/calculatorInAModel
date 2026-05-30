@@ -1242,41 +1242,67 @@ class TinyGPT(nn.Module):
             diagnostics["calculator_read_residual"] = h.detach()
             diagnostics["calculator_read_residual_intervened"] = read_h.detach()
             diagnostics["calculator_read_intervention"] = calculator_read_intervention
+        routes = self._calculator_hook_routes(x, len(hooks))
+        combined_injection = h.new_zeros(h.shape)
         injections: list[Tensor] = []
         traces: list[dict[str, Tensor]] = []
-        routes = self._calculator_hook_routes(x, len(hooks))
-        for hook in hooks:
+        if return_diagnostics:
+            injections = [h.new_zeros(h.shape) for _ in hooks]
+            traces = [
+                hook._empty_trace(read_h, x, injections[hook_idx])
+                for hook_idx, hook in enumerate(hooks)
+            ]
+        invoked_hook_count = 0
+        for hook_idx, hook in enumerate(hooks):
+            if routes is None:
+                route_mask = torch.ones(x.shape[0], dtype=torch.bool, device=x.device)
+            else:
+                route_mask = routes == hook_idx
+            if not bool(route_mask.any().item()):
+                continue
+            route_idx = route_mask.nonzero(as_tuple=False).squeeze(-1)
+            invoked_hook_count += 1
+            sub_read_h = read_h[route_mask]
+            sub_x = x[route_mask]
+            sub_oracle = (
+                oracle_operands[route_mask] if oracle_operands is not None else None
+            )
+            sub_forced_result = forced_calculator_result_class
+            if isinstance(forced_calculator_result_class, Tensor):
+                sub_forced_result = forced_calculator_result_class[route_mask]
             if return_diagnostics:
-                injection, trace = hook(
-                    read_h,
-                    x,
-                    oracle_operands=oracle_operands,
+                sub_injection, sub_trace = hook(
+                    sub_read_h,
+                    sub_x,
+                    oracle_operands=sub_oracle,
                     result_override=calculator_result_override,
-                    forced_result_class=forced_calculator_result_class,
+                    forced_result_class=sub_forced_result,
                     return_trace=True,
                 )
-                traces.append(trace)
-            else:
-                injection = hook(
-                    read_h,
-                    x,
-                    oracle_operands=oracle_operands,
-                    result_override=calculator_result_override,
-                    forced_result_class=forced_calculator_result_class,
+                traces[hook_idx] = self._scatter_calculator_trace(
+                    traces[hook_idx], sub_trace, route_mask
                 )
-            injections.append(injection)
-        if routes is not None:
-            masked_injections = []
-            for hook_idx, injection in enumerate(injections):
-                route_mask = (routes == hook_idx).to(injection.dtype).view(-1, 1, 1)
-                masked_injections.append(injection * route_mask)
-            injections = masked_injections
-        if len(injections) == 1:
-            combined_injection = injections[0]
-        else:
-            combined_injection = torch.stack(injections, dim=0).sum(dim=0)
+            else:
+                sub_injection = hook(
+                    sub_read_h,
+                    sub_x,
+                    oracle_operands=sub_oracle,
+                    result_override=calculator_result_override,
+                    forced_result_class=sub_forced_result,
+                )
+            if return_diagnostics:
+                injections[hook_idx] = injections[hook_idx].index_copy(
+                    0, route_idx, sub_injection
+                )
+            if routes is None:
+                combined_injection = combined_injection + sub_injection
+            else:
+                combined_injection = combined_injection.index_copy(
+                    0, route_idx, sub_injection
+                )
         diagnostics["calculator_injection"] = combined_injection
         diagnostics["calculator_active_hook_count"] = len(hooks)
+        diagnostics["calculator_invoked_hook_count"] = invoked_hook_count
         if routes is not None:
             diagnostics["calculator_hook_route"] = routes.detach()
             diagnostics["calculator_hook_route_counts"] = torch.bincount(
@@ -1289,6 +1315,18 @@ class TinyGPT(nn.Module):
             diagnostics["calculator_traces"] = traces
             diagnostics["calculator_trace"] = traces[0]
         return self._apply_calculator_injection(h, combined_injection, x)
+
+    @staticmethod
+    def _scatter_calculator_trace(
+        full_trace: dict[str, Tensor],
+        sub_trace: dict[str, Tensor],
+        route_mask: Tensor,
+    ) -> dict[str, Tensor]:
+        route_idx = route_mask.nonzero(as_tuple=False).squeeze(-1)
+        return {
+            name: value.index_copy(0, route_idx, sub_trace[name])
+            for name, value in full_trace.items()
+        }
 
     def forward(
         self,

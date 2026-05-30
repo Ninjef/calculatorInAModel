@@ -2,8 +2,7 @@
 
 Last updated: 2026-05-30
 
-Maintenance rule: keep under about `200` lines. Replace stale synthesis; move
-older context to reviews, memories, fact sheets, or work logs.
+Maintenance rule: keep under about `200` lines; move stale context to reviews, memories, fact sheets, or work logs.
 
 ## Overarching Goal
 
@@ -127,7 +126,8 @@ Active directions:
   staged gates. A fair two-hook routed source needs cloned/shared output
   projection. Corrected all-hook injection-zero controls show routed source and
   trusted handoff are causal; four routed hooks also clear source/handoff
-  (`1.000` handoff, `0.040` zero, `0.020` forced-random). Next: active-only execution or shared output projection.
+  (`1.000` handoff, `0.040` zero, `0.020` forced-random). Routed execution is now
+  active-only; next is shared/tied output projection, then less-prescriptive credit assignment.
 
 ## Paused Or Deprioritized Branches
 

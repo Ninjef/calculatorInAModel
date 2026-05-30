@@ -497,6 +497,9 @@ def calculator_trace_rows(
                     "calculator_active_hook_count": int(
                         diagnostics.get("calculator_active_hook_count", 0)
                     ),
+                    "calculator_invoked_hook_count": int(
+                        diagnostics.get("calculator_invoked_hook_count", 0)
+                    ),
                     "a_read_position": trace_value("a_read_position", -1),
                     "b_read_position": trace_value("b_read_position", -1),
                     "eq_read_position": trace_value("eq_read_position", -1),
@@ -563,6 +566,12 @@ def summarize_routed_trace_rows(rows: list[dict[str, object]]) -> dict[str, obje
     summary: dict[str, object] = {
         "calculator_hook_route_distribution": compact_distribution(route_values),
         "calculator_hook_active_count": len(set(route_values)),
+        "calculator_hook_configured_count": max(
+            int(row.get("calculator_active_hook_count", 0)) for row in routed_rows
+        ),
+        "calculator_hook_invoked_count": max(
+            int(row.get("calculator_invoked_hook_count", 0)) for row in routed_rows
+        ),
     }
     for hook_idx in sorted(set(route_values)):
         hook_rows = [
@@ -2499,13 +2508,23 @@ def calculator_read_result_logits_and_input(
         if model.calculator_hook.result_proj is None:
             raise ValueError("calculator result logits require a result projection")
         return model.calculator_hook.result_proj(result_input), result_input, positions
-    logits_by_hook = []
-    for hook in hooks:
+    active_logits = None
+    for hook_idx, hook in enumerate(hooks):
         if hook.result_proj is None:
             raise ValueError("calculator result logits require a result projection")
-        logits_by_hook.append(hook.result_proj(result_input))
-    stacked_logits = torch.stack(logits_by_hook, dim=1)
-    active_logits = stacked_logits[batch_idx, routes]
+        route_mask = routes == hook_idx
+        if not bool(route_mask.any().item()):
+            continue
+        hook_logits = hook.result_proj(result_input[route_mask])
+        if active_logits is None:
+            active_logits = result_input.new_zeros(
+                (batch.x.shape[0], hook_logits.shape[-1])
+            )
+        active_logits = active_logits.index_copy(
+            0, route_mask.nonzero(as_tuple=False).squeeze(-1), hook_logits
+        )
+    if active_logits is None:
+        raise ValueError("calculator result logits require at least one routed sample")
     return active_logits, result_input, positions
 
 

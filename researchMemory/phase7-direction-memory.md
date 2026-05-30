@@ -180,13 +180,22 @@ Memory:
   injection-zero `0.0550`, forced-random `0.0300`, and hook calc
   `1.0000/0.9955`. A four-hook routed stress also cleared source and handoff:
   source630 `0.9950` final / `0.0275` zero, handoff600 `1.0000` final /
-  `0.0400` zero, all four hooks perfect on the handoff snapshot. Next target
-  active-only execution or shared output projection because current routed
-  runs still execute every hook and clone output projections.
+  `0.0400` zero, all four hooks perfect on the handoff snapshot.
+- Active-only routed execution is now implemented for both model forward hooks
+  and source-training result-logit reads. With `left_operand_mod` routing, the
+  model invokes only hooks that have examples in the batch, scatters their
+  traces/injections back into full-batch diagnostics, and records both
+  configured (`calculator_active_hook_count`) and invoked
+  (`calculator_invoked_hook_count`) hook counts. The training helper applies
+  each hook's `result_proj` only to routed examples instead of stacking all
+  hooks over the full batch. Regression tests verify a 4-hook batch routed only
+  to hooks `0` and `2` calls/projects only those hooks. This removes the
+  all-hooks-forward waste from routed batches, but cloned/independent output
+  projections still leave parameter scaling unresolved.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
-  next work should implement true multi-calculator/routing pressure, reduce
+  next work should share/tie routed output projections, reduce
   prescriptiveness, pursue non-enumerative credit assignment, or stress op39
   with an explicit compute hypothesis.
 

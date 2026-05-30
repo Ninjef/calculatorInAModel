@@ -9056,3 +9056,52 @@ Interpretation:
   non-bottleneck gate, and four routed hooks also train and transfer. The
   useful next axis is active-only routed execution or shared/tied output
   projections to reduce many-calculator compute/parameters.
+
+Active-only routed hook execution:
+
+Implementation:
+
+- `TinyGPT._call_calculator_hooks` now computes routed masks before invoking
+  hooks. For `left_operand_mod`, it slices each nonempty route, calls only that
+  hook, scatters the returned injection and trace tensors back into full-batch
+  diagnostics, and skips hooks with no examples in the batch.
+- Full-batch per-hook injection/trace buffers are diagnostic-only, so ordinary
+  training does not allocate them when `return_diagnostics=False`.
+- Diagnostics now distinguish configured hook count from executed hook count:
+  `calculator_active_hook_count` is still the number of configured hooks, while
+  `calculator_invoked_hook_count` is the number actually called for the batch.
+- `calculator_read_result_logits_and_input` now mirrors active-only routing for
+  source-training result logits: each present hook's `result_proj` is applied
+  only to that route's examples instead of stacking every hook's logits over the
+  full batch.
+- Routed trace summaries include both `calculator_hook_configured_count` and
+  `calculator_hook_invoked_count`.
+
+Validation:
+
+```bash
+PYTHONPATH=. PYTHONPYCACHEPREFIX=/tmp/codex_pycache pytest tests/test_model.py::test_multiple_calculator_hooks_sum_independent_injections tests/test_model.py::test_left_operand_mod_routes_examples_to_one_hook tests/test_model.py::test_routed_calculator_only_invokes_present_hooks tests/test_model.py::test_routed_result_policy_reads_active_hook_logits tests/test_model.py::test_routed_result_policy_only_projects_present_hooks -q
+PYTHONPATH=. PYTHONPYCACHEPREFIX=/tmp/codex_pycache pytest tests/test_model.py tests/test_assignment_scaling.py tests/test_research_memory.py -q
+```
+
+Results:
+
+- Focused routed tests: `5 passed`.
+- Broader regression set: `146 passed`.
+- A new four-hook routed model test verifies that a batch using only routes `0`
+  and `2` calls only hooks `0` and `2`, reports `calculator_invoked_hook_count=2`,
+  leaves hook `1` and `3` injections zero, and preserves combined-injection
+  accounting.
+- A routed result-logit test verifies that source-training result projections
+  are also active-only: only present route projections are called, and active
+  logits still come from the correct hook.
+
+Interpretation:
+
+- This removes the known all-hooks-forward waste from routed multi-calculator
+  batches and makes the four-hook result more relevant to many-calculator
+  compute scaling.
+- It does not solve many-calculator parameter scaling, because the current
+  positive routed recipe still uses cloned/independent output projections.
+  Shared/tied output projection is the next implementation axis before another
+  routed training gate.

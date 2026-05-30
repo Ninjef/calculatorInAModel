@@ -736,6 +736,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/148-routed-calculator-execution-is-now-active-only-for-present-routes",
+      "target": "researchMemory/hypotheses/phase7/148-routed-calculator-execution-is-now-active-only-for-present-routes.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -2345,6 +2350,13 @@
       "source_path": "researchMemory/hypotheses/phase7/147-four-routed-calculator-hooks-train-and-transfer-under-corrected-controls.md",
       "status": "POSITIVE",
       "title": "Four routed calculator hooks train and transfer under corrected controls."
+    },
+    {
+      "id": "doc/148-routed-calculator-execution-is-now-active-only-for-present-routes",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/148-routed-calculator-execution-is-now-active-only-for-present-routes.md",
+      "status": "POSITIVE-IMPLEMENTATION",
+      "title": "Routed calculator execution is now active-only for present routes."
     },
     {
       "id": "doc/phase7-direction-memory",

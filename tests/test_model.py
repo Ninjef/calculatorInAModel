@@ -464,6 +464,7 @@ def test_multiple_calculator_hooks_sum_independent_injections() -> None:
 
     assert logits.shape == (1, 8, VOCAB_SIZE)
     assert diagnostics["calculator_active_hook_count"] == 3
+    assert diagnostics["calculator_invoked_hook_count"] == 3
     assert hook_injections.shape == (3, 1, 8, 32)
     assert torch.allclose(combined_injection, hook_injections.sum(dim=0))
     assert len(diagnostics["calculator_traces"]) == 3
@@ -492,10 +493,61 @@ def test_left_operand_mod_routes_examples_to_one_hook() -> None:
     hook_injections = diagnostics["calculator_hook_injections"]
 
     assert diagnostics["calculator_active_hook_count"] == 2
+    assert diagnostics["calculator_invoked_hook_count"] == 2
     assert torch.equal(diagnostics["calculator_hook_route"], torch.tensor([0, 1]))
     assert torch.equal(diagnostics["calculator_hook_route_counts"], torch.tensor([1, 1]))
     assert torch.all(hook_injections[1, 0] == 0)
     assert torch.all(hook_injections[0, 1] == 0)
+    assert torch.allclose(
+        diagnostics["calculator_injection"], hook_injections.sum(dim=0)
+    )
+
+
+def test_routed_calculator_only_invokes_present_hooks() -> None:
+    torch.manual_seed(0)
+    model = TinyGPT(
+        _small_calculator_cfg(hook_count=4, hook_routing="left_operand_mod")
+    )
+    calls = [0, 0, 0, 0]
+    handles = []
+    for hook_idx, hook in enumerate(model.calculator_hook_modules()):
+        handles.append(
+            hook.register_forward_hook(
+                lambda _module, _args, _output, idx=hook_idx: calls.__setitem__(
+                    idx, calls[idx] + 1
+                )
+            )
+        )
+    x = torch.tensor(
+        [
+            [0, PLUS_ID, 2, EQ_ID, 5, 6, 7, 8],
+            [2, PLUS_ID, 2, EQ_ID, 5, 6, 7, 8],
+        ]
+    )
+
+    try:
+        with torch.no_grad():
+            _, diagnostics = model(
+                x,
+                forced_calculator_result_class=2,
+                return_diagnostics=True,
+            )
+    finally:
+        for handle in handles:
+            handle.remove()
+
+    hook_injections = diagnostics["calculator_hook_injections"]
+
+    assert calls == [1, 0, 1, 0]
+    assert diagnostics["calculator_active_hook_count"] == 4
+    assert diagnostics["calculator_invoked_hook_count"] == 2
+    assert torch.equal(diagnostics["calculator_hook_route"], torch.tensor([0, 2]))
+    assert torch.equal(
+        diagnostics["calculator_hook_route_counts"], torch.tensor([1, 0, 1, 0])
+    )
+    assert len(diagnostics["calculator_traces"]) == 4
+    assert torch.all(hook_injections[1] == 0)
+    assert torch.all(hook_injections[3] == 0)
     assert torch.allclose(
         diagnostics["calculator_injection"], hook_injections.sum(dim=0)
     )
@@ -4468,6 +4520,72 @@ def test_routed_result_policy_reads_active_hook_logits() -> None:
     assert metrics["result_policy_improvement_assignment_forced_eval_count"] == 10
     assert metrics["result_policy_hook_0_route_count"] == 1
     assert metrics["result_policy_hook_1_route_count"] == 1
+
+
+def test_routed_result_policy_only_projects_present_hooks() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_script_routed_active_logits", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_hook_count=4,
+        calculator_hook_routing="left_operand_mod",
+        calculator_operand_vocab_size=5,
+        calculator_result_vocab_size=9,
+        calculator_estimator="ste",
+        calculator_action_head="result_space",
+        calculator_bottleneck_mode="none",
+    )
+    model = TinyGPT(cfg)
+    calls = [0, 0, 0, 0]
+    handles = []
+    for hook_idx, hook in enumerate(model.calculator_hook_modules()):
+        assert hook.result_proj is not None
+        with torch.no_grad():
+            hook.result_proj.weight.zero_()
+            hook.result_proj.bias.zero_()
+            hook.result_proj.bias[hook_idx] = 10.0
+        handles.append(
+            hook.result_proj.register_forward_hook(
+                lambda _module, _args, _output, idx=hook_idx: calls.__setitem__(
+                    idx, calls[idx] + 1
+                )
+            )
+        )
+    batch = ArithmeticBatch(
+        x=torch.tensor(
+            [
+                [0, PLUS_ID, 0, EQ_ID],
+                [2, PLUS_ID, 0, EQ_ID],
+            ]
+        ),
+        y=torch.zeros((2, 4), dtype=torch.long),
+        loss_mask=torch.zeros((2, 4), dtype=torch.bool),
+    )
+
+    try:
+        result_logits, _, _, _ = overfit_script.calculator_read_result_logits(
+            model, batch
+        )
+    finally:
+        for handle in handles:
+            handle.remove()
+
+    assert result_logits.argmax(dim=-1).tolist() == [0, 2]
+    assert calls == [1, 0, 1, 0]
 
 
 def test_freeze_semantic_decoder_preserves_decoder_but_not_interface() -> None:
