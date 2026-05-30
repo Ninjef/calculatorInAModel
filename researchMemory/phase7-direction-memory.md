@@ -167,8 +167,11 @@ Memory:
   source had high normal but high injection-zero (`0.4925`). A fair `embd32`
   routed source630 trained both hooks (`1.0000/0.9944`) but still had high
   injection-zero (`0.4600`), while frozen-upstream source200 reduced leakage
-  (`0.1875`) but undertrained (`0.4150` normal). Routed source acquisition now
-  needs anti-leak pressure or longer frozen-upstream training before handoff.
+  (`0.1875`) only while undertrained (`0.4150` normal). Extending frozen
+  upstream to source630 recovered learning (`0.9750` normal, `0.9955/0.9494`
+  hook calc) but injection-zero returned (`0.4400` snapshot, `0.5000` final
+  counterfactual). Routed source acquisition now needs explicit anti-leak
+  pressure or a stricter architecture before handoff.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;

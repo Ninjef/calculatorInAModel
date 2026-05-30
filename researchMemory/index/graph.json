@@ -716,6 +716,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/144-longer-frozen-upstream-routed-source-learns-both-hooks-but-leakage-returns",
+      "target": "researchMemory/hypotheses/phase7/144-longer-frozen-upstream-routed-source-learns-both-hooks-but-leakage-returns.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -2297,6 +2302,13 @@
       "source_path": "researchMemory/hypotheses/phase7/143-routed-cloned-output-source-training-learns-both-hooks-but-leaks-through-the-upstream-resi.md",
       "status": "MIXED-NEGATIVE",
       "title": "Routed cloned-output source training learns both hooks but leaks through the upstream residual."
+    },
+    {
+      "id": "doc/144-longer-frozen-upstream-routed-source-learns-both-hooks-but-leakage-returns",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/144-longer-frozen-upstream-routed-source-learns-both-hooks-but-leakage-returns.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Longer frozen-upstream routed source learns both hooks but leakage returns."
     },
     {
       "id": "doc/phase7-direction-memory",

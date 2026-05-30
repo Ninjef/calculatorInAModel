@@ -93,10 +93,13 @@ source with the matched `embd32` product decoder parity checkpoint and 630-step
 recipe trained both hooks almost perfectly (`1.0000/0.9944` hook calc), but
 source injection-zero was still high (`0.4600`), unlike the single-hook
 `embd32` source630 (`0.0275`). Freezing upstream reduced leakage at source200
-(`0.1875`) but undertrained (`0.4150` normal). The active many-calculator issue
-is therefore no longer only scorer count or hook observability; routed source
-training needs anti-leak pressure or frozen-upstream acquisition before
-handoff results can be trusted.
+(`0.1875`) but undertrained (`0.4150` normal). A longer frozen-upstream
+source630 recovered learning (`0.9475` final, `0.9750` step-630 normal,
+`0.9955/0.9494` hook calc), but injection-zero returned (`0.4400` snapshot,
+`0.5000` final counterfactual). The active many-calculator issue is therefore
+no longer only scorer count or hook observability; routed source training needs
+source-time anti-leak pressure or a stricter routed architecture before handoff
+results can be trusted.
 
 ## What Should Stop
 

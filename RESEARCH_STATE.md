@@ -126,8 +126,8 @@ Active directions:
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
   staged gates. A fair two-hook routed source needs cloned/shared output
   projection. It trains both hooks, but open-upstream routed sources leak
-  (`0.998` normal, `0.460` injection-zero); freezing upstream lowers leakage
-  but source200 only reached `0.415`. Anti-leak routed acquisition is next.
+  (`0.998` normal, `0.460` injection-zero). Frozen upstream source630 still
+  leaks once it learns (`0.975` normal, `0.440-0.500` injection-zero); anti-leak routed acquisition is next.
 
 ## Paused Or Deprioritized Branches
 
