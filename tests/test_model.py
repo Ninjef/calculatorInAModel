@@ -4519,10 +4519,13 @@ def test_phase7_memory_local_target_branch_parser() -> None:
     ]
     assert runner.parse_learned_policy_reweighted_branch(
         "learned_policy_reweighted_t1_u8_p24_h32_e1"
-    ) == (1.0, 8, 24, 32, 1)
+    ) == (1.0, 8, 24, 32, 1, 0)
     assert runner.parse_learned_policy_reweighted_branch(
         "learned_policy_reweighted_t0p5_u16_p16_h64_e3"
-    ) == (0.5, 16, 16, 64, 3)
+    ) == (0.5, 16, 16, 64, 3, 0)
+    assert runner.parse_learned_policy_reweighted_branch(
+        "learned_policy_reweighted_t1_u4_p28_h32_e1_w50"
+    ) == (1.0, 4, 28, 32, 1, 50)
     with pytest.raises(ValueError, match="at least one uniform"):
         runner.parse_learned_policy_reweighted_branch(
             "learned_policy_reweighted_t1_u0_p24_h32_e1"
@@ -4534,6 +4537,10 @@ def test_phase7_memory_local_target_branch_parser() -> None:
     with pytest.raises(ValueError, match="epochs"):
         runner.parse_learned_policy_reweighted_branch(
             "learned_policy_reweighted_t1_u8_p24_h32_e0"
+        )
+    with pytest.raises(ValueError, match="pretrain batches"):
+        runner.parse_learned_policy_reweighted_branch(
+            "learned_policy_reweighted_t1_u8_p24_h32_e1_w-1"
         )
     assert runner.parse_corrected_policy_reweighted_branch(
         "corrected_policy_reweighted_t1_u8_bmean"

@@ -300,3 +300,26 @@ simple online polynomial-feature MLP on the fixed grid. The next learned
 proposal must explain how it will generalize under streaming/non-exhaustive
 training, or local-target work should pivot to estimator/target construction
 rather than more proposal knobs.
+
+## Addendum: Pretrained Learned Proposal
+
+Random-prompt pretraining did not turn the simple learned proposal into a
+streaming solution.
+
+- Added optional `_wN` syntax, e.g.
+  `learned_policy_reweighted_t1_u4_p28_h32_e1_w20`. Before model training, the
+  proposal MLP receives `N` batches of random prompt/result forced-loss
+  observations, then continues online as before.
+- In a 200-step batch-16 streaming screen, raw `u32` reached `0.0700` exact
+  calc / `0.0703` sampled normal. The online learned branch reached `0.0925`
+  / `0.0938`; `_w20` reached `0.0975` / `0.0625`; `_w50` reached `0.0950` /
+  `0.0547`.
+- In the 800-step batch-16 stress, raw `u32` reached `0.2350` exact calc /
+  `0.2734` sampled normal. `_w20` reached a slightly higher `0.2625` exact
+  calc but much lower `0.1797` sampled normal.
+
+Updated steering: do not keep turning the `_wN` dial. The result suggests
+offline proposal data can slightly shape the result policy, but this simple
+polynomial-feature predictor does not produce robust functional calculator
+use under streaming. A next learned proposal needs a different generalization
+story, not more warmup batches.

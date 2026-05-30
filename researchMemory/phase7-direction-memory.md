@@ -364,6 +364,10 @@ Memory:
   proposal coverage, but it did not beat raw `u32` under streaming minibatches
   (`0.2350` calc for both at 800 steps, sampled normal `0.2656` learned vs
   `0.2734` raw).
+- Random-prompt proposal pretraining is mixed-negative: `_w20` warmup gave a
+  small 800-step streaming exact-calc nudge over raw `u32` (`0.2625` vs
+  `0.2350`) but hurt sampled normal badly (`0.1797` vs `0.2734`), and `_w20`
+  / `_w50` did not lift the 200-step streaming screen.
 - The durable lesson is negative for fixed hand-coded proposals. Exact
   `policy_reweighted_t1` remains a useful ceiling, but fixed replay memory is
   not a scalable method, and the first simple learned proposal is only a clue.
@@ -388,3 +392,4 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-streaming-prompt-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-corrected-sparse-local-target-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-learned-proposal-local-target-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-pretrained-learned-proposal-gate.md`

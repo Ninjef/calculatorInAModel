@@ -237,27 +237,30 @@ def parse_memory_policy_reweighted_branch(
 
 def parse_learned_policy_reweighted_branch(
     branch: str,
-) -> tuple[float, int, int, int, int]:
+) -> tuple[float, int, int, int, int, int]:
     prefix = "learned_policy_reweighted_t"
     if not branch.startswith(prefix):
         raise ValueError(f"not a learned policy-reweighted branch: {branch!r}")
     parts = branch.removeprefix(prefix).split("_")
     if (
-        len(parts) != 5
+        len(parts) not in {5, 6}
         or not parts[1].startswith("u")
         or not parts[2].startswith("p")
         or not parts[3].startswith("h")
         or not parts[4].startswith("e")
+        or (len(parts) == 6 and not parts[5].startswith("w"))
     ):
         raise ValueError(
             "learned policy-reweighted branch must look like "
-            "'learned_policy_reweighted_t1_u8_p24_h32_e1'"
+            "'learned_policy_reweighted_t1_u8_p24_h32_e1' or "
+            "'learned_policy_reweighted_t1_u8_p24_h32_e1_w50'"
         )
     temperature = float(parts[0].replace("p", "."))
     uniform_samples = int(parts[1].removeprefix("u"))
     proposal_candidates = int(parts[2].removeprefix("p"))
     hidden_size = int(parts[3].removeprefix("h"))
     proposal_epochs = int(parts[4].removeprefix("e"))
+    pretrain_batches = int(parts[5].removeprefix("w")) if len(parts) == 6 else 0
     if temperature <= 0:
         raise ValueError("learned policy-reweighted temperature must be positive")
     if uniform_samples < 1:
@@ -268,12 +271,15 @@ def parse_learned_policy_reweighted_branch(
         raise ValueError("learned proposal hidden size must be positive")
     if proposal_epochs < 1:
         raise ValueError("learned proposal epochs must be positive")
+    if pretrain_batches < 0:
+        raise ValueError("learned proposal pretrain batches must be non-negative")
     return (
         temperature,
         uniform_samples,
         proposal_candidates,
         hidden_size,
         proposal_epochs,
+        pretrain_batches,
     )
 
 
@@ -387,6 +393,75 @@ def train_learned_proposal(
         "target_proposal_seen_examples": int(state.get("proposal_seen_examples", 0)),
         "target_proposal_updates": int(state.get("proposal_updates", 0)),
     }
+
+
+def pretrain_learned_proposal(
+    *,
+    model,
+    branch: str,
+    args: argparse.Namespace,
+    state: dict[str, Any],
+    train_rng: random.Random,
+    device: str,
+) -> None:
+    (
+        _temperature,
+        uniform_samples,
+        proposal_candidates,
+        hidden_size,
+        proposal_epochs,
+        pretrain_batches,
+    ) = parse_learned_policy_reweighted_branch(branch)
+    if pretrain_batches < 1 or state.get("proposal_pretrained"):
+        return
+    proposal_model, proposal_optimizer = load_learned_proposal_state(
+        state=state,
+        hidden_size=hidden_size,
+        device=torch.device(device),
+    )
+    result_vocab_size = int(model.cfg.calculator_result_vocab_size)
+    pretrain_batch_size = max(1, int(args.learned_proposal_pretrain_batch_size))
+    candidate_count = max(1, min(uniform_samples + proposal_candidates, result_vocab_size))
+    for _ in range(pretrain_batches):
+        batch = random_range_batch(
+            batch_size=pretrain_batch_size,
+            digits=args.digits,
+            operand_max=args.operand_max,
+            answer_format=args.answer_format,
+            rng=train_rng,
+            device=device,
+        )
+        candidates = sample_uniform_result_candidates(
+            batch_size=batch.x.shape[0],
+            result_vocab_size=result_vocab_size,
+            count=candidate_count,
+            device=batch.x.device,
+        )
+        candidate_losses = score_forced_candidate_result_classes(
+            model,
+            batch,
+            candidates,
+            chunk_size=args.result_chunk_size,
+        )
+        features = learned_proposal_features(
+            batch,
+            candidates,
+            digits=args.digits,
+            operand_max=args.operand_max,
+            result_vocab_size=result_vocab_size,
+        )
+        train_learned_proposal(
+            state=state,
+            proposal_model=proposal_model,
+            proposal_optimizer=proposal_optimizer,
+            features=features,
+            losses=candidate_losses,
+            epochs=proposal_epochs,
+        )
+    state["proposal_pretrained"] = True
+    state["proposal_pretrain_batches"] = int(pretrain_batches)
+    state["proposal_pretrain_batch_size"] = int(pretrain_batch_size)
+    state["proposal_pretrain_candidate_count"] = int(candidate_count)
 
 
 @torch.no_grad()
@@ -1005,6 +1080,7 @@ def learned_policy_reweighted_loss(
         proposal_candidates,
         hidden_size,
         proposal_epochs,
+        pretrain_batches,
     ) = parse_learned_policy_reweighted_branch(branch)
     result_logits, _, _, _ = calculator_read_result_logits(model, batch)
     result_vocab_size = result_logits.shape[-1]
@@ -1123,6 +1199,14 @@ def learned_policy_reweighted_loss(
             "target_proposal_candidates": int(proposal_candidates),
             "target_proposal_hidden_size": int(hidden_size),
             "target_proposal_epochs": int(proposal_epochs),
+            "target_proposal_pretrain_batches": int(pretrain_batches),
+            "target_proposal_pretrained": float(bool(state.get("proposal_pretrained"))),
+            "target_proposal_pretrain_batch_size": int(
+                state.get("proposal_pretrain_batch_size", 0)
+            ),
+            "target_proposal_pretrain_candidate_count": int(
+                state.get("proposal_pretrain_candidate_count", 0)
+            ),
             "target_forced_scores_per_step": int(candidates.shape[1]),
             "target_proposal_true_candidate_coverage": float(
                 proposal_true_coverage
@@ -1391,6 +1475,15 @@ def train_branch(
         rows.append(row)
 
     branch_state: dict[str, Any] = {}
+    if branch.startswith("learned_policy_reweighted_t"):
+        pretrain_learned_proposal(
+            model=model,
+            branch=branch,
+            args=args,
+            state=branch_state,
+            train_rng=train_rng,
+            device=device,
+        )
     train_batch = next_train_batch()
     initial_loss, initial_metrics = branch_loss(
         model, train_batch, branch=branch, args=args, state=branch_state
@@ -1535,6 +1628,7 @@ def main() -> int:
     parser.add_argument("--logit-descent-steps", type=int, default=25)
     parser.add_argument("--logit-descent-lr", type=float, default=1.0)
     parser.add_argument("--logit-descent-target-temperature", type=float, default=1.0)
+    parser.add_argument("--learned-proposal-pretrain-batch-size", type=int, default=32)
     parser.add_argument(
         "--branches",
         default="hard_boundary,expected_loss,policy_reweighted_t1,logit_descent_p0p1",
@@ -1560,6 +1654,8 @@ def main() -> int:
         raise ValueError("--control-eval-every must be non-negative")
     if args.result_chunk_size < 1:
         raise ValueError("--result-chunk-size must be positive")
+    if args.learned_proposal_pretrain_batch_size < 1:
+        raise ValueError("--learned-proposal-pretrain-batch-size must be positive")
 
     summary = run(args)
     output_root = resolve_path(args.output_root)

@@ -128,12 +128,11 @@ Active directions:
   (`0.7725`). The neg-4 full-grid version was too costly locally.
 - A genuinely different credit-assignment family such as target propagation or
   local targets. Exact `policy_reweighted_t1` is positive and survives
-  answer-only retention, but full enumeration is not scalable. Naive sparse
-  sampling, low-loss neighborhoods, fixed replay memory, and corrected sparse
-  targets failed scalability stress. A simple learned loss proposal improved
-  the fixed-grid 200-step gate but tied raw `u32` under 800-step streaming
-  minibatches, so local targets need stronger learned/generalized proposals,
-  estimator correction, or a different target construction.
+  retention, but full enumeration is not scalable. Sparse/adaptive sampling,
+  fixed replay memory, corrected sparse targets, and simple learned proposals
+  have failed streaming scalability stress, so local targets need stronger
+  learned/generalized proposals, estimator correction, or a different target
+  construction.
 - Lower-cost assignment is useful only when it changes scalability, not merely
   proxy selection.
 

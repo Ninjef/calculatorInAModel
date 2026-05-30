@@ -7754,3 +7754,61 @@ Interpretation:
 - Do not tune these same fixed-grid learned-proposal knobs as novelty. A next
   learned-proposal attempt needs an explicit streaming/generalization
   mechanism or validation objective.
+
+## 2026-05-29 Pretrained Learned Proposal Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-pretrained-learned-proposal-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_pretrained_learned_proposal_gate/smoke_op3
+runs/2026-05-29_phase7_pretrained_learned_proposal_gate/streaming_b16_200_screen
+runs/2026-05-29_phase7_pretrained_learned_proposal_gate/streaming_b16_800_w20
+```
+
+Question:
+
+Can random-prompt forced-loss pretraining make the learned proposal generalize
+well enough to beat raw `u32` under streaming minibatches?
+
+Tooling:
+
+- Added optional `_wN` learned-proposal syntax.
+- Before model training, the proposal MLP trains on `N` random prompt batches
+  with random result candidates and observed forced-result answer losses.
+
+Streaming 200-step screen:
+
+| Branch | Exact-grid calc | Sampled normal |
+| --- | ---: | ---: |
+| `sampled_policy_reweighted_t1_k0_u32` | `0.0700` | `0.0703` |
+| `learned_policy_reweighted_t1_u4_p28_h32_e1` | `0.0925` | `0.0938` |
+| `learned_policy_reweighted_t1_u4_p28_h32_e1_w20` | `0.0975` | `0.0625` |
+| `learned_policy_reweighted_t1_u4_p28_h32_e1_w50` | `0.0950` | `0.0547` |
+
+Streaming 800-step stress:
+
+| Branch | Exact-grid calc | Sampled normal | Injection-zero | Forced-random |
+| --- | ---: | ---: | ---: | ---: |
+| `sampled_policy_reweighted_t1_k0_u32` | `0.2350` | `0.2734` | `0.0234` | `0.0156` |
+| `learned_policy_reweighted_t1_u4_p28_h32_e1_w20` | `0.2625` | `0.1797` | `0.0234` | `0.0156` |
+
+Decision:
+
+```text
+pretrained_learned_proposal_streaming_mixed_negative
+```
+
+Interpretation:
+
+- Proposal pretraining slightly improved exact-grid calculator-result accuracy
+  in the 800-step streaming stress.
+- It did not produce a clean functional lift: sampled normal accuracy fell far
+  below raw `u32`.
+- Do not tune warmup count or batch size as novelty. Learned proposals need a
+  different generalization/validation mechanism.

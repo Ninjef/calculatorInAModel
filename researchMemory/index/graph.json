@@ -546,6 +546,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/110-random-prompt-learned-proposal-pretraining-does-not-cleanly-rescue-streaming-local-targets",
+      "target": "researchMemory/hypotheses/phase7/110-random-prompt-learned-proposal-pretraining-does-not-cleanly-rescue-streaming-local-targets.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -908,6 +913,11 @@
     {
       "source": "direction/target-propagation-local-targets",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-learned-proposal-local-target-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-pretrained-learned-proposal-gate.md",
       "type": "supported_by"
     },
     {
@@ -1679,6 +1689,13 @@
       "source_path": "researchMemory/hypotheses/phase7/109-a-simple-online-learned-loss-proposal-improves-fixed-grid-sparse-local-targets-but-does-no.md",
       "status": "PARTIAL",
       "title": "A simple online learned loss proposal improves fixed-grid sparse local targets but does not solve streaming scalability."
+    },
+    {
+      "id": "doc/110-random-prompt-learned-proposal-pretraining-does-not-cleanly-rescue-streaming-local-targets",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/110-random-prompt-learned-proposal-pretraining-does-not-cleanly-rescue-streaming-local-targets.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Random-prompt learned-proposal pretraining does not cleanly rescue streaming local targets."
     },
     {
       "id": "doc/phase7-direction-memory",
