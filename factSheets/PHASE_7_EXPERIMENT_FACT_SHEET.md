@@ -8318,3 +8318,50 @@ Interpretation:
   policy-reweighted target reproduced its known lift.
 - Do not continue with simple pairwise preference candidate-count or loss-gap
   sweeps as novelty.
+
+## 2026-05-30 Forced-Margin Product-Decoder Parity
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-forced-margin-product-decoder-parity.md
+```
+
+Runs:
+
+```text
+runs/2026-05-30_phase7_product_decoder_parity/embd32_product_oracle_decoder_steps1000_cpu
+runs/2026-05-30_phase7_product_decoder_parity/embd32_product_forced_margin_source630_cpu
+runs/2026-05-30_phase7_product_decoder_parity/embd32_product_handoff600_from_step630_cpu
+```
+
+Question:
+
+Does the automated forced-margin staged benchmark survive a matching wider
+product decoder, removing the prior non-product decoder caveat?
+
+Results:
+
+| Run | Key result |
+| --- | --- |
+| Product oracle decoder | `1.0000` final eval; oracle snapshots `1.0000` by step `500` |
+| Source step `600` | `0.6375` normal/source calc, injection-zero `0.0300`, oracle `1.0000` |
+| Source step `630` | `0.9475` normal/source calc, injection-zero `0.0200`, oracle `1.0000` |
+| Handoff step `600` | `1.0000` normal, `0.0000` injection-zero, `1.0000` oracle, `0.9700` learned calc, `0.0225` forced-random |
+
+Decision:
+
+```text
+automated_forced_margin_recovery_wider_product_decoder_parity_positive
+```
+
+Interpretation:
+
+- The wider forced-margin result is not dependent on the older non-product
+  answer decoder. A matching wider product decoder also gives strong source
+  recovery and perfect trusted additive handoff.
+- This strengthens the staged-transfer benchmark and removes a caveat from the
+  previous wider scale stress.
+- It is still not the final scalable/non-prescriptive solution because the
+  source uses hard improvement assignment, true-result forced-margin pressure,
+  a pretrained semantic decoder, and frozen-policy transfer.

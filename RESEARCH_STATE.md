@@ -98,10 +98,11 @@ Active directions:
   raised handoff to `0.8700`; automated recovery hit `0.9875` final /
   `0.9800` step-600 normal on one fresh seed; a second fresh seed cleared at
   `0.8975` / `0.9050`; and a wider `n_embd=32`, `n_head=2` stress with the
-  older non-product decoder reached `1.0000` final / step-600 normal with
-  zero-injection `0.0625`, forced-random `0.0325`, and learned calc `0.8850`.
-  This is useful staged-transfer evidence with seed/decoder caveats, but
-  remains prescriptive because it uses hard assignment and true-result
+  older non-product decoder and then a matching product decoder both reached
+  `1.0000` final / step-600 normal. Product parity had zero-injection
+  `0.0000`, forced-random `0.0225`, and learned calc `0.9700` at step `600`.
+  This is useful staged-transfer evidence, but remains prescriptive because it
+  uses hard assignment and true-result
   contrastive forcing. Treat it as a benchmark source recipe, not a local knob
   branch.
 - Target propagation/local targets are now a ceiling and diagnostic, not the
@@ -158,8 +159,9 @@ These branches should not continue without a new mechanism:
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark
    to beat; further forced-margin work must stress a new thesis-relevant axis
-   such as product-decoder parity, larger operand range, larger architecture,
-   or many-calculator cost, or remove hard assignment / true-result forcing.
+   such as larger operand range, larger architecture, or many-calculator cost,
+   or remove hard assignment / true-result forcing. Product-decoder parity for
+   the wider model has already cleared.
 4. If reducing hard-assignment cost, state the scalability hypothesis
    up front and compare against the exact-grid assignment ceiling rather than
    only against prior cheap selectors.

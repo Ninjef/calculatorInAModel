@@ -306,6 +306,13 @@ Memory:
   (`0.0625` zero-injection, `0.0325` forced-random). This supports staged
   scale/stability but does not remove prescriptiveness or prove product-decoder
   parity.
+- Product-decoder parity for the wider scale stress is positive. A matching
+  `n_embd=32`, `n_head=2`, `answer_decoder_interaction=product` oracle decoder
+  reached `1.0000`; the automated forced-margin source improved during late
+  recovery from `0.6375` to `0.9475`, and the trusted 600-step frozen-policy
+  additive handoff reached `1.0000` final / step-600 normal with `0.0000`
+  injection-zero and `0.0225` forced-random at step `600`. This removes the
+  non-product decoder caveat but remains prescriptive staged transfer.
 - Forced-margin benchmark review: automated recovery is now the staged-transfer
   benchmark to beat, not the next knob branch. Future forced-margin compute
   must stress a new thesis-relevant axis such as product-decoder parity, larger
@@ -355,6 +362,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-automated-forced-margin-source-recovery.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-second-fresh-seed-stability.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-wider-model-scale-stress.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-product-decoder-parity.md`
 - `researchReviews/2026-05-30-forced-margin-benchmark-direction-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-answer-derived-boundary-handoff.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-amortized-critic-diagnostic.md`
