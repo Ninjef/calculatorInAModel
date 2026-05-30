@@ -9027,6 +9027,8 @@ runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_ho
 runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks2_cloneout_embd32_source630_fixed_zero_eval_cpu/.../model-c-2digit-seed43
 runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks2_cloneout_handoff600_strictfreeze_fixed_zero_eval_cpu/.../model-c-2digit-seed43
 runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks2_cloneout_embd32_handoff600_from_source630_fixedzero_cpu/.../model-c-2digit-seed43
+runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks4_cloneout_embd32_source630_fixedzero_cpu/.../model-c-2digit-seed43
+runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks4_cloneout_embd32_handoff600_from_source630_fixedzero_cpu/.../model-c-2digit-seed43
 ```
 
 | Run | Main result | Injection-zero | Hook calc | Status |
@@ -9039,6 +9041,8 @@ runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_ho
 | Corrected `embd32` source630 eval | `1.0000` final / `0.9950` step-630 reload normal | `0.0250` | `1.0000/0.9893` | valid |
 | Corrected strict handoff600 eval | `0.9075` final / `0.9250` step-600 reload normal | `0.0000` | `0.9108/0.9198` | valid |
 | Corrected `embd32` source630 handoff600 | `1.0000` final / `1.0000` step-600 normal | `0.0550` | `1.0000/0.9955` | valid |
+| Corrected four-hook `embd32` source630 | `0.9950` final / `0.9975` step-630 normal | `0.0275` | `0.9928/1.0000/1.0000/1.0000` | valid |
+| Corrected four-hook handoff600 | `1.0000` final / `1.0000` step-600 normal | `0.0400` | `1.0000/1.0000/1.0000/1.0000` | valid |
 
 Interpretation:
 
@@ -9049,5 +9053,6 @@ Interpretation:
   injection-zero near the fraction of examples routed to the extra hook.
 - Future routed work no longer needs anti-leak pressure as the immediate next
   step. The corrected `embd32` source630 handoff now clears the trusted
-  non-bottleneck gate. The useful next axis is fresh seeds, more hooks, or
-  shared/tied output projections to reduce many-calculator parameters.
+  non-bottleneck gate, and four routed hooks also train and transfer. The
+  useful next axis is active-only routed execution or shared/tied output
+  projections to reduce many-calculator compute/parameters.

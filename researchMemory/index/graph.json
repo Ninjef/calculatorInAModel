@@ -731,6 +731,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/147-four-routed-calculator-hooks-train-and-transfer-under-corrected-controls",
+      "target": "researchMemory/hypotheses/phase7/147-four-routed-calculator-hooks-train-and-transfer-under-corrected-controls.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -2333,6 +2338,13 @@
       "source_path": "researchMemory/hypotheses/phase7/146-corrected-control-routed-embd32-source630-clears-trusted-additive-handoff.md",
       "status": "POSITIVE",
       "title": "Corrected-control routed embd32 source630 clears trusted additive handoff."
+    },
+    {
+      "id": "doc/147-four-routed-calculator-hooks-train-and-transfer-under-corrected-controls",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/147-four-routed-calculator-hooks-train-and-transfer-under-corrected-controls.md",
+      "status": "POSITIVE",
+      "title": "Four routed calculator hooks train and transfer under corrected controls."
     },
     {
       "id": "doc/phase7-direction-memory",

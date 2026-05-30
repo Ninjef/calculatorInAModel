@@ -119,6 +119,14 @@ sparse assignment from source-only evidence to a real two-hook non-bottleneck
 positive, while leaving fresh-seed/more-hook/shared-output validation as the
 remaining scalability work.
 
+The first more-hook validation also cleared: four routed hooks reached
+`0.9950` source final with all hooks trained and then `1.0000` trusted handoff
+final with `0.0400` injection-zero, `0.0200` forced-random, and all four hooks
+at `1.0000` calculator-result accuracy on the final snapshot. This strengthens
+the many-calculator trainability claim. The remaining scaling gap is now
+implementation/economics: current routed execution still calls every hook
+before masking and still clones per-hook output projections.
+
 ## What Should Stop
 
 - More op19 or op29 topk8+unique24 seed replications as scalability evidence.

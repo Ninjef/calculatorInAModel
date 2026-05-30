@@ -178,8 +178,11 @@ Memory:
   under corrected controls. The stronger routed `embd32` source630 then cleared
   a trusted 600-step additive handoff: final/step-600 normal `1.0000`, step-600
   injection-zero `0.0550`, forced-random `0.0300`, and hook calc
-  `1.0000/0.9955`. Next validate fresh seeds, more hooks, or shared output
-  projection.
+  `1.0000/0.9955`. A four-hook routed stress also cleared source and handoff:
+  source630 `0.9950` final / `0.0275` zero, handoff600 `1.0000` final /
+  `0.0400` zero, all four hooks perfect on the handoff snapshot. Next target
+  active-only execution or shared output projection because current routed
+  runs still execute every hook and clone output projections.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
