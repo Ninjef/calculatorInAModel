@@ -114,11 +114,10 @@ Active directions:
   `0.0000`, learned calc `0.9922`). This shows true-result forced-margin is
   not strictly required for staged transfer, but full forced-result enumeration
   and frozen transfer remain unsolved scalability/prescriptiveness issues.
-  Static approximations are paused: hidden/output critics miss (`0.40` best
-  argmin), proposal-rescoring is costly (`16/39` for `0.96-1.00`), adaptive
-  expansion has modest leverage, and soft/regret-set targets train worse than
-  hard-best. Frozen critics fail forward; simple online calibration and
-  policy-topk+unique24 sampled source targets are insufficient.
+  Static approximations are paused: critics/proposals are costly or state-local,
+  soft/regret/sampled hard-best targets are weak, and simple online calibration
+  is partial. Zero-injection improvement is the active lead: full-enum matches
+  hard-best source learning while sampled topk8+unique24 is only partial.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29

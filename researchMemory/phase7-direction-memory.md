@@ -562,6 +562,14 @@ Memory:
   `0.3675` snapshot calc, and `0.3525` final eval, below matched full-enum
   hard-best source comparators. Do not respond with sample-count/top-k ladders;
   change proposal/training co-design or target construction.
+- Zero-injection improvement is the active result-boundary lead. It builds a
+  target from answer-loss improvement over no calculator injection, not from
+  the true sum label. Full enumeration reached step-200 snapshot calc `0.5700`,
+  learned-best `0.5475`, and final eval `0.5425`, matching nearby hard-best
+  boundary comparators while keeping effective target size `1.2692`. The
+  topk8+unique24 sparse version improved over sampled hard-best (`0.4300`
+  final vs `0.3525`) but still trailed full enumeration despite `0.9725`
+  true-candidate coverage, so sparse scaling remains open.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -623,6 +631,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-cross-checkpoint-critic-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-online-calibrated-critic-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-sampled-result-boundary-source-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-zero-improvement-boundary-source-gate.md`
 - `researchReviews/2026-05-30-sampled-result-boundary-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`

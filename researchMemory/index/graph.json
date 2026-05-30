@@ -806,6 +806,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/162-zero-injection-improvement-result-boundary-targets-train-a-less-prescriptive-full-enum-sou",
+      "target": "researchMemory/hypotheses/phase7/162-zero-injection-improvement-result-boundary-targets-train-a-less-prescriptive-full-enum-sou.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1263,6 +1268,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-sampled-result-boundary-source-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-zero-improvement-boundary-source-gate.md",
       "type": "supported_by"
     },
     {
@@ -2568,6 +2578,13 @@
       "source_path": "researchMemory/hypotheses/phase7/161-policy-topk-unique24-sampled-result-boundary-source-targets-do-not-preserve-the-full-enum-.md",
       "status": "MIXED-NEGATIVE",
       "title": "Policy-topk+unique24 sampled result-boundary source targets do not preserve the full-enum boundary source signal."
+    },
+    {
+      "id": "doc/162-zero-injection-improvement-result-boundary-targets-train-a-less-prescriptive-full-enum-sou",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/162-zero-injection-improvement-result-boundary-targets-train-a-less-prescriptive-full-enum-sou.md",
+      "status": "PARTIAL-POSITIVE",
+      "title": "Zero-injection improvement result-boundary targets train a less-prescriptive full-enum source but do not yet solve sparse scoring."
     },
     {
       "id": "doc/phase7-direction-memory",

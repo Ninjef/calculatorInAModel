@@ -8560,6 +8560,34 @@ result-boundary comparators (`0.5450`/`0.5475` in the soft-target gate and
 the true result from candidates; candidate hard-best source training gives a
 weaker learning signal than full enumeration.
 
+Zero-injection improvement target follow-up:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-zero-improvement-boundary-source-gate.md
+runs/2026-05-30_phase7_zero_improvement_boundary_source_gate/full_enum_step200_cpu/.../model-c-2digit-seed4
+runs/2026-05-30_phase7_zero_improvement_boundary_source_gate/topk8_unique24_step200_cpu/.../model-c-2digit-seed4
+```
+
+- Added `result_boundary_target_mode=zero_improvement`, which weights result
+  classes by answer-loss improvement over the zero-injection baseline.
+- This does not directly name the true sum or forced argmin; it asks which
+  calculator results make the downstream answer better than no calculator.
+
+| Branch | Scored classes | Step-200 true coverage | Step-200 true target mass | Step-200 learned-best/calc | Snapshot normal/calc | Final eval |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| full-enum zero-improvement | `39/39` | `1.0000` | `0.9541` | `0.5475` | `0.5700` | `0.5425` |
+| topk8+unique24 zero-improvement | `24/39` | `0.9725` | `0.9356` | `0.4275` | `0.4525` | `0.4300` |
+| topk8+unique24 hard-best comparator | `24/39` | `0.9600` | n/a | `0.3425` | `0.3675` | `0.3525` |
+
+Interpretation:
+
+- Full-enum zero-improvement preserves the result-boundary source signal while
+  being less prescriptive than hard-best/true-sum forcing.
+- The sparse version is better than sampled hard-best but still does not close
+  the full-enum gap; high true-candidate coverage alone is not enough.
+- Next useful zero-improvement work should validate longer source/handoff or
+  change the sparse proposal/training mechanism, not ladder candidate counts.
+
 Static approximation steering review:
 
 ```text

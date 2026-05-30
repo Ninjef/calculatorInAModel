@@ -822,6 +822,10 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_boundary_target_unique_candidate_fraction",
         "result_boundary_target_true_candidate_coverage",
         "result_boundary_target_forced_eval_count",
+        "result_boundary_target_zero_loss",
+        "result_boundary_target_zero_improvement_positive_fraction",
+        "result_boundary_target_zero_improvement_true_fraction",
+        "result_boundary_target_zero_improvement_mean_positive_mass",
         "result_boundary_target_regret_set_fraction",
         "result_boundary_target_regret_set_true_fraction",
         "result_boundary_target_best_nll",
@@ -2799,6 +2803,22 @@ def score_forced_result_classes_chunked(
     return torch.cat(losses, dim=-1)
 
 
+@torch.no_grad()
+def score_injection_zero_answer_losses(
+    model: TinyGPT, batch: ArithmeticBatch
+) -> torch.Tensor:
+    was_training = model.training
+    model.eval()
+    try:
+        with temporary_calculator_injection_scale(model, 0.0):
+            logits = model(batch.x)
+        losses = masked_cross_entropy_per_example(logits, batch.y, batch.loss_mask)
+    finally:
+        if was_training:
+            model.train()
+    return losses
+
+
 def result_boundary_target_loss(
     model: TinyGPT,
     batch: ArithmeticBatch,
@@ -2812,10 +2832,15 @@ def result_boundary_target_loss(
     unique_sampling: bool = False,
     policy_topk_count: int = 0,
 ) -> tuple[torch.Tensor, dict[str, float]]:
-    if target_mode not in {"hard_best_result", "soft_result", "regret_set"}:
+    if target_mode not in {
+        "hard_best_result",
+        "soft_result",
+        "regret_set",
+        "zero_improvement",
+    }:
         raise ValueError(
             "result-boundary target mode must be 'hard_best_result', "
-            "'soft_result', or 'regret_set'"
+            "'soft_result', 'regret_set', or 'zero_improvement'"
         )
     if temperature <= 0:
         raise ValueError("result-boundary target temperature must be positive")
@@ -2875,6 +2900,10 @@ def result_boundary_target_loss(
             dtype=result_logits.dtype,
         )
     best_result = full_losses.argmin(dim=-1)
+    zero_losses = None
+    zero_improvement_mass = None
+    zero_improvement_positive = None
+    zero_improvement_true_fraction = None
     if target_mode == "hard_best_result":
         target_weights = torch.nn.functional.one_hot(
             best_result, num_classes=result_vocab_size
@@ -2892,6 +2921,23 @@ def result_boundary_target_loss(
         target_loss = -(
             target_weights * result_logits.log_softmax(dim=-1)
         ).sum(dim=-1).mean()
+    elif target_mode == "zero_improvement":
+        zero_losses = score_injection_zero_answer_losses(model, batch)
+        improvements = (
+            zero_losses.unsqueeze(-1) - full_losses
+        ).masked_fill(~candidate_mask, 0.0).clamp_min(0.0)
+        zero_improvement_mass = improvements.sum(dim=-1)
+        zero_improvement_positive = zero_improvement_mass > 1.0e-12
+        target_weights = improvements / zero_improvement_mass.unsqueeze(-1).clamp_min(
+            1.0e-12
+        )
+        per_example_loss = -(
+            target_weights * result_logits.log_softmax(dim=-1)
+        ).sum(dim=-1)
+        if bool(zero_improvement_positive.any().item()):
+            target_loss = per_example_loss[zero_improvement_positive].mean()
+        else:
+            target_loss = result_logits.sum() * 0.0
     else:
         action_count = candidate_mask.sum(dim=-1)
         if bool((min_probability_floor * action_count >= 1.0).any().item()):
@@ -2928,6 +2974,8 @@ def result_boundary_target_loss(
         1, true_sum.unsqueeze(-1)
     ).squeeze(-1)
     true_candidate = candidate_mask.gather(1, true_sum.unsqueeze(-1)).squeeze(-1)
+    if target_mode == "zero_improvement":
+        zero_improvement_true_fraction = true_result_probability > 0
     if target_mode == "regret_set":
         regret_set_fraction = (target_weights > 0).float().mean(dim=-1)
         regret_set_true_fraction = (true_result_probability > 0).float()
@@ -2969,6 +3017,24 @@ def result_boundary_target_loss(
         ),
         "result_boundary_target_forced_eval_count": int(
             batch.x.shape[0] * (sample_count if sample_count > 0 else result_vocab_size)
+        ),
+        "result_boundary_target_zero_loss": (
+            float(zero_losses.mean().item()) if zero_losses is not None else float("nan")
+        ),
+        "result_boundary_target_zero_improvement_positive_fraction": (
+            float(zero_improvement_positive.float().mean().item())
+            if zero_improvement_positive is not None
+            else float("nan")
+        ),
+        "result_boundary_target_zero_improvement_true_fraction": (
+            float(zero_improvement_true_fraction.float().mean().item())
+            if zero_improvement_true_fraction is not None
+            else float("nan")
+        ),
+        "result_boundary_target_zero_improvement_mean_positive_mass": (
+            finite_mean(zero_improvement_mass[zero_improvement_positive])
+            if zero_improvement_mass is not None
+            else float("nan")
         ),
         "result_boundary_target_best_nll": float(best_losses.mean().item()),
         "result_boundary_target_true_nll": finite_mean(true_losses),
@@ -10858,11 +10924,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--result-boundary-target-mode",
-        choices=["hard_best_result", "soft_result", "regret_set"],
+        choices=[
+            "hard_best_result",
+            "soft_result",
+            "regret_set",
+            "zero_improvement",
+        ],
         default="hard_best_result",
         help=(
             "CE to the lowest-NLL forced result, CE/KL to a soft result target, "
-            "or CE/KL to the set of results within temperature NLL of best."
+            "CE/KL to the set of results within temperature NLL of best, or "
+            "CE/KL to results that improve answer loss over zero injection."
         ),
     )
     parser.add_argument(
