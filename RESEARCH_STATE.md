@@ -126,8 +126,8 @@ Active directions:
   (`1.000` handoff, `0.040` zero, `0.020` forced-random). Routed execution is now
   active-only. Shared output projections remove cloned-output parameter growth
   and train the 4-hook source, but miss trusted handoff (`0.78`; matched
-  delayed-margin rerun `0.75`), despite near-perfect calculator accuracy.
-  Next: shared-output geometry or less-prescriptive credit.
+  delayed-margin rerun `0.75`) despite near-perfect calculator accuracy.
+  Next: less-prescriptive credit; shared-output only with a new mechanism.
 
 ## Paused Or Deprioritized Branches
 
@@ -157,8 +157,9 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Continue local targets only via materially different target construction,
-   estimator changes, or explicit streaming/generalization validation.
+1. Move mainline compute toward less-prescriptive answer-derived credit:
+   changed target construction/estimators, streaming validation, or replacing
+   forced-result enumeration.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark
@@ -166,11 +167,10 @@ These branches should not continue without a new mechanism:
    such as many-calculator cost, cheaper assignment, or removal of hard
    assignment / true-result forcing. Do not rerun op19, shallow op29, op29
    low-LR recovery, completed op29 `rhead64` seeds, or the same op39 path.
-4. If reducing hard-assignment cost, state the scalability hypothesis up front
-   and compare against the exact-grid ceiling. Do not run more uniform sampled
-   count ladders or fixed refresh-interval ladders on op19 `rhead64`; improve
-   policy-aware proposals via true multi-calculator/routing validation, op39
-   with an explicit compute hypothesis, or a changed estimator.
+4. If reducing hard-assignment cost, state the scalability hypothesis and
+   compare against the exact-grid ceiling. Do not run more uniform sampled
+   count ladders or fixed refresh-interval ladders on op19 `rhead64`; use true
+   routing validation, op39 with a compute hypothesis, or a changed estimator.
 5. Use answer-derived result-boundary transfer as a bridge, not a recipe:
    next work should approximate or replace the full forced-result enumeration
    that selected the best-result target. Do not continue pointwise/rank

@@ -31,6 +31,37 @@ Interpretation:
 - Next forced-margin work must stress a thesis-relevant axis or remove
   prescriptiveness.
 
+## 2026-05-30 Post-Shared-Output Steering Review
+
+Review:
+
+```text
+researchReviews/2026-05-30-post-shared-output-steering-review.md
+```
+
+Result:
+
+```text
+post_shared_output_pivot_to_less_prescriptive_credit
+```
+
+After active-only routing, shared output projection, four-hook routed positives,
+and the matched shared-output handoff miss, the many-calculator scaling branch
+has reached a clear boundary. Routed calculators can train and transfer with
+cloned outputs, and tied outputs remove parameter growth, but tied outputs do
+not preserve the trusted non-bottleneck handoff geometry.
+
+Interpretation:
+
+- Do not spend mainline compute on same-recipe shared-output source/handoff
+  variants, same forced-margin knobs, op19/op29 topk replications, or selector
+  proxies.
+- Mainline compute should move toward less-prescriptive answer-derived target
+  construction, estimator changes, streaming/evolving-state validation, or a
+  replacement for forced-result enumeration.
+- Shared-output work should continue only with a new transfer-geometry
+  mechanism validated against the trusted handoff gate.
+
 ## 2026-05-30 Forced-Margin Wider-Model Scale Stress
 
 Task/work log:

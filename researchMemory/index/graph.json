@@ -751,6 +751,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/151-post-shared-output-steering-favors-less-prescriptive-credit-over-more-same-recipe-scaling",
+      "target": "researchMemory/hypotheses/phase7/151-post-shared-output-steering-favors-less-prescriptive-credit-over-more-same-recipe-scaling-.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -2381,6 +2386,13 @@
       "source_path": "researchMemory/hypotheses/phase7/150-shared-output-four-hook-routed-source-trains-but-trusted-handoff-misses-the-cloned-output-.md",
       "status": "MIXED",
       "title": "Shared-output four-hook routed source trains, but trusted handoff misses the cloned-output gate."
+    },
+    {
+      "id": "doc/151-post-shared-output-steering-favors-less-prescriptive-credit-over-more-same-recipe-scaling",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/151-post-shared-output-steering-favors-less-prescriptive-credit-over-more-same-recipe-scaling-.md",
+      "status": "REVIEW",
+      "title": "Post-shared-output steering favors less-prescriptive credit over more same-recipe scaling audits."
     },
     {
       "id": "doc/phase7-direction-memory",

@@ -218,12 +218,18 @@ Memory:
   Shared output projections therefore remove parameter growth and preserve
   source trainability, but they are not a drop-in replacement for cloned
   output projections in the current non-bottleneck handoff geometry.
+- Post-shared-output steering review: this scaling branch has reached a clear
+  boundary. More same-recipe shared-output seeds, continuations, or
+  delayed-margin reruns are low value. Mainline compute should pivot to
+  less-prescriptive answer-derived credit assignment unless shared-output work
+  introduces a real new transfer-geometry mechanism validated by trusted
+  handoff.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
-  next work should change shared-output transfer geometry, reduce
-  prescriptiveness, pursue non-enumerative credit assignment, or stress op39
-  with an explicit compute hypothesis.
+  next work should reduce prescriptiveness, pursue non-enumerative credit
+  assignment, or change shared-output transfer geometry with a predeclared
+  mechanism.
 
 Representative evidence:
 
