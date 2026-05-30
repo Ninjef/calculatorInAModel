@@ -329,9 +329,11 @@ Memory:
 - A hidden result-head op29 capacity diagnostic is positive: adding
   `--calculator-result-head-hidden-size 64` raised source final eval to
   `0.9978` and the trusted handoff to `1.0000` final / step-600 normal with
-  low controls. The op29 range miss was strongly source-capacity sensitive, but
-  the fix adds per-calculator result-head parameters and keeps full-grid hard
-  assignment plus true-result forcing.
+  low controls. A fresh-seed repeat also cleared: source step `630` reached
+  `0.9967` and the trusted handoff reached `1.0000` final / step-600 normal
+  with low controls. The op29 range miss was strongly source-capacity
+  sensitive, but the fix adds per-calculator result-head parameters and keeps
+  full-grid hard assignment plus true-result forcing.
 - Forced-margin benchmark review: automated recovery is now the staged-transfer
   benchmark to beat, not the next knob branch. Future forced-margin compute
   must stress a new thesis-relevant axis such as product-decoder parity, larger
@@ -385,6 +387,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-op29-range-stress.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-op29-low-lr-source-recovery-diagnostic.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-op29-hidden-result-head-capacity-diagnostic.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-op29-rhead64-fresh-seed-replication.md`
 - `researchReviews/2026-05-30-forced-margin-range-stress-review.md`
 - `researchReviews/2026-05-30-forced-margin-benchmark-direction-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-answer-derived-boundary-handoff.md`

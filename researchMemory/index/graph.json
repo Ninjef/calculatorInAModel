@@ -636,6 +636,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/128-op29-hidden-result-head-capacity-fix-survives-a-fresh-seed",
+      "target": "researchMemory/hypotheses/phase7/128-op29-hidden-result-head-capacity-fix-survives-a-fresh-seed.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -943,6 +948,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-op29-hidden-result-head-capacity-diagnostic.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-op29-rhead64-fresh-seed-replication.md",
       "type": "supported_by"
     },
     {
@@ -1985,6 +1995,13 @@
       "source_path": "researchMemory/hypotheses/phase7/127-a-hidden-result-head-rescues-op29-forced-margin-range-transfer.md",
       "status": "POSITIVE",
       "title": "A hidden result head rescues op29 forced-margin range transfer."
+    },
+    {
+      "id": "doc/128-op29-hidden-result-head-capacity-fix-survives-a-fresh-seed",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/128-op29-hidden-result-head-capacity-fix-survives-a-fresh-seed.md",
+      "status": "POSITIVE",
+      "title": "op29 hidden result-head capacity fix survives a fresh seed."
     },
     {
       "id": "doc/phase7-direction-memory",

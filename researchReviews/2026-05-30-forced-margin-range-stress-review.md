@@ -25,15 +25,18 @@ A source-capacity diagnostic changed the picture more sharply. Adding a hidden
 result head (`--calculator-result-head-hidden-size 64`) to the same op29
 product forced-margin source reached `0.9978` final source eval and produced a
 perfect trusted handoff (`1.0000` final / step-600 normal) with low controls.
-The result head grew from `7,611` to `12,091` trainable parameters.
+The result head grew from `7,611` to `12,091` trainable parameters. A fresh
+seed repeated the result: source step `630` reached `0.9967`, and the trusted
+handoff again reached `1.0000` final / step-600 normal with low controls
+(`0.0344` injection-zero, `0.0111` forced-random at step `600`).
 
 ## What Should Stop
 
 Do not treat the op19 forced-margin recipe as range-scalable merely because it
 cleared product parity. Do not rerun op29 with the same source/handoff seed,
 repeat the same low-LR continuation ladder, or jump to op49 with the same
-full-grid hard-assignment recipe as novelty. Also do not rerun the same op29
-`rhead64` seed as novelty.
+full-grid hard-assignment recipe as novelty. Also do not rerun either completed
+op29 `rhead64` seed as novelty.
 
 Also do not respond by tuning local forced-margin knobs. The failure is aligned
 with the strategic bottleneck: source acquisition under larger candidate/result
@@ -48,13 +51,14 @@ Useful next work should make range scaling more true:
 - Reduce assignment cost with a declared scalability hypothesis and compare to
   the exact-grid ceiling.
 - If staying staged, validate whether the hidden result-head capacity fix
-  survives fresh seeds, larger ranges, or lower-cost assignment.
+  survives larger ranges, many-calculator cost, or lower-cost assignment.
 
 ## Are We Closer?
 
 Yes. The staged benchmark is now strong for op19 and wider product decoders,
-and op29 can clear with a larger result policy head. The remaining gap is
-scalability/prescriptiveness: the successful op29 recipe still uses full-grid
-hard assignment, true-result forced-margin pressure, and extra per-calculator
-source-head capacity. Future agents should validate generality or reduce the
-assignment/capacity cost rather than repeating op19 or the same op29 runs.
+and op29 can clear with a larger result policy head across two seeds. The
+remaining gap is scalability/prescriptiveness: the successful op29 recipe still
+uses full-grid hard assignment, true-result forced-margin pressure, and extra
+per-calculator source-head capacity. Future agents should validate larger
+generality or reduce the assignment/capacity cost rather than repeating op19 or
+the same op29 runs.

@@ -8465,16 +8465,34 @@ Capacity:
 | op29 shallow result head | `28,311` | `7,611` |
 | op29 `rhead64` | `32,791` | `12,091` |
 
+Fresh-seed `rhead64` validation:
+
+```text
+runs/2026-05-30_phase7_forced_margin_range_stress/op29_rhead64_fresh_seed_source630_cpu
+runs/2026-05-30_phase7_forced_margin_range_stress/op29_rhead64_fresh_seed_handoff600_from_step630_cpu
+```
+
+CLI seed was `31`; run directories record effective model seed `33`.
+
+| Run | Key result |
+| --- | --- |
+| Fresh `rhead64` source step `600` | `0.7122` normal/source calc, `0.0311` injection-zero, `1.0000` oracle, `0.0089` forced-random |
+| Fresh `rhead64` source step `630` | `0.9967` normal/source calc, `0.0200` injection-zero, `1.0000` oracle, `0.0133` forced-random |
+| Fresh `rhead64` source final eval | `897/900 = 0.9967` |
+| Fresh `rhead64` handoff step `600` | `1.0000` normal, `0.0344` injection-zero, `1.0000` oracle, `1.0000` learned calc, `0.0111` forced-random |
+| Fresh `rhead64` handoff final eval | `900/900 = 1.0000` |
+
 Decision:
 
 ```text
-op29_hidden_result_head_capacity_positive_but_prescriptive
+op29_hidden_result_head_capacity_replicates_but_prescriptive
 ```
 
 Interpretation:
 
 - The op29 range miss was strongly source-capacity sensitive. A hidden result
   head rescued source acquisition and trusted handoff without the extra low-LR
-  continuation ladder.
+  continuation ladder, and the source-plus-handoff result replicated on a fresh
+  seed.
 - This remains prescriptive and full-grid. It improves the staged benchmark's
   range story, but not the final scalable/non-prescriptive training method.
