@@ -681,6 +681,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/137-policy-topk-unique24-op29-range-source-handoff-replicates-on-a-fresh-seed",
+      "target": "researchMemory/hypotheses/phase7/137-policy-topk-unique24-op29-range-source-handoff-replicates-on-a-fresh-seed.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -803,6 +808,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-range-validation.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-fresh-seed-validation.md",
       "type": "supported_by"
     },
     {
@@ -2173,6 +2183,13 @@
       "source_path": "researchMemory/hypotheses/phase7/136-policy-topk-unique24-preserves-the-op29-rhead64-range-source-and-handoff-ceiling-on-one-se.md",
       "status": "POSITIVE",
       "title": "Policy-topk unique24 preserves the op29 rhead64 range source and handoff ceiling on one seed."
+    },
+    {
+      "id": "doc/137-policy-topk-unique24-op29-range-source-handoff-replicates-on-a-fresh-seed",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/137-policy-topk-unique24-op29-range-source-handoff-replicates-on-a-fresh-seed.md",
+      "status": "POSITIVE",
+      "title": "Policy-topk unique24 op29 range source/handoff replicates on a fresh seed."
     },
     {
       "id": "doc/phase7-direction-memory",

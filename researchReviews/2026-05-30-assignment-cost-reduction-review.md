@@ -89,6 +89,13 @@ assignment on that seed, though it remains one op29 seed and still uses hard
 assignment, forced-margin source shaping, hidden result-head capacity, a
 pretrained decoder, and frozen transfer.
 
+The op29 range result now replicates. On CLI seed `31` / effective seed `33`,
+matched to the exact fresh-range comparator, the sparse source reached
+`899/900 = 0.9989` and the trusted handoff reached `900/900 = 1.0000`.
+Step-600 handoff controls stayed causal: injection-zero `0.0333`, learned calc
+`0.9989`, and forced-random `0.0111`. Further op29 seed replications are now
+low value; the next axis should change.
+
 ## What Should Stop
 
 - Uniform sampled hard-assignment count ladders on the same op19 source gate.
@@ -111,11 +118,14 @@ pretrained decoder, and frozen transfer.
   scalability or prescriptiveness.
 - The same effective-seed-29 op29 `rhead64` topk8+unique24 source630 plus
   handoff600 path. It has cleared against the exact-grid ceiling.
+- More op29 `rhead64` topk8+unique24 seed replications. Effective seeds `29`
+  and `33` both cleared; future work needs many-calculator, op39, or
+  prescriptiveness pressure.
 
 ## What Deserves Compute
 
-- Validate policy-aware top-k proposals beyond one-seed op29 transfer:
-  fresh range seed, op39/many-calculator cost, or reduced prescriptiveness.
+- Validate policy-aware top-k proposals beyond replicated op29 transfer:
+  op39/many-calculator cost or reduced prescriptiveness.
 - More active/non-uniform proposals only if they beat the topk8+unique baseline
   or explain when/why top-k coverage fails.
 - Structured proposals that exploit arithmetic/result geometry while still
@@ -131,7 +141,7 @@ pretrained decoder, and frozen transfer.
 
 Meaningfully closer on the scalable-assignment axis, but not done. This did not
 solve non-prescriptive credit assignment, but it closed tempting cheap paths and
-turned policy-aware sparse assignment into a replicated op19 baseline plus a
-one-seed op29 range positive. The next direction is narrower: replicate or
-stress this under range/many-calculator pressure, or replace hard assignment
-with a less prescriptive credit signal.
+turned policy-aware sparse assignment into a replicated op19 and replicated
+op29 range baseline. The next direction is narrower: stress this under
+many-calculator/op39 pressure, or replace hard assignment with a less
+prescriptive credit signal.

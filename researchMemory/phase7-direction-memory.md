@@ -130,11 +130,16 @@ Memory:
   scored `24/59` result classes yet reached `1.0000` source final and
   `1.0000` trusted handoff final, with step-600 handoff learned calc `1.0000`,
   injection-zero `0.0356`, and forced-random `0.0189`.
+- Op29 range validation replicated on effective seed `33`: sparse source final
+  was `899/900 = 0.9989`, trusted handoff final was `900/900 = 1.0000`, and
+  step-600 handoff controls stayed causal (`0.0333` injection-zero, `0.0111`
+  forced-random, `0.9989` learned calc).
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
-  next work should replicate range, test many-calculator cost, reduce
-  prescriptiveness, or pursue non-enumerative credit assignment.
+  next work should test many-calculator cost, reduce prescriptiveness, pursue
+  non-enumerative credit assignment, or stress op39 with an explicit compute
+  hypothesis.
 
 Representative evidence:
 
@@ -147,6 +152,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-source-handoff-validation.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-fresh-seed-validation.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-range-validation.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-fresh-seed-validation.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `HYPOTHESIS_LEDGER.md`
 
