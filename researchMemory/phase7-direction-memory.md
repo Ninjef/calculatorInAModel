@@ -293,6 +293,14 @@ Memory:
   start-step, margin, negative count, or recovery length on the same setup as
   novelty. Future forced-margin compute should stress stability/scale or
   remove prescriptiveness by replacing hard assignment or true-result forcing.
+- A less-prescriptive answer-derived bridge is positive but constrained: the
+  older full-grid `result_boundary_target` source checkpoint transfers into
+  the trusted frozen-policy additive gate at `0.8825` final / `0.8425`
+  step-600 normal, with injection-zero `0.0000`, forced-random `0.0391`, and
+  learned calc `0.9922`. This shows true-result forced-margin pressure is not
+  strictly required for causal staged transfer, but it remains full-enumeration
+  candidate scoring plus frozen-policy transfer and is weaker than automated
+  forced-margin recovery.
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -321,6 +329,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-long-source-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-forced-margin-low-lr-source-recovery.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-automated-forced-margin-source-recovery.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-answer-derived-boundary-handoff.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 - `researchReviews/2026-05-29-forced-margin-branch-review.md`
 - `researchReviews/2026-05-30-forced-margin-recovery-review.md`

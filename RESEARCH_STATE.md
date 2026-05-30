@@ -1,6 +1,6 @@
 # Research State
 
-Last updated: 2026-05-29
+Last updated: 2026-05-30
 
 Maintenance rule: keep under about `200` lines. Replace stale synthesis; move
 older context to reviews, memories, fact sheets, or work logs.
@@ -114,6 +114,12 @@ Active directions:
   online learned, and pretrained learned variants failed scalability stress.
   Continue only with a different estimator, different target construction, or
   explicitly streaming/generalizing learned proposal.
+- Less-prescriptive answer-derived target construction. The old full-grid
+  result-boundary target source transfers causally into the trusted additive
+  frozen-policy gate (`0.8825` final, `0.8425` step-600 normal, zero-injection
+  `0.0000`, learned calc `0.9922`). This shows true-result forced-margin is
+  not strictly required for staged transfer, but full forced-result enumeration
+  and frozen transfer remain unsolved scalability/prescriptiveness issues.
 - Lower-cost assignment is useful only when it changes scalability, not merely
   proxy selection.
 
@@ -155,6 +161,9 @@ These branches should not continue without a new mechanism:
 4. If reducing hard-assignment cost, state the scalability hypothesis
    up front and compare against the exact-grid assignment ceiling rather than
    only against prior cheap selectors.
+5. Use answer-derived result-boundary transfer as a bridge, not a recipe:
+   next work should approximate or replace the full forced-result enumeration
+   that selected the best-result target.
 
 Do not run another local selector/proxy experiment unless it is explicitly
 designed to replace a named compute bottleneck and has a predeclared validation

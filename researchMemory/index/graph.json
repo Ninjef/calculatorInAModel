@@ -571,6 +571,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/115-answer-derived-result-boundary-source-transfers-but-is-not-scalable",
+      "target": "researchMemory/hypotheses/phase7/115-answer-derived-result-boundary-source-transfers-but-is-not-scalable.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -848,6 +853,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-automated-forced-margin-source-recovery.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-answer-derived-boundary-handoff.md",
       "type": "supported_by"
     },
     {
@@ -1764,6 +1774,13 @@
       "source_path": "researchMemory/hypotheses/phase7/114-forced-margin-recovery-is-now-a-staged-transfer-benchmark-not-a-local-knob-branch.md",
       "status": "REVIEW / STEERING.",
       "title": "Forced-margin recovery is now a staged-transfer benchmark, not a local knob branch."
+    },
+    {
+      "id": "doc/115-answer-derived-result-boundary-source-transfers-but-is-not-scalable",
+      "kind": "memory_document",
+      "source_path": "researchMemory/hypotheses/phase7/115-answer-derived-result-boundary-source-transfers-but-is-not-scalable.md",
+      "status": "POSITIVE, constrained.",
+      "title": "Answer-derived result-boundary source transfers but is not scalable."
     },
     {
       "id": "doc/phase7-direction-memory",

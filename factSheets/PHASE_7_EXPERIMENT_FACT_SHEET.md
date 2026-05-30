@@ -7985,3 +7985,57 @@ Summary:
 - Do not continue same-setup forced-margin knob tuning. Future work should
   either stress stability/scale or remove hard assignment / true-result
   forcing with a new target construction or estimator.
+
+## 2026-05-30 Answer-Derived Boundary Handoff
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-answer-derived-boundary-handoff.md
+```
+
+Run:
+
+```text
+runs/2026-05-30_phase7_answer_derived_boundary_handoff/stage1_step800_handoff600_cpu
+```
+
+Question:
+
+Can the old full-grid result-boundary target source, whose target is selected
+from answer-loss scoring rather than true-result forced-margin pressure,
+transfer into the trusted additive frozen-policy handoff gate?
+
+Source checkpoint:
+
+```text
+runs/2026-05-13_phase7_full_grid_upstream_open_result_boundary_retention/stage1_primary_full_grid/2026-05-13_153947_011891_model-c-op0-19-fullgrid-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-hard_best_result-rbtt0.25-rbtchunk64-rtemp1-rfinal1-answer_decoder-adec-product/model-c-2digit-seed2/checkpoint_snapshots/step_00800_weights.pt
+```
+
+Trusted handoff result:
+
+| Metric | Result |
+| --- | ---: |
+| final eval | `0.8825` |
+| step-600 normal | `0.8425` |
+| step-600 injection-zero | `0.0000` |
+| diagnostic forced-random | `0.0391` |
+| diagnostic learned calc | `0.9922` |
+| diagnostic oracle-at-eval | `0.8594` |
+
+Decision:
+
+```text
+answer_derived_result_boundary_source_transfers_but_is_not_scalable
+```
+
+Interpretation:
+
+- Answer-derived best-result target training can produce a causally useful
+  source policy for the additive non-bottleneck frozen-policy gate.
+- This is less explicitly true-result-prescriptive than forced-margin source
+  recovery, but it still requires full forced-result enumeration and staged
+  frozen-policy transfer.
+- It is positive but weaker than automated forced-margin recovery (`0.9875`
+  final / `0.9800` step-600 normal), so treat it as a bridge toward new target
+  construction or estimator work rather than the new best recipe.
