@@ -116,7 +116,8 @@ Active directions:
   and frozen transfer remain unsolved scalability/prescriptiveness issues.
   Static approximations are paused: hidden/output critics miss (`0.40` best
   argmin), proposal-rescoring is costly (`16/39` for `0.96-1.00`), adaptive
-  expansion has modest leverage, and soft targets train worse than hard-best.
+  expansion has modest leverage, and soft/regret-set targets train worse than
+  hard-best.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
@@ -171,9 +172,9 @@ These branches should not continue without a new mechanism:
    against exact-grid, avoid more uniform count/fixed-refresh ladders, and use
    routing validation, op39 compute stress, or a changed estimator.
 5. Use answer-derived result-boundary transfer as a bridge, not a recipe. Do
-   not continue static critic/proposal/soft-target variants; use evolving-state
-   validation, materially different target construction, or another
-   credit-assignment family.
+   not continue static critic/proposal/soft/regret-set target variants; use
+   evolving-state validation, materially different target construction, or
+   another credit-assignment family.
 
 ## What Would Change Our Mind
 

@@ -811,6 +811,8 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_boundary_target_temperature",
         "result_boundary_target_min_probability_floor",
         "result_boundary_target_chunk_size",
+        "result_boundary_target_regret_set_fraction",
+        "result_boundary_target_regret_set_true_fraction",
         "result_boundary_target_best_nll",
         "result_boundary_target_true_nll",
         "result_boundary_target_learned_nll",
@@ -2796,9 +2798,10 @@ def result_boundary_target_loss(
     min_probability_floor: float,
     chunk_size: int,
 ) -> tuple[torch.Tensor, dict[str, float]]:
-    if target_mode not in {"hard_best_result", "soft_result"}:
+    if target_mode not in {"hard_best_result", "soft_result", "regret_set"}:
         raise ValueError(
-            "result-boundary target mode must be 'hard_best_result' or 'soft_result'"
+            "result-boundary target mode must be 'hard_best_result', "
+            "'soft_result', or 'regret_set'"
         )
     if temperature <= 0:
         raise ValueError("result-boundary target temperature must be positive")
@@ -2810,15 +2813,30 @@ def result_boundary_target_loss(
     full_losses = score_forced_result_classes_chunked(
         model, batch, chunk_size=chunk_size
     )
-    target_weights = action_loss_weights_from_losses(
-        full_losses,
-        temperature=temperature,
-        min_probability_floor=min_probability_floor,
-    )
     best_result = full_losses.argmin(dim=-1)
     if target_mode == "hard_best_result":
+        target_weights = action_loss_weights_from_losses(
+            full_losses,
+            temperature=temperature,
+            min_probability_floor=min_probability_floor,
+        )
         target_loss = torch.nn.functional.cross_entropy(result_logits, best_result)
+    elif target_mode == "regret_set":
+        best_nll = full_losses.gather(1, best_result.unsqueeze(-1)).squeeze(-1)
+        regret_mask = full_losses <= (best_nll.unsqueeze(-1) + temperature)
+        target_weights = regret_mask.float()
+        target_weights = target_weights / target_weights.sum(
+            dim=-1, keepdim=True
+        ).clamp_min(1.0)
+        target_loss = -(
+            target_weights * result_logits.log_softmax(dim=-1)
+        ).sum(dim=-1).mean()
     else:
+        target_weights = action_loss_weights_from_losses(
+            full_losses,
+            temperature=temperature,
+            min_probability_floor=min_probability_floor,
+        )
         target_loss = -(
             target_weights * result_logits.log_softmax(dim=-1)
         ).sum(dim=-1).mean()
@@ -2835,6 +2853,14 @@ def result_boundary_target_loss(
     true_result_probability = target_weights.gather(
         1, true_sum.unsqueeze(-1)
     ).squeeze(-1)
+    if target_mode == "regret_set":
+        regret_set_fraction = (target_weights > 0).float().mean(dim=-1)
+        regret_set_true_fraction = (true_result_probability > 0).float()
+    else:
+        regret_set_fraction = torch.full_like(true_result_probability, float("nan"))
+        regret_set_true_fraction = torch.full_like(
+            true_result_probability, float("nan")
+        )
     tie_tolerance = 1e-6
     true_result_strictly_beaten = full_losses < (
         true_losses.unsqueeze(-1) - tie_tolerance
@@ -2866,6 +2892,12 @@ def result_boundary_target_loss(
         "result_boundary_target_entropy": float(target_entropy.mean().item()),
         "result_boundary_target_effective_results": float(
             target_entropy.exp().mean().item()
+        ),
+        "result_boundary_target_regret_set_fraction": float(
+            regret_set_fraction.mean().item()
+        ),
+        "result_boundary_target_regret_set_true_fraction": float(
+            regret_set_true_fraction.mean().item()
         ),
         "result_boundary_target_learned_best_fraction": float(
             (learned_result == best_result).float().mean().item()
@@ -10698,9 +10730,12 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--result-boundary-target-mode",
-        choices=["hard_best_result", "soft_result"],
+        choices=["hard_best_result", "soft_result", "regret_set"],
         default="hard_best_result",
-        help="CE to the lowest-NLL forced result or CE/KL to a soft result target.",
+        help=(
+            "CE to the lowest-NLL forced result, CE/KL to a soft result target, "
+            "or CE/KL to the set of results within temperature NLL of best."
+        ),
     )
     parser.add_argument(
         "--result-boundary-target-temperature",

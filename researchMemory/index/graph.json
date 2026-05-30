@@ -776,6 +776,16 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/156-static-full-enum-regret-set-result-boundary-targets-improve-source-acquisition",
+      "target": "researchMemory/hypotheses/phase7/156-static-full-enum-regret-set-result-boundary-targets-improve-source-acquisition.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/157-static-result-boundary-set-targets-are-paused-after-soft-and-regret-set-negatives",
+      "target": "researchMemory/hypotheses/phase7/157-static-result-boundary-set-targets-are-paused-after-soft-and-regret-set-negatives.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1212,12 +1222,22 @@
     },
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-result-boundary-regret-set-training-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "researchReviews/2026-05-30-result-boundary-approximation-review.md",
       "type": "supported_by"
     },
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "researchReviews/2026-05-30-result-boundary-set-target-steering-review.md",
       "type": "supported_by"
     },
     {
@@ -2461,6 +2481,20 @@
       "source_path": "researchMemory/hypotheses/phase7/155-static-result-boundary-approximation-is-paused-after-critic-proposal-adaptive-and-soft-tar.md",
       "status": "REVIEW",
       "title": "Static result-boundary approximation is paused after critic, proposal, adaptive, and soft-target gates."
+    },
+    {
+      "id": "doc/156-static-full-enum-regret-set-result-boundary-targets-improve-source-acquisition",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/156-static-full-enum-regret-set-result-boundary-targets-improve-source-acquisition.md",
+      "status": "DISPROVEN",
+      "title": "Static full-enum regret-set result-boundary targets improve source acquisition."
+    },
+    {
+      "id": "doc/157-static-result-boundary-set-targets-are-paused-after-soft-and-regret-set-negatives",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/157-static-result-boundary-set-targets-are-paused-after-soft-and-regret-set-negatives.md",
+      "status": "REVIEW",
+      "title": "Static result-boundary set targets are paused after soft and regret-set negatives."
     },
     {
       "id": "doc/phase7-direction-memory",

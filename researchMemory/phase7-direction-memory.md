@@ -526,11 +526,18 @@ Memory:
   learned calc / `0.5475` final eval; soft `t=1` reached only `0.2900` /
   `0.2775`, and broad soft `t=4` reached `0.1350` / `0.1275`. Temperature
   softening diluted rather than improved the answer-derived teaching signal.
-- Steering review: static result-boundary approximation is paused. The branch
-  has now tested direct critics, proposal rescoring, adaptive expansion, and
-  soft targets. Continue only with evolving-checkpoint validation, calibrated
-  proposal learning, uncertainty/regret set targets, or a genuinely different
-  less-prescriptive credit-assignment mechanism.
+- Static full-enum regret-set targets are negative too. Fixed margins up to
+  `1.0` collapsed to hard-best, margin `2.0` was nearly hard (`1.06`
+  effective results), and the first meaningful set target, margin `4.0`
+  (`5.6975` effective results, true result always in set), trained far worse
+  than matched hard-best at step `200`: `0.0900` learned calc / `0.0900`
+  final eval versus `0.4625` / `0.4225`.
+- Steering review: static result-boundary approximation and static set targets
+  are paused. The branch has now tested direct critics, proposal rescoring,
+  adaptive expansion, soft targets, and fixed-margin regret sets. Continue only
+  with evolving-checkpoint validation, calibrated proposal learning, adaptive
+  uncertainty/regret selection, or a genuinely different less-prescriptive
+  credit-assignment mechanism.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -588,8 +595,10 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-uncertainty-proposal-diagnostic.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-adaptive-proposal-diagnostic.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-soft-target-training-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-regret-set-training-gate.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`
+- `researchReviews/2026-05-30-result-boundary-set-target-steering-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-sampled-hard-assignment-cost-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-exact-assignment-refresh-cadence-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-unique-sampled-assignment-coverage-gate.md`

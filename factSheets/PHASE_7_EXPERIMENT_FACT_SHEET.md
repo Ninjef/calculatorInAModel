@@ -8388,6 +8388,58 @@ Interpretation:
   hard-best target, even when the target is only moderately soft (`t=1`).
 - Do not run more static soft-result temperature ladders as novelty.
 
+Regret-set target follow-up:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-result-boundary-regret-set-training-gate.md
+runs/2026-05-30_phase7_result_boundary_regret_set_probe/m005
+runs/2026-05-30_phase7_result_boundary_regret_set_probe/m025
+runs/2026-05-30_phase7_result_boundary_regret_set_probe/m1
+runs/2026-05-30_phase7_result_boundary_regret_set_probe/m2
+runs/2026-05-30_phase7_result_boundary_regret_set_probe/m4
+runs/2026-05-30_phase7_result_boundary_regret_set_training/hard_matched_step200
+runs/2026-05-30_phase7_result_boundary_regret_set_training/m4_step200
+```
+
+- Added `regret_set`, a uniform target over forced result classes within a
+  fixed NLL margin of the best forced result.
+- Target width probe:
+
+| Regret margin | Regret-set fraction | True in set | Effective results | True-result target mass |
+| ---: | ---: | ---: | ---: | ---: |
+| `0.05` | `0.0256` | `1.0000` | `1.0000` | `1.0000` |
+| `0.25` | `0.0256` | `1.0000` | `1.0000` | `1.0000` |
+| `1.0` | `0.0256` | `1.0000` | `1.0000` | `1.0000` |
+| `2.0` | `0.0272` | `1.0000` | `1.0600` | `0.9700` |
+| `4.0` | `0.1461` | `1.0000` | `5.6975` | `0.2413` |
+
+- Matched 200-step full-grid upstream-open training:
+
+| Target | Step-200 learned calc | Step-200 snapshot normal | Final eval |
+| --- | ---: | ---: | ---: |
+| hard-best `t=0.25` | `0.4625` | `0.4600` | `0.4225` |
+| regret-set margin `4.0` | `0.0900` | `0.0875` | `0.0900` |
+
+Interpretation:
+
+- Narrow margins are not a new mechanism because they collapse to hard-best.
+- The first meaningful static set target dilutes source acquisition even more
+  than the earlier moderate soft-result target.
+- Do not run static full-enum regret-set margin ladders or simple top-N
+  low-regret static target variants as novelty.
+
+Set-target steering review:
+
+```text
+researchReviews/2026-05-30-result-boundary-set-target-steering-review.md
+```
+
+- Static result-boundary set targets are paused after soft and regret-set
+  negatives.
+- Continue result-boundary work only with evolving-checkpoint validation,
+  calibrated proposal learning, adaptive uncertainty/regret selection, or a
+  different less-prescriptive credit-assignment family.
+
 Static approximation steering review:
 
 ```text
