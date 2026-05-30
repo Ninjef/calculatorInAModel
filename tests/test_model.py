@@ -35,6 +35,7 @@ def _small_calculator_cfg(
     bottleneck_mode: str = "none",
     output_format: str = "sum",
     answer_decoder_interaction: str = "none",
+    hook_count: int = 1,
 ) -> GPTConfig:
     return GPTConfig(
         n_embd=32,
@@ -43,6 +44,7 @@ def _small_calculator_cfg(
         block_size=8,
         calculator_enabled=True,
         calculator_mode=mode,
+        calculator_hook_count=hook_count,
         calculator_estimator=estimator,
         calculator_injection_mode=injection_mode,
         calculator_bottleneck_mode=bottleneck_mode,
@@ -369,6 +371,13 @@ def test_invalid_calculator_injection_mode_raises() -> None:
         TinyGPT(cfg)
 
 
+def test_invalid_calculator_hook_count_raises() -> None:
+    cfg = _small_calculator_cfg(hook_count=0)
+
+    with pytest.raises(ValueError, match="calculator hook count"):
+        TinyGPT(cfg)
+
+
 def test_invalid_calculator_bottleneck_mode_raises() -> None:
     cfg = _small_calculator_cfg(bottleneck_mode="middle")
 
@@ -427,6 +436,29 @@ def test_replace_calculator_injection_mode_only_replaces_equals_positions() -> N
     assert torch.equal(updated[0, :2], h[0, :2])
     assert torch.equal(updated[0, 3:], h[0, 3:])
     assert torch.equal(updated[0, 2], injection[0, 2])
+
+
+def test_multiple_calculator_hooks_sum_independent_injections() -> None:
+    torch.manual_seed(0)
+    model = TinyGPT(_small_calculator_cfg(hook_count=3))
+    x = torch.tensor([[1, 2, PLUS_ID, 3, 4, EQ_ID, 5, 6]])
+
+    with torch.no_grad():
+        logits, diagnostics = model(
+            x,
+            forced_calculator_result_class=5,
+            return_diagnostics=True,
+        )
+
+    hook_injections = diagnostics["calculator_hook_injections"]
+    combined_injection = diagnostics["calculator_injection"]
+
+    assert logits.shape == (1, 8, VOCAB_SIZE)
+    assert diagnostics["calculator_active_hook_count"] == 3
+    assert hook_injections.shape == (3, 1, 8, 32)
+    assert torch.allclose(combined_injection, hook_injections.sum(dim=0))
+    assert len(diagnostics["calculator_traces"]) == 3
+    assert diagnostics["calculator_trace"] is diagnostics["calculator_traces"][0]
 
 
 def test_calculator_off_replace_mode_zeros_equals_residual_only() -> None:
@@ -4224,6 +4256,7 @@ def test_adaptive_optimizer_groups_assign_lrs_and_exclude_frozen_decoder() -> No
         calculator_enabled=True,
         calculator_mode="add",
         calculator_hook_after_layer=1,
+        calculator_hook_count=3,
         calculator_operand_vocab_size=3,
         calculator_result_vocab_size=5,
         calculator_estimator="adaptive_interface",
@@ -4251,8 +4284,11 @@ def test_adaptive_optimizer_groups_assign_lrs_and_exclude_frozen_decoder() -> No
     assert group_by_name["calculator_hook.input_proj"]["lr"] == pytest.approx(3e-4)
     assert group_by_name["upstream"]["lr"] == pytest.approx(1e-4)
     assert id(model.calculator_hook.input_proj.weight) in grouped_params
+    assert id(model.extra_calculator_hooks[0].input_proj.weight) in grouped_params
+    assert id(model.extra_calculator_hooks[1].input_proj.weight) in grouped_params
     assert id(model.answer_decoder.weight) not in grouped_params
     assert id(model.calculator_hook.output_proj.weight) not in grouped_params
+    assert id(model.extra_calculator_hooks[0].output_proj.weight) not in grouped_params
 
 
 def test_freeze_semantic_decoder_preserves_decoder_but_not_interface() -> None:
@@ -4272,6 +4308,7 @@ def test_freeze_semantic_decoder_preserves_decoder_but_not_interface() -> None:
         calculator_enabled=True,
         calculator_mode="add",
         calculator_hook_after_layer=1,
+        calculator_hook_count=2,
         calculator_operand_vocab_size=3,
         calculator_result_vocab_size=5,
         calculator_estimator="adaptive_interface",
@@ -4285,6 +4322,8 @@ def test_freeze_semantic_decoder_preserves_decoder_but_not_interface() -> None:
 
     assert model.calculator_hook.input_proj.weight.requires_grad
     assert not model.calculator_hook.output_proj.weight.requires_grad
+    assert model.extra_calculator_hooks[0].input_proj.weight.requires_grad
+    assert not model.extra_calculator_hooks[0].output_proj.weight.requires_grad
     assert not model.answer_decoder.weight.requires_grad
 
 
@@ -4307,6 +4346,7 @@ def test_freeze_calculator_action_head_preserves_surrounding_model() -> None:
         calculator_enabled=True,
         calculator_mode="add",
         calculator_hook_after_layer=1,
+        calculator_hook_count=2,
         calculator_operand_vocab_size=3,
         calculator_result_vocab_size=5,
         calculator_estimator="ste",
@@ -4320,9 +4360,12 @@ def test_freeze_calculator_action_head_preserves_surrounding_model() -> None:
 
     assert not model.calculator_hook.result_proj.weight.requires_grad
     assert not model.calculator_hook.result_proj.bias.requires_grad
+    assert not model.extra_calculator_hooks[0].result_proj.weight.requires_grad
+    assert not model.extra_calculator_hooks[0].result_proj.bias.requires_grad
     assert model.tok_emb.weight.requires_grad
     assert model.blocks[0].attn.qkv.weight.requires_grad
     assert model.calculator_hook.output_proj.weight.requires_grad
+    assert model.extra_calculator_hooks[0].output_proj.weight.requires_grad
 
 
 def test_freeze_calculator_policy_backbone_preserves_action_head() -> None:

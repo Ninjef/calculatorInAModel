@@ -126,8 +126,8 @@ Active directions:
   Topk8+unique24 is the first positive: it has cleared two op19 seeds and two
   op29 range seeds while scoring `24` classes, not the full `39/59`. Accounting
   shows this changes the scorer slope from `O(C * result_vocab)` to `O(C * 24)`,
-  but the implementation still has one calculator hook and still scales
-  linearly with active calculator count.
+  and the repo now has same-layer multi-hook forward/CLI support; true
+  routing/differentiated training remains unproven.
 
 ## Paused Or Deprioritized Branches
 

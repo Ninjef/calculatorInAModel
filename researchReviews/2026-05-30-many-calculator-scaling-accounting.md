@@ -35,11 +35,25 @@ slope from `O(result_vocab)` to `O(24)` for the tested setup. This is the first
 cost-reduction branch with both source/handoff evidence and a meaningful range
 scaling argument.
 
-But it does not solve many-calculator scaling. The repo still exposes a single
-calculator path. If we clone independent calculators, scorer cost and head
-parameters remain linear in active calculator count. The method is also still
-prescriptive: hard assignment scores forced calculator results and trains the
-policy toward the best scored result.
+But it does not solve many-calculator scaling. Even when independent
+calculators are instantiated, scorer cost and head parameters remain linear in
+active calculator count. The method is also still prescriptive: hard assignment
+scores forced calculator results and trains the policy toward the best scored
+result.
+
+## Implementation Follow-Up
+
+The repo now has a same-layer multi-hook prerequisite path:
+`GPTConfig.calculator_hook_count` instantiates independent calculator hooks,
+their injections are summed at the hook layer, diagnostics report
+`calculator_active_hook_count` plus per-hook injections, and
+`scripts/overfit_one_batch.py` accepts `--calculator-hook-count`.
+
+A zero-step smoke with `--calculator-hook-count 3` wrote `calculator_hook_count=3`
+in both `config.json` and `metrics.json`, and tests verify that extra hook
+policy heads are grouped/frozen with the primary calculator head. This removes
+the immediate single-hook code blocker, but it is not yet a routed or scattered
+many-calculator training result.
 
 ## What Should Stop
 

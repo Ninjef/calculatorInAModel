@@ -143,6 +143,12 @@ Memory:
   linearly if each calculator has an independent `rhead64` head (`12,091` each
   at op29). This supports topk as a scorer-cost baseline, not as a complete
   many-calculator architecture.
+- A same-layer multi-hook forward path now exists: `GPTConfig.calculator_hook_count`
+  instantiates independent calculator hooks, diagnostics report
+  `calculator_active_hook_count` and per-hook injections, and the training CLI
+  accepts `--calculator-hook-count`. A zero-step smoke with `hook_count=3`
+  wrote matching config/metrics. This is prerequisite tooling, not evidence
+  that routed/differentiated many-calculator policies can train.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
@@ -163,6 +169,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-range-validation.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-fresh-seed-validation.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-30-many-calculator-scaling-accounting.md`
 - `HYPOTHESIS_LEDGER.md`

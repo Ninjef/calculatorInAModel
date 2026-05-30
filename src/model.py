@@ -30,6 +30,7 @@ class GPTConfig:
     calculator_enabled: bool = False
     calculator_mode: str = "off"
     calculator_hook_after_layer: int = 2
+    calculator_hook_count: int = 1
     calculator_operand_vocab_size: int = 10
     calculator_result_vocab_size: int = 19
     calculator_injection_scale: float = 1.0
@@ -1073,6 +1074,7 @@ class TinyGPT(nn.Module):
         self.pos_emb = nn.Embedding(cfg.block_size, cfg.n_embd)
         self.blocks = nn.ModuleList([Block(cfg) for _ in range(cfg.n_layer)])
         self.calculator_hook: CalculatorHook | None = None
+        self.extra_calculator_hooks = nn.ModuleList()
         self.ln_f = nn.LayerNorm(cfg.n_embd)
         self.lm_head = nn.Linear(cfg.n_embd, cfg.vocab_size, bias=False)
         self.answer_offset_emb: nn.Embedding | None = None
@@ -1084,8 +1086,14 @@ class TinyGPT(nn.Module):
         if cfg.calculator_enabled:
             if not 0 <= cfg.calculator_hook_after_layer <= cfg.n_layer:
                 raise ValueError("calculator hook layer must be within model depth")
+            if cfg.calculator_hook_count < 1:
+                raise ValueError("calculator hook count must be positive")
             self.calculator_hook = CalculatorHook(cfg)
             self.calculator_hook.apply(self._init_weights)
+            for _ in range(cfg.calculator_hook_count - 1):
+                hook = CalculatorHook(cfg)
+                hook.apply(self._init_weights)
+                self.extra_calculator_hooks.append(hook)
 
     @staticmethod
     def _init_weights(module: nn.Module) -> None:
@@ -1098,6 +1106,11 @@ class TinyGPT(nn.Module):
 
     def num_params(self) -> int:
         return sum(p.numel() for p in self.parameters())
+
+    def calculator_hook_modules(self) -> list[CalculatorHook]:
+        if self.calculator_hook is None:
+            return []
+        return [self.calculator_hook, *list(self.extra_calculator_hooks)]
 
     def _apply_calculator_injection(
         self, h: Tensor, injection: Tensor, tokens: Tensor
@@ -1188,7 +1201,7 @@ class TinyGPT(nn.Module):
         intervened[batch_idx, target_pos] = source
         return intervened
 
-    def _call_calculator_hook(
+    def _call_calculator_hooks(
         self,
         h: Tensor,
         x: Tensor,
@@ -1200,7 +1213,8 @@ class TinyGPT(nn.Module):
         forced_calculator_result_class: int | Tensor | None,
         calculator_read_intervention: ReadSiteIntervention | None,
     ) -> Tensor:
-        assert self.calculator_hook is not None
+        hooks = self.calculator_hook_modules()
+        assert hooks
         read_h = self._apply_read_site_intervention(
             h, x, calculator_read_intervention
         )
@@ -1208,25 +1222,41 @@ class TinyGPT(nn.Module):
             diagnostics["calculator_read_residual"] = h.detach()
             diagnostics["calculator_read_residual_intervened"] = read_h.detach()
             diagnostics["calculator_read_intervention"] = calculator_read_intervention
-            injection, trace = self.calculator_hook(
-                read_h,
-                x,
-                oracle_operands=oracle_operands,
-                result_override=calculator_result_override,
-                forced_result_class=forced_calculator_result_class,
-                return_trace=True,
-            )
-            diagnostics["calculator_trace"] = trace
+        injections: list[Tensor] = []
+        traces: list[dict[str, Tensor]] = []
+        for hook in hooks:
+            if return_diagnostics:
+                injection, trace = hook(
+                    read_h,
+                    x,
+                    oracle_operands=oracle_operands,
+                    result_override=calculator_result_override,
+                    forced_result_class=forced_calculator_result_class,
+                    return_trace=True,
+                )
+                traces.append(trace)
+            else:
+                injection = hook(
+                    read_h,
+                    x,
+                    oracle_operands=oracle_operands,
+                    result_override=calculator_result_override,
+                    forced_result_class=forced_calculator_result_class,
+                )
+            injections.append(injection)
+        if len(injections) == 1:
+            combined_injection = injections[0]
         else:
-            injection = self.calculator_hook(
-                read_h,
-                x,
-                oracle_operands=oracle_operands,
-                result_override=calculator_result_override,
-                forced_result_class=forced_calculator_result_class,
+            combined_injection = torch.stack(injections, dim=0).sum(dim=0)
+        diagnostics["calculator_injection"] = combined_injection
+        diagnostics["calculator_active_hook_count"] = len(hooks)
+        if return_diagnostics:
+            diagnostics["calculator_hook_injections"] = torch.stack(
+                injections, dim=0
             )
-        diagnostics["calculator_injection"] = injection
-        return self._apply_calculator_injection(h, injection, x)
+            diagnostics["calculator_traces"] = traces
+            diagnostics["calculator_trace"] = traces[0]
+        return self._apply_calculator_injection(h, combined_injection, x)
 
     def forward(
         self,
@@ -1248,7 +1278,7 @@ class TinyGPT(nn.Module):
             self.calculator_hook is not None
             and self.cfg.calculator_hook_after_layer == 0
         ):
-            h = self._call_calculator_hook(
+            h = self._call_calculator_hooks(
                 h,
                 x,
                 diagnostics=diagnostics,
@@ -1269,7 +1299,7 @@ class TinyGPT(nn.Module):
                 self.calculator_hook is not None
                 and i == self.cfg.calculator_hook_after_layer
             ):
-                h = self._call_calculator_hook(
+                h = self._call_calculator_hooks(
                     h,
                     x,
                     diagnostics=diagnostics,

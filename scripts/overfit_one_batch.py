@@ -29,7 +29,7 @@ from src.data import (
     pad_sequence,
     tokenize,
 )
-from src.model import GPTConfig, TinyGPT, masked_cross_entropy
+from src.model import CalculatorHook, GPTConfig, TinyGPT, masked_cross_entropy
 
 DEFAULT_DIGITS = (1, 2, 3)
 DEFAULT_STEPS = 1000
@@ -222,6 +222,7 @@ class TrainConfig:
     n_embd: int
     mlp_expansion: int
     calculator_hook_after_layer: int
+    calculator_hook_count: int
     model: dict[str, object]
 
 
@@ -6576,9 +6577,13 @@ def input_proj_anchor_delta_summary(
     }
 
 
+def calculator_hook_modules(model: TinyGPT) -> list[CalculatorHook]:
+    return model.calculator_hook_modules()
+
+
 def freeze_semantic_decoder_parameters(model: TinyGPT) -> None:
-    if model.calculator_hook is not None:
-        for param in model.calculator_hook.output_proj.parameters():
+    for hook in calculator_hook_modules(model):
+        for param in hook.output_proj.parameters():
             param.requires_grad = False
     if model.answer_offset_emb is not None:
         for param in model.answer_offset_emb.parameters():
@@ -6586,12 +6591,10 @@ def freeze_semantic_decoder_parameters(model: TinyGPT) -> None:
     if model.answer_decoder is not None:
         for param in model.answer_decoder.parameters():
             param.requires_grad = False
-    if (
-        model.calculator_hook is not None
-        and model.cfg.calculator_action_head in {"joint_pair", "result_space"}
-    ):
-        for param in model.calculator_hook.input_proj.parameters():
-            param.requires_grad = False
+    if model.cfg.calculator_action_head in {"joint_pair", "result_space"}:
+        for hook in calculator_hook_modules(model):
+            for param in hook.input_proj.parameters():
+                param.requires_grad = False
 
 
 def freeze_upstream_encoder_parameters(model: TinyGPT) -> None:
@@ -6604,15 +6607,7 @@ def freeze_calculator_policy_parameters(model: TinyGPT) -> None:
     if model.calculator_hook is None:
         return
     freeze_calculator_policy_backbone_parameters(model)
-    if model.cfg.calculator_action_head == "result_space":
-        for param in model.calculator_hook.result_proj.parameters():
-            param.requires_grad = False
-    elif model.cfg.calculator_action_head == "joint_pair":
-        for param in model.calculator_hook.pair_proj.parameters():
-            param.requires_grad = False
-    else:
-        for param in model.calculator_hook.input_proj.parameters():
-            param.requires_grad = False
+    freeze_calculator_action_head_parameters(model)
 
 
 def freeze_calculator_policy_backbone_parameters(model: TinyGPT) -> None:
@@ -6629,15 +6624,34 @@ def freeze_calculator_policy_backbone_parameters(model: TinyGPT) -> None:
 def freeze_calculator_action_head_parameters(model: TinyGPT) -> None:
     if model.calculator_hook is None:
         return
-    if model.cfg.calculator_action_head == "result_space":
-        for param in model.calculator_hook.result_proj.parameters():
-            param.requires_grad = False
-    elif model.cfg.calculator_action_head == "joint_pair":
-        for param in model.calculator_hook.pair_proj.parameters():
-            param.requires_grad = False
-    else:
-        for param in model.calculator_hook.input_proj.parameters():
-            param.requires_grad = False
+    for hook in calculator_hook_modules(model):
+        if model.cfg.calculator_action_head == "result_space":
+            assert hook.result_proj is not None
+            for param in hook.result_proj.parameters():
+                param.requires_grad = False
+        elif model.cfg.calculator_action_head == "joint_pair":
+            assert hook.pair_proj is not None
+            for param in hook.pair_proj.parameters():
+                param.requires_grad = False
+        else:
+            for param in hook.input_proj.parameters():
+                param.requires_grad = False
+
+
+def calculator_parameter_group_name(name: str) -> str | None:
+    if name.startswith("calculator_hook.input_proj.") or (
+        name.startswith("extra_calculator_hooks.") and ".input_proj." in name
+    ):
+        return "calculator_hook.input_proj"
+    if name.startswith("calculator_hook.pair_proj.") or (
+        name.startswith("extra_calculator_hooks.") and ".pair_proj." in name
+    ):
+        return "calculator_hook.pair_proj"
+    if name.startswith("calculator_hook.result_proj.") or (
+        name.startswith("extra_calculator_hooks.") and ".result_proj." in name
+    ):
+        return "calculator_hook.result_proj"
+    return None
 
 
 def adaptive_optimizer_param_groups(
@@ -6657,11 +6671,12 @@ def adaptive_optimizer_param_groups(
     for name, param in model.named_parameters():
         if not param.requires_grad:
             continue
-        if name.startswith("calculator_hook.input_proj."):
+        calculator_group = calculator_parameter_group_name(name)
+        if calculator_group == "calculator_hook.input_proj":
             input_params.append(param)
-        elif name.startswith("calculator_hook.pair_proj."):
+        elif calculator_group == "calculator_hook.pair_proj":
             pair_params.append(param)
-        elif name.startswith("calculator_hook.result_proj."):
+        elif calculator_group == "calculator_hook.result_proj":
             result_params.append(param)
         else:
             upstream_params.append(param)
@@ -6713,15 +6728,7 @@ def trainable_parameter_summary(model: TinyGPT) -> list[dict[str, object]]:
     for name, param in model.named_parameters():
         if not param.requires_grad:
             continue
-        group_name = (
-            "calculator_hook.input_proj"
-            if name.startswith("calculator_hook.input_proj.")
-            else "calculator_hook.pair_proj"
-            if name.startswith("calculator_hook.pair_proj.")
-            else "calculator_hook.result_proj"
-            if name.startswith("calculator_hook.result_proj.")
-            else "upstream"
-        )
+        group_name = calculator_parameter_group_name(name) or "upstream"
         group = groups.setdefault(
             group_name,
             {"name": group_name, "parameter_count": 0, "parameters": []},
@@ -6947,6 +6954,7 @@ def make_model_config(
     n_embd: int = 128,
     mlp_expansion: int = 4,
     calculator_hook_after_layer: int | None = None,
+    calculator_hook_count: int = 1,
 ) -> GPTConfig:
     operand_vocab_size = operand_vocab_size or 10**num_digits
     calculator_enabled = variant in {"model-b", "model-c"}
@@ -6966,6 +6974,7 @@ def make_model_config(
         calculator_enabled=calculator_enabled,
         calculator_mode=calculator_mode,
         calculator_hook_after_layer=calculator_hook_after_layer,
+        calculator_hook_count=calculator_hook_count,
         calculator_operand_vocab_size=operand_vocab_size,
         calculator_result_vocab_size=(2 * operand_vocab_size) - 1,
         calculator_injection_scale=injection_scale,
@@ -7023,6 +7032,7 @@ def make_additive_handoff_probe_model(
         n_embd=args.n_embd,
         mlp_expansion=args.mlp_expansion,
         calculator_hook_after_layer=args.calculator_hook_after_layer,
+        calculator_hook_count=args.calculator_hook_count,
     )
     probe = TinyGPT(cfg).to(device)
     load_compatible_state_from_model(source, probe)
@@ -7170,6 +7180,7 @@ def run_variant(
         n_embd=args.n_embd,
         mlp_expansion=args.mlp_expansion,
         calculator_hook_after_layer=args.calculator_hook_after_layer,
+        calculator_hook_count=args.calculator_hook_count,
     )
     model = TinyGPT(cfg).to(device)
     use_result_space_reinforce = (
@@ -7559,6 +7570,7 @@ def run_variant(
         n_embd=args.n_embd,
         mlp_expansion=args.mlp_expansion,
         calculator_hook_after_layer=cfg.calculator_hook_after_layer,
+        calculator_hook_count=cfg.calculator_hook_count,
         model=asdict(cfg),
     )
     (run_dir / "config.json").write_text(
@@ -8202,12 +8214,10 @@ def run_variant(
             decay_steps=args.relaxed_calculator_temperature_decay_steps,
             step=step,
         )
-        if model.calculator_hook is not None:
-            model.calculator_hook.relaxed_temperature = current_relaxed_temperature
-            model.calculator_hook.relaxed_mode = args.relaxed_calculator_mode
-            model.calculator_hook.relaxed_hard_forward = (
-                args.relaxed_calculator_hard_forward
-            )
+        for hook in calculator_hook_modules(model):
+            hook.relaxed_temperature = current_relaxed_temperature
+            hook.relaxed_mode = args.relaxed_calculator_mode
+            hook.relaxed_hard_forward = args.relaxed_calculator_hard_forward
         if use_reinforce:
             diagnostics = {}
             per_example_answer_loss = None
@@ -9852,6 +9862,7 @@ def run_variant(
     metrics["calculator_result_head_hidden_size"] = (
         args.calculator_result_head_hidden_size
     )
+    metrics["calculator_hook_count"] = args.calculator_hook_count
     metrics["relaxed_calculator_temperature"] = args.relaxed_calculator_temperature
     metrics["relaxed_calculator_final_temperature"] = (
         args.relaxed_calculator_final_temperature
@@ -11359,6 +11370,15 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--calculator-hook-count",
+        type=int,
+        default=1,
+        help=(
+            "Number of independent calculator hooks to apply at the configured "
+            "hook layer. 1 preserves existing behavior."
+        ),
+    )
+    parser.add_argument(
         "--reinforce-baseline-beta",
         type=float,
         default=0.95,
@@ -12106,6 +12126,8 @@ def main() -> None:
         and not 0 <= args.calculator_hook_after_layer <= args.n_layer
     ):
         raise ValueError("--calculator-hook-after-layer must be within model depth")
+    if args.calculator_hook_count < 1:
+        raise ValueError("--calculator-hook-count must be positive")
     device = pick_device(args.device)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S_%f")
     suffix_parts = [args.variant]
@@ -12497,6 +12519,8 @@ def main() -> None:
                     "stepscales"
                     + args.optimizer_step_line_search_scales.replace(",", "_")
                 )
+    if args.calculator_hook_count != 1:
+        suffix_parts.append(f"hooks{args.calculator_hook_count}")
     if args.calculator_injection_mode != "add":
         suffix_parts.append(args.calculator_injection_mode)
     if args.calculator_bottleneck_mode != "none":
@@ -12734,7 +12758,8 @@ def main() -> None:
         "architecture: "
         f"n_layer={args.n_layer} n_head={args.n_head} "
         f"n_embd={args.n_embd} mlp_expansion={args.mlp_expansion} "
-        f"hook_after_layer={args.calculator_hook_after_layer}"
+        f"hook_after_layer={args.calculator_hook_after_layer} "
+        f"hook_count={args.calculator_hook_count}"
     )
     print(f"run root: {base_run_dir}")
 

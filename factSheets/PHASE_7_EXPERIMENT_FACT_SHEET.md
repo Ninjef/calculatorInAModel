@@ -8849,3 +8849,39 @@ Accounting interpretation:
   and result-head parameters by the number of active calculators.
 - Future many-calculator claims need either a true multi-hook/routed diagnostic
   or a non-enumerative target construction, not more op19/op29 seed replication.
+
+Same-layer multi-hook forward support:
+
+```text
+GPTConfig.calculator_hook_count
+scripts/overfit_one_batch.py --calculator-hook-count
+```
+
+Smoke command:
+
+```bash
+PYTHONPATH=. PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 scripts/overfit_one_batch.py --variant model-c --digits 1 --steps 0 --batch-size 4 --eval-samples 8 --run-root /tmp/codex_multi_hook_smoke --device cpu --calculator-hook-count 3 --calculator-estimator ste
+```
+
+Smoke result:
+
+- Run root included `model-c-hooks3`.
+- The saved `config.json` had top-level `calculator_hook_count=3` and
+  `model.calculator_hook_count=3`.
+- The saved `metrics.json` had `calculator_hook_count=3`.
+- Trainable parameter groups separated `calculator_hook.input_proj` from
+  `upstream`.
+
+Implementation decision:
+
+```text
+same_layer_multi_hook_forward_support_partial
+```
+
+Implementation interpretation:
+
+- This removes the immediate single-hook implementation blocker for a
+  same-layer multi-calculator diagnostic.
+- It is not yet routed/scattered through the model and does not prove that
+  independent hooks train useful specialized policies. The next many-calculator
+  experiment must add routing/task partitioning and measure per-hook quality.
