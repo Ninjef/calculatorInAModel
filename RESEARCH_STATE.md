@@ -121,13 +121,13 @@ Active directions:
   Hidden-state/candidate-output critics do not look like the scalable bridge:
   pointwise recovery stayed at `0.08-0.26`, and the best pairwise result was
   only `0.40` heldout argmin recovery while using `24/39` result scores.
-- Lower-cost assignment is useful only when it changes scalability. Uniform
+- Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
-  Topk8+unique24 is the first positive: it has cleared two op19 seeds and two
-  op29 range seeds while scoring `24` classes, not the full `39/59`. Accounting
-  shows this changes the scorer slope from `O(C * result_vocab)` to `O(C * 24)`,
-  and the repo now has same-layer multi-hook, left-operand routing, and routed
-  per-hook snapshot metrics; differentiated multi-hook training remains unproven.
+  Topk8+unique24 has cleared two op19 seeds and two op29 range seeds with `24`
+  classes, not the full `39/59`, and changes scorer slope to `O(C * 24)`.
+  A fair two-hook routed source needs cloned/shared output projection: uncloned
+  extra hooks get bad forced-result targets, while cloned topk8+unique24 reaches
+  `0.925` normal with hook calc `0.932/0.917`. This is still source-only.
 
 ## Paused Or Deprioritized Branches
 

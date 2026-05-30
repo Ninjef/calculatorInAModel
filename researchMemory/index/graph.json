@@ -706,6 +706,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/142-cloned-output-projection-makes-a-routed-two-hook-topk-source-train-both-hooks",
+      "target": "researchMemory/hypotheses/phase7/142-cloned-output-projection-makes-a-routed-two-hook-topk-source-train-both-hooks.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -798,6 +803,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-routed-multi-hook-snapshot-metrics.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-routed-cloned-output-source-gate.md",
       "type": "supported_by"
     },
     {
@@ -2263,6 +2273,13 @@
       "source_path": "researchMemory/hypotheses/phase7/141-routed-snapshot-metrics-expose-per-hook-quality-but-do-not-prove-routed-training.md",
       "status": "PARTIAL",
       "title": "Routed snapshot metrics expose per-hook quality but do not prove routed training."
+    },
+    {
+      "id": "doc/142-cloned-output-projection-makes-a-routed-two-hook-topk-source-train-both-hooks",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/142-cloned-output-projection-makes-a-routed-two-hook-topk-source-train-both-hooks.md",
+      "status": "MIXED-POSITIVE",
+      "title": "Cloned output projection makes a routed two-hook topk source train both hooks."
     },
     {
       "id": "doc/phase7-direction-memory",

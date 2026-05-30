@@ -89,6 +89,7 @@ class TrainConfig:
     answer_decoder_interaction: str
     semantic_decoder_checkpoint: str | None
     semantic_decoder_checkpoint_load_scope: str
+    clone_primary_calculator_output_proj: bool
     adaptive_interface_loss_weight: float
     adaptive_interface_loss_decay_steps: int
     adaptive_interface_loss_floor: float
@@ -831,6 +832,9 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_policy_improvement_assignment_unique_results",
         "result_policy_improvement_assignment_target_accuracy",
         "result_policy_improvement_assignment_learned_target_fraction",
+        "result_policy_improvement_assignment_forced_eval_count",
+        "result_policy_active_hook_count",
+        "result_policy_route_distribution",
         "result_policy_stabilization_temperature",
         "result_policy_entropy",
         "result_policy_effective_results",
@@ -1793,6 +1797,14 @@ def result_policy_stabilization_loss(
     if model.cfg.calculator_action_head != "result_space":
         raise ValueError("result policy stabilization requires result-space logits")
     result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    routes = None
+    hook_count = 1
+    if hasattr(model, "calculator_hook_modules") and hasattr(
+        model, "_calculator_hook_routes"
+    ):
+        hooks = model.calculator_hook_modules()
+        hook_count = len(hooks)
+        routes = model._calculator_hook_routes(batch.x, hook_count)
     result_probs = torch.softmax(result_logits / temperature, dim=-1)
     result_entropy = -(
         result_probs * result_probs.clamp_min(1e-12).log()
@@ -1819,6 +1831,7 @@ def result_policy_stabilization_loss(
     )
     assignment_metrics: dict[str, float | int] = {}
     assignment_objective = result_logits.new_zeros(())
+    assignment_targets: torch.Tensor | None = None
     if improvement_assignment_weight > 0:
         use_cached_exact_assignment = (
             improvement_assignment_refresh_interval > 1
@@ -2004,6 +2017,14 @@ def result_policy_stabilization_loss(
         "result_policy_improvement_assignment_refresh_interval": int(
             improvement_assignment_refresh_interval
         ),
+        "result_policy_improvement_assignment_forced_eval_count": int(
+            batch.x.shape[0]
+            * int(
+                assignment_metrics.get(
+                    "result_policy_improvement_assignment_scored_count", 0
+                )
+            )
+        ),
         "result_policy_stabilization_temperature": float(temperature),
         "result_policy_entropy": float(result_entropy.mean().detach().item()),
         "result_policy_effective_results": float(
@@ -2033,6 +2054,48 @@ def result_policy_stabilization_loss(
             .item()
         ),
     }
+    if routes is not None:
+        metrics["result_policy_active_hook_count"] = int(hook_count)
+        metrics["result_policy_route_distribution"] = compact_distribution(
+            [int(value) for value in routes.detach().cpu().tolist()]
+        )
+        assignment_targets_for_routes = assignment_targets
+        if assignment_targets_for_routes is not None:
+            assigned_mask_for_routes = assignment_targets_for_routes >= 0
+            true_sum_for_routes = true_sum.to(assignment_targets_for_routes.device)
+            result_pred_for_routes = result_pred.detach().to(
+                assignment_targets_for_routes.device
+            )
+            routes_for_metrics = routes.to(assignment_targets_for_routes.device)
+            for hook_idx in sorted(set(int(value) for value in routes.detach().cpu().tolist())):
+                route_mask = routes_for_metrics == hook_idx
+                route_count = int(route_mask.sum().detach().item())
+                route_assigned = route_mask & assigned_mask_for_routes
+                assigned_count = int(route_assigned.sum().detach().item())
+                prefix = f"result_policy_hook_{hook_idx}"
+                metrics[f"{prefix}_route_count"] = route_count
+                metrics[f"{prefix}_assignment_fraction"] = (
+                    assigned_count / max(route_count, 1)
+                )
+                if assigned_count > 0:
+                    assigned_targets = assignment_targets_for_routes[route_assigned]
+                    metrics[f"{prefix}_assignment_target_accuracy"] = float(
+                        (assigned_targets == true_sum_for_routes[route_assigned])
+                        .float()
+                        .mean()
+                        .detach()
+                        .item()
+                    )
+                    metrics[f"{prefix}_assignment_learned_target_fraction"] = float(
+                        (assigned_targets == result_pred_for_routes[route_assigned])
+                        .float()
+                        .mean()
+                        .detach()
+                        .item()
+                    )
+                else:
+                    metrics[f"{prefix}_assignment_target_accuracy"] = 0.0
+                    metrics[f"{prefix}_assignment_learned_target_fraction"] = 0.0
     metrics.update(assignment_metrics)
     return objective, metrics
 
@@ -2427,9 +2490,20 @@ def calculator_read_result_logits_and_input(
             ],
             dim=-1,
         )
-    if model.calculator_hook.result_proj is None:
-        raise ValueError("calculator result logits require a result projection")
-    return model.calculator_hook.result_proj(result_input), result_input, positions
+    hooks = model.calculator_hook_modules()
+    routes = model._calculator_hook_routes(batch.x, len(hooks))
+    if routes is None:
+        if model.calculator_hook.result_proj is None:
+            raise ValueError("calculator result logits require a result projection")
+        return model.calculator_hook.result_proj(result_input), result_input, positions
+    logits_by_hook = []
+    for hook in hooks:
+        if hook.result_proj is None:
+            raise ValueError("calculator result logits require a result projection")
+        logits_by_hook.append(hook.result_proj(result_input))
+    stacked_logits = torch.stack(logits_by_hook, dim=1)
+    active_logits = stacked_logits[batch_idx, routes]
+    return active_logits, result_input, positions
 
 
 def adaptive_interface_loss(
@@ -6644,6 +6718,14 @@ def freeze_semantic_decoder_parameters(model: TinyGPT) -> None:
                 param.requires_grad = False
 
 
+def clone_primary_calculator_output_proj_to_extra_hooks(model: TinyGPT) -> None:
+    if model.calculator_hook is None:
+        return
+    source_state = model.calculator_hook.output_proj.state_dict()
+    for hook in model.extra_calculator_hooks:
+        hook.output_proj.load_state_dict(source_state)
+
+
 def freeze_upstream_encoder_parameters(model: TinyGPT) -> None:
     for module in [model.tok_emb, model.pos_emb, model.blocks, model.ln_f, model.lm_head]:
         for param in module.parameters():
@@ -7244,6 +7326,8 @@ def run_variant(
             args.semantic_decoder_checkpoint,
             load_scope=args.semantic_decoder_checkpoint_load_scope,
         )
+    if args.clone_primary_calculator_output_proj:
+        clone_primary_calculator_output_proj_to_extra_hooks(model)
     input_proj_anchor = None
     if args.input_proj_anchor_checkpoint is not None:
         input_proj_anchor = load_input_proj_anchor(
@@ -7396,6 +7480,7 @@ def run_variant(
             else None
         ),
         semantic_decoder_checkpoint_load_scope=args.semantic_decoder_checkpoint_load_scope,
+        clone_primary_calculator_output_proj=args.clone_primary_calculator_output_proj,
         adaptive_interface_loss_weight=args.adaptive_interface_loss_weight,
         adaptive_interface_loss_decay_steps=args.adaptive_interface_loss_decay_steps,
         adaptive_interface_loss_floor=args.adaptive_interface_loss_floor,
@@ -9916,6 +10001,9 @@ def run_variant(
     )
     metrics["calculator_hook_count"] = args.calculator_hook_count
     metrics["calculator_hook_routing"] = args.calculator_hook_routing
+    metrics["clone_primary_calculator_output_proj"] = (
+        args.clone_primary_calculator_output_proj
+    )
     metrics["relaxed_calculator_temperature"] = args.relaxed_calculator_temperature
     metrics["relaxed_calculator_final_temperature"] = (
         args.relaxed_calculator_final_temperature
@@ -10037,7 +10125,10 @@ def run_variant(
             answer_format=args.answer_format,
         )
         trace_summary = summarize_trace_rows(trace_rows)
+        routed_trace_summary = summarize_routed_trace_rows(trace_rows)
         metrics["diagnostic_summary"] = trace_summary
+        if routed_trace_summary:
+            metrics["diagnostic_routed_summary"] = routed_trace_summary
         counterfactual_samples = min(args.eval_samples, 128)
         metrics["counterfactuals"] = {
             "samples": counterfactual_samples,
@@ -10093,6 +10184,10 @@ def run_variant(
         (run_dir / "diagnostic_summary.json").write_text(
             json.dumps(trace_summary, indent=2) + "\n"
         )
+        if routed_trace_summary:
+            (run_dir / "diagnostic_routed_summary.json").write_text(
+                json.dumps(routed_trace_summary, indent=2) + "\n"
+            )
         if args.calculator_estimator in {
             "adaptive_interface",
             "action_loss_weighted_interface",
@@ -10403,6 +10498,15 @@ def parse_args() -> argparse.Namespace:
             "Load the full checkpoint for backward compatibility, only frozen "
             "answer-decoder/calculator-output semantic tensors, or every "
             "shape-compatible tensor present in the target model."
+        ),
+    )
+    parser.add_argument(
+        "--clone-primary-calculator-output-proj",
+        action="store_true",
+        help=(
+            "Copy the primary calculator hook output projection into extra hooks "
+            "after checkpoint loading, so routed hooks share the same result-to-"
+            "residual semantic interface at initialization."
         ),
     )
     parser.add_argument(
@@ -12546,6 +12650,8 @@ def main() -> None:
             suffix_parts.append(f"causalgapm{args.calculator_causal_gap_margin:g}")
         if args.calculator_result_head_hidden_size > 0:
             suffix_parts.append(f"rhead{args.calculator_result_head_hidden_size}")
+        if args.clone_primary_calculator_output_proj:
+            suffix_parts.append("cloneoutproj")
         if args.freeze_calculator_policy_backbone:
             suffix_parts.append("freezepolicybackbone")
         if args.freeze_calculator_action_head:

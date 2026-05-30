@@ -3494,9 +3494,11 @@ def test_result_policy_assignment_refresh_interval_reuses_cached_targets(
     assert score_calls == 1
     assert first_metrics["result_policy_improvement_assignment_refreshed"] == 1
     assert first_metrics["result_policy_improvement_assignment_scored_count"] == 3
+    assert first_metrics["result_policy_improvement_assignment_forced_eval_count"] == 12
     assert second_metrics["result_policy_improvement_assignment_refreshed"] == 0
     assert second_metrics["result_policy_improvement_assignment_target_age"] == 1
     assert second_metrics["result_policy_improvement_assignment_scored_count"] == 0
+    assert second_metrics["result_policy_improvement_assignment_forced_eval_count"] == 0
     assert second_metrics[
         "result_policy_improvement_assignment_target_accuracy"
     ] == pytest.approx(
@@ -4377,6 +4379,82 @@ def test_snapshot_rows_report_routed_hook_quality() -> None:
     assert 0.0 <= row["hook_1_calculator_result_accuracy"] <= 1.0
 
 
+def test_routed_result_policy_reads_active_hook_logits() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_routed_logits", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_hook_count=2,
+        calculator_hook_routing="left_operand_mod",
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_estimator="ste",
+        calculator_action_head="result_space",
+        calculator_bottleneck_mode="none",
+    )
+    model = TinyGPT(cfg)
+    assert model.calculator_hook is not None
+    assert len(model.extra_calculator_hooks) == 1
+    assert model.calculator_hook.result_proj is not None
+    assert model.extra_calculator_hooks[0].result_proj is not None
+    with torch.no_grad():
+        model.calculator_hook.result_proj.weight.zero_()
+        model.calculator_hook.result_proj.bias.zero_()
+        model.calculator_hook.result_proj.bias[1] = 10.0
+        model.extra_calculator_hooks[0].result_proj.weight.zero_()
+        model.extra_calculator_hooks[0].result_proj.bias.zero_()
+        model.extra_calculator_hooks[0].result_proj.bias[2] = 10.0
+    batch = ArithmeticBatch(
+        x=torch.tensor(
+            [
+                [0, PLUS_ID, 0, EQ_ID],
+                [1, PLUS_ID, 0, EQ_ID],
+            ]
+        ),
+        y=torch.zeros((2, 4), dtype=torch.long),
+        loss_mask=torch.zeros((2, 4), dtype=torch.bool),
+    )
+
+    result_logits, _, _, _ = overfit_script.calculator_read_result_logits(model, batch)
+
+    assert result_logits.argmax(dim=-1).tolist() == [1, 2]
+    _, metrics = overfit_script.result_policy_stabilization_loss(
+        model,
+        batch,
+        num_digits=1,
+        step=0,
+        temperature=1.0,
+        entropy_weight=0.0,
+        batch_diversity_weight=0.0,
+        improvement_assignment_weight=1.0,
+        improvement_assignment_min_improvement=0.0,
+        improvement_assignment_quota_multiplier=1.0,
+        improvement_assignment_sample_count=0,
+        improvement_assignment_unique_sampling=False,
+        improvement_assignment_policy_topk_count=0,
+        improvement_assignment_refresh_interval=1,
+        improvement_assignment_cache=None,
+        chunk_size=5,
+    )
+    assert metrics["result_policy_active_hook_count"] == 2
+    assert json.loads(metrics["result_policy_route_distribution"]) == {"0": 1, "1": 1}
+    assert metrics["result_policy_improvement_assignment_forced_eval_count"] == 10
+    assert metrics["result_policy_hook_0_route_count"] == 1
+    assert metrics["result_policy_hook_1_route_count"] == 1
+
+
 def test_freeze_semantic_decoder_preserves_decoder_but_not_interface() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_script_adaptive_freeze", script_path)
@@ -4411,6 +4489,46 @@ def test_freeze_semantic_decoder_preserves_decoder_but_not_interface() -> None:
     assert model.extra_calculator_hooks[0].input_proj.weight.requires_grad
     assert not model.extra_calculator_hooks[0].output_proj.weight.requires_grad
     assert not model.answer_decoder.weight.requires_grad
+
+
+def test_clone_primary_calculator_output_projection_to_extra_hooks() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_script_clone_hook_output", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_hook_count=2,
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_estimator="ste",
+        calculator_bottleneck_mode="none",
+    )
+    model = TinyGPT(cfg)
+    assert model.calculator_hook is not None
+    assert len(model.extra_calculator_hooks) == 1
+    with torch.no_grad():
+        model.calculator_hook.output_proj.weight.fill_(0.25)
+        model.extra_calculator_hooks[0].output_proj.weight.fill_(1.0)
+
+    overfit_script.clone_primary_calculator_output_proj_to_extra_hooks(model)
+
+    assert torch.equal(
+        model.extra_calculator_hooks[0].output_proj.weight,
+        model.calculator_hook.output_proj.weight,
+    )
 
 
 def test_freeze_calculator_action_head_preserves_surrounding_model() -> None:

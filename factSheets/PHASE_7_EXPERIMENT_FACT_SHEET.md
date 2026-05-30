@@ -8955,3 +8955,51 @@ Routed snapshot interpretation:
   from the standard snapshot artifact.
 - This is instrumentation only. It does not show that routed hooks specialize
   or train under exact/topk assignment pressure.
+
+Routed two-hook source gate with cloned output interface:
+
+Implementation additions:
+
+```text
+scripts/overfit_one_batch.py --clone-primary-calculator-output-proj
+training_curve.csv:
+result_policy_improvement_assignment_forced_eval_count
+result_policy_active_hook_count
+result_policy_route_distribution
+result_policy_hook_{i}_route_count
+result_policy_hook_{i}_assignment_fraction
+result_policy_hook_{i}_assignment_target_accuracy
+```
+
+Uncloned controls:
+
+- Exact source200:
+  `runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_exact_hooks2_source200_cpu/.../model-c-2digit-seed43`
+  reached final eval `0.4825`, step-200 normal `0.5075`, oracle `0.5675`,
+  hook calc `0.8767/0.0387`, and `15,600` forced evals per full-grid step.
+- Topk8+unique24 source200:
+  `runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks2_source200_cpu/.../model-c-2digit-seed43`
+  reached final eval `0.5250`, step-200 normal `0.5525`, oracle `0.5675`,
+  hook calc `0.9315/0.0110`, and `9,600` forced evals per full-grid step.
+- Exact source50 with route metrics showed hook 1 was not starved, but its
+  assignment target accuracy was only `0.0839` versus hook 0 `1.0000`.
+
+Cloned-output diagnostics:
+
+- Exact source50 with `--clone-primary-calculator-output-proj` raised oracle
+  eval to `1.0000`; step-50 route target accuracy was `0.8831/0.9333`.
+- Topk8+unique24 source200 with cloned output projection:
+  `runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks2_cloneout_source200_cpu/.../model-c-2digit-seed43`
+  reached final eval `361/400 = 0.9025`, step-200 normal `0.9250`, oracle
+  `1.0000`, forced-random `0.0325`, hook calc `0.9315/0.9171`, and target
+  accuracy `1.0000` while scoring `24/39` results.
+
+Interpretation:
+
+- The first routed hook-1 collapse was not evidence against routing itself.
+  It was caused by a frozen random extra-hook output projection.
+- Cloning/sharing the output semantic interface is a prerequisite for fair
+  multi-hook assignment diagnostics.
+- The cloned topk result is a routed source positive, not a solved thesis
+  result: injection-zero was still `0.4325`, and no additive handoff/fresh seed
+  has been run yet.

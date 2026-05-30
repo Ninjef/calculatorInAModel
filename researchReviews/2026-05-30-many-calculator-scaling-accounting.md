@@ -70,6 +70,22 @@ accuracy, and sampled log-probability. This closes an observability gap for the
 next routed training diagnostic; it is not by itself evidence that hooks train
 or specialize.
 
+The first routed training gate found a real prerequisite. With two routed hooks
+and frozen semantic decoder/output interface, extra hooks must not keep random
+frozen output projections. Uncloned exact/topk source200 runs mostly trained
+hook 0 and left hook 1 near chance. A 50-step exact route diagnostic showed
+hook 1 was assigned targets, but they were semantically wrong (`0.0839` target
+accuracy) because forced-result scoring through its random output projection
+did not mean the same thing as the primary calculator output.
+
+Adding `--clone-primary-calculator-output-proj` made the routed gate fair. The
+cloned exact source50 route target accuracies were `0.8831/0.9333`, and the
+cloned topk8+unique24 source200 reached `0.9250` step-200 normal with hook calc
+`0.9315/0.9171` while scoring `24/39` results (`9,600` forced evals per
+full-grid step versus `15,600` exact). This is closer to many-calculator source
+training, but it is not yet a non-bottleneck proof: injection-zero was `0.4325`,
+and no trusted handoff or fresh seed has been run.
+
 ## What Should Stop
 
 - More op19 or op29 topk8+unique24 seed replications as scalability evidence.
