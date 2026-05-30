@@ -2,10 +2,8 @@
 
 Last updated: 2026-05-29
 
-Maintenance rule: keep this file under about `200` lines. Replace stale
-synthesis instead of appending history. Put older strategic snapshots in
-`researchReviews/`, topic memories in `researchMemory/`, and raw evidence in
-`factSheets/` or `aiAgentWorkHistory/`.
+Maintenance rule: keep under about `200` lines. Replace stale synthesis; move
+older context to reviews, memories, fact sheets, or work logs.
 
 ## Overarching Goal
 
@@ -123,9 +121,11 @@ Active directions:
   full-grid early handoff gate: one sampled negative per prompt reached
   `0.3225` source calc / `0.3600` final eval at 200 steps and `0.6600` final
   eval under trusted 600-step frozen-policy handoff, beating the matched
-  scheduled forced-true 200-step handoff (`0.4150`) with low controls. The
-  neg-4 full-grid version was too costly locally, so treat one-negative margin
-  as the scalable variant to extend or replicate.
+  scheduled forced-true 200-step handoff (`0.4150`) with low controls. Longer
+  one-negative source training is mixed-positive: it improves handoff to about
+  `0.73-0.74` final / `0.785` best snapshot, but remains checkpoint-sensitive
+  and does not clearly beat scheduled forced-true step-600 final handoff
+  (`0.7725`). The neg-4 full-grid version was too costly locally.
 - A genuinely different credit-assignment family such as target propagation or
   local targets. Exact `policy_reweighted_t1` is positive and survives
   answer-only retention, but full enumeration is not scalable. Naive sparse

@@ -258,6 +258,14 @@ Memory:
   trusted 600-step frozen-policy handoff reached `0.6600` final eval /
   `0.7050` step-600 normal with low controls, above matched scheduled
   forced-true (`0.4150`) and baseline (`0.2525`).
+- Longer one-negative forced-margin training is mixed-positive but not a clean
+  replacement for scheduled forced-true. A 600-step source run reached
+  `0.5225` source calc and near-perfect forced geometry, but trusted handoff
+  was `0.7330` final / `0.7500` step-600 normal. Continuing the exact 200-step
+  positive checkpoint found a better intermediate handoff (`0.7400` final /
+  `0.7850` step-600 normal) but degraded with another 200 source steps.
+  Longer margin therefore improves over the 200-step margin handoff (`0.6600`)
+  but does not clearly beat scheduled forced-true step-600 final (`0.7725`).
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -283,6 +291,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-conjunctive-recovery-trigger.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-source-aux-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-op19-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-long-source-gate.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 
 ## Direction: Target Propagation / Local Targets

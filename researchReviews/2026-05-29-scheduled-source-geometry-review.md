@@ -316,3 +316,29 @@ lesson is unchanged but sharper: geometry and slope remain diagnostics; actual
 handoff gates decide. The one-negative forced-margin branch is now worth a
 longer-horizon (`400/600`) or fresh-seed check, while the 4-negative full-grid
 variant should not be repeated without a compute-reduction plan.
+
+### Longer One-Negative Forced-Margin Source
+
+The longer one-negative check was mixed-positive:
+
+- A fresh 600-step source run improved source calc to `0.5225` and final source
+  eval to `0.4800`; forced-result geometry was nearly perfect by step `600`
+  (`forced_best_true=0.9925`).
+- Trusted handoff from that step-600 checkpoint reached `0.7330` final eval /
+  `0.7500` step-600 normal, with injection-zero `0.0000`, forced-random
+  `0.0225`, and learned calc `0.4975`.
+- Continuing the exact prior positive 200-step checkpoint gave a better
+  intermediate source checkpoint after 200 continuation steps: source calc
+  `0.4725`, `forced_best_true=0.9675`, and trusted handoff `0.7400` final eval
+  / `0.7850` step-600 normal, with injection-zero `0.0000`, forced-random
+  `0.0300`, and learned calc `0.4175`.
+- Continuing that exact lineage to 400 source-continuation steps degraded
+  source final eval back to `0.3600`.
+
+Updated steering: one-negative forced-margin is a real handoff-improving
+mechanism, but "just run it longer" is not enough. It improves over its
+200-step handoff (`0.6600`) yet does not clearly beat scheduled forced-true
+step-600 final handoff (`0.7725`). Future work should either test a late
+source-recovery/retention phase for the margin source-policy bottleneck, or
+replicate on a fresh seed; do not use near-perfect forced geometry as a
+substitute for actual handoff.

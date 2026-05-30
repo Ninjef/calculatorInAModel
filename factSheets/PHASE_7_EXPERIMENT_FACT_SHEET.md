@@ -7567,3 +7567,70 @@ Interpretation:
 - Do not repeat the 4-negative full-grid branch without a compute-reduction
   plan. The next useful test is a longer one-negative forced-margin source
   horizon or fresh-seed stability check with the same handoff arbiter.
+
+## 2026-05-29 Additive Forced-Margin Long Source Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-long-source-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_additive_forced_margin/op19_long_neg1
+runs/2026-05-29_phase7_additive_forced_margin/op19_continue_from_step200_neg1
+```
+
+Question:
+
+Does the one-negative forced-margin handoff lift compound at longer source
+horizons, and does it beat the scheduled forced-true step-600 source handoff?
+
+Fresh 600-step source run:
+
+| Source checkpoint | Source calc | Source normal snapshot | Source final eval | Forced best=true | 50-step slope final loss |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| step `200` | `0.3025` | `0.3100` | n/a | `0.7225` | `1.3404` |
+| step `400` | `0.4525` | `0.4600` | n/a | `0.9450` | `1.2446` |
+| step `600` | `0.5225` | `0.4975` | `0.4800` | `0.9925` | `1.2365` |
+
+Trusted handoffs from the fresh source run:
+
+| Source checkpoint | Handoff final eval | Step-600 normal | Injection-zero | Forced-random | Learned calc |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| step `400` | `0.7030` | `0.7025` | `0.0000` | `0.0400` | `0.4250` |
+| step `600` | `0.7330` | `0.7500` | `0.0000` | `0.0225` | `0.4975` |
+
+Continuation from the exact prior positive 200-step checkpoint:
+
+| Continuation checkpoint | Source calc | Source normal snapshot | Source final eval | Forced best=true | 50-step slope final loss |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| step `0` | `0.3225` | `0.3275` | n/a | n/a | n/a |
+| step `200` | `0.4725` | `0.4950` | n/a | `0.9675` | `1.1494` |
+| step `400` | `0.3850` | `0.4075` | `0.3600` | `0.9800` | `1.2038` |
+
+Trusted handoff from the continuation step-200 checkpoint:
+
+| Source checkpoint | Handoff final eval | Step-600 normal | Injection-zero | Forced-random | Learned calc |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| continued step `200` | `0.7400` | `0.7850` | `0.0000` | `0.0300` | `0.4175` |
+
+Decision:
+
+```text
+additive_forced_margin_long_source_mixed_positive
+```
+
+Interpretation:
+
+- Longer one-negative margin improves over the 200-step margin handoff
+  (`0.6600`) and keeps controls low.
+- It does not clearly beat the scheduled forced-true step-600 source final
+  handoff (`0.7725`), although its best logged handoff snapshot (`0.7850`) is
+  competitive.
+- The exact positive lineage is checkpoint-sensitive: 200 continuation steps
+  helped, 400 continuation steps degraded source final eval.
+- Near-perfect forced-result geometry still did not guarantee the best final
+  handoff, so actual 600-step handoff remains the arbiter.
