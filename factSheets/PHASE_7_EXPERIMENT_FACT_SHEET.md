@@ -8739,3 +8739,41 @@ Fresh-seed interpretation:
 - Do not run more op19 `rhead64` topk8+unique24 fresh-seed replications as
   novelty. Next validation should move to range, many-calculator cost,
   reduced prescriptiveness, or a non-enumerative replacement.
+
+Op29 range validation against exact ceiling:
+
+```text
+runs/2026-05-30_phase7_assignment_cost_reduction/op29_rhead64_topk8_unique24_source630_cpu/2026-05-30_113818_335991_model-c-op0-29-fullgrid-direct_feedback_alignment-answer_decoder-adec-product/model-c-2digit-seed29
+runs/2026-05-30_phase7_assignment_cost_reduction/op29_rhead64_topk8_unique24_handoff600_from_step630_cpu/2026-05-30_121551_265986_model-c-op0-29-fullgrid-adec-product/model-c-2digit-seed29
+```
+
+Both runs used CLI seed `27`, recorded as effective model seed `29`, matching
+the exact full-grid op29 `rhead64` ceiling seed. Assignment scoring used
+`topk8+unique24`, so each prompt scored `24/59` result classes rather than
+the exact `59/59`.
+
+| Run | Key result |
+| --- | --- |
+| Source step `630` | `1.0000` normal/source calc, `0.0233` injection-zero, `1.0000` oracle, `0.0144` forced-random |
+| Source final eval | `900/900 = 1.0000`; final metrics forced-random `0.0078125` on 128 samples |
+| Handoff step `600` | `1.0000` normal, `0.0356` injection-zero, `1.0000` oracle, `1.0000` learned calc, `0.0189` forced-random |
+| Handoff final eval | `900/900 = 1.0000`; final metrics forced-random `0.0078125` on 128 samples |
+
+Range decision:
+
+```text
+policy_topk_unique24_op29_range_handoff_positive
+```
+
+Range interpretation:
+
+- The policy-aware sparse assignment proposal preserved the op29 exact-grid
+  source/handoff ceiling on the matched effective-seed-29 comparator while
+  scoring `24/59` result classes instead of `59/59`.
+- This strengthens the scalability story beyond op19, but it remains one op29
+  seed and still uses hard assignment, forced-margin source shaping, a
+  pretrained product decoder, hidden result-head capacity, and frozen-policy
+  transfer.
+- Do not rerun this same op29 effective-seed-29 topk8+unique24 path as novelty.
+  Next work should test a fresh op29 seed, op39/many-calculator cost with a
+  declared compute hypothesis, or reduced prescriptiveness.

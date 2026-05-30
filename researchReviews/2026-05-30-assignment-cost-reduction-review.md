@@ -80,6 +80,15 @@ causal: injection-zero `0.0475`, learned calc `1.0000`, and forced-random
 `0.0250`. That makes the proposal a replicated op19 transfer result, but not
 yet a range-scaled, many-calculator, or non-prescriptive method.
 
+The first range validation is positive. On the op29 `rhead64` exact-ceiling
+seed, `topk8+unique24` scored `24/59` result classes and still reached
+`1.0000` source final eval plus `1.0000` trusted handoff final eval. Step-600
+handoff controls were causal: injection-zero `0.0356`, learned calc `1.0000`,
+and forced-random `0.0189`. This is a real range/cost improvement over exact
+assignment on that seed, though it remains one op29 seed and still uses hard
+assignment, forced-margin source shaping, hidden result-head capacity, a
+pretrained decoder, and frozen transfer.
+
 ## What Should Stop
 
 - Uniform sampled hard-assignment count ladders on the same op19 source gate.
@@ -100,11 +109,13 @@ yet a range-scaled, many-calculator, or non-prescriptive method.
 - More op19 `rhead64` topk8+unique24 fresh-seed source630 plus handoff600
   replications. Two seeds have cleared; the next axis should be about
   scalability or prescriptiveness.
+- The same effective-seed-29 op29 `rhead64` topk8+unique24 source630 plus
+  handoff600 path. It has cleared against the exact-grid ceiling.
 
 ## What Deserves Compute
 
-- Validate policy-aware top-k proposals beyond replicated op19 transfer:
-  larger range, many-calculator cost, or reduced prescriptiveness.
+- Validate policy-aware top-k proposals beyond one-seed op29 transfer:
+  fresh range seed, op39/many-calculator cost, or reduced prescriptiveness.
 - More active/non-uniform proposals only if they beat the topk8+unique baseline
   or explain when/why top-k coverage fails.
 - Structured proposals that exploit arithmetic/result geometry while still
@@ -118,9 +129,9 @@ yet a range-scaled, many-calculator, or non-prescriptive method.
 
 ## Are We Closer?
 
-Slightly more than before. This did not solve scalable assignment, but it
-closed tempting cheap paths and turned policy-aware sparse assignment into a
-replicated op19 baseline. The next direction is narrower: reduce assignment
-cost only with a proposal/credit mechanism that preserves this baseline under
-range or many-calculator pressure, or replace hard assignment with a less
-prescriptive credit signal.
+Meaningfully closer on the scalable-assignment axis, but not done. This did not
+solve non-prescriptive credit assignment, but it closed tempting cheap paths and
+turned policy-aware sparse assignment into a replicated op19 baseline plus a
+one-seed op29 range positive. The next direction is narrower: replicate or
+stress this under range/many-calculator pressure, or replace hard assignment
+with a less prescriptive credit signal.

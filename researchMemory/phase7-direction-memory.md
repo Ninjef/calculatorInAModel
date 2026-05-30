@@ -126,12 +126,15 @@ Memory:
   also reached `1.0000` source final and `1.0000` trusted handoff final, with
   step-600 handoff learned calc `1.0000`, injection-zero `0.0475`, and
   forced-random `0.0250`.
+- Op29 range validation is positive on the exact-ceiling seed: topk8+unique24
+  scored `24/59` result classes yet reached `1.0000` source final and
+  `1.0000` trusted handoff final, with step-600 handoff learned calc `1.0000`,
+  injection-zero `0.0356`, and forced-random `0.0189`.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
-  next work should validate policy-aware proposals on larger ranges or
-  many-calculator cost, reduce prescriptiveness, or pursue non-enumerative
-  credit assignment.
+  next work should replicate range, test many-calculator cost, reduce
+  prescriptiveness, or pursue non-enumerative credit assignment.
 
 Representative evidence:
 
@@ -143,6 +146,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-assignment-proposal-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-source-handoff-validation.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-fresh-seed-validation.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-range-validation.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `HYPOTHESIS_LEDGER.md`
 
