@@ -8365,3 +8365,53 @@ Interpretation:
 - It is still not the final scalable/non-prescriptive solution because the
   source uses hard improvement assignment, true-result forced-margin pressure,
   a pretrained semantic decoder, and frozen-policy transfer.
+
+## 2026-05-30 Forced-Margin op29 Range Stress
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-forced-margin-op29-range-stress.md
+```
+
+Runs:
+
+```text
+runs/2026-05-30_phase7_forced_margin_range_stress/op29_product_oracle_decoder_steps1000_cpu
+runs/2026-05-30_phase7_forced_margin_range_stress/op29_product_forced_margin_source630_cpu
+runs/2026-05-30_phase7_forced_margin_range_stress/op29_product_handoff600_from_step630_cpu
+```
+
+Question:
+
+Does the automated forced-margin staged benchmark survive increasing the grid
+from op19 (`400` prompts, `39` result classes) to op29 (`900` prompts, `59`
+result classes)?
+
+Results:
+
+| Run | Key result |
+| --- | --- |
+| Product op29 oracle decoder | `1.0000` full-grid final eval; oracle snapshots `1.0000` by step `500` |
+| Source step `600` | `0.3533` normal/source calc, injection-zero `0.0233`, oracle `1.0000` |
+| Source step `630` | `0.6889` normal/source calc, injection-zero `0.0233`, oracle `1.0000` |
+| Source final eval | `642/900 = 0.7133` |
+| Handoff step `600` | `0.8278` normal, `0.0344` injection-zero, `0.8411` oracle, `0.6522` learned calc, `0.0189` forced-random |
+| Handoff final eval | `768/900 = 0.8533` |
+
+Decision:
+
+```text
+automated_forced_margin_recovery_op29_range_stress_mixed_negative
+```
+
+Interpretation:
+
+- The calculator path remains causal at op29: normal handoff accuracy is far
+  above injection-zero and forced-random controls.
+- The high gate does not clear. Source acquisition is the limiting factor:
+  late recovery helps, but the source only reaches `0.6889` on the full-grid
+  step-630 snapshot.
+- Do not treat the current full-grid hard-assignment forced-margin recipe as a
+  scalable range solution. Further range work needs changed source acquisition
+  or a declared assignment-cost reduction strategy.

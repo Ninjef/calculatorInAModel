@@ -97,14 +97,12 @@ Active directions:
   forced-margin with late recovery is the current benchmark: manual recovery
   raised handoff to `0.8700`; automated recovery hit `0.9875` final /
   `0.9800` step-600 normal on one fresh seed; a second fresh seed cleared at
-  `0.8975` / `0.9050`; and a wider `n_embd=32`, `n_head=2` stress with the
-  older non-product decoder and then a matching product decoder both reached
-  `1.0000` final / step-600 normal. Product parity had zero-injection
-  `0.0000`, forced-random `0.0225`, and learned calc `0.9700` at step `600`.
-  This is useful staged-transfer evidence, but remains prescriptive because it
-  uses hard assignment and true-result
-  contrastive forcing. Treat it as a benchmark source recipe, not a local knob
-  branch.
+  `0.8975` / `0.9050`; and wider `n_embd=32`, `n_head=2` non-product and
+  product-decoder op19 stresses both reached `1.0000` final / step-600 normal.
+  But the first range stress, op29 product, missed the high gate: source calc
+  recovered only `0.3533 -> 0.6889`, and trusted handoff reached `0.8533`
+  final / `0.8278` step-600 normal with low controls. Treat forced-margin as a
+  strong op19 staged benchmark, not a range-scalable recipe.
 - Target propagation/local targets are now a ceiling and diagnostic, not the
   current scalable mainline. Exact `policy_reweighted_t1` is positive and
   survives retention, but full enumeration is not scalable. Simple
@@ -159,9 +157,10 @@ These branches should not continue without a new mechanism:
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark
    to beat; further forced-margin work must stress a new thesis-relevant axis
-   such as larger operand range, larger architecture, or many-calculator cost,
-   or remove hard assignment / true-result forcing. Product-decoder parity for
-   the wider model has already cleared.
+   such as larger architecture or many-calculator cost, or remove hard
+   assignment / true-result forcing. Product-decoder parity cleared; op29 range
+   stress missed, so do not jump to op49 with the same full-grid recipe as
+   novelty.
 4. If reducing hard-assignment cost, state the scalability hypothesis
    up front and compare against the exact-grid assignment ceiling rather than
    only against prior cheap selectors.

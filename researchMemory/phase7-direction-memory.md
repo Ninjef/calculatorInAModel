@@ -313,6 +313,13 @@ Memory:
   additive handoff reached `1.0000` final / step-600 normal with `0.0000`
   injection-zero and `0.0225` forced-random at step `600`. This removes the
   non-product decoder caveat but remains prescriptive staged transfer.
+- The first larger-range stress is mixed-negative. At `operand_max=29`, the
+  wider product oracle decoder reached full-grid `1.0000`, but the same
+  automated forced-margin source recovered only from `0.3533` to `0.6889`
+  source calc and the trusted handoff reached `0.8533` final / `0.8278`
+  step-600 normal with low controls. Range scaling is therefore an unresolved
+  source-acquisition/assignment-cost problem; do not jump to op49 with the same
+  full-grid recipe as novelty.
 - Forced-margin benchmark review: automated recovery is now the staged-transfer
   benchmark to beat, not the next knob branch. Future forced-margin compute
   must stress a new thesis-relevant axis such as product-decoder parity, larger
@@ -363,6 +370,8 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-second-fresh-seed-stability.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-wider-model-scale-stress.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-product-decoder-parity.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-op29-range-stress.md`
+- `researchReviews/2026-05-30-forced-margin-range-stress-review.md`
 - `researchReviews/2026-05-30-forced-margin-benchmark-direction-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-answer-derived-boundary-handoff.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-amortized-critic-diagnostic.md`

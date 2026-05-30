@@ -616,6 +616,16 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/124-automated-forced-margin-recovery-does-not-clear-the-op29-range-stress",
+      "target": "researchMemory/hypotheses/phase7/124-automated-forced-margin-recovery-does-not-clear-the-op29-range-stress.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/125-the-staged-forced-margin-benchmark-is-strong-at-op19-but-not-range-scalable-yet",
+      "target": "researchMemory/hypotheses/phase7/125-the-staged-forced-margin-benchmark-is-strong-at-op19-but-not-range-scalable-yet.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -908,6 +918,16 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-forced-margin-product-decoder-parity.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-forced-margin-op29-range-stress.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "researchReviews/2026-05-30-forced-margin-range-stress-review.md",
       "type": "supported_by"
     },
     {
@@ -1917,6 +1937,20 @@
       "source_path": "researchMemory/hypotheses/phase7/123-automated-forced-margin-recovery-survives-wider-product-decoder-parity.md",
       "status": "POSITIVE",
       "title": "Automated forced-margin recovery survives wider product-decoder parity."
+    },
+    {
+      "id": "doc/124-automated-forced-margin-recovery-does-not-clear-the-op29-range-stress",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/124-automated-forced-margin-recovery-does-not-clear-the-op29-range-stress.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Automated forced-margin recovery does not clear the op29 range stress."
+    },
+    {
+      "id": "doc/125-the-staged-forced-margin-benchmark-is-strong-at-op19-but-not-range-scalable-yet",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/125-the-staged-forced-margin-benchmark-is-strong-at-op19-but-not-range-scalable-yet.md",
+      "status": "REVIEW",
+      "title": "The staged forced-margin benchmark is strong at op19 but not range-scalable yet."
     },
     {
       "id": "doc/phase7-direction-memory",
