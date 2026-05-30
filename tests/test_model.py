@@ -5446,6 +5446,7 @@ def test_training_cli_supports_non_bottleneck_result_space_assignment(
             "--calculator-causal-gap-margin",
             "0.25",
             "--freeze-calculator-policy",
+            "--freeze-semantic-decoder",
             "--result-boundary-target-chunk-size",
             "5",
             "--run-root",
@@ -5478,7 +5479,13 @@ def test_training_cli_supports_non_bottleneck_result_space_assignment(
     trainable_names = {
         group["name"] for group in metrics["trainable_parameter_groups"]
     }
+    trainable_parameters = {
+        parameter
+        for group in metrics["trainable_parameter_groups"]
+        for parameter in group["parameters"]
+    }
     assert "calculator_hook.result_proj" not in trainable_names
+    assert "calculator_hook.output_proj.weight" not in trainable_parameters
     assert (run_dir / "diagnostic_snapshots.csv").exists()
     curve_rows = list(csv.DictReader((run_dir / "training_curve.csv").open()))
     assert "calculator_causal_gap" in curve_rows[-1]

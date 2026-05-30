@@ -7333,24 +7333,7 @@ def run_variant(
         input_proj_anchor = load_input_proj_anchor(
             model, args.input_proj_anchor_checkpoint, device=device
         )
-    if (
-        args.freeze_semantic_decoder
-        and (
-            args.calculator_estimator
-            in {
-                "adaptive_interface",
-                "action_loss_weighted_interface",
-                "action_loss_replay_interface",
-                "action_loss_full_enum_interface",
-                "action_loss_full_enum_joint_interface",
-                "identifiable_full_enum_local_target",
-                "full_enum_expected_answer_loss",
-                "gumbel_concrete_interface",
-                "direct_feedback_alignment",
-            }
-            or use_result_space_reinforce
-        )
-    ):
+    if args.freeze_semantic_decoder:
         freeze_semantic_decoder_parameters(model)
     if (
         args.freeze_upstream_encoder

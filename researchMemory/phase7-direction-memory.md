@@ -163,6 +163,12 @@ Memory:
   exact route targets accurate and let topk8+unique24 train both hooks on op19:
   step-200 normal `0.9250`, hook calc `0.9315/0.9171`, scored `24/39` results.
   This is source-only and still needs handoff/fresh-seed validation.
+- The next routed gate exposed leakage. Strict handoff from the 200-step routed
+  source had high normal but high injection-zero (`0.4925`). A fair `embd32`
+  routed source630 trained both hooks (`1.0000/0.9944`) but still had high
+  injection-zero (`0.4600`), while frozen-upstream source200 reduced leakage
+  (`0.1875`) but undertrained (`0.4150` normal). Routed source acquisition now
+  needs anti-leak pressure or longer frozen-upstream training before handoff.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
@@ -176,6 +182,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-convergence-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-routed-multi-hook-snapshot-metrics.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-routed-cloned-output-source-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-routed-source-leakage-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-sampled-hard-assignment-cost-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-exact-assignment-refresh-cadence-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-unique-sampled-assignment-coverage-gate.md`

@@ -123,11 +123,11 @@ Active directions:
   only `0.40` heldout argmin recovery while using `24/39` result scores.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
-  Topk8+unique24 has cleared two op19 seeds and two op29 range seeds with `24`
-  classes, not the full `39/59`, and changes scorer slope to `O(C * 24)`.
-  A fair two-hook routed source needs cloned/shared output projection: uncloned
-  extra hooks get bad forced-result targets, while cloned topk8+unique24 reaches
-  `0.925` normal with hook calc `0.932/0.917`. This is still source-only.
+  Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
+  staged gates. A fair two-hook routed source needs cloned/shared output
+  projection. It trains both hooks, but open-upstream routed sources leak
+  (`0.998` normal, `0.460` injection-zero); freezing upstream lowers leakage
+  but source200 only reached `0.415`. Anti-leak routed acquisition is next.
 
 ## Paused Or Deprioritized Branches
 

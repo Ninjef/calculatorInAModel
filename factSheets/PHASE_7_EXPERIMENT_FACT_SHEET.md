@@ -9003,3 +9003,36 @@ Interpretation:
 - The cloned topk result is a routed source positive, not a solved thesis
   result: injection-zero was still `0.4325`, and no additive handoff/fresh seed
   has been run yet.
+
+Routed source leakage follow-up:
+
+Implementation correction:
+
+- `--freeze-semantic-decoder` now freezes semantic output projections even for
+  `--calculator-estimator ste` handoff runs.
+- The CLI test now asserts `calculator_hook.output_proj.weight` is absent from
+  trainable parameters when `--freeze-semantic-decoder` is used.
+
+Runs:
+
+```text
+runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks2_cloneout_handoff600_strictfreeze_cpu/.../model-c-2digit-seed43
+runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks2_cloneout_embd32_source630_cpu/.../model-c-2digit-seed43
+runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks2_cloneout_embd32_freezeup_source200_cpu/.../model-c-2digit-seed43
+```
+
+| Run | Main result | Injection-zero | Hook calc |
+| --- | ---: | ---: | ---: |
+| Strict frozen handoff from source200 | `0.9075` final / `0.9175` step-600 normal | `0.4925` | `0.9438/0.8784` |
+| Fair `embd32` open-upstream source630 | `1.0000` final / `0.9975` step-630 normal | `0.4600` | `1.0000/0.9944` |
+| Fair `embd32` frozen-upstream source200 | `0.3925` final / `0.4150` step-200 normal | `0.1875` | `0.4384/0.3867` |
+
+Interpretation:
+
+- The matched routed `embd32` source trains both hooks, so the result-policy
+  routing/scoring machinery works.
+- Unlike the single-hook `embd32` source630 (`0.0275` injection-zero), routed
+  open-upstream source acquisition leaks through the residual path.
+- Freezing upstream reduces the leak but undertrains at 200 steps. Future
+  routed-source work should target anti-leak acquisition before running more
+  additive handoffs.

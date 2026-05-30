@@ -711,6 +711,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/143-routed-cloned-output-source-training-learns-both-hooks-but-leaks-through-the-upstream-resi",
+      "target": "researchMemory/hypotheses/phase7/143-routed-cloned-output-source-training-learns-both-hooks-but-leaks-through-the-upstream-resi.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -808,6 +813,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-routed-cloned-output-source-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-routed-source-leakage-gate.md",
       "type": "supported_by"
     },
     {
@@ -2280,6 +2290,13 @@
       "source_path": "researchMemory/hypotheses/phase7/142-cloned-output-projection-makes-a-routed-two-hook-topk-source-train-both-hooks.md",
       "status": "MIXED-POSITIVE",
       "title": "Cloned output projection makes a routed two-hook topk source train both hooks."
+    },
+    {
+      "id": "doc/143-routed-cloned-output-source-training-learns-both-hooks-but-leaks-through-the-upstream-resi",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/143-routed-cloned-output-source-training-learns-both-hooks-but-leaks-through-the-upstream-resi.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Routed cloned-output source training learns both hooks but leaks through the upstream residual."
     },
     {
       "id": "doc/phase7-direction-memory",

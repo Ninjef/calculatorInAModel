@@ -86,6 +86,18 @@ full-grid step versus `15,600` exact). This is closer to many-calculator source
 training, but it is not yet a non-bottleneck proof: injection-zero was `0.4325`,
 and no trusted handoff or fresh seed has been run.
 
+The follow-up handoff/source controls make the next bottleneck sharper. A
+strict frozen-policy additive handoff from the routed source200 reached high
+normal accuracy but high injection-zero (`0.4925`). Re-running the routed
+source with the matched `embd32` product decoder parity checkpoint and 630-step
+recipe trained both hooks almost perfectly (`1.0000/0.9944` hook calc), but
+source injection-zero was still high (`0.4600`), unlike the single-hook
+`embd32` source630 (`0.0275`). Freezing upstream reduced leakage at source200
+(`0.1875`) but undertrained (`0.4150` normal). The active many-calculator issue
+is therefore no longer only scorer count or hook observability; routed source
+training needs anti-leak pressure or frozen-upstream acquisition before
+handoff results can be trusted.
+
 ## What Should Stop
 
 - More op19 or op29 topk8+unique24 seed replications as scalability evidence.
