@@ -8090,3 +8090,38 @@ Interpretation:
   a scalable result-boundary approximation.
 - Future result-boundary approximation needs a stronger rank/uncertainty-aware
   critic or a different target construction.
+
+Rank-aware follow-up:
+
+```text
+runs/2026-05-30_phase7_result_boundary_amortized_critic/hidden_output_pairwise_k24_step0_800.json
+runs/2026-05-30_phase7_result_boundary_amortized_critic/hidden_output_hybrid_k24_step0_800.json
+```
+
+| Mode | Checkpoint | Scores per train prompt | Heldout argmin = full best | Top-5 contains best | Mean regret |
+| --- | --- | ---: | ---: | ---: | ---: |
+| pairwise | step `0` | `24` | `0.2600` | `0.6200` | `3.6179` |
+| pairwise | step `800` | `24` | `0.4000` | `0.8300` | `2.3874` |
+| hybrid | step `0` | `24` | `0.2000` | `0.6200` | `3.9556` |
+| hybrid | step `800` | `24` | `0.2700` | `0.7800` | `2.9605` |
+
+Review:
+
+```text
+researchReviews/2026-05-30-result-boundary-approximation-review.md
+```
+
+Review decision:
+
+```text
+hidden_output_boundary_critic_family_paused
+```
+
+Review interpretation:
+
+- Pairwise ranking is a real improvement at the trained checkpoint, but
+  `0.4000` heldout argmin recovery with `24/39` candidates scored per training
+  prompt is not a practical replacement for full enumeration.
+- Pause pointwise/pairwise/hybrid hidden-output critic variants. Continue only
+  with different target construction, uncertainty-aware compute allocation, or
+  a stronger generalization mechanism.

@@ -119,10 +119,10 @@ Active directions:
   frozen-policy gate (`0.8825` final, `0.8425` step-600 normal, zero-injection
   `0.0000`, learned calc `0.9922`). This shows true-result forced-margin is
   not strictly required for staged transfer, but full forced-result enumeration
-  and frozen transfer remain unsolved scalability/prescriptiveness issues. A
-  naive hidden-state/candidate-output critic did not replace full enumeration:
-  heldout argmin recovery stayed only `0.08-0.17` with 8 scores/prompt and
-  `0.19-0.26` even with 24 scores/prompt.
+  and frozen transfer remain unsolved scalability/prescriptiveness issues.
+  Hidden-state/candidate-output critics do not look like the scalable bridge:
+  pointwise recovery stayed at `0.08-0.26`, and the best pairwise result was
+  only `0.40` heldout argmin recovery while using `24/39` result scores.
 - Lower-cost assignment is useful only when it changes scalability, not merely
   proxy selection.
 
@@ -166,9 +166,9 @@ These branches should not continue without a new mechanism:
    only against prior cheap selectors.
 5. Use answer-derived result-boundary transfer as a bridge, not a recipe:
    next work should approximate or replace the full forced-result enumeration
-   that selected the best-result target. Do not start with the already-failed
-   pointwise hidden/output loss critic; use a rank/uncertainty-aware critic or
-   a different target construction.
+   that selected the best-result target. Do not continue pointwise/rank
+   hidden-output critic variants; use different target construction,
+   uncertainty-aware compute, or validation across evolving model states.
 
 Do not run another local selector/proxy experiment unless it is explicitly
 designed to replace a named compute bottleneck and has a predeclared validation

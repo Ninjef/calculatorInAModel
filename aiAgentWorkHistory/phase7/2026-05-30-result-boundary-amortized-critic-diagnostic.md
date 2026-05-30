@@ -24,6 +24,7 @@ The diagnostic:
   vector) -> forced answer loss` examples on training prompts;
 - validates whether the critic's predicted argmin recovers the full-enum
   boundary best result on heldout prompts.
+- supports pointwise, pairwise ranking, and hybrid critic losses.
 
 This is not a training method yet. It is a gate to avoid wiring a weak
 approximation into the training loop.
@@ -56,6 +57,16 @@ runs/2026-05-30_phase7_result_boundary_amortized_critic/hidden_output_k24_step0_
 Same setup, but `24` sparse forced scores per train prompt for step `0` and
 step `800`.
 
+Rank-aware checks:
+
+```text
+runs/2026-05-30_phase7_result_boundary_amortized_critic/hidden_output_pairwise_k24_step0_800.json
+runs/2026-05-30_phase7_result_boundary_amortized_critic/hidden_output_hybrid_k24_step0_800.json
+```
+
+Same `k=24` setup with pairwise ranking loss and pointwise+pairwise hybrid
+loss.
+
 ## Results
 
 At all tested checkpoints, the full-enum boundary best was exactly the true sum
@@ -76,6 +87,15 @@ Wider `k=24` critic:
 | step `0` | `7200` | `0.2600` | `0.4700` | `0.6500` | `3.6525` |
 | step `800` | `7200` | `0.1900` | `0.5900` | `0.7800` | `3.3686` |
 
+Rank-aware `k=24` critic:
+
+| Mode | Checkpoint | Heldout argmin = full best | Top-3 contains best | Top-5 contains best | Mean regret |
+| --- | --- | ---: | ---: | ---: | ---: |
+| pairwise | step `0` | `0.2600` | `0.4600` | `0.6200` | `3.6179` |
+| pairwise | step `800` | `0.4000` | `0.6400` | `0.8300` | `2.3874` |
+| hybrid | step `0` | `0.2000` | `0.4100` | `0.6200` | `3.9556` |
+| hybrid | step `800` | `0.2700` | `0.5800` | `0.7800` | `2.9605` |
+
 ## Decision
 
 ```text
@@ -84,12 +104,13 @@ hidden_output_amortized_boundary_critic_negative
 
 Interpretation:
 
-- A naive hidden-state plus candidate-output-vector critic is not good enough
-  to replace full forced-result enumeration for boundary target selection.
-- Even `24` sparse scores per training prompt, which is most of the `39`-class
-  result vocabulary, gives poor heldout argmin recovery.
-- Do not wire this exact critic into source training as a scalable
+- A hidden-state plus candidate-output-vector critic is not good enough to
+  replace full forced-result enumeration for boundary target selection.
+- Pairwise ranking helps at the trained step-800 checkpoint (`0.4000` argmin
+  recovery), but this is still far below what a source-training target needs
+  and uses most of the result vocabulary as sparse supervision.
+- Do not wire this critic family into source training as a scalable
   result-boundary approximation.
-- The next approximation needs a stronger generalization mechanism, a
-  rank/uncertainty-aware objective, or a different target construction instead
-  of simply training a pointwise loss predictor over hidden/output features.
+- The next approximation needs a stronger generalization mechanism or a
+  different target construction, not another pointwise/rank loss tweak over
+  the same hidden/output features.

@@ -581,6 +581,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/117-hidden-output-boundary-critic-family-is-not-the-scalable-result-boundary-bridge",
+      "target": "researchMemory/hypotheses/phase7/117-hidden-output-boundary-critic-family-is-not-the-scalable-result-boundary-bridge.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -868,6 +873,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-result-boundary-amortized-critic-diagnostic.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "researchReviews/2026-05-30-result-boundary-approximation-review.md",
       "type": "supported_by"
     },
     {
@@ -1798,6 +1808,13 @@
       "source_path": "researchMemory/hypotheses/phase7/116-naive-hidden-state-amortized-boundary-critics-do-not-recover-full-enum-result-boundary-targ.md",
       "status": "MIXED-NEGATIVE.",
       "title": "Naive hidden-state amortized boundary critics do not recover full-enum result-boundary targets."
+    },
+    {
+      "id": "doc/117-hidden-output-boundary-critic-family-is-not-the-scalable-result-boundary-bridge",
+      "kind": "memory_document",
+      "source_path": "researchMemory/hypotheses/phase7/117-hidden-output-boundary-critic-family-is-not-the-scalable-result-boundary-bridge.md",
+      "status": "REVIEW, paused.",
+      "title": "Hidden-output boundary critic family is not the scalable result-boundary bridge."
     },
     {
       "id": "doc/phase7-direction-memory",

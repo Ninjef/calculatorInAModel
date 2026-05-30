@@ -301,11 +301,11 @@ Memory:
   strictly required for causal staged transfer, but it remains full-enumeration
   candidate scoring plus frozen-policy transfer and is weaker than automated
   forced-margin recovery.
-- A naive amortized replacement for result-boundary enumeration is negative:
-  a shared MLP critic over prompt hidden state plus candidate output vectors
-  recovered heldout full-enum argmins only `0.08-0.17` with 8 sparse scores per
-  prompt and `0.19-0.26` even with 24 sparse scores. Do not wire that pointwise
-  critic into training as the scalable bridge.
+- Hidden-output amortized critics are not the current scalable result-boundary
+  bridge: pointwise recovery reached only `0.08-0.26`; pairwise ranking helped
+  the trained checkpoint to `0.40` heldout argmin recovery at `k=24`, but that
+  already scores most of the 39-class result vocabulary. Do not continue
+  pointwise/pairwise/hybrid critic-loss variants as novelty.
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -336,6 +336,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-automated-forced-margin-source-recovery.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-answer-derived-boundary-handoff.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-amortized-critic-diagnostic.md`
+- `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 - `researchReviews/2026-05-29-forced-margin-branch-review.md`
 - `researchReviews/2026-05-30-forced-margin-recovery-review.md`

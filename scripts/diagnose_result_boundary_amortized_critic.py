@@ -39,6 +39,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--heldout-prompts", type=int, default=100)
     parser.add_argument("--hidden-size", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=600)
+    parser.add_argument(
+        "--critic-loss-mode",
+        choices=["pointwise", "pairwise", "hybrid"],
+        default="pointwise",
+    )
     parser.add_argument("--lr", type=float, default=1.0e-3)
     parser.add_argument("--weight-decay", type=float, default=1.0e-4)
     parser.add_argument("--seed", type=int, default=0)
@@ -134,11 +139,18 @@ def train_critic(
     train_features: torch.Tensor,
     train_losses: torch.Tensor,
     *,
+    prompts: int,
+    samples_per_prompt: int,
     hidden_size: int,
     epochs: int,
+    critic_loss_mode: str,
     lr: float,
     weight_decay: float,
 ) -> tuple[torch.nn.Module, dict[str, float]]:
+    if train_features.shape[0] != prompts * samples_per_prompt:
+        raise ValueError("train feature count must match prompts * samples_per_prompt")
+    if critic_loss_mode not in {"pointwise", "pairwise", "hybrid"}:
+        raise ValueError("unknown critic loss mode")
     feature_mean = train_features.mean(dim=0, keepdim=True)
     feature_std = train_features.std(dim=0, keepdim=True).clamp_min(1.0e-6)
     target_mean = train_losses.mean()
@@ -163,7 +175,28 @@ def train_critic(
     for _ in range(epochs):
         optimizer.zero_grad(set_to_none=True)
         prediction = critic(normalized_features)
-        loss = torch.nn.functional.smooth_l1_loss(prediction, normalized_targets)
+        pointwise_loss = torch.nn.functional.smooth_l1_loss(
+            prediction, normalized_targets
+        )
+        grouped_prediction = prediction.reshape(prompts, samples_per_prompt)
+        grouped_targets = normalized_targets.reshape(prompts, samples_per_prompt)
+        prediction_diff = grouped_prediction.unsqueeze(2) - grouped_prediction.unsqueeze(1)
+        target_diff = grouped_targets.unsqueeze(2) - grouped_targets.unsqueeze(1)
+        pair_mask = target_diff.abs() > 1.0e-6
+        pair_targets = (target_diff > 0).to(prediction_diff.dtype)
+        if bool(pair_mask.any().item()):
+            pairwise_loss = torch.nn.functional.binary_cross_entropy_with_logits(
+                prediction_diff[pair_mask],
+                pair_targets[pair_mask],
+            )
+        else:
+            pairwise_loss = pointwise_loss.new_tensor(0.0)
+        if critic_loss_mode == "pointwise":
+            loss = pointwise_loss
+        elif critic_loss_mode == "pairwise":
+            loss = pairwise_loss
+        else:
+            loss = pointwise_loss + pairwise_loss
         loss.backward()
         torch.nn.utils.clip_grad_norm_(critic.parameters(), 5.0)
         optimizer.step()
@@ -272,8 +305,11 @@ def diagnose_checkpoint(
     critic, train_metrics = train_critic(
         train_features,
         train_losses,
+        prompts=int(train_indices.shape[0]),
+        samples_per_prompt=args.samples_per_prompt,
         hidden_size=args.hidden_size,
         epochs=args.epochs,
+        critic_loss_mode=args.critic_loss_mode,
         lr=args.lr,
         weight_decay=args.weight_decay,
     )
@@ -292,6 +328,7 @@ def diagnose_checkpoint(
         "heldout_prompts": int(heldout_indices.shape[0]),
         "result_count": result_count,
         "samples_per_prompt": int(args.samples_per_prompt),
+        "critic_loss_mode": str(args.critic_loss_mode),
         "forced_scores_used": int(train_losses.numel()),
         "full_enum_scores_for_eval": int(full_losses.numel()),
         **train_metrics,
