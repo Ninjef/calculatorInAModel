@@ -8612,3 +8612,33 @@ Interpretation:
 - Do not run more fixed refresh-interval ladders as novelty. Temporal
   amortization needs adaptive freshness/trust or predictive target updates,
   plus measured compute savings.
+
+Follow-up unique-sampling coverage gate:
+
+```text
+runs/2026-05-30_phase7_assignment_cost_reduction/op19_rhead64_unique16_source200_cpu
+runs/2026-05-30_phase7_assignment_cost_reduction/op19_rhead64_unique32_source200_cpu
+```
+
+| Assignment | Scored results | Step-200 true coverage | Step-200 target acc | Best snapshot normal/calc | Final eval |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Exact | `39/39` | `1.0000` | `0.9900` | `0.8625` | `294/400 = 0.7350` |
+| Sample16 duplicate-prone | `16/39` | `0.6125` | `0.4581` | `0.3650` | `141/400 = 0.3525` |
+| Unique16 | `16/39` | `0.6525` | `0.5317` | `0.3625` | `162/400 = 0.4050` |
+| Sample32 duplicate-prone | `32/39` | `0.7400` | `0.6773` | `0.4050` | `152/400 = 0.3800` |
+| Unique32 | `32/39` | `0.9275` | `0.8156` | `0.6250` | `244/400 = 0.6100` |
+
+Decision:
+
+```text
+unique_sampled_assignment_coverage_mixed_positive_but_below_exact
+```
+
+Interpretation:
+
+- Removing duplicate candidates is a real improvement: unique32 substantially
+  beats duplicate-prone sample32 at the same scorer count.
+- It still does not preserve exact source acquisition, and unique32 already
+  scores most of the result vocabulary.
+- Do not run more unique-uniform count ladders. Candidate-cost reduction needs
+  a smarter non-uniform proposal or different credit signal.

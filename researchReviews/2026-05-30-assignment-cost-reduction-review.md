@@ -36,6 +36,19 @@ Refresh cadence is less destructive than uniform sparse candidates, but it
 still fails to preserve exact source acquisition and does not show meaningful
 full-run wall-clock savings in this diagnostic setup.
 
+Finally, we tested duplicate-free sampled candidates. This is a coverage-aware
+variant of the sampled assignment gate: the learned result is included, and the
+remaining candidates are sampled without replacement per prompt.
+
+| Assignment | Scored results | Step-200 true coverage | Best snapshot normal | Final eval |
+| --- | ---: | ---: | ---: | ---: |
+| Exact | `39/39` | `1.0000` | `0.8625` | `0.7350` |
+| Sample32 duplicate-prone | `32/39` | `0.7400` | `0.4050` | `0.3800` |
+| Unique32 | `32/39` | `0.9275` | `0.6250` | `0.6100` |
+
+Duplicate removal clearly helps, but unique32 still scores most of the result
+vocabulary and remains below the exact ceiling.
+
 ## What Should Stop
 
 - Uniform sampled hard-assignment count ladders on the same op19 source gate.
@@ -47,11 +60,15 @@ full-run wall-clock savings in this diagnostic setup.
 - Fixed refresh-interval ladders on the same op19 `rhead64` gate. Stale exact
   targets are not enough without an adaptive freshness or predictive update
   mechanism.
+- Unique-uniform sample-count ladders on the same gate. Unique32 is the useful
+  diagnostic point: coverage helps, but it is still not enough.
 
 ## What Deserves Compute
 
 - Coverage-aware or active candidate construction that explicitly raises
   true/best-result inclusion without scoring the full vocabulary.
+- Non-uniform proposals that beat unique32 at lower scorer count or close the
+  gap to exact at similar count.
 - Structured proposals that exploit arithmetic/result geometry while still
   being validated against exact-grid assignment ceilings.
 - Non-enumerative credit signals that avoid hard assignment rather than

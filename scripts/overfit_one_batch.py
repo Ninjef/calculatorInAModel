@@ -120,6 +120,7 @@ class TrainConfig:
     result_policy_improvement_assignment_min_improvement: float
     result_policy_improvement_assignment_quota_multiplier: float
     result_policy_improvement_assignment_sample_count: int
+    result_policy_improvement_assignment_unique_sampling: bool
     result_policy_improvement_assignment_refresh_interval: int
     result_policy_stabilization_temperature: float
     result_policy_stabilization_decay_steps: int
@@ -767,6 +768,7 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_policy_improvement_assignment_min_improvement",
         "result_policy_improvement_assignment_quota_multiplier",
         "result_policy_improvement_assignment_sample_count",
+        "result_policy_improvement_assignment_unique_sampling",
         "result_policy_improvement_assignment_refresh_interval",
         "result_policy_improvement_assignment_refreshed",
         "result_policy_improvement_assignment_target_age",
@@ -1529,6 +1531,7 @@ def sample_improvement_assignment_candidates(
     *,
     result_count: int,
     sample_count: int,
+    unique: bool = False,
 ) -> torch.Tensor:
     if sample_count < 1:
         raise ValueError("assignment sample count must be positive")
@@ -1537,12 +1540,27 @@ def sample_improvement_assignment_candidates(
     candidates = [learned_result.unsqueeze(-1)]
     random_count = sample_count - 1
     if random_count > 0:
-        random_candidates = torch.randint(
-            low=0,
-            high=result_count,
-            size=(learned_result.shape[0], random_count),
-            device=learned_result.device,
-        )
+        if unique:
+            if sample_count > result_count:
+                raise ValueError(
+                    "unique assignment sample count cannot exceed result count"
+                )
+            rows: list[torch.Tensor] = []
+            all_results = torch.arange(result_count, device=learned_result.device)
+            for learned in learned_result:
+                available = all_results[all_results != learned]
+                order = torch.randperm(
+                    available.shape[0], device=learned_result.device
+                )
+                rows.append(available[order[:random_count]])
+            random_candidates = torch.stack(rows, dim=0)
+        else:
+            random_candidates = torch.randint(
+                low=0,
+                high=result_count,
+                size=(learned_result.shape[0], random_count),
+                device=learned_result.device,
+            )
         candidates.append(random_candidates)
     return torch.cat(candidates, dim=-1)
 
@@ -1675,6 +1693,7 @@ def result_policy_stabilization_loss(
     improvement_assignment_min_improvement: float,
     improvement_assignment_quota_multiplier: float,
     improvement_assignment_sample_count: int,
+    improvement_assignment_unique_sampling: bool,
     improvement_assignment_refresh_interval: int,
     improvement_assignment_cache: dict[str, object] | None,
     chunk_size: int,
@@ -1763,6 +1782,7 @@ def result_policy_stabilization_loss(
                 result_pred.detach(),
                 result_count=result_logits.shape[-1],
                 sample_count=improvement_assignment_sample_count,
+                unique=improvement_assignment_unique_sampling,
             )
             candidate_losses = score_forced_result_candidate_classes(
                 model,
@@ -1879,6 +1899,9 @@ def result_policy_stabilization_loss(
         ),
         "result_policy_improvement_assignment_sample_count": int(
             improvement_assignment_sample_count
+        ),
+        "result_policy_improvement_assignment_unique_sampling": int(
+            improvement_assignment_unique_sampling
         ),
         "result_policy_improvement_assignment_refresh_interval": int(
             improvement_assignment_refresh_interval
@@ -7314,6 +7337,9 @@ def run_variant(
         result_policy_improvement_assignment_sample_count=(
             args.result_policy_improvement_assignment_sample_count
         ),
+        result_policy_improvement_assignment_unique_sampling=(
+            args.result_policy_improvement_assignment_unique_sampling
+        ),
         result_policy_improvement_assignment_refresh_interval=(
             args.result_policy_improvement_assignment_refresh_interval
         ),
@@ -8415,6 +8441,9 @@ def run_variant(
                 ),
                 improvement_assignment_sample_count=(
                     args.result_policy_improvement_assignment_sample_count
+                ),
+                improvement_assignment_unique_sampling=(
+                    args.result_policy_improvement_assignment_unique_sampling
                 ),
                 improvement_assignment_refresh_interval=(
                     args.result_policy_improvement_assignment_refresh_interval
@@ -9528,6 +9557,9 @@ def run_variant(
     metrics["result_policy_improvement_assignment_sample_count"] = (
         args.result_policy_improvement_assignment_sample_count
     )
+    metrics["result_policy_improvement_assignment_unique_sampling"] = (
+        args.result_policy_improvement_assignment_unique_sampling
+    )
     metrics["result_policy_improvement_assignment_refresh_interval"] = (
         args.result_policy_improvement_assignment_refresh_interval
     )
@@ -10488,6 +10520,15 @@ def parse_args() -> argparse.Namespace:
             "If positive, approximate hard improvement assignment by scoring "
             "only this many result classes per prompt: the learned result plus "
             "uniform random candidates. 0 preserves exact full result-class scoring."
+        ),
+    )
+    parser.add_argument(
+        "--result-policy-improvement-assignment-unique-sampling",
+        action="store_true",
+        help=(
+            "When sampling improvement-assignment candidates, sample without "
+            "replacement per prompt so the learned result and random candidates "
+            "are unique."
         ),
     )
     parser.add_argument(
@@ -11607,6 +11648,23 @@ def main() -> None:
             "requires exact assignment, not sampled assignment"
         )
     if (
+        args.result_policy_improvement_assignment_unique_sampling
+        and args.result_policy_improvement_assignment_sample_count <= 0
+    ):
+        raise ValueError(
+            "--result-policy-improvement-assignment-unique-sampling requires "
+            "--result-policy-improvement-assignment-sample-count > 0"
+        )
+    if (
+        args.result_policy_improvement_assignment_unique_sampling
+        and args.result_policy_improvement_assignment_sample_count
+        > (args.operand_max * 2 + 1 if args.operand_max is not None else 10**args.digits * 2 - 1)
+    ):
+        raise ValueError(
+            "--result-policy-improvement-assignment-sample-count cannot exceed "
+            "the result vocabulary size when unique sampling is enabled"
+        )
+    if (
         args.result_policy_improvement_assignment_refresh_interval > 1
         and not args.exhaustive_grid_batch
     ):
@@ -12186,6 +12244,8 @@ def main() -> None:
                     "rpolassigns"
                     f"{args.result_policy_improvement_assignment_sample_count}"
                 )
+                if args.result_policy_improvement_assignment_unique_sampling:
+                    suffix_parts.append("rpolassignuniq")
             if args.result_policy_improvement_assignment_refresh_interval > 1:
                 suffix_parts.append(
                     "rpolassignrefresh"
@@ -12468,6 +12528,8 @@ def main() -> None:
         f"{args.result_policy_improvement_assignment_quota_multiplier} "
         "improvement_assignment_sample_count="
         f"{args.result_policy_improvement_assignment_sample_count} "
+        "improvement_assignment_unique_sampling="
+        f"{args.result_policy_improvement_assignment_unique_sampling} "
         "improvement_assignment_refresh_interval="
         f"{args.result_policy_improvement_assignment_refresh_interval} "
         f"temperature={args.result_policy_stabilization_temperature} "

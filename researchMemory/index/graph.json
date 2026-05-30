@@ -656,6 +656,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/132-unique-sampled-hard-assignment-improves-coverage-but-still-misses-the-op19-exact-ceiling",
+      "target": "researchMemory/hypotheses/phase7/132-unique-sampled-hard-assignment-improves-coverage-but-still-misses-the-op19-exact-ceiling.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -753,6 +758,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-exact-assignment-refresh-cadence-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-unique-sampled-assignment-coverage-gate.md",
       "type": "supported_by"
     },
     {
@@ -1023,6 +1033,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-exact-assignment-refresh-cadence-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-unique-sampled-assignment-coverage-gate.md",
       "type": "supported_by"
     },
     {
@@ -2073,6 +2088,13 @@
       "source_path": "researchMemory/hypotheses/phase7/131-fixed-cadence-exact-assignment-refresh-weakens-the-op19-rhead64-source-signal.md",
       "status": "MIXED-NEGATIVE",
       "title": "Fixed-cadence exact assignment refresh weakens the op19 rhead64 source signal."
+    },
+    {
+      "id": "doc/132-unique-sampled-hard-assignment-improves-coverage-but-still-misses-the-op19-exact-ceiling",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/132-unique-sampled-hard-assignment-improves-coverage-but-still-misses-the-op19-exact-ceiling.md",
+      "status": "MIXED-POSITIVE",
+      "title": "Unique sampled hard-assignment improves coverage but still misses the op19 exact ceiling."
     },
     {
       "id": "doc/phase7-direction-memory",

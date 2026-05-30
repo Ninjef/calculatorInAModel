@@ -3269,6 +3269,30 @@ def test_sampled_improvement_assignment_targets_use_scored_candidates_only() -> 
     ] == pytest.approx(1.0)
 
 
+def test_unique_sampled_improvement_assignment_candidates_are_unique() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_unique_assignment_sample", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    learned_result = torch.tensor([0, 2, 4])
+    candidates = overfit_script.sample_improvement_assignment_candidates(
+        learned_result,
+        result_count=5,
+        sample_count=4,
+        unique=True,
+    )
+
+    assert candidates.shape == (3, 4)
+    assert candidates[:, 0].tolist() == learned_result.tolist()
+    for row in candidates.tolist():
+        assert len(row) == len(set(row))
+
+
 def test_result_policy_assignment_refresh_interval_reuses_cached_targets(
     monkeypatch,
 ) -> None:
@@ -3338,6 +3362,7 @@ def test_result_policy_assignment_refresh_interval_reuses_cached_targets(
         improvement_assignment_min_improvement=0.0,
         improvement_assignment_quota_multiplier=2.0,
         improvement_assignment_sample_count=0,
+        improvement_assignment_unique_sampling=False,
         improvement_assignment_refresh_interval=3,
         improvement_assignment_cache=cache,
         chunk_size=7,
@@ -3354,6 +3379,7 @@ def test_result_policy_assignment_refresh_interval_reuses_cached_targets(
         improvement_assignment_min_improvement=0.0,
         improvement_assignment_quota_multiplier=2.0,
         improvement_assignment_sample_count=0,
+        improvement_assignment_unique_sampling=False,
         improvement_assignment_refresh_interval=3,
         improvement_assignment_cache=cache,
         chunk_size=7,
@@ -3539,6 +3565,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "1.5",
             "--result-policy-improvement-assignment-sample-count",
             "8",
+            "--result-policy-improvement-assignment-unique-sampling",
             "--result-policy-improvement-assignment-refresh-interval",
             "1",
             "--result-policy-stabilization-temperature",
@@ -3568,6 +3595,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
         pytest.approx(1.5)
     )
     assert parsed.result_policy_improvement_assignment_sample_count == 8
+    assert parsed.result_policy_improvement_assignment_unique_sampling is True
     assert parsed.result_policy_improvement_assignment_refresh_interval == 1
     assert parsed.result_policy_stabilization_temperature == pytest.approx(1.5)
     assert parsed.result_policy_stabilization_decay_steps == 40

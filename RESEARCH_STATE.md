@@ -125,9 +125,10 @@ Active directions:
   sampled hard assignment is negative: sample16/sample32 on op19 `rhead64`
   failed to preserve exact source signal (`0.3650`/`0.4050` best snapshots vs
   `0.8625` exact). Fixed exact-target refresh is also mixed-negative:
-  refresh2/refresh5 reached only `0.5875`/`0.4950` best snapshots. Next
-  attempts need adaptive freshness, coverage-aware/structured proposals, or a
-  non-enumerative credit signal.
+  refresh2/refresh5 reached only `0.5875`/`0.4950`. Unique32 improves coverage
+  and reaches `0.6250`, but still scores `32/39` classes and misses exact. Next
+  attempts need non-uniform active/structured proposals, adaptive freshness, or
+  a non-enumerative credit signal.
 
 ## Paused Or Deprioritized Branches
 
@@ -169,7 +170,7 @@ These branches should not continue without a new mechanism:
 4. If reducing hard-assignment cost, state the scalability hypothesis up front
    and compare against the exact-grid ceiling. Do not run more uniform sampled
    count ladders or fixed refresh-interval ladders on op19 `rhead64`; improve
-   freshness/coverage/target quality or change the estimator.
+   proposal quality beyond duplicate-free uniform coverage or change estimator.
 5. Use answer-derived result-boundary transfer as a bridge, not a recipe:
    next work should approximate or replace the full forced-result enumeration
    that selected the best-result target. Do not continue pointwise/rank

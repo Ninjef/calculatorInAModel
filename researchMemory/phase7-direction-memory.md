@@ -110,10 +110,14 @@ Memory:
   refresh5 reduce full assignment refreshes but reach only `0.5875` and
   `0.4950` best snapshot normal/calc on the same op19 `rhead64` gate, versus
   `0.8625` exact, with little full-run wall-clock gain.
+- Unique sampled assignment is mixed-positive but below ceiling. Removing
+  duplicate candidates lifts sample32 from `0.4050` to `0.6250` best snapshot
+  and step-200 true coverage from `0.7400` to `0.9275`, but unique32 still
+  scores most of the vocabulary and misses exact (`0.8625` best snapshot).
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
-  next work needs coverage-aware, active, adaptive-refresh, structured, or
+  next work needs non-uniform active/structured proposals, adaptive refresh, or
   non-enumerative credit assignment.
 
 Representative evidence:
@@ -122,6 +126,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-convergence-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-sampled-hard-assignment-cost-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-exact-assignment-refresh-cadence-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-unique-sampled-assignment-coverage-gate.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `HYPOTHESIS_LEDGER.md`
 
@@ -383,6 +388,9 @@ Memory:
 - Fixed-cadence exact target refresh also weakens source acquisition; refresh2
   is better than sampled candidates but still far below exact. Do not treat
   stale exact targets as the cheap assignment answer without adaptive freshness.
+- Unique sampled assignment improves coverage and source learning, but still
+  misses exact despite scoring `32/39` classes. Candidate proposals need to be
+  smarter than duplicate-free uniform coverage.
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -426,6 +434,7 @@ Representative evidence:
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-sampled-hard-assignment-cost-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-exact-assignment-refresh-cadence-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-unique-sampled-assignment-coverage-gate.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 - `researchReviews/2026-05-29-forced-margin-branch-review.md`
