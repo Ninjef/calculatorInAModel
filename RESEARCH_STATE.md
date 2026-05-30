@@ -125,7 +125,15 @@ Active directions:
   one-negative source training is mixed-positive: it improves handoff to about
   `0.73-0.74` final / `0.785` best snapshot, but remains checkpoint-sensitive
   and does not clearly beat scheduled forced-true step-600 final handoff
-  (`0.7725`). The neg-4 full-grid version was too costly locally.
+  (`0.7725`). A predeclared low-LR source recovery phase shows this branch was
+  partly source-policy-maturity limited: continuing the forced-margin step-600
+  checkpoint for 30 steps at `lr=0.0003` with margin weight `0.1` raised source
+  calc from `0.5225` to `0.7725`, and the trusted frozen-policy handoff reached
+  `0.8700` final / `0.9050` step-600 normal with injection-zero `0.0000` and
+  forced-random `0.0313`. This is a real positive source auxiliary but still
+  prescriptive, below automated scheduled-source recovery (`0.9400` final),
+  and not a final scalable/non-prescriptive solution. The neg-4 full-grid
+  version was too costly locally.
 - A genuinely different credit-assignment family such as target propagation or
   local targets. Exact `policy_reweighted_t1` is positive and survives
   retention, but full enumeration is not scalable. Simple proposal
@@ -168,7 +176,10 @@ These branches should not continue without a new mechanism:
    with an explicit streaming/generalization validation objective.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
-3. If reducing hard-assignment cost, state the scalability hypothesis
+3. If staying in forced-margin, use only fresh-seed stability or automated
+   low-LR recovery as the next question; do not rerun the exact seed-15
+   step-600 recovery/handoff or more same-seed ladders.
+4. If reducing hard-assignment cost, state the scalability hypothesis
    up front and compare against the exact-grid assignment ceiling rather than
    only against prior cheap selectors.
 

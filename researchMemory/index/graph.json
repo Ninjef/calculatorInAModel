@@ -556,6 +556,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/112-low-lr-recovery-shows-one-negative-forced-margin-was-source-policy-maturity-limited",
+      "target": "researchMemory/hypotheses/phase7/112-low-lr-recovery-shows-one-negative-forced-margin-was-source-policy-maturity-limited.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -823,6 +828,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-long-source-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-forced-margin-low-lr-source-recovery.md",
       "type": "supported_by"
     },
     {
@@ -1713,6 +1723,13 @@
       "source_path": "researchMemory/hypotheses/phase7/111-simple-local-target-proposal-approximation-is-not-the-scalable-path.md",
       "status": "PAUSED",
       "title": "Simple local-target proposal approximation is not the scalable path."
+    },
+    {
+      "id": "doc/112-low-lr-recovery-shows-one-negative-forced-margin-was-source-policy-maturity-limited",
+      "kind": "memory_document",
+      "source_path": "researchMemory/hypotheses/phase7/112-low-lr-recovery-shows-one-negative-forced-margin-was-source-policy-maturity-limited.md",
+      "status": "POSITIVE, constrained.",
+      "title": "Low-LR recovery shows one-negative forced-margin was source-policy-maturity limited."
     },
     {
       "id": "doc/phase7-direction-memory",

@@ -272,6 +272,15 @@ Memory:
   proxy selection, or geometry-only checkpoint fishing as novelty. Continue
   only for predeclared source recovery/retention, fresh-seed stability, or as
   evidence feeding less prescriptive/scalable credit-assignment work.
+- The predeclared source recovery test was positive: continuing the longer
+  one-negative forced-margin step-600 source checkpoint for `30` low-LR steps
+  (`lr=0.0003`, margin weight `0.1`) raised source calc from `0.5225` to
+  `0.7725` and final source eval to `0.7825`. The trusted frozen-policy
+  600-step handoff from recovered step `30` reached `0.8700` final /
+  `0.9050` step-600 normal with injection-zero `0.0000`, forced-random
+  `0.0313`, and learned calc `0.8594`. This means forced-margin was partly
+  source-policy-maturity limited, but it remains prescriptive and below
+  automated scheduled-source recovery (`0.9400` final).
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -298,6 +307,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-source-aux-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-op19-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-long-source-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-forced-margin-low-lr-source-recovery.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 - `researchReviews/2026-05-29-forced-margin-branch-review.md`
 

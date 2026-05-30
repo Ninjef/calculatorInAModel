@@ -7846,3 +7846,55 @@ Summary:
   streaming/full-grid generalization.
 - Otherwise, compute should move back to source objectives that improve actual
   600-step additive handoff/readout behavior.
+
+## 2026-05-29 Forced-Margin Low-LR Source Recovery
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-forced-margin-low-lr-source-recovery.md
+```
+
+Runs:
+
+```text
+runs/2026-05-29_phase7_forced_margin_source_recovery/lr3e4_margin0p1_from_long_step600_steps30_cpu
+runs/2026-05-29_phase7_forced_margin_source_recovery/handoff600_from_lr3e4_margin0p1_step30_cpu
+```
+
+Question:
+
+Is the one-negative forced-margin branch mainly limited by source-policy
+maturity, as the scheduled forced-true branch was before low-LR recovery?
+
+Result:
+
+| Gate | Result |
+| --- | ---: |
+| source calc, step 0 | `0.5225` |
+| source calc, step 30 | `0.7725` |
+| source final eval | `0.7825` |
+| recovered 600-step handoff final eval | `0.8700` |
+| recovered handoff step-600 normal | `0.9050` |
+| recovered handoff injection-zero | `0.0000` |
+| recovered handoff forced-random | `0.0313` |
+| recovered handoff learned calc | `0.8594` |
+
+Decision:
+
+```text
+forced_margin_low_lr_recovery_positive_but_prescriptive
+```
+
+Interpretation:
+
+- The longer one-negative forced-margin checkpoint was partly source-policy
+  maturity limited. Low-LR recovery lifted source calc and trusted handoff.
+- The recovered handoff beats unrecovered forced-margin (`0.7330-0.7400`
+  final) and the old scheduled forced-true step-600 handoff (`0.7725` final).
+- It remains below automated scheduled-source recovery (`0.9400` final) and
+  still relies on hard assignment plus true-result contrastive forcing, so it
+  is not the final scalable/non-prescriptive solution.
+- Do not rerun this exact recovery plus handoff as novelty. Next forced-margin
+  work should be fresh-seed stability or an automated in-source recovery phase;
+  otherwise move to less-prescriptive target construction or estimator work.
