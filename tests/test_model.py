@@ -3269,6 +3269,109 @@ def test_sampled_improvement_assignment_targets_use_scored_candidates_only() -> 
     ] == pytest.approx(1.0)
 
 
+def test_result_policy_assignment_refresh_interval_reuses_cached_targets(
+    monkeypatch,
+) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_assignment_refresh", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    class DummyCfg:
+        calculator_action_head = "result_space"
+
+    class DummyModel:
+        cfg = DummyCfg()
+
+    model = DummyModel()
+    batch = overfit_script.make_exhaustive_range_batch(
+        num_digits=1,
+        operand_max=1,
+        fixed_width=True,
+        device="cpu",
+        answer_format="sum",
+    )
+    result_logits = torch.zeros(batch.x.shape[0], 3, requires_grad=True)
+    score_calls = 0
+
+    def fake_result_logits(model_arg, batch_arg):
+        assert model_arg is model
+        assert batch_arg is batch
+        return result_logits, None, None, None
+
+    def fake_score_full(model_arg, batch_arg, *, chunk_size):
+        nonlocal score_calls
+        assert model_arg is model
+        assert batch_arg is batch
+        assert chunk_size == 7
+        score_calls += 1
+        return torch.tensor(
+            [
+                [5.0, 6.0, 7.0],
+                [4.0, 0.5, 6.0],
+                [4.0, 0.5, 6.0],
+                [4.0, 5.0, 0.25],
+            ]
+        )
+
+    monkeypatch.setattr(
+        overfit_script, "calculator_read_result_logits", fake_result_logits
+    )
+    monkeypatch.setattr(
+        overfit_script, "score_forced_result_classes_chunked", fake_score_full
+    )
+
+    cache: dict[str, object] = {}
+    _, first_metrics = overfit_script.result_policy_stabilization_loss(
+        model,
+        batch,
+        num_digits=1,
+        step=0,
+        temperature=1.0,
+        entropy_weight=0.0,
+        batch_diversity_weight=0.0,
+        improvement_assignment_weight=1.0,
+        improvement_assignment_min_improvement=0.0,
+        improvement_assignment_quota_multiplier=2.0,
+        improvement_assignment_sample_count=0,
+        improvement_assignment_refresh_interval=3,
+        improvement_assignment_cache=cache,
+        chunk_size=7,
+    )
+    _, second_metrics = overfit_script.result_policy_stabilization_loss(
+        model,
+        batch,
+        num_digits=1,
+        step=1,
+        temperature=1.0,
+        entropy_weight=0.0,
+        batch_diversity_weight=0.0,
+        improvement_assignment_weight=1.0,
+        improvement_assignment_min_improvement=0.0,
+        improvement_assignment_quota_multiplier=2.0,
+        improvement_assignment_sample_count=0,
+        improvement_assignment_refresh_interval=3,
+        improvement_assignment_cache=cache,
+        chunk_size=7,
+    )
+
+    assert score_calls == 1
+    assert first_metrics["result_policy_improvement_assignment_refreshed"] == 1
+    assert first_metrics["result_policy_improvement_assignment_scored_count"] == 3
+    assert second_metrics["result_policy_improvement_assignment_refreshed"] == 0
+    assert second_metrics["result_policy_improvement_assignment_target_age"] == 1
+    assert second_metrics["result_policy_improvement_assignment_scored_count"] == 0
+    assert second_metrics[
+        "result_policy_improvement_assignment_target_accuracy"
+    ] == pytest.approx(
+        first_metrics["result_policy_improvement_assignment_target_accuracy"]
+    )
+
+
 def test_joint_pair_relaxed_metrics_report_soft_result_hardening(monkeypatch) -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_relaxed_metrics", script_path)
@@ -3436,6 +3539,8 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "1.5",
             "--result-policy-improvement-assignment-sample-count",
             "8",
+            "--result-policy-improvement-assignment-refresh-interval",
+            "1",
             "--result-policy-stabilization-temperature",
             "1.5",
             "--result-policy-stabilization-decay-steps",
@@ -3463,6 +3568,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
         pytest.approx(1.5)
     )
     assert parsed.result_policy_improvement_assignment_sample_count == 8
+    assert parsed.result_policy_improvement_assignment_refresh_interval == 1
     assert parsed.result_policy_stabilization_temperature == pytest.approx(1.5)
     assert parsed.result_policy_stabilization_decay_steps == 40
     assert parsed.optimizer_step_max_delta_norm == pytest.approx(0.125)

@@ -22,6 +22,20 @@ Runtime dropped only modestly at this scale: about `115s` exact, `88s`
 sample16, and `106s` sample32. The sampled branches did not preserve the
 source signal well enough to justify that savings.
 
+We then added exact assignment refresh cadence as a second cost-reduction
+mechanism. This preserved full coverage on refresh steps but reused cached
+targets between them.
+
+| Assignment cadence | Full refreshes over 201 steps | Best snapshot normal | Final eval | Approx wall time |
+| --- | ---: | ---: | ---: | ---: |
+| Exact every step | `201` | `0.8625` | `0.7350` | `115.5s` |
+| Refresh every 2 | `101` | `0.5875` | `0.5925` | `106.4s` |
+| Refresh every 5 | `41` | `0.4950` | `0.4950` | `105.1s` |
+
+Refresh cadence is less destructive than uniform sparse candidates, but it
+still fails to preserve exact source acquisition and does not show meaningful
+full-run wall-clock savings in this diagnostic setup.
+
 ## What Should Stop
 
 - Uniform sampled hard-assignment count ladders on the same op19 source gate.
@@ -30,6 +44,9 @@ source signal well enough to justify that savings.
   at step `200`, partly because uniform sampling duplicates candidates.
 - Jumping from this failure to larger full-grid range runs without a changed
   assignment-cost hypothesis.
+- Fixed refresh-interval ladders on the same op19 `rhead64` gate. Stale exact
+  targets are not enough without an adaptive freshness or predictive update
+  mechanism.
 
 ## What Deserves Compute
 
@@ -39,6 +56,8 @@ source signal well enough to justify that savings.
   being validated against exact-grid assignment ceilings.
 - Non-enumerative credit signals that avoid hard assignment rather than
   sampling it thinly.
+- Adaptive target-refresh criteria that can skip scoring only when target
+  freshness is likely preserved, and that report real compute savings.
 - Many-calculator accounting, but only when paired with a candidate mechanism
   whose single-calculator ceiling comparison is not already negative.
 

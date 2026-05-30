@@ -120,6 +120,7 @@ class TrainConfig:
     result_policy_improvement_assignment_min_improvement: float
     result_policy_improvement_assignment_quota_multiplier: float
     result_policy_improvement_assignment_sample_count: int
+    result_policy_improvement_assignment_refresh_interval: int
     result_policy_stabilization_temperature: float
     result_policy_stabilization_decay_steps: int
     result_policy_anchor_weight: float
@@ -766,6 +767,9 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_policy_improvement_assignment_min_improvement",
         "result_policy_improvement_assignment_quota_multiplier",
         "result_policy_improvement_assignment_sample_count",
+        "result_policy_improvement_assignment_refresh_interval",
+        "result_policy_improvement_assignment_refreshed",
+        "result_policy_improvement_assignment_target_age",
         "result_policy_improvement_assignment_scored_count",
         "result_policy_improvement_assignment_true_coverage",
         "result_policy_improvement_assignment_unique_candidate_fraction",
@@ -1663,6 +1667,7 @@ def result_policy_stabilization_loss(
     batch: ArithmeticBatch,
     *,
     num_digits: int,
+    step: int,
     temperature: float,
     entropy_weight: float,
     batch_diversity_weight: float,
@@ -1670,6 +1675,8 @@ def result_policy_stabilization_loss(
     improvement_assignment_min_improvement: float,
     improvement_assignment_quota_multiplier: float,
     improvement_assignment_sample_count: int,
+    improvement_assignment_refresh_interval: int,
+    improvement_assignment_cache: dict[str, object] | None,
     chunk_size: int,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     if temperature <= 0:
@@ -1678,6 +1685,8 @@ def result_policy_stabilization_loss(
         raise ValueError(
             "result policy improvement assignment weight must be non-negative"
         )
+    if improvement_assignment_refresh_interval < 1:
+        raise ValueError("assignment refresh interval must be positive")
     if model.cfg.calculator_action_head != "result_space":
         raise ValueError("result policy stabilization requires result-space logits")
     result_logits, _, _, _ = calculator_read_result_logits(model, batch)
@@ -1708,7 +1717,48 @@ def result_policy_stabilization_loss(
     assignment_metrics: dict[str, float | int] = {}
     assignment_objective = result_logits.new_zeros(())
     if improvement_assignment_weight > 0:
-        if improvement_assignment_sample_count > 0:
+        use_cached_exact_assignment = (
+            improvement_assignment_refresh_interval > 1
+            and improvement_assignment_sample_count == 0
+            and improvement_assignment_cache is not None
+        )
+        cache_targets = (
+            improvement_assignment_cache.get("targets")
+            if improvement_assignment_cache is not None
+            else None
+        )
+        cache_step = (
+            improvement_assignment_cache.get("step")
+            if improvement_assignment_cache is not None
+            else None
+        )
+        cache_valid = (
+            use_cached_exact_assignment
+            and isinstance(cache_targets, torch.Tensor)
+            and cache_targets.shape == result_pred.shape
+            and isinstance(cache_step, int)
+        )
+        refresh_assignment = (
+            not use_cached_exact_assignment
+            or not cache_valid
+            or step % improvement_assignment_refresh_interval == 0
+        )
+        if use_cached_exact_assignment and not refresh_assignment:
+            assignment_targets = cache_targets.to(result_pred.device)
+            cached_metrics = improvement_assignment_cache.get("metrics", {})
+            assignment_metrics = (
+                dict(cached_metrics) if isinstance(cached_metrics, dict) else {}
+            )
+            assignment_metrics[
+                "result_policy_improvement_assignment_scored_count"
+            ] = 0
+            assignment_metrics[
+                "result_policy_improvement_assignment_refreshed"
+            ] = 0
+            assignment_metrics[
+                "result_policy_improvement_assignment_target_age"
+            ] = int(step - cache_step)
+        elif improvement_assignment_sample_count > 0:
             candidate_results = sample_improvement_assignment_candidates(
                 result_pred.detach(),
                 result_count=result_logits.shape[-1],
@@ -1740,6 +1790,12 @@ def result_policy_stabilization_loss(
                 .detach()
                 .item()
             )
+            assignment_metrics[
+                "result_policy_improvement_assignment_refreshed"
+            ] = 1
+            assignment_metrics[
+                "result_policy_improvement_assignment_target_age"
+            ] = 0
         else:
             full_losses = score_forced_result_classes_chunked(
                 model, batch, chunk_size=chunk_size
@@ -1759,6 +1815,18 @@ def result_policy_stabilization_loss(
             assignment_metrics[
                 "result_policy_improvement_assignment_unique_candidate_fraction"
             ] = 1.0
+            assignment_metrics[
+                "result_policy_improvement_assignment_refreshed"
+            ] = 1
+            assignment_metrics[
+                "result_policy_improvement_assignment_target_age"
+            ] = 0
+            if use_cached_exact_assignment:
+                improvement_assignment_cache["targets"] = (
+                    assignment_targets.detach().clone()
+                )
+                improvement_assignment_cache["step"] = int(step)
+                improvement_assignment_cache["metrics"] = dict(assignment_metrics)
         assignment_mask = assignment_targets >= 0
         if bool(assignment_mask.any().item()):
             assignment_objective = torch.nn.functional.cross_entropy(
@@ -1811,6 +1879,9 @@ def result_policy_stabilization_loss(
         ),
         "result_policy_improvement_assignment_sample_count": int(
             improvement_assignment_sample_count
+        ),
+        "result_policy_improvement_assignment_refresh_interval": int(
+            improvement_assignment_refresh_interval
         ),
         "result_policy_stabilization_temperature": float(temperature),
         "result_policy_entropy": float(result_entropy.mean().detach().item()),
@@ -7243,6 +7314,9 @@ def run_variant(
         result_policy_improvement_assignment_sample_count=(
             args.result_policy_improvement_assignment_sample_count
         ),
+        result_policy_improvement_assignment_refresh_interval=(
+            args.result_policy_improvement_assignment_refresh_interval
+        ),
         result_policy_stabilization_temperature=(
             args.result_policy_stabilization_temperature
         ),
@@ -7880,6 +7954,11 @@ def run_variant(
     adaptive_late_source_recovery_trigger_count = 0
     adaptive_late_source_recovery_secondary_trigger_ema: float | None = None
     adaptive_late_source_recovery_secondary_trigger_count = 0
+    result_policy_improvement_assignment_cache: dict[str, object] | None = (
+        {}
+        if args.result_policy_improvement_assignment_refresh_interval > 1
+        else None
+    )
     model.train()
     for step in range(args.steps + 1):
         fixed_late_source_recovery_active = late_source_recovery_active(
@@ -8319,6 +8398,7 @@ def run_variant(
                 model,
                 batch,
                 num_digits=num_digits,
+                step=step,
                 temperature=args.result_policy_stabilization_temperature,
                 entropy_weight=current_result_policy_entropy_weight,
                 batch_diversity_weight=(
@@ -8335,6 +8415,12 @@ def run_variant(
                 ),
                 improvement_assignment_sample_count=(
                     args.result_policy_improvement_assignment_sample_count
+                ),
+                improvement_assignment_refresh_interval=(
+                    args.result_policy_improvement_assignment_refresh_interval
+                ),
+                improvement_assignment_cache=(
+                    result_policy_improvement_assignment_cache
                 ),
                 chunk_size=args.result_boundary_target_chunk_size,
             )
@@ -9442,6 +9528,9 @@ def run_variant(
     metrics["result_policy_improvement_assignment_sample_count"] = (
         args.result_policy_improvement_assignment_sample_count
     )
+    metrics["result_policy_improvement_assignment_refresh_interval"] = (
+        args.result_policy_improvement_assignment_refresh_interval
+    )
     metrics["result_policy_stabilization_temperature"] = (
         args.result_policy_stabilization_temperature
     )
@@ -10399,6 +10488,16 @@ def parse_args() -> argparse.Namespace:
             "If positive, approximate hard improvement assignment by scoring "
             "only this many result classes per prompt: the learned result plus "
             "uniform random candidates. 0 preserves exact full result-class scoring."
+        ),
+    )
+    parser.add_argument(
+        "--result-policy-improvement-assignment-refresh-interval",
+        type=int,
+        default=1,
+        help=(
+            "For exact hard improvement assignment, refresh full result-class "
+            "targets every N training steps and reuse cached targets between "
+            "refreshes. Requires --exhaustive-grid-batch when N > 1."
         ),
     )
     parser.add_argument(
@@ -11495,6 +11594,26 @@ def main() -> None:
         raise ValueError(
             "--result-policy-improvement-assignment-sample-count must be non-negative"
         )
+    if args.result_policy_improvement_assignment_refresh_interval < 1:
+        raise ValueError(
+            "--result-policy-improvement-assignment-refresh-interval must be positive"
+        )
+    if (
+        args.result_policy_improvement_assignment_refresh_interval > 1
+        and args.result_policy_improvement_assignment_sample_count > 0
+    ):
+        raise ValueError(
+            "--result-policy-improvement-assignment-refresh-interval > 1 "
+            "requires exact assignment, not sampled assignment"
+        )
+    if (
+        args.result_policy_improvement_assignment_refresh_interval > 1
+        and not args.exhaustive_grid_batch
+    ):
+        raise ValueError(
+            "--result-policy-improvement-assignment-refresh-interval > 1 "
+            "requires --exhaustive-grid-batch so cached targets match prompts"
+        )
     if args.result_policy_stabilization_temperature <= 0:
         raise ValueError(
             "--result-policy-stabilization-temperature must be positive"
@@ -12067,6 +12186,11 @@ def main() -> None:
                     "rpolassigns"
                     f"{args.result_policy_improvement_assignment_sample_count}"
                 )
+            if args.result_policy_improvement_assignment_refresh_interval > 1:
+                suffix_parts.append(
+                    "rpolassignrefresh"
+                    f"{args.result_policy_improvement_assignment_refresh_interval}"
+                )
         if (
             args.result_policy_entropy_weight > 0
             or args.result_policy_batch_diversity_weight > 0
@@ -12344,6 +12468,8 @@ def main() -> None:
         f"{args.result_policy_improvement_assignment_quota_multiplier} "
         "improvement_assignment_sample_count="
         f"{args.result_policy_improvement_assignment_sample_count} "
+        "improvement_assignment_refresh_interval="
+        f"{args.result_policy_improvement_assignment_refresh_interval} "
         f"temperature={args.result_policy_stabilization_temperature} "
         f"decay_steps={args.result_policy_stabilization_decay_steps}"
     )

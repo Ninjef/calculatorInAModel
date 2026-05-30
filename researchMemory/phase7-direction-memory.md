@@ -106,16 +106,22 @@ Memory:
   only `0.4050`. Step-200 true coverage and target accuracy were too low
   (`0.6125`/`0.4581` for sample16, `0.7400`/`0.6773` for sample32), and wall
   time savings were modest.
+- Fixed-cadence exact assignment refresh is also mixed-negative. Refresh2 and
+  refresh5 reduce full assignment refreshes but reach only `0.5875` and
+  `0.4950` best snapshot normal/calc on the same op19 `rhead64` gate, versus
+  `0.8625` exact, with little full-run wall-clock gain.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
-  now ruled out as the simple answer; next work needs coverage-aware, active,
-  structured, or non-enumerative credit assignment.
+  ruled out as the simple answer, and fixed stale exact targets are not enough;
+  next work needs coverage-aware, active, adaptive-refresh, structured, or
+  non-enumerative credit assignment.
 
 Representative evidence:
 
 - `aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-convergence-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-sampled-hard-assignment-cost-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-exact-assignment-refresh-cadence-gate.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `HYPOTHESIS_LEDGER.md`
 
@@ -374,6 +380,9 @@ Memory:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
   must improve candidate coverage/target quality or change the credit signal.
+- Fixed-cadence exact target refresh also weakens source acquisition; refresh2
+  is better than sampled candidates but still far below exact. Do not treat
+  stale exact targets as the cheap assignment answer without adaptive freshness.
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -416,6 +425,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-amortized-critic-diagnostic.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-sampled-hard-assignment-cost-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-exact-assignment-refresh-cadence-gate.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 - `researchReviews/2026-05-29-forced-margin-branch-review.md`

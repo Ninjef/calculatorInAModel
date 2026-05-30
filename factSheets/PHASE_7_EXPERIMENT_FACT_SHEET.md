@@ -8583,3 +8583,32 @@ Interpretation:
 - Do not run more uniform count ladders as novelty. Assignment-cost reduction
   needs coverage-aware/active/structured proposals or a different
   non-enumerative credit signal, compared against an exact-grid ceiling.
+
+Follow-up exact-refresh cadence gate:
+
+```text
+runs/2026-05-30_phase7_assignment_cost_reduction/op19_rhead64_refresh2_source200_cpu
+runs/2026-05-30_phase7_assignment_cost_reduction/op19_rhead64_refresh5_source200_cpu
+```
+
+| Assignment cadence | Full refreshes over 201 steps | Best snapshot normal/calc | Step-200 target acc | Final eval | Approx wall time |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Exact every step | `201` | `0.8625` at step `150` | `0.9900` | `294/400 = 0.7350` | `115.5s` |
+| Refresh every 2 | `101` | `0.5875` at step `200` | `0.9603` | `237/400 = 0.5925` | `106.4s` |
+| Refresh every 5 | `41` | `0.4950` at step `200` | `0.8600` | `198/400 = 0.4950` | `105.1s` |
+
+Decision:
+
+```text
+fixed_cadence_exact_assignment_refresh_mixed_negative
+```
+
+Interpretation:
+
+- Exact target refresh is less damaging than uniform sampled candidates but
+  still fails to preserve the exact source signal.
+- Fixed stale targets are not enough: refresh2 kept high step-200 target
+  accuracy but learned much more slowly than exact.
+- Do not run more fixed refresh-interval ladders as novelty. Temporal
+  amortization needs adaptive freshness/trust or predictive target updates,
+  plus measured compute savings.
