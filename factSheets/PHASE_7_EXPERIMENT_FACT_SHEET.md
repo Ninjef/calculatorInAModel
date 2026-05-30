@@ -8675,3 +8675,33 @@ Interpretation:
 - Do not run more topk8 count ladders on this exact gate. Next validation
   should test longer source/handoff, fresh seed, larger range, or many-calculator
   cost accounting.
+
+Longer source plus trusted handoff validation:
+
+```text
+runs/2026-05-30_phase7_assignment_cost_reduction/op19_rhead64_topk8_unique24_source630_cpu
+runs/2026-05-30_phase7_assignment_cost_reduction/op19_rhead64_topk8_unique24_handoff600_from_step630_cpu
+```
+
+| Run | Key result |
+| --- | --- |
+| Source step `630` | `1.0000` normal/source calc, `0.0275` injection-zero, `1.0000` oracle, `0.0300` forced-random |
+| Source final eval | `400/400 = 1.0000` |
+| Handoff step `600` | `1.0000` normal, `0.0200` injection-zero, `1.0000` oracle, `1.0000` learned calc, `0.0325` forced-random |
+| Handoff final eval | `400/400 = 1.0000` |
+
+Follow-up decision:
+
+```text
+policy_topk_unique24_op19_source_handoff_positive
+```
+
+Follow-up interpretation:
+
+- The policy-aware proposal now has real staged-transfer evidence, not only a
+  short source screen. It trains a perfect op19 source and transfers into a
+  causal additive non-bottleneck handoff while scoring `24/39` result classes
+  for assignment.
+- This remains one seed and one operand range. Next validation should be
+  fresh-seed stability, op29/range stress, many-calculator accounting, or a
+  less-prescriptive variant.

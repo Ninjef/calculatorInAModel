@@ -65,6 +65,14 @@ a solved scalable recipe yet because the result is one op19 source gate, but it
 changes the next direction from "uniform coverage is insufficient" to
 "policy-aware proposals can preserve target coverage at lower scorer count."
 
+The first staged validation is positive. Running `topk8+unique24` for the
+longer `630`-step op19 `rhead64` source recipe with late recovery reached
+`1.0000` source final eval; the trusted frozen-policy additive handoff from
+step `630` also reached `1.0000` final eval / step-600 normal with low controls
+(`0.0200` injection-zero, `0.0325` forced-random). This upgrades the proposal
+from local source-screen positive to op19 staged-transfer positive, while still
+leaving fresh-seed/range/many-calculator validation open.
+
 ## What Should Stop
 
 - Uniform sampled hard-assignment count ladders on the same op19 source gate.
@@ -80,11 +88,13 @@ changes the next direction from "uniform coverage is insufficient" to
   diagnostic point: coverage helps, but it is still not enough.
 - Topk8 unique count ladders on the same gate. The useful threshold is already
   mapped at 16/24/32.
+- The same effective-seed-43 op19 topk8+unique24 source630 plus handoff600
+  path. It cleared; repeat only with a new validation axis.
 
 ## What Deserves Compute
 
 - Validate policy-aware top-k proposals beyond the local op19 source gate:
-  longer source plus handoff, fresh seed, larger range, or many-calculator cost.
+  fresh seed, larger range, or many-calculator cost.
 - More active/non-uniform proposals only if they beat the topk8+unique baseline
   or explain when/why top-k coverage fails.
 - Structured proposals that exploit arithmetic/result geometry while still

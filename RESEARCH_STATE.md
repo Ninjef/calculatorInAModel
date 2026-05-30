@@ -125,8 +125,9 @@ Active directions:
   sampling, fixed refresh, and unique-uniform sampling are insufficient. A
   policy-aware proposal is the first positive: topk8+unique24 scored `24/39`
   classes and reached `0.7500` final on the op19 `rhead64` source gate, while
-  topk8+unique32 reached `0.8600`; exact scored `39/39` and reached `0.7350`
-  final / `0.8625` best snapshot. Validate this beyond one op19 source gate.
+  topk8+unique32 reached `0.8600`; exact scored `39/39` and reached `0.7350`.
+  A longer topk8+unique24 source and trusted handoff both reached `1.0000`
+  with low controls. Next: fresh seed, range, or many-calculator validation.
 
 ## Paused Or Deprioritized Branches
 
@@ -168,8 +169,8 @@ These branches should not continue without a new mechanism:
 4. If reducing hard-assignment cost, state the scalability hypothesis up front
    and compare against the exact-grid ceiling. Do not run more uniform sampled
    count ladders or fixed refresh-interval ladders on op19 `rhead64`; improve
-   policy-aware proposals via handoff/range/fresh-seed validation or change
-   estimator.
+   policy-aware proposals via range/fresh-seed/many-calculator validation or
+   change estimator.
 5. Use answer-derived result-boundary transfer as a bridge, not a recipe:
    next work should approximate or replace the full forced-result enumeration
    that selected the best-result target. Do not continue pointwise/rank

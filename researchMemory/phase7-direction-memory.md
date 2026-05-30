@@ -118,11 +118,15 @@ Memory:
   unique random candidates reached true coverage `1.0000` at `16/39`, `24/39`,
   and `32/39` scored classes; topk8+unique24 reached final `0.7500` and
   topk8+unique32 final `0.8600`, versus exact final `0.7350`.
+- The first staged validation is positive: topk8+unique24 source630 reached
+  `1.0000` final/source calc while scoring `24/39` result classes, and the
+  trusted frozen-policy additive handoff reached `1.0000` final / step-600
+  normal with low zero/random controls.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
-  next work should validate policy-aware proposals beyond the op19 source gate
-  or pursue non-enumerative credit assignment.
+  next work should validate policy-aware proposals on fresh seeds, larger
+  ranges, or many-calculator cost, or pursue non-enumerative credit assignment.
 
 Representative evidence:
 
@@ -132,6 +136,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-exact-assignment-refresh-cadence-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-unique-sampled-assignment-coverage-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-assignment-proposal-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-source-handoff-validation.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `HYPOTHESIS_LEDGER.md`
 
@@ -398,8 +403,8 @@ Memory:
   smarter than duplicate-free uniform coverage.
 - Policy-topk plus unique random candidates is now the proposal to validate:
   it preserves true-result coverage and source learning much better than
-  uniform unique sampling at matched scored count, but still needs handoff,
-  fresh-seed, range, or many-calculator validation.
+  uniform unique sampling at matched scored count. It now has op19 handoff
+  validation, but still needs fresh-seed, range, or many-calculator validation.
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -445,6 +450,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-exact-assignment-refresh-cadence-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-unique-sampled-assignment-coverage-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-assignment-proposal-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-source-handoff-validation.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 - `researchReviews/2026-05-29-forced-margin-branch-review.md`
