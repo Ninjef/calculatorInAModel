@@ -90,23 +90,18 @@ source policies directly for transfer/readout geometry.
 Active directions:
 
 - Source acquisition optimized against actual handoff/readout geometry, not
-  just source answer accuracy or cheap selector scores. Delayed forced-true
-  additive readout pressure plus late low-LR recovery is a strong staged
-  recipe: manual recovery cleared continuation/readout (`0.9320`), fresh-seed
-  recovery reached `0.9600` trusted handoff, and one-run automated recovery
-  reached `0.9400`. Simple source-accuracy and forced-loss triggers are not
-  robust enough yet, and cheap selector/proxy work is paused unless validated
-  against fresh-family 600-step handoffs. One-negative forced-margin is a
-  useful source auxiliary: the early 200-step gate reached `0.6600` handoff,
-  longer unrecovered sources reached only about `0.73-0.74`, and manual low-LR
-  recovery raised handoff to `0.8700`. Folding margin recovery into the source
-  run now replicates strongly on a fresh seed: source step `600->630` improved
-  calc `0.5825->0.8825`, final source eval was `0.8700`, and trusted
-  frozen-policy handoff reached `0.9875` final / `0.9800` step-600 normal with
-  injection-zero `0.0156-0.0250` and forced-random `0.0938`. This is useful
-  evidence for staged transfer, but it remains prescriptive because it uses
-  hard assignment and true-result contrastive forcing. Treat this as a
-  benchmark source recipe, not a local knob branch.
+  source accuracy or cheap selector scores. Delayed forced-true plus late
+  low-LR recovery is a strong staged recipe (`0.9320` continuation/readout,
+  `0.9600` fresh-seed handoff, `0.9400` automated handoff), but simple
+  source-accuracy/forced-loss triggers are not robust. One-negative
+  forced-margin with late recovery is the current benchmark: manual recovery
+  raised handoff to `0.8700`; automated recovery hit `0.9875` final /
+  `0.9800` step-600 normal on one fresh seed, and a second fresh seed cleared
+  the gate at `0.8975` final / `0.9050` step-600 normal with zero-injection
+  `0.0000` and forced-random `0.0350`. This is useful staged-transfer evidence
+  with seed variance, but remains prescriptive because it uses hard assignment
+  and true-result contrastive forcing. Treat it as a benchmark source recipe,
+  not a local knob branch.
 - Target propagation/local targets are now a ceiling and diagnostic, not the
   current scalable mainline. Exact `policy_reweighted_t1` is positive and
   survives retention, but full enumeration is not scalable. Simple

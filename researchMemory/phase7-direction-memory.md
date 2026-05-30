@@ -293,6 +293,12 @@ Memory:
   start-step, margin, negative count, or recovery length on the same setup as
   novelty. Future forced-margin compute should stress stability/scale or
   remove prescriptiveness by replacing hard assignment or true-result forcing.
+- A second fresh-seed automated forced-margin stability check is mixed-positive:
+  CLI seed `19` / effective seed `21` again improved sharply during late
+  recovery (`0.5625 -> 0.8325` source calc from step `600` to `630`) and
+  cleared trusted handoff (`0.8975` final / `0.9050` step-600 normal,
+  zero-injection `0.0000`, forced-random `0.0350`). This confirms the benchmark
+  is real but seed-variable, below the prior `0.9875` handoff.
 - A less-prescriptive answer-derived bridge is positive but constrained: the
   older full-grid `result_boundary_target` source checkpoint transfers into
   the trusted frozen-policy additive gate at `0.8825` final / `0.8425`
@@ -334,6 +340,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-long-source-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-forced-margin-low-lr-source-recovery.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-automated-forced-margin-source-recovery.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-second-fresh-seed-stability.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-answer-derived-boundary-handoff.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-amortized-critic-diagnostic.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`

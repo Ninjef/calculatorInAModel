@@ -745,3 +745,9 @@ Conclusion: Exact `policy_reweighted_t1` remains a useful proof of principle and
 Do not repeat: Do not run more sparse count ladders, top-k/neighborhood proposal tweaks, replay-cache tuning, imputed-loss variants, polynomial learned-proposal hidden-size/epoch/warmup sweeps, or sparse pairwise count/gap sweeps as novelty.
 Next allowed test: Local targets only with a materially different estimator or target construction, or with predeclared streaming/heldout generalization validation. Otherwise pivot compute to source-geometry objectives or less-prescriptive answer-derived boundary methods that reduce full forced-result enumeration.
 Source: `researchReviews/2026-05-30-local-target-approximation-direction-review.md`
+
+MIXED-POSITIVE: Automated forced-margin recovery clears a second fresh seed but with variance.
+Conclusion: Repeating the automated one-negative forced-margin recovery recipe on CLI seed `19` / effective model seed `21` replicated the late recovery mechanism and cleared the trusted handoff gate, but below the prior very strong seed. Source calc rose from `0.5625` at step `600` to `0.8325` at step `630`, and final source eval was `0.8600`. The trusted 600-step frozen-policy additive handoff reached `0.8975` final eval / `0.9050` step-600 normal with injection-zero `0.0000`, forced-random `0.0350`, and learned calc `0.8425` at step `600`. This confirms the recipe is a useful staged-transfer benchmark with real seed variance, not a solved final method.
+Do not repeat: Do not rerun the same CLI seed-19/effective-seed-21 automated forced-margin recovery source plus 600-step handoff as novelty.
+Next allowed test: Forced-margin work should either test broader stability/scale or remove prescriptiveness by replacing hard assignment or true-result forcing; do not tune start step, margin, negative count, or recovery length on this setup as novelty.
+Source: `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-second-fresh-seed-stability.md`

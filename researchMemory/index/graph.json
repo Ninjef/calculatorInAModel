@@ -576,8 +576,8 @@
       "type": "defined_in"
     },
     {
-      "source": "doc/116-naive-hidden-state-amortized-boundary-critics-do-not-recover-full-enum-result-boundary-targ",
-      "target": "researchMemory/hypotheses/phase7/116-naive-hidden-state-amortized-boundary-critics-do-not-recover-full-enum-result-boundary-targ.md",
+      "source": "doc/116-naive-hidden-state-amortized-boundary-critics-do-not-recover-full-enum-result-boundary-tar",
+      "target": "researchMemory/hypotheses/phase7/116-naive-hidden-state-amortized-boundary-critics-do-not-recover-full-enum-result-boundary-tar.md",
       "type": "defined_in"
     },
     {
@@ -591,8 +591,13 @@
       "type": "defined_in"
     },
     {
-      "source": "doc/119-local-target-approximation-is-a-ceiling-not-current-scalable-path",
-      "target": "researchMemory/hypotheses/phase7/119-local-target-approximation-is-a-ceiling-not-current-scalable-path.md",
+      "source": "doc/119-local-target-approximation-is-a-ceiling-not-the-current-scalable-path",
+      "target": "researchMemory/hypotheses/phase7/119-local-target-approximation-is-a-ceiling-not-the-current-scalable-path.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/120-automated-forced-margin-recovery-clears-a-second-fresh-seed-but-with-variance",
+      "target": "researchMemory/hypotheses/phase7/120-automated-forced-margin-recovery-clears-a-second-fresh-seed-but-with-variance.md",
       "type": "defined_in"
     },
     {
@@ -873,6 +878,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-automated-forced-margin-source-recovery.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-forced-margin-second-fresh-seed-stability.md",
       "type": "supported_by"
     },
     {
@@ -1796,59 +1806,66 @@
     },
     {
       "id": "doc/112-low-lr-recovery-shows-one-negative-forced-margin-was-source-policy-maturity-limited",
-      "kind": "memory_document",
+      "kind": "hypothesis_memory",
       "source_path": "researchMemory/hypotheses/phase7/112-low-lr-recovery-shows-one-negative-forced-margin-was-source-policy-maturity-limited.md",
-      "status": "POSITIVE, constrained.",
+      "status": "POSITIVE",
       "title": "Low-LR recovery shows one-negative forced-margin was source-policy-maturity limited."
     },
     {
       "id": "doc/113-automated-forced-margin-recovery-replicates-strongly-on-a-fresh-seed",
-      "kind": "memory_document",
+      "kind": "hypothesis_memory",
       "source_path": "researchMemory/hypotheses/phase7/113-automated-forced-margin-recovery-replicates-strongly-on-a-fresh-seed.md",
-      "status": "POSITIVE, constrained.",
+      "status": "POSITIVE",
       "title": "Automated forced-margin recovery replicates strongly on a fresh seed."
     },
     {
       "id": "doc/114-forced-margin-recovery-is-now-a-staged-transfer-benchmark-not-a-local-knob-branch",
-      "kind": "memory_document",
+      "kind": "hypothesis_memory",
       "source_path": "researchMemory/hypotheses/phase7/114-forced-margin-recovery-is-now-a-staged-transfer-benchmark-not-a-local-knob-branch.md",
-      "status": "REVIEW / STEERING.",
+      "status": "REVIEW",
       "title": "Forced-margin recovery is now a staged-transfer benchmark, not a local knob branch."
     },
     {
       "id": "doc/115-answer-derived-result-boundary-source-transfers-but-is-not-scalable",
-      "kind": "memory_document",
+      "kind": "hypothesis_memory",
       "source_path": "researchMemory/hypotheses/phase7/115-answer-derived-result-boundary-source-transfers-but-is-not-scalable.md",
-      "status": "POSITIVE, constrained.",
+      "status": "POSITIVE",
       "title": "Answer-derived result-boundary source transfers but is not scalable."
     },
     {
-      "id": "doc/116-naive-hidden-state-amortized-boundary-critics-do-not-recover-full-enum-result-boundary-targ",
-      "kind": "memory_document",
-      "source_path": "researchMemory/hypotheses/phase7/116-naive-hidden-state-amortized-boundary-critics-do-not-recover-full-enum-result-boundary-targ.md",
-      "status": "MIXED-NEGATIVE.",
+      "id": "doc/116-naive-hidden-state-amortized-boundary-critics-do-not-recover-full-enum-result-boundary-tar",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/116-naive-hidden-state-amortized-boundary-critics-do-not-recover-full-enum-result-boundary-tar.md",
+      "status": "MIXED-NEGATIVE",
       "title": "Naive hidden-state amortized boundary critics do not recover full-enum result-boundary targets."
     },
     {
       "id": "doc/117-hidden-output-boundary-critic-family-is-not-the-scalable-result-boundary-bridge",
-      "kind": "memory_document",
+      "kind": "hypothesis_memory",
       "source_path": "researchMemory/hypotheses/phase7/117-hidden-output-boundary-critic-family-is-not-the-scalable-result-boundary-bridge.md",
-      "status": "REVIEW, paused.",
+      "status": "REVIEW",
       "title": "Hidden-output boundary critic family is not the scalable result-boundary bridge."
     },
     {
       "id": "doc/118-sparse-sampled-pairwise-preference-targets-do-not-train-result-space-calculator-use",
-      "kind": "memory_document",
+      "kind": "hypothesis_memory",
       "source_path": "researchMemory/hypotheses/phase7/118-sparse-sampled-pairwise-preference-targets-do-not-train-result-space-calculator-use.md",
-      "status": "DISPROVEN.",
+      "status": "DISPROVEN",
       "title": "Sparse sampled pairwise-preference targets do not train result-space calculator use."
     },
     {
-      "id": "doc/119-local-target-approximation-is-a-ceiling-not-current-scalable-path",
-      "kind": "memory_document",
-      "source_path": "researchMemory/hypotheses/phase7/119-local-target-approximation-is-a-ceiling-not-current-scalable-path.md",
-      "status": "REVIEW / PAUSED",
-      "title": "Local-target approximation is a ceiling, not the current scalable path"
+      "id": "doc/119-local-target-approximation-is-a-ceiling-not-the-current-scalable-path",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/119-local-target-approximation-is-a-ceiling-not-the-current-scalable-path.md",
+      "status": "REVIEW",
+      "title": "Local-target approximation is a ceiling, not the current scalable path."
+    },
+    {
+      "id": "doc/120-automated-forced-margin-recovery-clears-a-second-fresh-seed-but-with-variance",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/120-automated-forced-margin-recovery-clears-a-second-fresh-seed-but-with-variance.md",
+      "status": "MIXED-POSITIVE",
+      "title": "Automated forced-margin recovery clears a second fresh seed but with variance."
     },
     {
       "id": "doc/phase7-direction-memory",

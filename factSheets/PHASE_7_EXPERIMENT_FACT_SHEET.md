@@ -1,5 +1,44 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-30 Forced-Margin Second Fresh-Seed Stability
+
+Task/work log:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-forced-margin-second-fresh-seed-stability.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-30_phase7_forced_margin_auto_recovery_seed19/fresh_seed19_source630_cpu
+runs/2026-05-30_phase7_forced_margin_auto_recovery_seed19/handoff600_from_seed19_step630_cpu
+```
+
+Result:
+
+```text
+automated_forced_margin_recovery_second_fresh_seed_mixed_positive
+```
+
+The automated one-negative forced-margin recovery recipe replicated on CLI
+seed `19` / effective model seed `21`, but with lower handoff than the prior
+fresh seed. Source calc rose during late recovery from `0.5625` at step `600`
+to `0.8325` at step `630`; final source eval was `0.8600`. The trusted
+600-step frozen-policy additive handoff reached `0.8975` final eval and
+`0.9050` step-600 normal, with injection-zero `0.0000`, forced-random
+`0.0350`, and learned calc `0.8425` at step `600`.
+
+Interpretation:
+
+- Automated forced-margin recovery is a real staged-transfer benchmark across
+  more than one fresh seed.
+- The recipe has meaningful seed variance (`0.8975` here versus `0.9875` on
+  the prior automated run).
+- Do not tune local forced-margin knobs on this setup; next forced-margin work
+  should test broader stability/scale or remove hard assignment / true-result
+  forcing.
+
 ## 2026-05-30 Local-Target Approximation Direction Review
 
 Review:
