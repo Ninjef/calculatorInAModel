@@ -266,6 +266,12 @@ Memory:
   `0.7850` step-600 normal) but degraded with another 200 source steps.
   Longer margin therefore improves over the 200-step margin handoff (`0.6600`)
   but does not clearly beat scheduled forced-true step-600 final (`0.7725`).
+- Forced-margin branch review: treat one-negative margin as a useful
+  constrained auxiliary, not a standalone mainline. Do not continue with
+  negative-count tweaks, same-seed longer ladders, start-step tweaks, slope
+  proxy selection, or geometry-only checkpoint fishing as novelty. Continue
+  only for predeclared source recovery/retention, fresh-seed stability, or as
+  evidence feeding less prescriptive/scalable credit-assignment work.
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -293,6 +299,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-op19-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-long-source-gate.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
+- `researchReviews/2026-05-29-forced-margin-branch-review.md`
 
 ## Direction: Target Propagation / Local Targets
 

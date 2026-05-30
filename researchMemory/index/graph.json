@@ -531,6 +531,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/107-one-negative-forced-margin-is-a-useful-auxiliary-not-a-standalone-new-mainline",
+      "target": "researchMemory/hypotheses/phase7/107-one-negative-forced-margin-is-a-useful-auxiliary-not-a-standalone-new-mainline.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -803,6 +808,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "researchReviews/2026-05-29-scheduled-source-geometry-review.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "researchReviews/2026-05-29-forced-margin-branch-review.md",
       "type": "supported_by"
     },
     {
@@ -1628,6 +1638,13 @@
       "source_path": "researchMemory/hypotheses/phase7/106-longer-one-negative-forced-margin-source-training-improves-handoff-but-does-not-clearly-be.md",
       "status": "MIXED-POSITIVE",
       "title": "Longer one-negative forced-margin source training improves handoff but does not clearly beat scheduled forced-true step-600."
+    },
+    {
+      "id": "doc/107-one-negative-forced-margin-is-a-useful-auxiliary-not-a-standalone-new-mainline",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/107-one-negative-forced-margin-is-a-useful-auxiliary-not-a-standalone-new-mainline.md",
+      "status": "CONSTRAINED",
+      "title": "One-negative forced-margin is a useful auxiliary, not a standalone new mainline."
     },
     {
       "id": "doc/phase7-direction-memory",

@@ -667,3 +667,9 @@ Conclusion: Extending the one-negative forced-margin source branch on `operand_m
 Do not repeat: Do not rerun the same seed-13 one-negative forced-margin 600-step source ladder, the same continuation from step-200, or handoffs from the tested step-400/step-600/continued-step-200 checkpoints as novelty.
 Next allowed test: Try a late source-recovery/retention phase for one-negative margin only if explicitly testing the source-policy bottleneck; otherwise compare on a fresh seed or move to less prescriptive/scalable assignment. Keep actual 600-step handoff as arbiter because slope/geometry stayed imperfect selectors.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-long-source-gate.md`
+
+CONSTRAINED: One-negative forced-margin is a useful auxiliary, not a standalone new mainline.
+Conclusion: Reviewing the forced-margin branch shows a real but bounded result. The one-negative objective is the scalable/practical variant and improves early full-grid handoff, but many-negative full-grid margin is too costly, longer same-seed one-negative training is checkpoint-sensitive, and the best longer handoff (`0.7400` final / `0.7850` snapshot) does not clearly surpass scheduled forced-true step-600 (`0.7725` final). The branch still relies on hard assignment and true-result forcing, so it does not solve non-prescriptive scalable credit assignment.
+Do not repeat: Do not continue with negative-count tweaks, same-seed longer ladders, start-step tweaks, slope-proxy selection, or geometry-only checkpoint fishing as novelty.
+Next allowed test: Stay in forced-margin only for a predeclared source recovery/retention test or a fresh-seed stability replication with trusted 600-step handoff. Otherwise move effort toward learned/generalized proposals, estimator correction, or a less prescriptive target construction.
+Source: `researchReviews/2026-05-29-forced-margin-branch-review.md`
