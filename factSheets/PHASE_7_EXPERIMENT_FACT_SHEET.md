@@ -8039,3 +8039,54 @@ Interpretation:
 - It is positive but weaker than automated forced-margin recovery (`0.9875`
   final / `0.9800` step-600 normal), so treat it as a bridge toward new target
   construction or estimator work rather than the new best recipe.
+
+## 2026-05-30 Result-Boundary Amortized Critic Diagnostic
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-result-boundary-amortized-critic-diagnostic.md
+```
+
+Runs:
+
+```text
+runs/2026-05-30_phase7_result_boundary_amortized_critic/hidden_output_k8_step0_100_800.json
+runs/2026-05-30_phase7_result_boundary_amortized_critic/hidden_output_k24_step0_800.json
+```
+
+Question:
+
+Can a shared critic trained on sparse forced-result scores approximate the
+full-enumeration result-boundary target on heldout prompts?
+
+Tooling:
+
+- Added `scripts/diagnose_result_boundary_amortized_critic.py`.
+- The critic predicts forced answer loss from prompt hidden-state features and
+  candidate calculator output vectors.
+
+Results:
+
+| Checkpoint | Scores per train prompt | Heldout argmin = full best | Top-5 contains best | Mean regret |
+| --- | ---: | ---: | ---: | ---: |
+| step `0` | `8` | `0.0800` | `0.3200` | `5.2390` |
+| step `100` | `8` | `0.0800` | `0.2900` | `4.7240` |
+| step `800` | `8` | `0.1700` | `0.6400` | `3.5766` |
+| step `0` | `24` | `0.2600` | `0.6500` | `3.6525` |
+| step `800` | `24` | `0.1900` | `0.7800` | `3.3686` |
+
+Decision:
+
+```text
+hidden_output_amortized_boundary_critic_negative
+```
+
+Interpretation:
+
+- The full-enum boundary target remained valid (`best=true-sum` on all heldout
+  prompts), but the sparse critic did not recover the heldout argmin reliably.
+- Do not wire this exact pointwise hidden/output critic into source training as
+  a scalable result-boundary approximation.
+- Future result-boundary approximation needs a stronger rank/uncertainty-aware
+  critic or a different target construction.
