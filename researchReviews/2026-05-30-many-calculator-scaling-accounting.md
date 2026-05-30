@@ -63,6 +63,13 @@ smoke with three hooks wrote matching routing/count fields in config and
 metrics. This enables a task-partitioned diagnostic, but still does not prove
 per-hook specialization or scalable training.
 
+Diagnostic snapshots now also expose routed per-hook quality: routed rows read
+the active hook trace, and `diagnostic_snapshots.csv` includes route
+distribution plus per-hook route counts, operand accuracy, calculator-result
+accuracy, and sampled log-probability. This closes an observability gap for the
+next routed training diagnostic; it is not by itself evidence that hooks train
+or specialize.
+
 ## What Should Stop
 
 - More op19 or op29 topk8+unique24 seed replications as scalability evidence.

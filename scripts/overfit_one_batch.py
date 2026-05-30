@@ -438,7 +438,17 @@ def calculator_trace_rows(
             )
             pred = decode_tokens(pred_ids)
             eq_pos = prompt_ids.index(EQ_ID)
-            trace = diagnostics.get("calculator_trace", {})
+            route_tensor = diagnostics.get("calculator_hook_route")
+            calculator_hook_route = (
+                int(route_tensor[0].item())
+                if isinstance(route_tensor, torch.Tensor)
+                else -1
+            )
+            traces = diagnostics.get("calculator_traces")
+            if isinstance(traces, list) and calculator_hook_route >= 0:
+                trace = traces[calculator_hook_route]
+            else:
+                trace = diagnostics.get("calculator_trace", {})
 
             def trace_value(name: str, default: float | int | bool) -> float | int | bool:
                 if name not in trace:
@@ -478,6 +488,10 @@ def calculator_trace_rows(
                     "injection_norm": trace_value("injection_norm", float("nan")),
                     "calculator_read_position_id": trace_value(
                         "calculator_read_position_id", -1
+                    ),
+                    "calculator_hook_route": calculator_hook_route,
+                    "calculator_active_hook_count": int(
+                        diagnostics.get("calculator_active_hook_count", 0)
                     ),
                     "a_read_position": trace_value("a_read_position", -1),
                     "b_read_position": trace_value("b_read_position", -1),
@@ -532,6 +546,36 @@ def summarize_trace_rows(rows: list[dict[str, object]]) -> dict[str, object]:
     }
 
 
+def summarize_routed_trace_rows(rows: list[dict[str, object]]) -> dict[str, object]:
+    routed_rows = [
+        row
+        for row in rows
+        if isinstance(row.get("calculator_hook_route"), int)
+        and int(row["calculator_hook_route"]) >= 0
+    ]
+    if not routed_rows:
+        return {}
+    route_values = [int(row["calculator_hook_route"]) for row in routed_rows]
+    summary: dict[str, object] = {
+        "calculator_hook_route_distribution": compact_distribution(route_values),
+        "calculator_hook_active_count": len(set(route_values)),
+    }
+    for hook_idx in sorted(set(route_values)):
+        hook_rows = [
+            row for row in routed_rows if int(row["calculator_hook_route"]) == hook_idx
+        ]
+        hook_summary = summarize_trace_rows(hook_rows)
+        prefix = f"hook_{hook_idx}"
+        summary[f"{prefix}_route_count"] = len(hook_rows)
+        summary[f"{prefix}_normal_exact_match"] = hook_summary["exact_match"]
+        summary[f"{prefix}_operand_exact_match"] = hook_summary["operand_exact_match"]
+        summary[f"{prefix}_calculator_result_accuracy"] = hook_summary[
+            "calculator_result_accuracy"
+        ]
+        summary[f"{prefix}_mean_sampled_logp"] = hook_summary["mean_sampled_logp"]
+    return summary
+
+
 def compact_distribution(values: list[object], *, limit: int = 12) -> str:
     counts: dict[object, int] = {}
     for value in values:
@@ -562,6 +606,7 @@ def snapshot_row_from_model(
         answer_format=answer_format,
     )
     normal = summarize_trace_rows(normal_rows)
+    routed = summarize_routed_trace_rows(normal_rows)
 
     injection_zero = evaluate(
         model,
@@ -631,6 +676,7 @@ def snapshot_row_from_model(
         "learned_result_distribution": compact_distribution(
             [row["calculator_result"] for row in normal_rows]
         ),
+        **routed,
     }
 
 

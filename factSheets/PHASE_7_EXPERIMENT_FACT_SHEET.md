@@ -8920,3 +8920,38 @@ Routed interpretation:
 - The repo can now run a task-partitioned same-layer multi-hook diagnostic.
 - This is still not a training result. The next diagnostic must measure
   per-hook calculator quality, route balance, scorer calls, and interference.
+
+Routed per-hook snapshot metrics:
+
+```text
+diagnostic_snapshots.csv:
+calculator_hook_route_distribution
+calculator_hook_active_count
+hook_{i}_route_count
+hook_{i}_normal_exact_match
+hook_{i}_operand_exact_match
+hook_{i}_calculator_result_accuracy
+hook_{i}_mean_sampled_logp
+```
+
+Smoke command:
+
+```bash
+PYTHONPATH=. PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 scripts/overfit_one_batch.py --variant model-c --digits 1 --operand-max 1 --steps 0 --batch-size 4 --eval-samples 8 --snapshot-every 1 --snapshot-samples 8 --run-root /tmp/codex_multi_hook_route_snapshot_smoke --device cpu --calculator-hook-count 2 --calculator-hook-routing left_operand_mod --calculator-estimator ste
+```
+
+Smoke result:
+
+- The saved `diagnostic_snapshots.csv` had routed per-hook columns.
+- The tiny smoke produced `calculator_hook_route_distribution={"0": 4, "1": 4}`
+  and `calculator_hook_active_count=2`.
+- `hook_0_calculator_result_accuracy` and
+  `hook_1_calculator_result_accuracy` were present. They were both `0.0`, as
+  expected for an untrained zero-step model.
+
+Routed snapshot interpretation:
+
+- Future routed training runs can now measure per-hook policy quality directly
+  from the standard snapshot artifact.
+- This is instrumentation only. It does not show that routed hooks specialize
+  or train under exact/topk assignment pressure.

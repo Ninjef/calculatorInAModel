@@ -153,6 +153,10 @@ Memory:
   example by final left-operand digit modulo hook count, reports route IDs and
   counts, and records routing in training config/metrics. It enables a
   task-partitioned diagnostic but still has no per-hook training result.
+- Routed diagnostic snapshots now report active-route distribution and per-hook
+  quality fields (`hook_{i}_route_count`, `hook_{i}_calculator_result_accuracy`,
+  etc.). This makes the next routed training run measurable but is not itself
+  evidence of specialization.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
@@ -164,6 +168,7 @@ Representative evidence:
 
 - `aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-convergence-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-routed-multi-hook-snapshot-metrics.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-sampled-hard-assignment-cost-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-exact-assignment-refresh-cadence-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-unique-sampled-assignment-coverage-gate.md`

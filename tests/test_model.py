@@ -4331,6 +4331,52 @@ def test_adaptive_optimizer_groups_assign_lrs_and_exclude_frozen_decoder() -> No
     assert id(model.extra_calculator_hooks[0].output_proj.weight) not in grouped_params
 
 
+def test_snapshot_rows_report_routed_hook_quality() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_script_routed_snapshot", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_hook_count=2,
+        calculator_hook_routing="left_operand_mod",
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_estimator="ste",
+        calculator_bottleneck_mode="none",
+    )
+    model = TinyGPT(cfg)
+
+    row = overfit_script.snapshot_row_from_model(
+        model,
+        step=0,
+        num_digits=1,
+        operand_max=1,
+        samples=8,
+        seed=0,
+        device="cpu",
+        answer_format="sum",
+    )
+
+    route_distribution = json.loads(row["calculator_hook_route_distribution"])
+    assert row["calculator_hook_active_count"] == 2
+    assert set(route_distribution) == {"0", "1"}
+    assert row["hook_0_route_count"] > 0
+    assert row["hook_1_route_count"] > 0
+    assert 0.0 <= row["hook_0_calculator_result_accuracy"] <= 1.0
+    assert 0.0 <= row["hook_1_calculator_result_accuracy"] <= 1.0
+
+
 def test_freeze_semantic_decoder_preserves_decoder_but_not_interface() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_script_adaptive_freeze", script_path)

@@ -701,6 +701,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/141-routed-snapshot-metrics-expose-per-hook-quality-but-do-not-prove-routed-training",
+      "target": "researchMemory/hypotheses/phase7/141-routed-snapshot-metrics-expose-per-hook-quality-but-do-not-prove-routed-training.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -788,6 +793,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-convergence-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-routed-multi-hook-snapshot-metrics.md",
       "type": "supported_by"
     },
     {
@@ -2246,6 +2256,13 @@
       "source_path": "researchMemory/hypotheses/phase7/140-left-operand-routed-multi-hook-support-enables-task-partition-diagnostics-but-does-not-pro.md",
       "status": "PARTIAL",
       "title": "Left-operand routed multi-hook support enables task-partition diagnostics but does not prove multi-hook training."
+    },
+    {
+      "id": "doc/141-routed-snapshot-metrics-expose-per-hook-quality-but-do-not-prove-routed-training",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/141-routed-snapshot-metrics-expose-per-hook-quality-but-do-not-prove-routed-training.md",
+      "status": "PARTIAL",
+      "title": "Routed snapshot metrics expose per-hook quality but do not prove routed training."
     },
     {
       "id": "doc/phase7-direction-memory",
