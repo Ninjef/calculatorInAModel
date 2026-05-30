@@ -114,9 +114,9 @@ Active directions:
   `0.0000`, learned calc `0.9922`). This shows true-result forced-margin is
   not strictly required for staged transfer, but full forced-result enumeration
   and frozen transfer remain unsolved scalability/prescriptiveness issues.
-  Hidden-state/candidate-output critics do not look like the scalable bridge:
-  pointwise recovery stayed at `0.08-0.26`, and the best pairwise result was
-  only `0.40` heldout argmin recovery while using `24/39` result scores.
+  Hidden/output critics cannot directly replace enumeration (`0.40` best
+  argmin recovery). Proposal-rescoring is stronger but costly: top-8 recovers
+  `0.79-0.84`; top-16 recovers `0.96-1.00` by scoring `16/39`; LCB lost to mean.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
@@ -167,15 +167,15 @@ These branches should not continue without a new mechanism:
    such as many-calculator cost, cheaper assignment, or removal of hard
    assignment / true-result forcing. Do not rerun op19, shallow op29, op29
    low-LR recovery, completed op29 `rhead64` seeds, or the same op39 path.
-4. If reducing hard-assignment cost, state the scalability hypothesis and
-   compare against the exact-grid ceiling. Do not run more uniform sampled
-   count ladders or fixed refresh-interval ladders on op19 `rhead64`; use true
-   routing validation, op39 with a compute hypothesis, or a changed estimator.
-5. Use answer-derived result-boundary transfer as a bridge, not a recipe:
-   next work should approximate or replace the full forced-result enumeration
-   that selected the best-result target. Do not continue pointwise/rank
-   hidden-output critic variants; use different target construction,
-   uncertainty-aware compute, or validation across evolving model states.
+4. If reducing hard-assignment cost, state the scalability hypothesis, compare
+   against exact-grid, avoid more uniform count/fixed-refresh ladders, and use
+   routing validation, op39 compute stress, or a changed estimator.
+5. Use answer-derived result-boundary transfer as a bridge, not a recipe: next
+   work should approximate or replace the full forced-result enumeration that
+   selected the best-result target. Do not continue pointwise/rank
+   hidden-output critic variants or static proposal count tweaks; use
+   adaptive compute, different target construction, or validation across
+   evolving model states.
 
 ## What Would Change Our Mind
 

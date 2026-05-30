@@ -504,6 +504,16 @@ Memory:
   the trained checkpoint to `0.40` heldout argmin recovery at `k=24`, but that
   already scores most of the 39-class result vocabulary. Do not continue
   pointwise/pairwise/hybrid critic-loss variants as novelty.
+- A follow-up uncertainty/proposal diagnostic changed the question from direct
+  argmin prediction to "propose a subset, then score it." This is
+  mixed-promising but not a solved bridge: at step `800`, a single pairwise
+  critic trained from `8` forced scores per train prompt recovered the
+  full-enum best on `0.79` of heldout prompts with top-8 proposal rescoring and
+  `0.96` with top-16; a four-member ensemble reached `0.84` top-8 and `1.00`
+  top-16. But top-16 already scores `16/39` heldout candidates, the ensemble
+  uses `32` train scores per prompt, and LCB uncertainty did not beat mean
+  proposals. Continue only with adaptive compute/soft targets/streaming
+  validation, not beta/count/ensemble tweaks.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -558,6 +568,7 @@ Representative evidence:
 - `researchReviews/2026-05-30-forced-margin-benchmark-direction-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-answer-derived-boundary-handoff.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-amortized-critic-diagnostic.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-uncertainty-proposal-diagnostic.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-sampled-hard-assignment-cost-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-exact-assignment-refresh-cadence-gate.md`

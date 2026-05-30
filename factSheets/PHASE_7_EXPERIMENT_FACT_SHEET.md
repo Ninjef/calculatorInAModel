@@ -8280,6 +8280,46 @@ runs/2026-05-30_phase7_result_boundary_amortized_critic/hidden_output_hybrid_k24
 | hybrid | step `0` | `24` | `0.2000` | `0.6200` | `3.9556` |
 | hybrid | step `800` | `24` | `0.2700` | `0.7800` | `2.9605` |
 
+Uncertainty/proposal follow-up:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-result-boundary-uncertainty-proposal-diagnostic.md
+runs/2026-05-30_phase7_result_boundary_uncertainty_proposal/uncertainty_lcb_k8_pairwise_ensemble4_step0_100_800.json
+runs/2026-05-30_phase7_result_boundary_uncertainty_proposal/uncertainty_lcb_k16_pairwise_ensemble4_step800.json
+runs/2026-05-30_phase7_result_boundary_uncertainty_proposal/single_pairwise_k8_step800.json
+runs/2026-05-30_phase7_result_boundary_uncertainty_proposal/single_pairwise_k16_step800.json
+```
+
+- Extended `scripts/diagnose_result_boundary_amortized_critic.py` with
+  `--ensemble-size`, `--uncertainty-candidates`, and `--uncertainty-beta`.
+- The new metric asks whether a critic-proposed subset would contain the
+  full-enum best if we actually scored only that subset.
+- Direct pairwise-critic argmin recovery remained weak at step `800`: `0.20`
+  for a single critic and `0.24` for a four-member ensemble with `8` sparse
+  scores per train prompt.
+- Proposal-plus-rescoring was much stronger:
+
+| Setup | Proposed candidates | Train scores/prompt | Heldout scored best = full best | Mean regret |
+| --- | ---: | ---: | ---: | ---: |
+| single pairwise step `800` | `8/39` | `8` | `0.7900` | `0.6707` |
+| single pairwise step `800` | `16/39` | `8` | `0.9600` | `0.1162` |
+| ensemble pairwise step `800` mean proposal | `8/39` | `32` | `0.8400` | `0.5032` |
+| ensemble pairwise step `800` mean proposal | `16/39` | `32` | `1.0000` | `0.0000` |
+| ensemble pairwise step `800` LCB proposal | `8/39` | `32` | `0.7900` | `0.6694` |
+| ensemble pairwise step `800` LCB proposal | `16/39` | `32` | `0.9800` | `0.0705` |
+
+Interpretation:
+
+- This is a partial result, not a solved training method.
+- The static critic can be useful as a broad candidate proposer, but near-exact
+  target recovery required scoring `16/39` heldout candidates, and the
+  four-member ensemble's sparse supervision cost is close to full enumeration.
+- LCB uncertainty did not beat the mean proposal, so the hoped adaptive-compute
+  mechanism is not present yet.
+- Next result-boundary work needs adaptive stopping/calibration, soft/set
+  targets, or streaming/evolving-checkpoint validation rather than more static
+  beta/ensemble/count tweaks.
+
 Review:
 
 ```text

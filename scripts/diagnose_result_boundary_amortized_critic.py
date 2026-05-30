@@ -39,6 +39,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--heldout-prompts", type=int, default=100)
     parser.add_argument("--hidden-size", type=int, default=128)
     parser.add_argument("--epochs", type=int, default=600)
+    parser.add_argument("--ensemble-size", type=int, default=1)
+    parser.add_argument("--uncertainty-candidates", type=int, default=8)
+    parser.add_argument("--uncertainty-beta", type=float, default=1.0)
     parser.add_argument(
         "--critic-loss-mode",
         choices=["pointwise", "pairwise", "hybrid"],
@@ -256,6 +259,67 @@ def evaluate_predictions(
     }
 
 
+def evaluate_candidate_proposals(
+    mean_losses: torch.Tensor,
+    std_losses: torch.Tensor,
+    full_losses: torch.Tensor,
+    heldout_indices: torch.Tensor,
+    true_sum: torch.Tensor,
+    *,
+    candidate_count: int,
+    uncertainty_beta: float,
+) -> dict[str, float]:
+    if candidate_count < 1:
+        raise ValueError("candidate_count must be positive")
+    if uncertainty_beta < 0.0:
+        raise ValueError("uncertainty_beta must be non-negative")
+    heldout_mean = mean_losses[heldout_indices]
+    heldout_std = std_losses[heldout_indices]
+    heldout_full = full_losses[heldout_indices]
+    heldout_true_sum = true_sum[heldout_indices]
+    full_best = heldout_full.argmin(dim=-1)
+    best_losses = heldout_full.gather(1, full_best.unsqueeze(-1)).squeeze(-1)
+
+    k = min(candidate_count, heldout_mean.shape[-1])
+    mean_candidates = heldout_mean.topk(k=k, largest=False).indices
+    lcb = heldout_mean - uncertainty_beta * heldout_std
+    lcb_candidates = lcb.topk(k=k, largest=False).indices
+
+    def score_selected(prefix: str, candidates: torch.Tensor) -> dict[str, float]:
+        selected_full_losses = heldout_full.gather(1, candidates)
+        selected_best_position = selected_full_losses.argmin(dim=-1)
+        selected_best = candidates.gather(
+            1,
+            selected_best_position.unsqueeze(-1),
+        ).squeeze(-1)
+        selected_best_losses = heldout_full.gather(
+            1,
+            selected_best.unsqueeze(-1),
+        ).squeeze(-1)
+        return {
+            f"{prefix}_topk_contains_full_best": float(
+                (candidates == full_best.unsqueeze(-1)).any(dim=-1).float().mean().item()
+            ),
+            f"{prefix}_scored_best_equals_full_best": float(
+                (selected_best == full_best).float().mean().item()
+            ),
+            f"{prefix}_scored_best_equals_true_sum": float(
+                (selected_best == heldout_true_sum).float().mean().item()
+            ),
+            f"{prefix}_mean_regret": float(
+                (selected_best_losses - best_losses).mean().item()
+            ),
+            f"{prefix}_median_regret": float(
+                (selected_best_losses - best_losses).median().item()
+            ),
+        }
+
+    return {
+        **score_selected("heldout_mean_proposal", mean_candidates),
+        **score_selected("heldout_lcb_proposal", lcb_candidates),
+    }
+
+
 def diagnose_checkpoint(
     checkpoint: Path,
     *,
@@ -293,32 +357,63 @@ def diagnose_checkpoint(
     heldout_indices = permutation[:heldout_count]
     train_indices = permutation[heldout_count:]
     result_count = int(full_losses.shape[-1])
-    prompt_indices, result_indices = sample_training_pairs(
-        train_indices,
-        result_count=result_count,
-        samples_per_prompt=args.samples_per_prompt,
-        generator=generator,
-        device=args.device,
-    )
-    train_features = features[prompt_indices, result_indices]
-    train_losses = full_losses[prompt_indices, result_indices]
-    critic, train_metrics = train_critic(
-        train_features,
-        train_losses,
-        prompts=int(train_indices.shape[0]),
-        samples_per_prompt=args.samples_per_prompt,
-        hidden_size=args.hidden_size,
-        epochs=args.epochs,
-        critic_loss_mode=args.critic_loss_mode,
-        lr=args.lr,
-        weight_decay=args.weight_decay,
-    )
-    predicted_losses = predict_losses(critic, features)
+
+    ensemble_predictions = []
+    train_losses_used = 0
+    train_loss_values = []
+    for member_idx in range(int(args.ensemble_size)):
+        torch.manual_seed(int(args.seed) + member_idx)
+        prompt_indices, result_indices = sample_training_pairs(
+            train_indices,
+            result_count=result_count,
+            samples_per_prompt=args.samples_per_prompt,
+            generator=generator,
+            device=args.device,
+        )
+        train_features = features[prompt_indices, result_indices]
+        train_losses = full_losses[prompt_indices, result_indices]
+        critic, member_train_metrics = train_critic(
+            train_features,
+            train_losses,
+            prompts=int(train_indices.shape[0]),
+            samples_per_prompt=args.samples_per_prompt,
+            hidden_size=args.hidden_size,
+            epochs=args.epochs,
+            critic_loss_mode=args.critic_loss_mode,
+            lr=args.lr,
+            weight_decay=args.weight_decay,
+        )
+        ensemble_predictions.append(predict_losses(critic, features))
+        train_losses_used += int(train_losses.numel())
+        train_loss_values.append(float(member_train_metrics["critic_train_loss"]))
+
+    stacked_predictions = torch.stack(ensemble_predictions, dim=0)
+    predicted_losses = stacked_predictions.mean(dim=0)
+    prediction_std = stacked_predictions.std(dim=0, unbiased=False)
+    train_metrics = {
+        "critic_train_loss": float(
+            torch.tensor(train_loss_values, device=args.device).mean().item()
+        ),
+        "critic_train_loss_mean": float(
+            torch.tensor(train_loss_values, device=args.device).mean().item()
+        ),
+        "critic_train_loss_min": float(min(train_loss_values)),
+        "critic_train_loss_max": float(max(train_loss_values)),
+    }
     metrics = evaluate_predictions(
         predicted_losses,
         full_losses,
         heldout_indices,
         true_sum,
+    )
+    proposal_metrics = evaluate_candidate_proposals(
+        predicted_losses,
+        prediction_std,
+        full_losses,
+        heldout_indices,
+        true_sum,
+        candidate_count=int(args.uncertainty_candidates),
+        uncertainty_beta=float(args.uncertainty_beta),
     )
     return {
         "label": label,
@@ -328,11 +423,21 @@ def diagnose_checkpoint(
         "heldout_prompts": int(heldout_indices.shape[0]),
         "result_count": result_count,
         "samples_per_prompt": int(args.samples_per_prompt),
+        "ensemble_size": int(args.ensemble_size),
+        "uncertainty_candidates": int(args.uncertainty_candidates),
+        "uncertainty_beta": float(args.uncertainty_beta),
         "critic_loss_mode": str(args.critic_loss_mode),
-        "forced_scores_used": int(train_losses.numel()),
+        "forced_scores_used": train_losses_used,
+        "heldout_proposal_scores_if_used": int(
+            heldout_indices.shape[0] * min(args.uncertainty_candidates, result_count)
+        ),
+        "proposal_score_fraction_of_full_heldout_enum": float(
+            min(args.uncertainty_candidates, result_count) / result_count
+        ),
         "full_enum_scores_for_eval": int(full_losses.numel()),
         **train_metrics,
         **metrics,
+        **proposal_metrics,
     }
 
 
@@ -340,6 +445,12 @@ def main() -> None:
     args = parse_args()
     if args.samples_per_prompt < 1:
         raise ValueError("--samples-per-prompt must be positive")
+    if args.ensemble_size < 1:
+        raise ValueError("--ensemble-size must be positive")
+    if args.uncertainty_candidates < 1:
+        raise ValueError("--uncertainty-candidates must be positive")
+    if args.uncertainty_beta < 0.0:
+        raise ValueError("--uncertainty-beta must be non-negative")
     config = load_config(args.config)
     labels = args.checkpoint_label
     if labels is None:

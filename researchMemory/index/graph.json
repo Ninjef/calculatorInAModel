@@ -756,6 +756,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/152-result-boundary-critic-proposals-help-only-when-followed-by-broad-candidate-rescoring",
+      "target": "researchMemory/hypotheses/phase7/152-result-boundary-critic-proposals-help-only-when-followed-by-broad-candidate-rescoring.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1173,6 +1178,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-result-boundary-amortized-critic-diagnostic.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-result-boundary-uncertainty-proposal-diagnostic.md",
       "type": "supported_by"
     },
     {
@@ -2393,6 +2403,13 @@
       "source_path": "researchMemory/hypotheses/phase7/151-post-shared-output-steering-favors-less-prescriptive-credit-over-more-same-recipe-scaling-.md",
       "status": "REVIEW",
       "title": "Post-shared-output steering favors less-prescriptive credit over more same-recipe scaling audits."
+    },
+    {
+      "id": "doc/152-result-boundary-critic-proposals-help-only-when-followed-by-broad-candidate-rescoring",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/152-result-boundary-critic-proposals-help-only-when-followed-by-broad-candidate-rescoring.md",
+      "status": "MIXED",
+      "title": "Result-boundary critic proposals help only when followed by broad candidate rescoring."
     },
     {
       "id": "doc/phase7-direction-memory",
