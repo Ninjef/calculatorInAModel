@@ -117,7 +117,7 @@ Active directions:
   Static approximations are paused: hidden/output critics miss (`0.40` best
   argmin), proposal-rescoring is costly (`16/39` for `0.96-1.00`), adaptive
   expansion has modest leverage, and soft/regret-set targets train worse than
-  hard-best. Frozen proposal critics also fail forward across checkpoints.
+  hard-best. Frozen critics fail forward; simple online calibration is partial.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29

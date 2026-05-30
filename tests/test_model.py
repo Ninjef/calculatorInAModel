@@ -5585,6 +5585,17 @@ def test_result_boundary_cross_checkpoint_diagnostic_main(monkeypatch, tmp_path)
         "train_critic",
         lambda *args, **kwargs: (ToyCritic(), {"critic_train_loss": 0.0}),
     )
+
+    def fake_fit_existing_critic(critic, train_features, train_losses, **kwargs):
+        critic.feature_mean = train_features.mean(dim=0, keepdim=True)
+        critic.feature_std = train_features.std(dim=0, keepdim=True).clamp_min(1.0e-6)
+        return {"adapt_critic_loss": 0.0}
+
+    monkeypatch.setattr(
+        diagnostic,
+        "fit_existing_critic",
+        fake_fit_existing_critic,
+    )
     output_json = tmp_path / "cross.json"
     monkeypatch.setattr(
         sys,
@@ -5609,6 +5620,10 @@ def test_result_boundary_cross_checkpoint_diagnostic_main(monkeypatch, tmp_path)
             "1",
             "--proposal-candidates",
             "1",
+            "--adapt-samples-per-prompt",
+            "1",
+            "--adapt-epochs",
+            "1",
             "--output-json",
             str(output_json),
         ],
@@ -5617,12 +5632,18 @@ def test_result_boundary_cross_checkpoint_diagnostic_main(monkeypatch, tmp_path)
     diagnostic.main()
 
     rows = json.loads(output_json.read_text())["rows"]
-    assert [row["eval_label"] for row in rows] == ["step0", "step100"]
+    assert [(row["eval_label"], row["proposal_mode"]) for row in rows] == [
+        ("step0", "frozen"),
+        ("step0", "adapted"),
+        ("step100", "frozen"),
+        ("step100", "adapted"),
+    ]
     assert all(row["train_label"] == "step0" for row in rows)
     assert rows[0]["heldout_mean_proposal_scored_best_equals_full_best"] == 1.0
-    assert rows[1]["feature_standardized_abs_mean"] > rows[0][
+    assert rows[2]["feature_standardized_abs_mean"] > rows[0][
         "feature_standardized_abs_mean"
     ]
+    assert rows[1]["adaptation_scores_used"] == 2
 
 
 def test_phase7_streaming_batch_and_prompt_memory_tables() -> None:

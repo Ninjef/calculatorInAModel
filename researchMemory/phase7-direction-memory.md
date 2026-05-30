@@ -545,6 +545,12 @@ Memory:
   `0.11`/`0.12`, and train step400 to eval step800 gave `0.23`. Do not wire a
   frozen critic into source training; result-boundary proposals need online
   refresh, state calibration, or a different mechanism.
+- Simple warm-start online calibration is partial-negative. Retargeting the
+  critic normalization at the eval checkpoint and fine-tuning on fresh sparse
+  scores repaired some forward transfer (`step400 -> step800` from `0.23` to
+  `0.59` with `2` fresh scores/prompt), but even `8` fresh scores/prompt only
+  reached `0.62`, below same-state step800 `0.79`. Do not tune small
+  adapt-lr/epoch/count variants as novelty.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -604,6 +610,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-soft-target-training-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-regret-set-training-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-cross-checkpoint-critic-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-online-calibrated-critic-gate.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-set-target-steering-review.md`

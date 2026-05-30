@@ -8475,6 +8475,39 @@ Interpretation:
   source training; proposal methods need online refresh, state calibration, or
   a different evolving objective.
 
+Online-calibrated proposal critic follow-up:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-result-boundary-online-calibrated-critic-gate.md
+runs/2026-05-30_phase7_result_boundary_online_calibrated_critic/train100_eval400_800_adapt2_k8.json
+runs/2026-05-30_phase7_result_boundary_online_calibrated_critic/train400_eval800_adapt2_k8.json
+runs/2026-05-30_phase7_result_boundary_online_calibrated_critic/train400_eval800_adapt4_k8.json
+runs/2026-05-30_phase7_result_boundary_online_calibrated_critic/train400_eval800_adapt8_k8.json
+```
+
+- Added warm-start online calibration to the cross-checkpoint diagnostic:
+  retarget feature/target normalization at the eval checkpoint and fine-tune
+  on fresh sparse forced scores before proposing top-8 candidates.
+
+| Train -> eval | Mode | Fresh adapt scores | Top-8 recovery | Mean regret |
+| --- | --- | ---: | ---: | ---: |
+| step100 -> step400 | frozen | `0` | `0.11` | `5.59` |
+| step100 -> step400 | adapted `k=2` | `600` | `0.36` | `2.55` |
+| step100 -> step800 | frozen | `0` | `0.12` | `5.29` |
+| step100 -> step800 | adapted `k=2` | `600` | `0.41` | `2.39` |
+| step400 -> step800 | frozen | `0` | `0.23` | `3.70` |
+| step400 -> step800 | adapted `k=2` | `600` | `0.59` | `1.34` |
+| step400 -> step800 | adapted `k=4` | `1200` | `0.54` | `1.49` |
+| step400 -> step800 | adapted `k=8` | `2400` | `0.62` | `1.25` |
+
+Interpretation:
+
+- Small online calibration repairs part of the forward-transfer collapse.
+- It does not restore same-state quality: the previous same-state step800
+  critic reached top-8 recovery `0.79` / mean regret `0.67`.
+- Do not wire this warm-start calibrated critic into source training as a
+  solved assignment replacement.
+
 Static approximation steering review:
 
 ```text

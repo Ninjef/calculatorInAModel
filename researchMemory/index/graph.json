@@ -791,6 +791,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/159-simple-online-calibrated-result-boundary-proposal-critics-do-not-restore-same-state-qualit",
+      "target": "researchMemory/hypotheses/phase7/159-simple-online-calibrated-result-boundary-proposal-critics-do-not-restore-same-state-qualit.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1233,6 +1238,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-result-boundary-cross-checkpoint-critic-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-result-boundary-online-calibrated-critic-gate.md",
       "type": "supported_by"
     },
     {
@@ -2512,6 +2522,13 @@
       "source_path": "researchMemory/hypotheses/phase7/158-frozen-result-boundary-proposal-critics-generalize-across-evolving-checkpoints.md",
       "status": "DISPROVEN",
       "title": "Frozen result-boundary proposal critics generalize across evolving checkpoints."
+    },
+    {
+      "id": "doc/159-simple-online-calibrated-result-boundary-proposal-critics-do-not-restore-same-state-qualit",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/159-simple-online-calibrated-result-boundary-proposal-critics-do-not-restore-same-state-qualit.md",
+      "status": "PARTIAL-NEGATIVE",
+      "title": "Simple online-calibrated result-boundary proposal critics do not restore same-state quality."
     },
     {
       "id": "doc/phase7-direction-memory",

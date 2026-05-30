@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 from pathlib import Path
 from typing import Any
@@ -45,6 +46,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--epochs", type=int, default=600)
     parser.add_argument("--ensemble-size", type=int, default=1)
     parser.add_argument("--proposal-candidates", type=int, default=8)
+    parser.add_argument("--adapt-samples-per-prompt", type=int, default=0)
+    parser.add_argument("--adapt-epochs", type=int, default=100)
+    parser.add_argument("--adapt-lr", type=float, default=3.0e-4)
     parser.add_argument("--uncertainty-beta", type=float, default=1.0)
     parser.add_argument(
         "--critic-loss-mode",
@@ -109,6 +113,123 @@ def feature_drift_metrics(
     }
 
 
+def retarget_critic_normalization(
+    critic: torch.nn.Module,
+    *,
+    feature_mean: torch.Tensor,
+    feature_std: torch.Tensor,
+    target_mean: torch.Tensor,
+    target_std: torch.Tensor,
+) -> None:
+    """Change feature/target normalization while preserving raw predictions."""
+    if not isinstance(critic, torch.nn.Sequential):
+        raise TypeError("normalization retargeting expects a Sequential critic")
+    first = critic[0]
+    last = critic[-1]
+    if not isinstance(first, torch.nn.Linear) or not isinstance(last, torch.nn.Linear):
+        raise TypeError("normalization retargeting expects Linear endpoints")
+
+    old_feature_mean = critic.feature_mean.to(  # type: ignore[attr-defined]
+        feature_mean.device
+    )
+    old_feature_std = critic.feature_std.to(  # type: ignore[attr-defined]
+        feature_std.device
+    )
+    old_target_mean = critic.target_mean.to(  # type: ignore[attr-defined]
+        target_mean.device
+    )
+    old_target_std = critic.target_std.to(  # type: ignore[attr-defined]
+        target_std.device
+    )
+
+    feature_scale = (feature_std / old_feature_std).squeeze(0)
+    feature_offset = ((feature_mean - old_feature_mean) / old_feature_std).squeeze(0)
+    with torch.no_grad():
+        old_first_weight = first.weight.detach().clone()
+        first.weight.copy_(old_first_weight * feature_scale.unsqueeze(0))
+        first.bias.add_(old_first_weight @ feature_offset)
+
+        target_scale = old_target_std / target_std
+        last.weight.mul_(target_scale)
+        last.bias.copy_(
+            (last.bias * old_target_std + old_target_mean - target_mean) / target_std
+        )
+
+    critic.feature_mean = feature_mean  # type: ignore[attr-defined]
+    critic.feature_std = feature_std  # type: ignore[attr-defined]
+    critic.target_mean = target_mean  # type: ignore[attr-defined]
+    critic.target_std = target_std  # type: ignore[attr-defined]
+
+
+def fit_existing_critic(
+    critic: torch.nn.Module,
+    train_features: torch.Tensor,
+    train_losses: torch.Tensor,
+    *,
+    prompts: int,
+    samples_per_prompt: int,
+    epochs: int,
+    critic_loss_mode: str,
+    lr: float,
+    weight_decay: float,
+) -> dict[str, float]:
+    if train_features.shape[0] != prompts * samples_per_prompt:
+        raise ValueError("train feature count must match prompts * samples_per_prompt")
+    feature_mean = train_features.mean(dim=0, keepdim=True)
+    feature_std = train_features.std(dim=0, keepdim=True).clamp_min(1.0e-6)
+    target_mean = train_losses.mean()
+    target_std = train_losses.std().clamp_min(1.0e-6)
+    retarget_critic_normalization(
+        critic,
+        feature_mean=feature_mean,
+        feature_std=feature_std,
+        target_mean=target_mean,
+        target_std=target_std,
+    )
+    normalized_features = (train_features - feature_mean) / feature_std
+    normalized_targets = ((train_losses - target_mean) / target_std).unsqueeze(-1)
+    optimizer = torch.optim.AdamW(
+        critic.parameters(),
+        lr=lr,
+        weight_decay=weight_decay,
+    )
+    final_loss = float("nan")
+    critic.train()
+    for _ in range(epochs):
+        optimizer.zero_grad(set_to_none=True)
+        prediction = critic(normalized_features)
+        pointwise_loss = torch.nn.functional.smooth_l1_loss(
+            prediction, normalized_targets
+        )
+        grouped_prediction = prediction.reshape(prompts, samples_per_prompt)
+        grouped_targets = normalized_targets.reshape(prompts, samples_per_prompt)
+        prediction_diff = grouped_prediction.unsqueeze(2) - grouped_prediction.unsqueeze(
+            1
+        )
+        target_diff = grouped_targets.unsqueeze(2) - grouped_targets.unsqueeze(1)
+        pair_mask = target_diff.abs() > 1.0e-6
+        pair_targets = (target_diff > 0).to(prediction_diff.dtype)
+        if bool(pair_mask.any().item()):
+            pairwise_loss = torch.nn.functional.binary_cross_entropy_with_logits(
+                prediction_diff[pair_mask],
+                pair_targets[pair_mask],
+            )
+        else:
+            pairwise_loss = pointwise_loss.new_tensor(0.0)
+        if critic_loss_mode == "pointwise":
+            loss = pointwise_loss
+        elif critic_loss_mode == "pairwise":
+            loss = pairwise_loss
+        else:
+            loss = pointwise_loss + pairwise_loss
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(critic.parameters(), 5.0)
+        optimizer.step()
+        final_loss = float(loss.detach().item())
+    critic.eval()
+    return {"adapt_critic_loss": final_loss}
+
+
 @torch.no_grad()
 def predict_losses(critic: torch.nn.Module, features: torch.Tensor) -> torch.Tensor:
     flat = features.reshape(-1, features.shape[-1])
@@ -127,6 +248,12 @@ def main() -> None:
         raise ValueError("--ensemble-size must be positive")
     if args.proposal_candidates < 1:
         raise ValueError("--proposal-candidates must be positive")
+    if args.adapt_samples_per_prompt < 0:
+        raise ValueError("--adapt-samples-per-prompt must be non-negative")
+    if args.adapt_samples_per_prompt > 0 and args.adapt_epochs < 1:
+        raise ValueError("--adapt-epochs must be positive when adaptation is enabled")
+    if args.adapt_lr <= 0:
+        raise ValueError("--adapt-lr must be positive")
     if args.uncertainty_beta < 0.0:
         raise ValueError("--uncertainty-beta must be non-negative")
 
@@ -196,55 +323,115 @@ def main() -> None:
                 device=args.device,
                 chunk_size=int(args.chunk_size),
             )
-        predictions = [
-            predict_losses(critic, eval_data["features"]) for critic in critics
-        ]
-        stacked_predictions = torch.stack(predictions, dim=0)
-        predicted_losses = stacked_predictions.mean(dim=0)
-        prediction_std = stacked_predictions.std(dim=0, unbiased=False)
-        prediction_metrics = evaluate_predictions(
-            predicted_losses,
-            eval_data["full_losses"],
-            heldout_indices,
-            eval_data["true_sum"],
+        def append_row(
+            *,
+            mode: str,
+            active_critics: list[torch.nn.Module],
+            adaptation_scores_used: int,
+            adaptation_loss: float | None,
+        ) -> None:
+            predictions = [
+                predict_losses(critic, eval_data["features"])
+                for critic in active_critics
+            ]
+            stacked_predictions = torch.stack(predictions, dim=0)
+            predicted_losses = stacked_predictions.mean(dim=0)
+            prediction_std = stacked_predictions.std(dim=0, unbiased=False)
+            prediction_metrics = evaluate_predictions(
+                predicted_losses,
+                eval_data["full_losses"],
+                heldout_indices,
+                eval_data["true_sum"],
+            )
+            proposal_metrics = evaluate_candidate_proposals(
+                predicted_losses,
+                prediction_std,
+                eval_data["full_losses"],
+                heldout_indices,
+                eval_data["true_sum"],
+                candidate_count=int(args.proposal_candidates),
+                uncertainty_beta=float(args.uncertainty_beta),
+            )
+            drift_metrics = feature_drift_metrics(
+                active_critics[0],
+                eval_data["features"],
+                heldout_indices,
+            )
+            rows.append(
+                {
+                    "proposal_mode": mode,
+                    "train_label": str(args.train_label),
+                    "train_checkpoint": str(args.train_checkpoint),
+                    "eval_label": str(label),
+                    "eval_checkpoint": str(checkpoint),
+                    "prompt_count": prompt_count,
+                    "train_prompts": int(train_indices.shape[0]),
+                    "heldout_prompts": int(heldout_indices.shape[0]),
+                    "result_count": result_count,
+                    "samples_per_prompt": int(args.samples_per_prompt),
+                    "adapt_samples_per_prompt": int(args.adapt_samples_per_prompt),
+                    "adapt_epochs": int(args.adapt_epochs),
+                    "adaptation_scores_used": adaptation_scores_used,
+                    "adapt_critic_loss": adaptation_loss,
+                    "ensemble_size": int(args.ensemble_size),
+                    "proposal_candidates": int(args.proposal_candidates),
+                    "uncertainty_beta": float(args.uncertainty_beta),
+                    "critic_loss_mode": str(args.critic_loss_mode),
+                    "forced_scores_used": train_losses_used,
+                    "critic_train_loss": float(
+                        torch.tensor(train_loss_values, device=args.device).mean().item()
+                    ),
+                    **prediction_metrics,
+                    **proposal_metrics,
+                    **drift_metrics,
+                }
+            )
+
+        append_row(
+            mode="frozen",
+            active_critics=critics,
+            adaptation_scores_used=0,
+            adaptation_loss=None,
         )
-        proposal_metrics = evaluate_candidate_proposals(
-            predicted_losses,
-            prediction_std,
-            eval_data["full_losses"],
-            heldout_indices,
-            eval_data["true_sum"],
-            candidate_count=int(args.proposal_candidates),
-            uncertainty_beta=float(args.uncertainty_beta),
-        )
-        drift_metrics = feature_drift_metrics(
-            critics[0],
-            eval_data["features"],
-            heldout_indices,
-        )
-        rows.append(
-            {
-                "train_label": str(args.train_label),
-                "train_checkpoint": str(args.train_checkpoint),
-                "eval_label": str(label),
-                "eval_checkpoint": str(checkpoint),
-                "prompt_count": prompt_count,
-                "train_prompts": int(train_indices.shape[0]),
-                "heldout_prompts": int(heldout_indices.shape[0]),
-                "result_count": result_count,
-                "samples_per_prompt": int(args.samples_per_prompt),
-                "ensemble_size": int(args.ensemble_size),
-                "proposal_candidates": int(args.proposal_candidates),
-                "uncertainty_beta": float(args.uncertainty_beta),
-                "critic_loss_mode": str(args.critic_loss_mode),
-                "forced_scores_used": train_losses_used,
-                "critic_train_loss": float(
-                    torch.tensor(train_loss_values, device=args.device).mean().item()
-                ),
-                **prediction_metrics,
-                **proposal_metrics,
-                **drift_metrics,
-            }
+        if int(args.adapt_samples_per_prompt) <= 0:
+            continue
+
+        adapted_critics = [copy.deepcopy(critic) for critic in critics]
+        adaptation_losses = []
+        adaptation_scores_used = 0
+        for member_idx, critic in enumerate(adapted_critics):
+            adapt_generator = torch.Generator(device=args.device)
+            adapt_generator.manual_seed(int(args.seed) + 10_000 + member_idx)
+            prompt_indices, result_indices = sample_training_pairs(
+                train_indices,
+                result_count=result_count,
+                samples_per_prompt=int(args.adapt_samples_per_prompt),
+                generator=adapt_generator,
+                device=args.device,
+            )
+            train_features = eval_data["features"][prompt_indices, result_indices]
+            train_losses = eval_data["full_losses"][prompt_indices, result_indices]
+            metrics = fit_existing_critic(
+                critic,
+                train_features,
+                train_losses,
+                prompts=int(train_indices.shape[0]),
+                samples_per_prompt=int(args.adapt_samples_per_prompt),
+                epochs=int(args.adapt_epochs),
+                critic_loss_mode=str(args.critic_loss_mode),
+                lr=float(args.adapt_lr),
+                weight_decay=float(args.weight_decay),
+            )
+            adaptation_losses.append(float(metrics["adapt_critic_loss"]))
+            adaptation_scores_used += int(train_losses.numel())
+
+        append_row(
+            mode="adapted",
+            active_critics=adapted_critics,
+            adaptation_scores_used=adaptation_scores_used,
+            adaptation_loss=float(
+                torch.tensor(adaptation_losses, device=args.device).mean().item()
+            ),
         )
 
     output = {"rows": rows}
