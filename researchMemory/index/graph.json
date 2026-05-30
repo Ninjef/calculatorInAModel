@@ -696,6 +696,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/140-left-operand-routed-multi-hook-support-enables-task-partition-diagnostics-but-does-not-pro",
+      "target": "researchMemory/hypotheses/phase7/140-left-operand-routed-multi-hook-support-enables-task-partition-diagnostics-but-does-not-pro.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -833,6 +838,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-left-operand-routed-multi-hook-support.md",
       "type": "supported_by"
     },
     {
@@ -2229,6 +2239,13 @@
       "source_path": "researchMemory/hypotheses/phase7/139-same-layer-multi-hook-forward-support-is-a-prerequisite-for-many-calculator-diagnostics-no.md",
       "status": "PARTIAL",
       "title": "Same-layer multi-hook forward support is a prerequisite for many-calculator diagnostics, not proof of scalable training."
+    },
+    {
+      "id": "doc/140-left-operand-routed-multi-hook-support-enables-task-partition-diagnostics-but-does-not-pro",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/140-left-operand-routed-multi-hook-support-enables-task-partition-diagnostics-but-does-not-pro.md",
+      "status": "PARTIAL",
+      "title": "Left-operand routed multi-hook support enables task-partition diagnostics but does not prove multi-hook training."
     },
     {
       "id": "doc/phase7-direction-memory",

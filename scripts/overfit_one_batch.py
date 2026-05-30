@@ -82,6 +82,8 @@ class TrainConfig:
     calculator_read_position: str
     calculator_read_span_width: int
     calculator_injection_mode: str
+    calculator_hook_count: int
+    calculator_hook_routing: str
     calculator_bottleneck_mode: str
     calculator_output_format: str
     answer_decoder_interaction: str
@@ -222,7 +224,6 @@ class TrainConfig:
     n_embd: int
     mlp_expansion: int
     calculator_hook_after_layer: int
-    calculator_hook_count: int
     model: dict[str, object]
 
 
@@ -6945,6 +6946,7 @@ def make_model_config(
     calculator_output_format: str = "sum",
     answer_decoder_interaction: str | None = None,
     calculator_result_head_hidden_size: int = 0,
+    calculator_hook_routing: str = "all",
     relaxed_calculator_temperature: float = 1.0,
     relaxed_calculator_mode: str = "deterministic",
     relaxed_calculator_hard_forward: bool = True,
@@ -6975,6 +6977,7 @@ def make_model_config(
         calculator_mode=calculator_mode,
         calculator_hook_after_layer=calculator_hook_after_layer,
         calculator_hook_count=calculator_hook_count,
+        calculator_hook_routing=calculator_hook_routing,
         calculator_operand_vocab_size=operand_vocab_size,
         calculator_result_vocab_size=(2 * operand_vocab_size) - 1,
         calculator_injection_scale=injection_scale,
@@ -7022,6 +7025,7 @@ def make_additive_handoff_probe_model(
         calculator_read_position=args.calculator_read_position,
         calculator_read_span_width=args.calculator_read_span_width,
         calculator_injection_mode="add",
+        calculator_hook_routing=args.calculator_hook_routing,
         calculator_bottleneck_mode="none",
         calculator_output_format=args.calculator_output_format,
         answer_decoder_interaction=args.answer_decoder_interaction,
@@ -7167,6 +7171,7 @@ def run_variant(
         calculator_read_position=args.calculator_read_position,
         calculator_read_span_width=args.calculator_read_span_width,
         calculator_injection_mode=args.calculator_injection_mode,
+        calculator_hook_routing=args.calculator_hook_routing,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
         calculator_output_format=args.calculator_output_format,
         answer_decoder_interaction=args.answer_decoder_interaction,
@@ -7334,6 +7339,8 @@ def run_variant(
         calculator_read_position=args.calculator_read_position,
         calculator_read_span_width=args.calculator_read_span_width,
         calculator_injection_mode=args.calculator_injection_mode,
+        calculator_hook_count=cfg.calculator_hook_count,
+        calculator_hook_routing=cfg.calculator_hook_routing,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
         calculator_output_format=args.calculator_output_format,
         answer_decoder_interaction=cfg.answer_decoder_interaction,
@@ -7570,7 +7577,6 @@ def run_variant(
         n_embd=args.n_embd,
         mlp_expansion=args.mlp_expansion,
         calculator_hook_after_layer=cfg.calculator_hook_after_layer,
-        calculator_hook_count=cfg.calculator_hook_count,
         model=asdict(cfg),
     )
     (run_dir / "config.json").write_text(
@@ -9863,6 +9869,7 @@ def run_variant(
         args.calculator_result_head_hidden_size
     )
     metrics["calculator_hook_count"] = args.calculator_hook_count
+    metrics["calculator_hook_routing"] = args.calculator_hook_routing
     metrics["relaxed_calculator_temperature"] = args.relaxed_calculator_temperature
     metrics["relaxed_calculator_final_temperature"] = (
         args.relaxed_calculator_final_temperature
@@ -11379,6 +11386,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--calculator-hook-routing",
+        choices=["all", "left_operand_mod"],
+        default="all",
+        help=(
+            "How to choose active hooks when --calculator-hook-count > 1. "
+            "'all' applies every hook; 'left_operand_mod' routes each prompt "
+            "to one hook by final left-operand digit modulo hook count."
+        ),
+    )
+    parser.add_argument(
         "--reinforce-baseline-beta",
         type=float,
         default=0.95,
@@ -12128,6 +12145,8 @@ def main() -> None:
         raise ValueError("--calculator-hook-after-layer must be within model depth")
     if args.calculator_hook_count < 1:
         raise ValueError("--calculator-hook-count must be positive")
+    if args.calculator_hook_routing != "all" and args.calculator_hook_count == 1:
+        raise ValueError("--calculator-hook-routing requires --calculator-hook-count > 1")
     device = pick_device(args.device)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S_%f")
     suffix_parts = [args.variant]
@@ -12521,6 +12540,8 @@ def main() -> None:
                 )
     if args.calculator_hook_count != 1:
         suffix_parts.append(f"hooks{args.calculator_hook_count}")
+        if args.calculator_hook_routing != "all":
+            suffix_parts.append(f"route{args.calculator_hook_routing}")
     if args.calculator_injection_mode != "add":
         suffix_parts.append(args.calculator_injection_mode)
     if args.calculator_bottleneck_mode != "none":
@@ -12554,6 +12575,10 @@ def main() -> None:
     print(f"answer loss weight: {args.answer_loss_weight}")
     print(f"injection scale: {args.injection_scale}")
     print(f"calculator injection mode: {args.calculator_injection_mode}")
+    print(
+        "calculator hook routing: "
+        f"count={args.calculator_hook_count} mode={args.calculator_hook_routing}"
+    )
     print(f"calculator bottleneck mode: {args.calculator_bottleneck_mode}")
     print(f"calculator output format: {args.calculator_output_format}")
     print(f"answer decoder interaction: {effective_answer_decoder_interaction}")

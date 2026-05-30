@@ -55,6 +55,14 @@ policy heads are grouped/frozen with the primary calculator head. This removes
 the immediate single-hook code blocker, but it is not yet a routed or scattered
 many-calculator training result.
 
+A first routed variant now exists too. `calculator_hook_routing='left_operand_mod'`
+activates one hook per fixed-width prompt by final left-operand digit modulo
+hook count, reports route IDs/counts, zeroes non-routed applied injections, and
+is exposed through `--calculator-hook-routing left_operand_mod`. A zero-step
+smoke with three hooks wrote matching routing/count fields in config and
+metrics. This enables a task-partitioned diagnostic, but still does not prove
+per-hook specialization or scalable training.
+
 ## What Should Stop
 
 - More op19 or op29 topk8+unique24 seed replications as scalability evidence.

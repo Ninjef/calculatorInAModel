@@ -36,6 +36,7 @@ def _small_calculator_cfg(
     output_format: str = "sum",
     answer_decoder_interaction: str = "none",
     hook_count: int = 1,
+    hook_routing: str = "all",
 ) -> GPTConfig:
     return GPTConfig(
         n_embd=32,
@@ -45,6 +46,7 @@ def _small_calculator_cfg(
         calculator_enabled=True,
         calculator_mode=mode,
         calculator_hook_count=hook_count,
+        calculator_hook_routing=hook_routing,
         calculator_estimator=estimator,
         calculator_injection_mode=injection_mode,
         calculator_bottleneck_mode=bottleneck_mode,
@@ -378,6 +380,13 @@ def test_invalid_calculator_hook_count_raises() -> None:
         TinyGPT(cfg)
 
 
+def test_invalid_calculator_hook_routing_raises() -> None:
+    cfg = _small_calculator_cfg(hook_routing="middle")
+
+    with pytest.raises(ValueError, match="calculator_hook_routing"):
+        TinyGPT(cfg)
+
+
 def test_invalid_calculator_bottleneck_mode_raises() -> None:
     cfg = _small_calculator_cfg(bottleneck_mode="middle")
 
@@ -459,6 +468,37 @@ def test_multiple_calculator_hooks_sum_independent_injections() -> None:
     assert torch.allclose(combined_injection, hook_injections.sum(dim=0))
     assert len(diagnostics["calculator_traces"]) == 3
     assert diagnostics["calculator_trace"] is diagnostics["calculator_traces"][0]
+
+
+def test_left_operand_mod_routes_examples_to_one_hook() -> None:
+    torch.manual_seed(0)
+    model = TinyGPT(
+        _small_calculator_cfg(hook_count=2, hook_routing="left_operand_mod")
+    )
+    x = torch.tensor(
+        [
+            [0, PLUS_ID, 2, EQ_ID, 5, 6, 7, 8],
+            [1, PLUS_ID, 2, EQ_ID, 5, 6, 7, 8],
+        ]
+    )
+
+    with torch.no_grad():
+        _, diagnostics = model(
+            x,
+            forced_calculator_result_class=2,
+            return_diagnostics=True,
+        )
+
+    hook_injections = diagnostics["calculator_hook_injections"]
+
+    assert diagnostics["calculator_active_hook_count"] == 2
+    assert torch.equal(diagnostics["calculator_hook_route"], torch.tensor([0, 1]))
+    assert torch.equal(diagnostics["calculator_hook_route_counts"], torch.tensor([1, 1]))
+    assert torch.all(hook_injections[1, 0] == 0)
+    assert torch.all(hook_injections[0, 1] == 0)
+    assert torch.allclose(
+        diagnostics["calculator_injection"], hook_injections.sum(dim=0)
+    )
 
 
 def test_calculator_off_replace_mode_zeros_equals_residual_only() -> None:

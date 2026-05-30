@@ -31,6 +31,7 @@ class GPTConfig:
     calculator_mode: str = "off"
     calculator_hook_after_layer: int = 2
     calculator_hook_count: int = 1
+    calculator_hook_routing: str = "all"
     calculator_operand_vocab_size: int = 10
     calculator_result_vocab_size: int = 19
     calculator_injection_scale: float = 1.0
@@ -1063,6 +1064,12 @@ class TinyGPT(nn.Module):
                 "{'none', 'answer_decoder'}, "
                 f"got {cfg.calculator_bottleneck_mode!r}"
             )
+        if cfg.calculator_hook_routing not in {"all", "left_operand_mod"}:
+            raise ValueError(
+                "calculator_hook_routing must be one of "
+                "{'all', 'left_operand_mod'}, "
+                f"got {cfg.calculator_hook_routing!r}"
+            )
         if cfg.answer_decoder_interaction not in {"none", "product"}:
             raise ValueError(
                 "answer_decoder_interaction must be one of "
@@ -1111,6 +1118,19 @@ class TinyGPT(nn.Module):
         if self.calculator_hook is None:
             return []
         return [self.calculator_hook, *list(self.extra_calculator_hooks)]
+
+    def _calculator_hook_routes(self, tokens: Tensor, hook_count: int) -> Tensor | None:
+        if hook_count == 1 or self.cfg.calculator_hook_routing == "all":
+            return None
+        if self.cfg.calculator_hook_routing == "left_operand_mod":
+            assert self.calculator_hook is not None
+            positions = self.calculator_hook._operand_read_positions(tokens)
+            batch_idx = torch.arange(tokens.shape[0], device=tokens.device)
+            left_tokens = tokens[batch_idx, positions["a"]].long()
+            return left_tokens.remainder(hook_count)
+        raise ValueError(
+            f"unknown calculator hook routing: {self.cfg.calculator_hook_routing}"
+        )
 
     def _apply_calculator_injection(
         self, h: Tensor, injection: Tensor, tokens: Tensor
@@ -1224,6 +1244,7 @@ class TinyGPT(nn.Module):
             diagnostics["calculator_read_intervention"] = calculator_read_intervention
         injections: list[Tensor] = []
         traces: list[dict[str, Tensor]] = []
+        routes = self._calculator_hook_routes(x, len(hooks))
         for hook in hooks:
             if return_diagnostics:
                 injection, trace = hook(
@@ -1244,12 +1265,23 @@ class TinyGPT(nn.Module):
                     forced_result_class=forced_calculator_result_class,
                 )
             injections.append(injection)
+        if routes is not None:
+            masked_injections = []
+            for hook_idx, injection in enumerate(injections):
+                route_mask = (routes == hook_idx).to(injection.dtype).view(-1, 1, 1)
+                masked_injections.append(injection * route_mask)
+            injections = masked_injections
         if len(injections) == 1:
             combined_injection = injections[0]
         else:
             combined_injection = torch.stack(injections, dim=0).sum(dim=0)
         diagnostics["calculator_injection"] = combined_injection
         diagnostics["calculator_active_hook_count"] = len(hooks)
+        if routes is not None:
+            diagnostics["calculator_hook_route"] = routes.detach()
+            diagnostics["calculator_hook_route_counts"] = torch.bincount(
+                routes.detach(), minlength=len(hooks)
+            )
         if return_diagnostics:
             diagnostics["calculator_hook_injections"] = torch.stack(
                 injections, dim=0

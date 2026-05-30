@@ -8885,3 +8885,38 @@ Implementation interpretation:
 - It is not yet routed/scattered through the model and does not prove that
   independent hooks train useful specialized policies. The next many-calculator
   experiment must add routing/task partitioning and measure per-hook quality.
+
+Left-operand routed multi-hook support:
+
+```text
+GPTConfig.calculator_hook_routing = "left_operand_mod"
+scripts/overfit_one_batch.py --calculator-hook-routing left_operand_mod
+```
+
+Smoke command:
+
+```bash
+PYTHONPATH=. PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 scripts/overfit_one_batch.py --variant model-c --digits 1 --steps 0 --batch-size 4 --eval-samples 8 --run-root /tmp/codex_multi_hook_route_smoke --device cpu --calculator-hook-count 3 --calculator-hook-routing left_operand_mod --calculator-estimator ste
+```
+
+Smoke result:
+
+- Run root included `model-c-hooks3-routeleft_operand_mod`.
+- The saved `config.json` had top-level and model
+  `calculator_hook_count=3`, `calculator_hook_routing=left_operand_mod`.
+- The saved `metrics.json` had `calculator_hook_count=3`,
+  `calculator_hook_routing=left_operand_mod`.
+- Tests verify route IDs/counts and that non-routed hook injections are zeroed
+  per example.
+
+Routed implementation decision:
+
+```text
+left_operand_routed_multi_hook_support_partial
+```
+
+Routed interpretation:
+
+- The repo can now run a task-partitioned same-layer multi-hook diagnostic.
+- This is still not a training result. The next diagnostic must measure
+  per-hook calculator quality, route balance, scorer calls, and interference.

@@ -149,6 +149,10 @@ Memory:
   accepts `--calculator-hook-count`. A zero-step smoke with `hook_count=3`
   wrote matching config/metrics. This is prerequisite tooling, not evidence
   that routed/differentiated many-calculator policies can train.
+- A first routed variant also exists: `left_operand_mod` activates one hook per
+  example by final left-operand digit modulo hook count, reports route IDs and
+  counts, and records routing in training config/metrics. It enables a
+  task-partitioned diagnostic but still has no per-hook training result.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
@@ -170,6 +174,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-fresh-seed-validation.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-left-operand-routed-multi-hook-support.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-30-many-calculator-scaling-accounting.md`
 - `HYPOTHESIS_LEDGER.md`
