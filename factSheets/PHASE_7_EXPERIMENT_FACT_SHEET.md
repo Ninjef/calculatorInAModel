@@ -8588,6 +8588,30 @@ Interpretation:
 - Next useful zero-improvement work should validate longer source/handoff or
   change the sparse proposal/training mechanism, not ladder candidate counts.
 
+Zero-improvement longer source and trusted handoff:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-zero-improvement-boundary-handoff.md
+runs/2026-05-30_phase7_zero_improvement_boundary_handoff/source800_full_enum_cpu/.../model-c-2digit-seed4
+runs/2026-05-30_phase7_zero_improvement_boundary_handoff/handoff600_from_source800_cpu/.../model-c-2digit-seed4
+runs/2026-05-30_phase7_zero_improvement_boundary_handoff/source1600_continue_full_enum_cpu/.../model-c-2digit-seed4
+runs/2026-05-30_phase7_zero_improvement_boundary_handoff/handoff600_from_source1600_cpu/.../model-c-2digit-seed4
+```
+
+| Run | Source final | Source snapshot/calc | Handoff final | Handoff step-600 normal | Injection-zero | Forced-random | Handoff calc |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| source800 -> handoff600 | `0.9150` | `0.8950` | `0.3650` | `0.3900` | `0.0550` | `0.0875` | `0.9050` |
+| source1600 -> handoff600 | `0.9850` | `0.9525` | `0.6775` | `0.7150` | `0.0100` | `0.0525` | `0.9725` |
+
+Interpretation:
+
+- Longer zero-improvement training can produce a strong bottleneck source.
+- Mature source transfer is calculator-causal but below the trusted gate and
+  weaker than the old hard-best result-boundary handoff (`0.8825` final /
+  `0.8425` step-600 normal).
+- Source maturity helps, but zero-improvement needs handoff/readout geometry
+  work before it can replace the hard-best boundary source.
+
 Static approximation steering review:
 
 ```text

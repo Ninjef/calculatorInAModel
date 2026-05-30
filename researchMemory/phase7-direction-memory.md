@@ -570,6 +570,14 @@ Memory:
   topk8+unique24 sparse version improved over sampled hard-best (`0.4300`
   final vs `0.3525`) but still trailed full enumeration despite `0.9725`
   true-candidate coverage, so sparse scaling remains open.
+- Longer zero-improvement source training confirms bottleneck viability but
+  exposes a handoff gap. The 1600-equivalent source reached final `0.9850` and
+  source calc `0.9725`; its trusted frozen-policy additive handoff was causal
+  but sub-gate (`0.6775` final, `0.7150` step-600 normal, `0.0100`
+  injection-zero, `0.0525` forced-random). Source maturity helps versus the
+  800-step source handoff (`0.3650` final), but this still trails the old
+  hard-best boundary handoff (`0.8825` final). Continue only with a new
+  handoff-aware geometry mechanism or scalable proposal.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -632,6 +640,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-online-calibrated-critic-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-sampled-result-boundary-source-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-zero-improvement-boundary-source-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-zero-improvement-boundary-handoff.md`
 - `researchReviews/2026-05-30-sampled-result-boundary-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`

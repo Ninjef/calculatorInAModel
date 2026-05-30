@@ -116,8 +116,9 @@ Active directions:
   and frozen transfer remain unsolved scalability/prescriptiveness issues.
   Static approximations are paused: critics/proposals are costly or state-local,
   soft/regret/sampled hard-best targets are weak, and simple online calibration
-  is partial. Zero-injection improvement is the active lead: full-enum matches
-  hard-best source learning while sampled topk8+unique24 is only partial.
+  is partial. Zero-injection improvement is the active lead: mature full-enum
+  trains a strong source but only partially clears causal handoff; sampled
+  topk8+unique24 is also partial.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
