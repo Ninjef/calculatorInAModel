@@ -7689,3 +7689,68 @@ Interpretation:
 - Do not tune these mean/current/max imputation branches as novelty. The next
   local-target approximation needs a learned/generalized proposal, a stronger
   estimator correction, or a different target construction.
+
+## 2026-05-29 Learned Proposal Local-Target Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-learned-proposal-local-target-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_learned_proposal_local_target_gate/smoke_op3
+runs/2026-05-29_phase7_learned_proposal_local_target_gate/learned_proposal_200
+runs/2026-05-29_phase7_learned_proposal_local_target_gate/learned_proposal_streaming_b16_200
+runs/2026-05-29_phase7_learned_proposal_local_target_gate/learned_proposal_streaming_b16_800
+```
+
+Question:
+
+Can a learned candidate proposal approximate `policy_reweighted_t1` better
+than raw uniform sampling at the same forced-result scoring budget, without a
+prompt-keyed replay cache or true-result labels?
+
+Tooling:
+
+- Added `learned_policy_reweighted_t<T>_u<U>_p<P>_h<H>_e<E>`.
+- The branch trains an online MLP loss predictor from observed forced-result
+  losses and uses low predicted-loss candidates plus uniform exploration.
+
+Fixed-grid 200-step gate:
+
+| Branch | Forced scores | Proposal coverage | Target argmax | Exact-grid calc | Sampled normal |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `policy_reweighted_t1` | full | n/a | `0.9925` | `0.5600` | `0.5391` |
+| `sampled_policy_reweighted_t1_k0_u32` | `32` | n/a | `0.8350` | `0.3350` | `0.3438` |
+| `learned_policy_reweighted_t1_u8_p24_h32_e1` | `32` | `1.0000` | `0.9225` | `0.4925` | `0.4141` |
+| `learned_policy_reweighted_t1_u16_p16_h32_e1` | `32` | `1.0000` | `0.9325` | `0.5050` | `0.4141` |
+| `learned_policy_reweighted_t1_u4_p28_h32_e1` | `32` | `1.0000` | `0.9175` | `0.5850` | `0.5703` |
+| `learned_policy_reweighted_t1_u8_p24_h64_e3` | `32` | `1.0000` | `0.9875` | `0.4850` | `0.4766` |
+
+Streaming stress:
+
+| Gate | Branch | Exact-grid calc | Sampled normal |
+| --- | --- | ---: | ---: |
+| batch `16`, 200 steps | `policy_reweighted_t1` | `0.1100` | `0.1016` |
+| batch `16`, 200 steps | `sampled_policy_reweighted_t1_k0_u32` | `0.0700` | `0.0703` |
+| batch `16`, 200 steps | `learned_policy_reweighted_t1_u4_p28_h32_e1` | `0.0925` | `0.0938` |
+| batch `16`, 800 steps | `sampled_policy_reweighted_t1_k0_u32` | `0.2350` | `0.2734` |
+| batch `16`, 800 steps | `learned_policy_reweighted_t1_u4_p28_h32_e1` | `0.2350` | `0.2656` |
+
+Decision:
+
+```text
+learned_proposal_local_target_partial_fixed_grid_only
+```
+
+Interpretation:
+
+- The learned proposal is a real fixed-grid improvement over raw `u32`.
+- The simple online MLP proposal does not yet generalize into the streaming
+  setting that matters for scalability.
+- Do not tune these same fixed-grid learned-proposal knobs as novelty. A next
+  learned-proposal attempt needs an explicit streaming/generalization
+  mechanism or validation objective.

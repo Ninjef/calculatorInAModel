@@ -129,11 +129,11 @@ Active directions:
 - A genuinely different credit-assignment family such as target propagation or
   local targets. Exact `policy_reweighted_t1` is positive and survives
   answer-only retention, but full enumeration is not scalable. Naive sparse
-  sampling and low-loss neighborhoods failed. Fixed replay memory looked useful
-  on the exhaustive grid, but rescoring did not help, reset windows damaged
-  learning, and streaming minibatches removed the strong lift. Continue local
-  targets only with learned/generalized proposals, estimator correction, or a
-  different target construction.
+  sampling, low-loss neighborhoods, fixed replay memory, and corrected sparse
+  targets failed scalability stress. A simple learned loss proposal improved
+  the fixed-grid 200-step gate but tied raw `u32` under 800-step streaming
+  minibatches, so local targets need stronger learned/generalized proposals,
+  estimator correction, or a different target construction.
 - Lower-cost assignment is useful only when it changes scalability, not merely
   proxy selection.
 

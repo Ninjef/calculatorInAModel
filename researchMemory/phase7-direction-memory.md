@@ -357,10 +357,18 @@ Memory:
   at best `0.2500` exact calc / `0.2500` sampled normal at `u16`, below raw
   uniform `u32` (`0.3350`/`0.3438`) and far below exact policy-reweighted
   (`0.5600`/`0.5391`).
+- A simple online learned loss proposal is partial: with the same 32 forced
+  scores per step, `learned_policy_reweighted_t1_u4_p28_h32_e1` beat raw
+  `u32` on the fixed-grid 200-step gate (`0.5850` exact calc / `0.5703`
+  sampled normal vs `0.3350`/`0.3438`) and achieved full true-candidate
+  proposal coverage, but it did not beat raw `u32` under streaming minibatches
+  (`0.2350` calc for both at 800 steps, sampled normal `0.2656` learned vs
+  `0.2734` raw).
 - The durable lesson is negative for fixed hand-coded proposals. Exact
   `policy_reweighted_t1` remains a useful ceiling, but fixed replay memory is
-  not a scalable method. Next local-target work needs learned/generalized
-  proposal memory, estimator correction, or a different target construction.
+  not a scalable method, and the first simple learned proposal is only a clue.
+  Next local-target work needs a stronger streaming/generalizing proposal,
+  estimator correction, or a different target construction.
 
 Representative evidence:
 
@@ -379,3 +387,4 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-reset-stress-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-streaming-prompt-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-corrected-sparse-local-target-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-learned-proposal-local-target-gate.md`

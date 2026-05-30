@@ -541,6 +541,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/109-a-simple-online-learned-loss-proposal-improves-fixed-grid-sparse-local-targets-but-does-no",
+      "target": "researchMemory/hypotheses/phase7/109-a-simple-online-learned-loss-proposal-improves-fixed-grid-sparse-local-targets-but-does-no.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -898,6 +903,11 @@
     {
       "source": "direction/target-propagation-local-targets",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-corrected-sparse-local-target-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-learned-proposal-local-target-gate.md",
       "type": "supported_by"
     },
     {
@@ -1662,6 +1672,13 @@
       "source_path": "researchMemory/hypotheses/phase7/108-preserving-unscored-policy-mass-does-not-rescue-sparse-policy-reweighted-local-targets.md",
       "status": "DISPROVEN",
       "title": "Preserving unscored policy mass does not rescue sparse policy-reweighted local targets."
+    },
+    {
+      "id": "doc/109-a-simple-online-learned-loss-proposal-improves-fixed-grid-sparse-local-targets-but-does-no",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/109-a-simple-online-learned-loss-proposal-improves-fixed-grid-sparse-local-targets-but-does-no.md",
+      "status": "PARTIAL",
+      "title": "A simple online learned loss proposal improves fixed-grid sparse local targets but does not solve streaming scalability."
     },
     {
       "id": "doc/phase7-direction-memory",

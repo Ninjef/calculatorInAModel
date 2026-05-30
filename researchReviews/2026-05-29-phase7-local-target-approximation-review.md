@@ -269,3 +269,34 @@ Updated steering: do not tune imputed mean/current/max sparse targets or treat
 approximation still needs a learned/generalized proposal, a correction with a
 stronger bias/variance argument, or a target construction that can create
 useful pressure without requiring high true-result coverage.
+
+## Addendum: Learned Loss Proposal
+
+A first parametric learned proposal is a real fixed-grid improvement but not a
+streaming scalability answer.
+
+- Added `learned_policy_reweighted_t<T>_u<U>_p<P>_h<H>_e<E>`. The branch
+  trains a small online MLP to predict forced-result answer loss from observed
+  candidate scores, then proposes low predicted-loss result classes plus
+  uniform exploration. It uses no true-sum label and no prompt-keyed cache.
+- In the fixed-grid 200-step gate at 32 forced scores per step,
+  `learned_policy_reweighted_t1_u4_p28_h32_e1` reached `0.5850` exact calc /
+  `0.5703` sampled normal, beating raw uniform `u32` (`0.3350` / `0.3438`)
+  and matching the exact-grid ceiling neighborhood (`policy_reweighted_t1`
+  `0.5600` / `0.5391`).
+- The fixed-grid learned branch achieved `1.0000` proposal true-candidate
+  coverage, target argmax `0.9175`, and low controls (`0.0234`
+  injection-zero, `0.0156` forced-random).
+- Other 32-score learned branches were also above raw `u32` but weaker:
+  `u8_p24_h32_e1` `0.4925` / `0.4141`, `u16_p16_h32_e1` `0.5050` /
+  `0.4141`, and `u8_p24_h64_e3` `0.4850` / `0.4766`.
+- Streaming minibatches removed the useful lift. At batch `16`, 200 steps gave
+  exact `0.1100`, raw `u32` `0.0700`, and learned `0.0925`; at 800 steps,
+  raw `u32` and learned tied at `0.2350` exact calc, with sampled normal
+  `0.2734` raw vs `0.2656` learned.
+
+Updated steering: keep the learned-proposal idea alive, but do not tune this
+simple online polynomial-feature MLP on the fixed grid. The next learned
+proposal must explain how it will generalize under streaming/non-exhaustive
+training, or local-target work should pivot to estimator/target construction
+rather than more proposal knobs.

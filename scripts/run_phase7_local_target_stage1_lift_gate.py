@@ -99,6 +99,7 @@ def parse_branch_specs(text: str) -> list[str]:
         "corrected_policy_reweighted_t",
         "adaptive_policy_reweighted_t",
         "memory_policy_reweighted_t",
+        "learned_policy_reweighted_t",
         "logit_descent_p",
     )
     for branch in branches:
@@ -234,6 +235,48 @@ def parse_memory_policy_reweighted_branch(
     )
 
 
+def parse_learned_policy_reweighted_branch(
+    branch: str,
+) -> tuple[float, int, int, int, int]:
+    prefix = "learned_policy_reweighted_t"
+    if not branch.startswith(prefix):
+        raise ValueError(f"not a learned policy-reweighted branch: {branch!r}")
+    parts = branch.removeprefix(prefix).split("_")
+    if (
+        len(parts) != 5
+        or not parts[1].startswith("u")
+        or not parts[2].startswith("p")
+        or not parts[3].startswith("h")
+        or not parts[4].startswith("e")
+    ):
+        raise ValueError(
+            "learned policy-reweighted branch must look like "
+            "'learned_policy_reweighted_t1_u8_p24_h32_e1'"
+        )
+    temperature = float(parts[0].replace("p", "."))
+    uniform_samples = int(parts[1].removeprefix("u"))
+    proposal_candidates = int(parts[2].removeprefix("p"))
+    hidden_size = int(parts[3].removeprefix("h"))
+    proposal_epochs = int(parts[4].removeprefix("e"))
+    if temperature <= 0:
+        raise ValueError("learned policy-reweighted temperature must be positive")
+    if uniform_samples < 1:
+        raise ValueError("learned branch needs at least one uniform sample")
+    if proposal_candidates < 0:
+        raise ValueError("learned proposal candidate count must be non-negative")
+    if hidden_size < 1:
+        raise ValueError("learned proposal hidden size must be positive")
+    if proposal_epochs < 1:
+        raise ValueError("learned proposal epochs must be positive")
+    return (
+        temperature,
+        uniform_samples,
+        proposal_candidates,
+        hidden_size,
+        proposal_epochs,
+    )
+
+
 def sample_uniform_result_candidates(
     *,
     batch_size: int,
@@ -247,6 +290,103 @@ def sample_uniform_result_candidates(
         .topk(k=sample_count, dim=-1)
         .indices
     )
+
+
+def learned_proposal_features(
+    batch: ArithmeticBatch,
+    result_classes: torch.Tensor,
+    *,
+    digits: int,
+    operand_max: int,
+    result_vocab_size: int,
+) -> torch.Tensor:
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=digits)
+    a = true_a.to(torch.float32).unsqueeze(-1)
+    b = true_b.to(torch.float32).unsqueeze(-1)
+    r = result_classes.to(torch.float32)
+    operand_denom = float(max(1, operand_max))
+    result_denom = float(max(1, result_vocab_size - 1))
+    a = (2.0 * (a / operand_denom)) - 1.0
+    b = (2.0 * (b / operand_denom)) - 1.0
+    r = (2.0 * (r / result_denom)) - 1.0
+    a_expanded = a.expand_as(r)
+    b_expanded = b.expand_as(r)
+    return torch.stack(
+        [
+            a_expanded,
+            b_expanded,
+            r,
+            a_expanded * b_expanded,
+            a_expanded * r,
+            b_expanded * r,
+            a_expanded.square(),
+            b_expanded.square(),
+            r.square(),
+        ],
+        dim=-1,
+    )
+
+
+def load_learned_proposal_state(
+    *,
+    state: dict[str, Any],
+    hidden_size: int,
+    device: torch.device,
+) -> tuple[torch.nn.Module, torch.optim.Optimizer]:
+    input_dim = 9
+    if (
+        "proposal_model" not in state
+        or state.get("proposal_hidden_size") != hidden_size
+    ):
+        proposal_model = torch.nn.Sequential(
+            torch.nn.Linear(input_dim, hidden_size),
+            torch.nn.ReLU(),
+            torch.nn.Linear(hidden_size, hidden_size),
+            torch.nn.ReLU(),
+            torch.nn.Linear(hidden_size, 1),
+        ).to(device)
+        state["proposal_model"] = proposal_model
+        state["proposal_optimizer"] = torch.optim.AdamW(
+            proposal_model.parameters(),
+            lr=1.0e-3,
+            weight_decay=1.0e-4,
+        )
+        state["proposal_hidden_size"] = hidden_size
+        state["proposal_seen_examples"] = 0
+        state["proposal_updates"] = 0
+    return state["proposal_model"], state["proposal_optimizer"]
+
+
+def train_learned_proposal(
+    *,
+    state: dict[str, Any],
+    proposal_model: torch.nn.Module,
+    proposal_optimizer: torch.optim.Optimizer,
+    features: torch.Tensor,
+    losses: torch.Tensor,
+    epochs: int,
+) -> dict[str, float | str]:
+    flat_features = features.detach().reshape(-1, features.shape[-1])
+    flat_losses = losses.detach().reshape(-1, 1)
+    final_loss = 0.0
+    proposal_model.train()
+    for _ in range(epochs):
+        proposal_optimizer.zero_grad(set_to_none=True)
+        predictions = proposal_model(flat_features)
+        train_loss = torch.nn.functional.smooth_l1_loss(predictions, flat_losses)
+        train_loss.backward()
+        torch.nn.utils.clip_grad_norm_(proposal_model.parameters(), 5.0)
+        proposal_optimizer.step()
+        final_loss = float(train_loss.detach().item())
+    state["proposal_seen_examples"] = int(
+        state.get("proposal_seen_examples", 0)
+    ) + int(flat_losses.shape[0])
+    state["proposal_updates"] = int(state.get("proposal_updates", 0)) + int(epochs)
+    return {
+        "target_proposal_train_loss": final_loss,
+        "target_proposal_seen_examples": int(state.get("proposal_seen_examples", 0)),
+        "target_proposal_updates": int(state.get("proposal_updates", 0)),
+    }
 
 
 @torch.no_grad()
@@ -851,6 +991,153 @@ def memory_policy_reweighted_loss(
     }
 
 
+def learned_policy_reweighted_loss(
+    model,
+    batch,
+    *,
+    branch: str,
+    args: argparse.Namespace,
+    state: dict[str, Any],
+) -> tuple[torch.Tensor, dict[str, float | str]]:
+    (
+        temperature,
+        uniform_samples,
+        proposal_candidates,
+        hidden_size,
+        proposal_epochs,
+    ) = parse_learned_policy_reweighted_branch(branch)
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    result_vocab_size = result_logits.shape[-1]
+    batch_size = batch.x.shape[0]
+    proposal_model, proposal_optimizer = load_learned_proposal_state(
+        state=state,
+        hidden_size=hidden_size,
+        device=batch.x.device,
+    )
+    all_results = (
+        torch.arange(result_vocab_size, device=batch.x.device)
+        .unsqueeze(0)
+        .expand(batch_size, -1)
+    )
+    proposal_count = min(proposal_candidates, result_vocab_size)
+    if proposal_count > 0 and int(state.get("proposal_seen_examples", 0)) > 0:
+        proposal_model.eval()
+        with torch.no_grad():
+            all_features = learned_proposal_features(
+                batch,
+                all_results,
+                digits=args.digits,
+                operand_max=args.operand_max,
+                result_vocab_size=result_vocab_size,
+            )
+            predicted_losses = proposal_model(
+                all_features.reshape(-1, all_features.shape[-1])
+            ).reshape(batch_size, result_vocab_size)
+            proposal_result_classes = predicted_losses.topk(
+                k=proposal_count,
+                largest=False,
+                dim=-1,
+            ).indices
+    else:
+        predicted_losses = result_logits.new_full(
+            (batch_size, result_vocab_size),
+            float("nan"),
+        )
+        proposal_result_classes = sample_uniform_result_candidates(
+            batch_size=batch_size,
+            result_vocab_size=result_vocab_size,
+            count=proposal_count,
+            device=batch.x.device,
+        )
+
+    uniform_candidates = sample_uniform_result_candidates(
+        batch_size=batch_size,
+        result_vocab_size=result_vocab_size,
+        count=uniform_samples,
+        device=batch.x.device,
+    )
+    candidates = (
+        torch.cat([proposal_result_classes, uniform_candidates], dim=-1)
+        if proposal_count > 0
+        else uniform_candidates
+    )
+    candidate_losses = score_forced_candidate_result_classes(
+        model,
+        batch,
+        candidates,
+        chunk_size=args.result_chunk_size,
+    )
+    candidate_features = learned_proposal_features(
+        batch,
+        candidates,
+        digits=args.digits,
+        operand_max=args.operand_max,
+        result_vocab_size=result_vocab_size,
+    )
+    proposal_train_metrics = train_learned_proposal(
+        state=state,
+        proposal_model=proposal_model,
+        proposal_optimizer=proposal_optimizer,
+        features=candidate_features,
+        losses=candidate_losses,
+        epochs=proposal_epochs,
+    )
+
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=args.digits)
+    true_sum = true_a + true_b
+    if proposal_count > 0:
+        proposal_true_coverage = (
+            (proposal_result_classes == true_sum.unsqueeze(-1))
+            .any(dim=-1)
+            .float()
+            .mean()
+            .item()
+        )
+        if torch.isfinite(predicted_losses).any():
+            proposal_argmin = predicted_losses.argmin(dim=-1)
+            proposal_argmin_accuracy = (
+                (proposal_argmin == true_sum).float().mean().item()
+            )
+        else:
+            proposal_argmin_accuracy = float("nan")
+    else:
+        proposal_true_coverage = 0.0
+        proposal_argmin_accuracy = float("nan")
+    uniform_true_coverage = (
+        (uniform_candidates == true_sum.unsqueeze(-1)).any(dim=-1).float().mean().item()
+    )
+    loss, metrics = dense_unique_candidate_policy_reweighted_loss(
+        model=model,
+        batch=batch,
+        result_logits=result_logits,
+        candidates=candidates,
+        candidate_losses=candidate_losses,
+        temperature=temperature,
+        min_probability_floor=args.min_probability_floor,
+        digits=args.digits,
+        metrics={
+            "branch_loss_mode": branch,
+            "target_family": "learned_policy_reweighted",
+            "target_temperature": float(temperature),
+            "target_uniform_samples": int(uniform_samples),
+            "target_proposal_candidates": int(proposal_candidates),
+            "target_proposal_hidden_size": int(hidden_size),
+            "target_proposal_epochs": int(proposal_epochs),
+            "target_forced_scores_per_step": int(candidates.shape[1]),
+            "target_proposal_true_candidate_coverage": float(
+                proposal_true_coverage
+            ),
+            "target_uniform_true_candidate_coverage": float(uniform_true_coverage),
+            "target_proposal_argmin_accuracy": float(proposal_argmin_accuracy),
+            **proposal_train_metrics,
+        },
+    )
+    return loss, {
+        "branch_loss": float(loss.detach().item()),
+        **metrics,
+    }
+
+
 def branch_loss(
     model,
     batch,
@@ -899,6 +1186,12 @@ def branch_loss(
         if state is None:
             raise ValueError("memory policy-reweighted branch requires state")
         return memory_policy_reweighted_loss(
+            model, batch, branch=branch, args=args, state=state
+        )
+    if branch.startswith("learned_policy_reweighted_t"):
+        if state is None:
+            raise ValueError("learned policy-reweighted branch requires state")
+        return learned_policy_reweighted_loss(
             model, batch, branch=branch, args=args, state=state
         )
 
