@@ -303,7 +303,7 @@ Representative evidence:
 
 ## Direction: Target Propagation / Local Targets
 
-Status: active only with learned/corrected proposals or new target construction
+Status: active only with estimator, target-construction, or validated generalization changes
 
 Memory:
 
@@ -368,11 +368,13 @@ Memory:
   small 800-step streaming exact-calc nudge over raw `u32` (`0.2625` vs
   `0.2350`) but hurt sampled normal badly (`0.1797` vs `0.2734`), and `_w20`
   / `_w50` did not lift the 200-step streaming screen.
-- The durable lesson is negative for fixed hand-coded proposals. Exact
-  `policy_reweighted_t1` remains a useful ceiling, but fixed replay memory is
-  not a scalable method, and the first simple learned proposal is only a clue.
-  Next local-target work needs a stronger streaming/generalizing proposal,
-  estimator correction, or a different target construction.
+- Local-target proposal branch review: pause simple proposal approximation as
+  a mainline branch. Exact `policy_reweighted_t1` remains a useful ceiling, but
+  raw/adaptive candidates, fixed replay, imputed sparse targets, online learned
+  proposals, and random-prompt proposal pretraining have all failed scalability
+  stress. Continue only with a different estimator, different target
+  construction, or learned proposal validation explicitly tied to
+  streaming/full-grid generalization.
 
 Representative evidence:
 
@@ -393,3 +395,4 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-corrected-sparse-local-target-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-learned-proposal-local-target-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-pretrained-learned-proposal-gate.md`
+- `researchReviews/2026-05-29-local-target-proposal-branch-review.md`

@@ -25,7 +25,7 @@ future agents to infer it from chronology.
 | Bottleneck-to-additive staged handoff | Active but constrained | Proves non-bottleneck viability, but source quality and policy protection remain bottlenecks. |
 | Cheap source-checkpoint selectors | Paused | Frozen-state, geometry, short-slope, ridge, and embedded 500-step probes are not reliable replacements for actual handoff gates. |
 | Source acquisition for transfer geometry | Active | Current best strategic direction if it directly targets handoff/readout behavior. |
-| Target propagation / local targets | Active candidate, constrained | Exact/full-enum local-target gates are positive, but raw sampled/top-k and simple adaptive-neighborhood approximations are paused; continue only with learned proposals, estimator correction, or a different target construction. |
+| Target propagation / local targets | Active candidate, constrained | Exact/full-enum local-target gates are positive, but simple proposal approximations are paused after sparse/adaptive, replay, corrected, online learned, and pretrained learned variants failed scalability stress; continue only with a different estimator, different target construction, or explicitly streaming/generalizing learned proposal. |
 
 Rule: if a proposed experiment belongs to a paused family, it needs a new
 mechanism and should be reconciled with `RESEARCH_STATE.md` before running.
@@ -691,3 +691,9 @@ Conclusion: Added optional `_wN` proposal pretraining for learned local-target b
 Do not repeat: Do not keep tuning `_w20/_w50` warmup counts, pretrain batch size, or the same polynomial-feature MLP as novelty.
 Next allowed test: If continuing learned proposals, change the generalization mechanism itself, such as heldout-range validation, a proposal state tied to evolving model features, uncertainty-aware candidate sets, or a different target construction. Otherwise pivot away from learned-proposal warmups.
 Source: `aiAgentWorkHistory/phase7/2026-05-29-pretrained-learned-proposal-gate.md`
+
+PAUSED: Simple local-target proposal approximation is not the scalable path.
+Conclusion: Reviewing the local-target approximation cluster shows a consistent failure mode. Exact `policy_reweighted_t1` remains a useful ceiling and proof of principle, and replay/learned proposal variants produced fixed-grid positives, but simple proposal mechanisms did not survive scalability stress: raw/top-k/adaptive proposals need near-full coverage, fixed replay memory is prompt-transductive, unscored-mass imputation diluted pressure, the online learned proposal tied raw `u32` under 800-step streaming, and random-prompt proposal pretraining hurt sampled normal despite a small exact-calc nudge.
+Do not repeat: Do not run more raw count ladders, top-k/neighborhood variants, fixed replay cache variants, mean/current/max imputation branches, or the same polynomial-feature learned proposal with or without `_wN` warmup as novelty.
+Next allowed test: Local targets need a different estimator, a different target construction, or a learned proposal whose validation objective explicitly targets streaming/full-grid generalization. Otherwise prioritize source objectives aimed at actual 600-step additive handoff/readout behavior.
+Source: `researchReviews/2026-05-29-local-target-proposal-branch-review.md`

@@ -128,11 +128,11 @@ Active directions:
   (`0.7725`). The neg-4 full-grid version was too costly locally.
 - A genuinely different credit-assignment family such as target propagation or
   local targets. Exact `policy_reweighted_t1` is positive and survives
-  retention, but full enumeration is not scalable. Sparse/adaptive sampling,
-  fixed replay memory, corrected sparse targets, and simple learned proposals
-  have failed streaming scalability stress, so local targets need stronger
-  learned/generalized proposals, estimator correction, or a different target
-  construction.
+  retention, but full enumeration is not scalable. Simple proposal
+  approximation is now paused after sparse/adaptive, replay-memory, corrected,
+  online learned, and pretrained learned variants failed scalability stress.
+  Continue only with a different estimator, different target construction, or
+  explicitly streaming/generalizing learned proposal.
 - Lower-cost assignment is useful only when it changes scalability, not merely
   proxy selection.
 
@@ -163,8 +163,9 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Move replay-memory work to learned/generalized proposals or a different
-   target construction; fixed-grid replay caches are paused.
+1. Do not run more simple local-target proposal variants; continue local
+   targets only via estimator/target-construction changes or a learned proposal
+   with an explicit streaming/generalization validation objective.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. If reducing hard-assignment cost, state the scalability hypothesis

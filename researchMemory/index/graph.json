@@ -551,6 +551,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/111-simple-local-target-proposal-approximation-is-not-the-scalable-path",
+      "target": "researchMemory/hypotheses/phase7/111-simple-local-target-proposal-approximation-is-not-the-scalable-path.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -918,6 +923,11 @@
     {
       "source": "direction/target-propagation-local-targets",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-pretrained-learned-proposal-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "researchReviews/2026-05-29-local-target-proposal-branch-review.md",
       "type": "supported_by"
     },
     {
@@ -1698,6 +1708,13 @@
       "title": "Random-prompt learned-proposal pretraining does not cleanly rescue streaming local targets."
     },
     {
+      "id": "doc/111-simple-local-target-proposal-approximation-is-not-the-scalable-path",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/111-simple-local-target-proposal-approximation-is-not-the-scalable-path.md",
+      "status": "PAUSED",
+      "title": "Simple local-target proposal approximation is not the scalable path."
+    },
+    {
       "id": "doc/phase7-direction-memory",
       "kind": "memory_document",
       "source_path": "researchMemory/phase7-direction-memory.md",
@@ -1771,7 +1788,7 @@
       "id": "direction/target-propagation-local-targets",
       "kind": "direction_memory",
       "source_path": "researchMemory/phase7-direction-memory.md",
-      "status": "active only with learned/corrected proposals or new target construction",
+      "status": "active only with estimator, target-construction, or validated generalization changes",
       "title": "Target Propagation / Local Targets"
     }
   ]

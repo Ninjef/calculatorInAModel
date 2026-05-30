@@ -7812,3 +7812,37 @@ Interpretation:
   below raw `u32`.
 - Do not tune warmup count or batch size as novelty. Learned proposals need a
   different generalization/validation mechanism.
+
+## 2026-05-29 Local-Target Proposal Branch Review
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-local-target-proposal-branch-review.md
+```
+
+Review:
+
+```text
+researchReviews/2026-05-29-local-target-proposal-branch-review.md
+```
+
+Decision:
+
+```text
+simple_local_target_proposal_approximation_paused
+```
+
+Summary:
+
+- Exact `policy_reweighted_t1` remains a useful ceiling and proof that
+  answer-derived local targets can train calculator use.
+- Simple proposal approximations should stop as mainline work: sparse/top-k,
+  adaptive neighborhoods, fixed replay memory, imputed sparse targets, online
+  learned proposals, and random-prompt proposal warmup have all failed
+  scalability stress or depended on transductive fixed-grid behavior.
+- Next local-target work needs a different estimator, different target
+  construction, or learned-proposal validation explicitly tied to
+  streaming/full-grid generalization.
+- Otherwise, compute should move back to source objectives that improve actual
+  600-step additive handoff/readout behavior.
