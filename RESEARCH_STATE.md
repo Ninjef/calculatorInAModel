@@ -90,50 +90,22 @@ source policies directly for transfer/readout geometry.
 Active directions:
 
 - Source acquisition optimized against actual handoff/readout geometry, not
-  just source answer accuracy or cheap selector scores. A first
-  forced-true additive readout auxiliary shows this can shape transfer
-  geometry. The naive always-on version competes with source policy
-  acquisition, but a delayed start fixed that tradeoff in a small gate and
-  improved full-grid 600-step handoff from `0.2525` to `0.4150` at matched
-  200-step source checkpoints; extending scheduled source training to step
-  `600` raised final handoff to `0.7725`, but continuation/readout plateaued
-  below gate at `0.8475` with learned calc around `0.5391`. A gentle
-  low-LR source recovery from that step-600 checkpoint fixed the immediate
-  source-policy bottleneck: source calc rose to `0.7950`, 600-step handoff
-  improved to `0.8425`, and continuation/readout cleared the high
-  non-bottleneck gate at `0.9320` with low zero/random controls. A fresh seed
-  replicated the recovery effect and cleared the handoff gate directly:
-  seed-14 scheduled source step `600` recovered from `0.6675` to `0.8850`
-  source eval, then reached `0.9600` final frozen-policy handoff with
-  injection-zero/forced-random around `0.085`. Folding the same late phase
-  into one automated run on seed 14 preserved the result: final source eval
-  `0.8775` and 600-step handoff `0.9400`, with low zero/random controls.
-  A simple source-accuracy adaptive trigger is not yet robust: on seed 14,
-  `argmax_result_accuracy >= 0.65` fired at step `528` and improved handoff to
-  `0.9850` final eval but with higher zero/random controls (`0.1325`); on a
-  fresh seed it never fired, source final was `0.6100`, and handoff reached
-  only `0.6825` while a fixed step-600 control reached `0.7675`. A smoothed
-  forced-true-loss trigger with patience fired at step `509` and improved the
-  hard-seed handoff to `0.8025`, but still missed the high gate. A hard
-  conjunctive gate requiring source accuracy `>=0.70` never fired on the same
-  seed and fell back to the weak no-recovery handoff (`0.6825`). A budgeted
-  contrastive forced-margin source objective is positive at the matched
-  full-grid early handoff gate: one sampled negative per prompt reached
-  `0.3225` source calc / `0.3600` final eval at 200 steps and `0.6600` final
-  eval under trusted 600-step frozen-policy handoff, beating the matched
-  scheduled forced-true 200-step handoff (`0.4150`) with low controls. Longer
-  one-negative source training is mixed-positive: it improves handoff to about
-  `0.73-0.74` final / `0.785` best snapshot, but remains checkpoint-sensitive
-  and does not clearly beat scheduled forced-true step-600 final handoff
-  (`0.7725`). A predeclared low-LR source recovery phase shows this branch was
-  partly source-policy-maturity limited: continuing the forced-margin step-600
-  checkpoint for 30 steps at `lr=0.0003` with margin weight `0.1` raised source
-  calc from `0.5225` to `0.7725`, and the trusted frozen-policy handoff reached
-  `0.8700` final / `0.9050` step-600 normal with injection-zero `0.0000` and
-  forced-random `0.0313`. This is a real positive source auxiliary but still
-  prescriptive, below automated scheduled-source recovery (`0.9400` final),
-  and not a final scalable/non-prescriptive solution. The neg-4 full-grid
-  version was too costly locally.
+  just source answer accuracy or cheap selector scores. Delayed forced-true
+  additive readout pressure plus late low-LR recovery is a strong staged
+  recipe: manual recovery cleared continuation/readout (`0.9320`), fresh-seed
+  recovery reached `0.9600` trusted handoff, and one-run automated recovery
+  reached `0.9400`. Simple source-accuracy and forced-loss triggers are not
+  robust enough yet, and cheap selector/proxy work is paused unless validated
+  against fresh-family 600-step handoffs. One-negative forced-margin is a
+  useful source auxiliary: the early 200-step gate reached `0.6600` handoff,
+  longer unrecovered sources reached only about `0.73-0.74`, and manual low-LR
+  recovery raised handoff to `0.8700`. Folding margin recovery into the source
+  run now replicates strongly on a fresh seed: source step `600->630` improved
+  calc `0.5825->0.8825`, final source eval was `0.8700`, and trusted
+  frozen-policy handoff reached `0.9875` final / `0.9800` step-600 normal with
+  injection-zero `0.0156-0.0250` and forced-random `0.0938`. This is useful
+  evidence for staged transfer, but it remains prescriptive because it uses
+  hard assignment and true-result contrastive forcing.
 - A genuinely different credit-assignment family such as target propagation or
   local targets. Exact `policy_reweighted_t1` is positive and survives
   retention, but full enumeration is not scalable. Simple proposal
@@ -176,9 +148,9 @@ These branches should not continue without a new mechanism:
    with an explicit streaming/generalization validation objective.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
-3. If staying in forced-margin, use only fresh-seed stability or automated
-   low-LR recovery as the next question; do not rerun the exact seed-15
-   step-600 recovery/handoff or more same-seed ladders.
+3. If staying in forced-margin, do not rerun the seed-15 manual recovery or
+   seed-16 automated recovery gates as novelty. The next question must be
+   broader stability/scale or a less-prescriptive target-construction bridge.
 4. If reducing hard-assignment cost, state the scalability hypothesis
    up front and compare against the exact-grid assignment ceiling rather than
    only against prior cheap selectors.

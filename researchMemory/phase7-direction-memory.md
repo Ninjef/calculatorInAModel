@@ -281,6 +281,13 @@ Memory:
   `0.0313`, and learned calc `0.8594`. This means forced-margin was partly
   source-policy-maturity limited, but it remains prescriptive and below
   automated scheduled-source recovery (`0.9400` final).
+- Automated forced-margin recovery now replicates strongly on a fresh seed.
+  Adding a late forced-margin weight override let a single 630-step source run
+  switch at step `600` (`lr` multiplier `0.1`, margin weight `0.1`), raising
+  source calc `0.5825 -> 0.8825`; the trusted 600-step frozen-policy handoff
+  reached `0.9875` final / `0.9800` step-600 normal with injection-zero
+  `0.0156-0.0250`, forced-random `0.0938`, and learned calc `0.8906`. This is
+  strong staged-transfer evidence, but still prescriptive.
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -308,6 +315,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-op19-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-additive-forced-margin-long-source-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-forced-margin-low-lr-source-recovery.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-automated-forced-margin-source-recovery.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 - `researchReviews/2026-05-29-forced-margin-branch-review.md`
 

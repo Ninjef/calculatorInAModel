@@ -142,6 +142,7 @@ class TrainConfig:
     late_source_recovery_start_step: int
     late_source_recovery_lr_multiplier: float
     late_source_recovery_additive_forced_true_loss_weight: float | None
+    late_source_recovery_additive_forced_margin_loss_weight: float | None
     late_source_recovery_trigger_metric: str
     late_source_recovery_trigger_threshold: float
     late_source_recovery_trigger_mode: str
@@ -1228,6 +1229,28 @@ def additive_forced_margin_weight_schedule(
     step: int,
 ) -> float:
     return additive_forced_true_weight_schedule(
+        initial_weight=initial_weight,
+        start_step=start_step,
+        ramp_steps=ramp_steps,
+        step=step,
+    )
+
+
+def effective_additive_forced_margin_weight(
+    *,
+    initial_weight: float,
+    start_step: int,
+    ramp_steps: int,
+    step: int,
+    late_recovery_start_step: int,
+    late_recovery_weight: float | None,
+) -> float:
+    if (
+        late_recovery_weight is not None
+        and late_source_recovery_active(start_step=late_recovery_start_step, step=step)
+    ):
+        return late_recovery_weight
+    return additive_forced_margin_weight_schedule(
         initial_weight=initial_weight,
         start_step=start_step,
         ramp_steps=ramp_steps,
@@ -7060,6 +7083,9 @@ def run_variant(
         late_source_recovery_additive_forced_true_loss_weight=(
             args.late_source_recovery_additive_forced_true_loss_weight
         ),
+        late_source_recovery_additive_forced_margin_loss_weight=(
+            args.late_source_recovery_additive_forced_margin_loss_weight
+        ),
         late_source_recovery_trigger_metric=(
             args.late_source_recovery_trigger_metric
         ),
@@ -8244,11 +8270,17 @@ def run_variant(
                 "additive_forced_true_objective"
             ] = additive_forced_true_objective_value
             loss = loss + additive_forced_true_objective
-        current_additive_forced_margin_weight = additive_forced_margin_weight_schedule(
-            initial_weight=args.additive_forced_margin_loss_weight,
-            start_step=args.additive_forced_margin_start_step,
-            ramp_steps=args.additive_forced_margin_ramp_steps,
-            step=step,
+        current_additive_forced_margin_weight = (
+            effective_additive_forced_margin_weight(
+                initial_weight=args.additive_forced_margin_loss_weight,
+                start_step=args.additive_forced_margin_start_step,
+                ramp_steps=args.additive_forced_margin_ramp_steps,
+                step=step,
+                late_recovery_start_step=current_late_source_recovery_start_step,
+                late_recovery_weight=(
+                    args.late_source_recovery_additive_forced_margin_loss_weight
+                ),
+            )
         )
         if current_additive_forced_margin_weight > 0:
             if use_reinforce:
@@ -9270,6 +9302,9 @@ def run_variant(
     metrics["late_source_recovery_additive_forced_true_loss_weight"] = (
         args.late_source_recovery_additive_forced_true_loss_weight
     )
+    metrics["late_source_recovery_additive_forced_margin_loss_weight"] = (
+        args.late_source_recovery_additive_forced_margin_loss_weight
+    )
     metrics["late_source_recovery_trigger_metric"] = (
         args.late_source_recovery_trigger_metric
     )
@@ -9345,11 +9380,19 @@ def run_variant(
         )
     )
     metrics["final_additive_forced_margin_effective_weight"] = (
-        additive_forced_margin_weight_schedule(
+        effective_additive_forced_margin_weight(
             initial_weight=args.additive_forced_margin_loss_weight,
             start_step=args.additive_forced_margin_start_step,
             ramp_steps=args.additive_forced_margin_ramp_steps,
             step=args.steps,
+            late_recovery_start_step=(
+                adaptive_late_source_recovery_trigger_step
+                if adaptive_late_source_recovery_trigger_step is not None
+                else args.late_source_recovery_start_step
+            ),
+            late_recovery_weight=(
+                args.late_source_recovery_additive_forced_margin_loss_weight
+            ),
         )
     )
     metrics["final_result_policy_anchor_weight"] = result_policy_anchor_weight_schedule(
@@ -10340,6 +10383,16 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--late-source-recovery-additive-forced-margin-loss-weight",
+        type=float,
+        default=None,
+        help=(
+            "Optional additive forced-margin weight override during late source "
+            "recovery. If omitted, the ordinary additive forced-margin schedule "
+            "continues unchanged."
+        ),
+    )
+    parser.add_argument(
         "--late-source-recovery-trigger-metric",
         choices=[
             "none",
@@ -11143,6 +11196,14 @@ def main() -> None:
             "--late-source-recovery-additive-forced-true-loss-weight "
             "must be non-negative"
         )
+    if (
+        args.late_source_recovery_additive_forced_margin_loss_weight is not None
+        and args.late_source_recovery_additive_forced_margin_loss_weight < 0
+    ):
+        raise ValueError(
+            "--late-source-recovery-additive-forced-margin-loss-weight "
+            "must be non-negative"
+        )
     if args.late_source_recovery_min_step < 0:
         raise ValueError("--late-source-recovery-min-step must be non-negative")
     if not 0.0 <= args.late_source_recovery_trigger_ema_beta < 1.0:
@@ -11854,6 +11915,14 @@ def main() -> None:
                     "laterecovadd"
                     f"{args.late_source_recovery_additive_forced_true_loss_weight:g}"
                 )
+            if (
+                args.late_source_recovery_additive_forced_margin_loss_weight
+                is not None
+            ):
+                suffix_parts.append(
+                    "laterecovmargin"
+                    f"{args.late_source_recovery_additive_forced_margin_loss_weight:g}"
+                )
         if args.late_source_recovery_trigger_metric != "none":
             suffix_parts.append(
                 f"laterecov{args.late_source_recovery_trigger_mode}"
@@ -12083,6 +12152,8 @@ def main() -> None:
         f"lr_multiplier={args.late_source_recovery_lr_multiplier} "
         "additive_forced_true_loss_weight="
         f"{args.late_source_recovery_additive_forced_true_loss_weight} "
+        "additive_forced_margin_loss_weight="
+        f"{args.late_source_recovery_additive_forced_margin_loss_weight} "
         f"trigger_metric={args.late_source_recovery_trigger_metric} "
         f"trigger_threshold={args.late_source_recovery_trigger_threshold} "
         f"trigger_mode={args.late_source_recovery_trigger_mode} "

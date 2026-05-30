@@ -561,6 +561,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/113-automated-forced-margin-recovery-replicates-strongly-on-a-fresh-seed",
+      "target": "researchMemory/hypotheses/phase7/113-automated-forced-margin-recovery-replicates-strongly-on-a-fresh-seed.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -833,6 +838,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-forced-margin-low-lr-source-recovery.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-automated-forced-margin-source-recovery.md",
       "type": "supported_by"
     },
     {
@@ -1730,6 +1740,13 @@
       "source_path": "researchMemory/hypotheses/phase7/112-low-lr-recovery-shows-one-negative-forced-margin-was-source-policy-maturity-limited.md",
       "status": "POSITIVE, constrained.",
       "title": "Low-LR recovery shows one-negative forced-margin was source-policy-maturity limited."
+    },
+    {
+      "id": "doc/113-automated-forced-margin-recovery-replicates-strongly-on-a-fresh-seed",
+      "kind": "memory_document",
+      "source_path": "researchMemory/hypotheses/phase7/113-automated-forced-margin-recovery-replicates-strongly-on-a-fresh-seed.md",
+      "status": "POSITIVE, constrained.",
+      "title": "Automated forced-margin recovery replicates strongly on a fresh seed."
     },
     {
       "id": "doc/phase7-direction-memory",

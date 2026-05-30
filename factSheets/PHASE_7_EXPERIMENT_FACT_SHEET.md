@@ -7898,3 +7898,64 @@ Interpretation:
 - Do not rerun this exact recovery plus handoff as novelty. Next forced-margin
   work should be fresh-seed stability or an automated in-source recovery phase;
   otherwise move to less-prescriptive target construction or estimator work.
+
+## 2026-05-30 Automated Forced-Margin Source Recovery
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-automated-forced-margin-source-recovery.md
+```
+
+Runs:
+
+```text
+runs/2026-05-30_phase7_forced_margin_auto_recovery/fresh_seed16_source630_cpu
+runs/2026-05-30_phase7_forced_margin_auto_recovery/handoff600_from_fresh_seed16_auto_step630_cpu
+```
+
+Question:
+
+Can the forced-margin low-LR recovery be folded into one source run and
+replicate on a fresh seed?
+
+Tooling:
+
+- Added `--late-source-recovery-additive-forced-margin-loss-weight`.
+- Focused tests: `2 passed, 117 deselected` for
+  `late_source_recovery or additive_forced_margin`.
+
+Source result:
+
+| Step | Source calc | Snapshot normal | Injection-zero | Late recovery |
+| ---: | ---: | ---: | ---: | --- |
+| `570` | `0.5800` | `0.6125` | `0.0600` | off |
+| `600` | `0.5825` | `0.5725` | `0.0425` | on |
+| `630` | `0.8825` | `0.9000` | `0.0425` | on |
+
+Final source eval was `0.8700`; diagnostic learned calc was `0.8906`.
+
+Trusted handoff:
+
+| Metric | Result |
+| --- | ---: |
+| final eval | `0.9875` |
+| step-600 normal | `0.9800` |
+| step-600 injection-zero | `0.0250` |
+| diagnostic injection-zero | `0.0156` |
+| diagnostic forced-random | `0.0938` |
+| diagnostic learned calc | `0.8906` |
+
+Decision:
+
+```text
+automated_forced_margin_recovery_fresh_seed_positive
+```
+
+Interpretation:
+
+- The forced-margin recovery mechanism survives automation and a fresh seed.
+- This is the strongest forced-margin handoff so far.
+- It remains a staged, prescriptive recipe because source training still uses
+  hard improvement assignment and true-result contrastive forcing.
+- Do not rerun the same seed-16 automated recovery plus handoff as novelty.
