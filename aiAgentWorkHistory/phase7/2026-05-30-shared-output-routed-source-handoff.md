@@ -85,6 +85,33 @@ Continued from the handoff600 final checkpoint for another `600` steps.
 - Step-600 continuation forced-random: `0.0800`.
 - Step-600 continuation calculator-result accuracy: `0.9950`.
 
+## Equivalence Audit
+
+Because tied output and cloned frozen output should be close mechanically, I
+checked whether the handoff miss was caused by state-dict loading or module
+tying.
+
+Added a regression that loads a shared-output checkpoint state into both a
+tied-output model and an independent-hook model. On a routed batch, the two
+models produce identical logits, calculator injections, routes, and hook result
+predictions.
+
+Targeted tests:
+
+```bash
+PYTHONPATH=. PYTHONPYCACHEPREFIX=/tmp/codex_pycache pytest tests/test_model.py::test_shared_calculator_output_projection_ties_extra_hooks tests/test_model.py::test_shared_calculator_output_projection_loads_primary_checkpoint_value tests/test_model.py::test_shared_output_checkpoint_matches_independent_forward tests/test_model.py::test_routed_calculator_only_invokes_present_hooks -q
+```
+
+Result: `4 passed`.
+
+Broader regression:
+
+```bash
+PYTHONPATH=. PYTHONPYCACHEPREFIX=/tmp/codex_pycache pytest tests/test_model.py tests/test_assignment_scaling.py tests/test_research_memory.py -q
+```
+
+Result: `150 passed`.
+
 ## Interpretation
 
 Shared output projection preserves four-hook routed source training and removes

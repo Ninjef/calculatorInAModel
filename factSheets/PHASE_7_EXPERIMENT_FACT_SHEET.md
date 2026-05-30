@@ -9214,6 +9214,15 @@ runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_ho
 - Step-600 continuation forced-random: `0.0800`.
 - Step-600 continuation calculator-result accuracy: `0.9950`.
 
+Equivalence audit:
+
+- Added a regression that loads a shared-output checkpoint state into both
+  tied-output and independent-hook models.
+- The two loaded models produce identical logits, calculator injections,
+  routes, and hook result predictions on a routed batch.
+- This rules out shared/independent state-dict loading or forward tying as the
+  explanation for the handoff miss.
+
 Interpretation:
 
 - Shared output projection is compatible with routed source acquisition: all

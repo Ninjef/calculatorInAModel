@@ -588,6 +588,65 @@ def test_shared_calculator_output_projection_loads_primary_checkpoint_value() ->
     assert torch.all(target.calculator_hook.output_proj.weight == 7.0)
 
 
+def test_shared_output_checkpoint_matches_independent_forward() -> None:
+    torch.manual_seed(0)
+    shared_source = TinyGPT(
+        _small_calculator_cfg(
+            hook_count=4,
+            hook_routing="left_operand_mod",
+            share_output_proj=True,
+        )
+    )
+    shared_target = TinyGPT(
+        _small_calculator_cfg(
+            hook_count=4,
+            hook_routing="left_operand_mod",
+            share_output_proj=True,
+        )
+    )
+    independent_target = TinyGPT(
+        _small_calculator_cfg(hook_count=4, hook_routing="left_operand_mod")
+    )
+    state = shared_source.state_dict()
+    shared_target.load_state_dict(state)
+    independent_target.load_state_dict(state)
+    x = torch.tensor(
+        [
+            [0, PLUS_ID, 2, EQ_ID, 5, 6, 7, 8],
+            [1, PLUS_ID, 2, EQ_ID, 5, 6, 7, 8],
+            [2, PLUS_ID, 2, EQ_ID, 5, 6, 7, 8],
+            [3, PLUS_ID, 2, EQ_ID, 5, 6, 7, 8],
+        ]
+    )
+
+    with torch.no_grad():
+        shared_logits, shared_diagnostics = shared_target(
+            x,
+            forced_calculator_result_class=2,
+            return_diagnostics=True,
+        )
+        independent_logits, independent_diagnostics = independent_target(
+            x,
+            forced_calculator_result_class=2,
+            return_diagnostics=True,
+        )
+
+    assert torch.equal(shared_logits, independent_logits)
+    assert torch.equal(
+        shared_diagnostics["calculator_injection"],
+        independent_diagnostics["calculator_injection"],
+    )
+    assert torch.equal(
+        shared_diagnostics["calculator_hook_route"],
+        independent_diagnostics["calculator_hook_route"],
+    )
+    for shared_trace, independent_trace in zip(
+        shared_diagnostics["calculator_traces"],
+        independent_diagnostics["calculator_traces"],
+    ):
+        assert torch.equal(shared_trace["result_pred"], independent_trace["result_pred"])
+
+
 def test_temporary_injection_scale_applies_to_all_calculator_hooks() -> None:
     from scripts.overfit_one_batch import temporary_calculator_injection_scale
 
