@@ -42,6 +42,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ensemble-size", type=int, default=1)
     parser.add_argument("--uncertainty-candidates", type=int, default=8)
     parser.add_argument("--uncertainty-beta", type=float, default=1.0)
+    parser.add_argument("--adaptive-base-candidates", type=int, default=8)
+    parser.add_argument("--adaptive-expanded-candidates", type=int, default=16)
+    parser.add_argument("--adaptive-expand-fraction", type=float, default=0.25)
     parser.add_argument(
         "--critic-loss-mode",
         choices=["pointwise", "pairwise", "hybrid"],
@@ -320,6 +323,132 @@ def evaluate_candidate_proposals(
     }
 
 
+def evaluate_adaptive_proposals(
+    mean_losses: torch.Tensor,
+    std_losses: torch.Tensor,
+    full_losses: torch.Tensor,
+    heldout_indices: torch.Tensor,
+    true_sum: torch.Tensor,
+    *,
+    base_count: int,
+    expanded_count: int,
+    expand_fraction: float,
+    uncertainty_beta: float,
+    random_seed: int,
+) -> dict[str, float]:
+    if base_count < 1:
+        raise ValueError("base_count must be positive")
+    if expanded_count < base_count:
+        raise ValueError("expanded_count must be >= base_count")
+    if not 0.0 <= expand_fraction <= 1.0:
+        raise ValueError("expand_fraction must be in [0, 1]")
+    if uncertainty_beta < 0.0:
+        raise ValueError("uncertainty_beta must be non-negative")
+
+    heldout_mean = mean_losses[heldout_indices]
+    heldout_std = std_losses[heldout_indices]
+    heldout_full = full_losses[heldout_indices]
+    heldout_true_sum = true_sum[heldout_indices]
+    full_best = heldout_full.argmin(dim=-1)
+    best_losses = heldout_full.gather(1, full_best.unsqueeze(-1)).squeeze(-1)
+
+    prompt_count = int(heldout_mean.shape[0])
+    result_count = int(heldout_mean.shape[-1])
+    base_k = min(base_count, result_count)
+    expanded_k = min(expanded_count, result_count)
+    expand_count = int(round(prompt_count * expand_fraction))
+    expand_count = max(0, min(expand_count, prompt_count))
+    ordered_by_mean = heldout_mean.argsort(dim=-1)
+    base_candidates = ordered_by_mean[:, :base_k]
+    expanded_candidates = ordered_by_mean[:, :expanded_k]
+
+    def best_from_candidates(candidates: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+        candidate_losses = heldout_full.gather(1, candidates)
+        best_position = candidate_losses.argmin(dim=-1)
+        selected_best = candidates.gather(1, best_position.unsqueeze(-1)).squeeze(-1)
+        selected_losses = heldout_full.gather(1, selected_best.unsqueeze(-1)).squeeze(-1)
+        return selected_best, selected_losses
+
+    base_best, base_losses = best_from_candidates(base_candidates)
+    expanded_best, expanded_losses = best_from_candidates(expanded_candidates)
+
+    def score_mask(prefix: str, mask: torch.Tensor) -> dict[str, float]:
+        selected_best = torch.where(mask, expanded_best, base_best)
+        selected_losses = torch.where(mask, expanded_losses, base_losses)
+        candidates_used = torch.where(
+            mask,
+            torch.full_like(mask, expanded_k, dtype=torch.float32),
+            torch.full_like(mask, base_k, dtype=torch.float32),
+        )
+        return {
+            f"{prefix}_expanded_fraction": float(mask.float().mean().item()),
+            f"{prefix}_mean_candidates": float(candidates_used.mean().item()),
+            f"{prefix}_score_fraction_of_full_heldout_enum": float(
+                candidates_used.mean().item() / result_count
+            ),
+            f"{prefix}_scored_best_equals_full_best": float(
+                (selected_best == full_best).float().mean().item()
+            ),
+            f"{prefix}_scored_best_equals_true_sum": float(
+                (selected_best == heldout_true_sum).float().mean().item()
+            ),
+            f"{prefix}_mean_regret": float((selected_losses - best_losses).mean().item()),
+            f"{prefix}_median_regret": float(
+                (selected_losses - best_losses).median().item()
+            ),
+        }
+
+    def mask_from_score(score: torch.Tensor, *, largest: bool) -> torch.Tensor:
+        mask = torch.zeros(prompt_count, dtype=torch.bool, device=heldout_mean.device)
+        if expand_count == 0:
+            return mask
+        selected = score.topk(k=expand_count, largest=largest).indices
+        mask[selected] = True
+        return mask
+
+    sorted_mean = heldout_mean.gather(1, ordered_by_mean)
+    if expanded_k > base_k:
+        cutoff_gap = sorted_mean[:, base_k] - sorted_mean[:, base_k - 1]
+        lcb = heldout_mean - uncertainty_beta * heldout_std
+        outside_candidates = ordered_by_mean[:, base_k:expanded_k]
+        outside_lcb = lcb.gather(1, outside_candidates)
+        lcb_intrusion = sorted_mean[:, 0] - outside_lcb.min(dim=-1).values
+    else:
+        cutoff_gap = torch.full(
+            (prompt_count,),
+            float("inf"),
+            dtype=heldout_mean.dtype,
+            device=heldout_mean.device,
+        )
+        lcb_intrusion = torch.full_like(cutoff_gap, float("-inf"))
+    top_base_std = heldout_std.gather(1, base_candidates).max(dim=-1).values
+    generator = torch.Generator(device=heldout_mean.device)
+    generator.manual_seed(random_seed)
+    random_score = torch.rand(prompt_count, generator=generator, device=heldout_mean.device)
+
+    return {
+        "heldout_adaptive_base_candidates": float(base_k),
+        "heldout_adaptive_expanded_candidates": float(expanded_k),
+        "heldout_adaptive_requested_expand_fraction": float(expand_fraction),
+        **score_mask(
+            "heldout_adaptive_margin",
+            mask_from_score(-cutoff_gap, largest=True),
+        ),
+        **score_mask(
+            "heldout_adaptive_std",
+            mask_from_score(top_base_std, largest=True),
+        ),
+        **score_mask(
+            "heldout_adaptive_lcb_intrusion",
+            mask_from_score(lcb_intrusion, largest=True),
+        ),
+        **score_mask(
+            "heldout_adaptive_random",
+            mask_from_score(random_score, largest=True),
+        ),
+    }
+
+
 def diagnose_checkpoint(
     checkpoint: Path,
     *,
@@ -415,6 +544,18 @@ def diagnose_checkpoint(
         candidate_count=int(args.uncertainty_candidates),
         uncertainty_beta=float(args.uncertainty_beta),
     )
+    adaptive_metrics = evaluate_adaptive_proposals(
+        predicted_losses,
+        prediction_std,
+        full_losses,
+        heldout_indices,
+        true_sum,
+        base_count=int(args.adaptive_base_candidates),
+        expanded_count=int(args.adaptive_expanded_candidates),
+        expand_fraction=float(args.adaptive_expand_fraction),
+        uncertainty_beta=float(args.uncertainty_beta),
+        random_seed=int(args.seed),
+    )
     return {
         "label": label,
         "checkpoint": str(checkpoint),
@@ -426,6 +567,9 @@ def diagnose_checkpoint(
         "ensemble_size": int(args.ensemble_size),
         "uncertainty_candidates": int(args.uncertainty_candidates),
         "uncertainty_beta": float(args.uncertainty_beta),
+        "adaptive_base_candidates": int(args.adaptive_base_candidates),
+        "adaptive_expanded_candidates": int(args.adaptive_expanded_candidates),
+        "adaptive_expand_fraction": float(args.adaptive_expand_fraction),
         "critic_loss_mode": str(args.critic_loss_mode),
         "forced_scores_used": train_losses_used,
         "heldout_proposal_scores_if_used": int(
@@ -438,6 +582,7 @@ def diagnose_checkpoint(
         **train_metrics,
         **metrics,
         **proposal_metrics,
+        **adaptive_metrics,
     }
 
 
@@ -451,6 +596,14 @@ def main() -> None:
         raise ValueError("--uncertainty-candidates must be positive")
     if args.uncertainty_beta < 0.0:
         raise ValueError("--uncertainty-beta must be non-negative")
+    if args.adaptive_base_candidates < 1:
+        raise ValueError("--adaptive-base-candidates must be positive")
+    if args.adaptive_expanded_candidates < args.adaptive_base_candidates:
+        raise ValueError(
+            "--adaptive-expanded-candidates must be >= --adaptive-base-candidates"
+        )
+    if not 0.0 <= args.adaptive_expand_fraction <= 1.0:
+        raise ValueError("--adaptive-expand-fraction must be in [0, 1]")
     config = load_config(args.config)
     labels = args.checkpoint_label
     if labels is None:

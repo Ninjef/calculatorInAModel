@@ -5408,6 +5408,52 @@ def test_result_boundary_uncertainty_candidate_proposals() -> None:
     assert metrics["heldout_lcb_proposal_mean_regret"] == 0.0
 
 
+def test_result_boundary_adaptive_candidate_expansion() -> None:
+    scripts_dir = str(Path("scripts").resolve())
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    script_path = Path("scripts/diagnose_result_boundary_amortized_critic.py")
+    spec = importlib.util.spec_from_file_location(
+        "result_boundary_critic_diagnostic",
+        script_path,
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    diagnostic = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(diagnostic)
+
+    full_losses = torch.tensor(
+        [
+            [3.0, 0.0, 2.0, 1.0],
+            [2.0, 3.0, 0.0, 1.0],
+        ]
+    )
+    mean_losses = torch.tensor(
+        [
+            [0.1, 0.2, 3.0, 4.0],
+            [3.0, 4.0, 0.1, 2.5],
+        ]
+    )
+    std_losses = torch.zeros_like(mean_losses)
+    metrics = diagnostic.evaluate_adaptive_proposals(
+        mean_losses,
+        std_losses,
+        full_losses,
+        torch.tensor([0, 1]),
+        torch.tensor([1, 2]),
+        base_count=1,
+        expanded_count=2,
+        expand_fraction=0.5,
+        uncertainty_beta=1.0,
+        random_seed=0,
+    )
+
+    assert metrics["heldout_adaptive_margin_expanded_fraction"] == 0.5
+    assert metrics["heldout_adaptive_margin_mean_candidates"] == 1.5
+    assert metrics["heldout_adaptive_margin_scored_best_equals_full_best"] == 1.0
+    assert metrics["heldout_adaptive_margin_mean_regret"] == 0.0
+
+
 def test_phase7_streaming_batch_and_prompt_memory_tables() -> None:
     script_path = Path("scripts/run_phase7_local_target_stage1_lift_gate.py")
     spec = importlib.util.spec_from_file_location("phase7_local_target_runner", script_path)

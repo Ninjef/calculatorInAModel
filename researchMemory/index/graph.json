@@ -761,6 +761,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/153-adaptive-result-boundary-proposal-expansion-has-useful-margin-signal-but-not-enough-levera",
+      "target": "researchMemory/hypotheses/phase7/153-adaptive-result-boundary-proposal-expansion-has-useful-margin-signal-but-not-enough-levera.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1183,6 +1188,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-result-boundary-uncertainty-proposal-diagnostic.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-result-boundary-adaptive-proposal-diagnostic.md",
       "type": "supported_by"
     },
     {
@@ -2410,6 +2420,13 @@
       "source_path": "researchMemory/hypotheses/phase7/152-result-boundary-critic-proposals-help-only-when-followed-by-broad-candidate-rescoring.md",
       "status": "MIXED",
       "title": "Result-boundary critic proposals help only when followed by broad candidate rescoring."
+    },
+    {
+      "id": "doc/153-adaptive-result-boundary-proposal-expansion-has-useful-margin-signal-but-not-enough-levera",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/153-adaptive-result-boundary-proposal-expansion-has-useful-margin-signal-but-not-enough-levera.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Adaptive result-boundary proposal expansion has useful margin signal but not enough leverage."
     },
     {
       "id": "doc/phase7-direction-memory",

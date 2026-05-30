@@ -8320,6 +8320,37 @@ Interpretation:
   targets, or streaming/evolving-checkpoint validation rather than more static
   beta/ensemble/count tweaks.
 
+Adaptive expansion follow-up:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-result-boundary-adaptive-proposal-diagnostic.md
+runs/2026-05-30_phase7_result_boundary_adaptive_proposal/single_pairwise_adaptive8to16_f25_step800.json
+runs/2026-05-30_phase7_result_boundary_adaptive_proposal/single_pairwise_adaptive8to16_f50_step800.json
+runs/2026-05-30_phase7_result_boundary_adaptive_proposal/ensemble4_pairwise_adaptive8to16_f25_step800.json
+runs/2026-05-30_phase7_result_boundary_adaptive_proposal/ensemble4_pairwise_adaptive8to16_f50_step800.json
+```
+
+- Added adaptive top-8-to-top-16 expansion metrics using cutoff-margin,
+  top-candidate std, LCB intrusion, and random expansion baselines.
+- Cutoff-margin expansion was best, but only partially useful:
+
+| Setup | Expanded prompts | Mean candidates | Margin adaptive | Random adaptive | Fixed top-16 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| single critic | `25%` | `10/39` | `0.8500` | `0.8200` | `0.9600` |
+| single critic | `50%` | `12/39` | `0.9200` | `0.8800` | `0.9600` |
+| ensemble | `25%` | `10/39` | `0.9100` | `0.8800` | `1.0000` |
+| ensemble | `50%` | `12/39` | `0.9700` | `0.9100` | `1.0000` |
+
+Interpretation:
+
+- Margin-based adaptive compute has real signal over random expansion.
+- The result still misses the fixed top-16 ceiling at lower average scoring
+  cost, and the ensemble setting uses `32` train scores per prompt.
+- Std and LCB-intrusion uncertainty scores were weaker than cutoff margin.
+- Do not continue threshold/beta/fraction sweeps as novelty; the next
+  result-boundary approximation needs a different target construction,
+  calibrated proposal model, or evolving-checkpoint validation.
+
 Review:
 
 ```text
