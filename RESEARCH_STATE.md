@@ -156,9 +156,10 @@ These branches should not continue without a new mechanism:
    estimator changes, or explicit streaming/generalization validation.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
-3. Do not tune forced-margin locally. Use automated recovery as a benchmark;
-   further work must stress stability/scale or remove hard assignment /
-   true-result forcing with a new target construction or estimator.
+3. Do not tune forced-margin locally. Use automated recovery as the benchmark
+   to beat; further forced-margin work must stress a new thesis-relevant axis
+   such as product-decoder parity, larger operand range, larger architecture,
+   or many-calculator cost, or remove hard assignment / true-result forcing.
 4. If reducing hard-assignment cost, state the scalability hypothesis
    up front and compare against the exact-grid assignment ceiling rather than
    only against prior cheap selectors.

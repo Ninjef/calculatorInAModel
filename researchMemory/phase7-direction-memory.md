@@ -306,6 +306,12 @@ Memory:
   (`0.0625` zero-injection, `0.0325` forced-random). This supports staged
   scale/stability but does not remove prescriptiveness or prove product-decoder
   parity.
+- Forced-margin benchmark review: automated recovery is now the staged-transfer
+  benchmark to beat, not the next knob branch. Future forced-margin compute
+  must stress a new thesis-relevant axis such as product-decoder parity, larger
+  operand range, larger architecture, or many-calculator cost, or remove hard
+  assignment / true-result forcing. Do not run more local knob sweeps, same-axis
+  seed-only reruns, or cheap selector/proxy work as novelty.
 - A less-prescriptive answer-derived bridge is positive but constrained: the
   older full-grid `result_boundary_target` source checkpoint transfers into
   the trusted frozen-policy additive gate at `0.8825` final / `0.8425`
@@ -349,6 +355,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-automated-forced-margin-source-recovery.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-second-fresh-seed-stability.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-wider-model-scale-stress.md`
+- `researchReviews/2026-05-30-forced-margin-benchmark-direction-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-answer-derived-boundary-handoff.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-amortized-critic-diagnostic.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`

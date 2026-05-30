@@ -1,5 +1,36 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-30 Forced-Margin Benchmark Direction Review
+
+Review:
+
+```text
+researchReviews/2026-05-30-forced-margin-benchmark-direction-review.md
+```
+
+Result:
+
+```text
+forced_margin_recovery_benchmark_not_knob_branch
+```
+
+Automated one-negative forced-margin recovery is now the staged-transfer
+benchmark rather than a local tuning branch. Evidence includes manual recovery
+handoff `0.8700` final / `0.9050` step-600 normal, automated fresh seed
+`0.9875` / `0.9800`, second fresh seed `0.8975` / `0.9050`, and wider
+`n_embd=32`, `n_head=2` non-product decoder stress `1.0000` / `1.0000` with
+low controls.
+
+Interpretation:
+
+- This is strong staged-transfer and scale evidence.
+- It is still prescriptive: hard improvement assignment, true-result
+  forced-margin pressure, a pretrained semantic decoder, and frozen-policy
+  transfer remain.
+- Do not run local forced-margin knob sweeps or same-axis reruns as novelty.
+- Next forced-margin work must stress a thesis-relevant axis or remove
+  prescriptiveness.
+
 ## 2026-05-30 Forced-Margin Wider-Model Scale Stress
 
 Task/work log:
