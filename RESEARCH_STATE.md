@@ -99,12 +99,11 @@ Active directions:
   `0.9800` step-600 normal on one fresh seed; a second fresh seed cleared at
   `0.8975` / `0.9050`; and wider `n_embd=32`, `n_head=2` non-product and
   product-decoder op19 stresses both reached `1.0000` final / step-600 normal.
-  But the first range stress, op29 product, missed the high gate: source calc
-  recovered only `0.3533 -> 0.6889`, and trusted handoff reached `0.8533`
-  final / `0.8278` step-600 normal with low controls. A 90-step low-LR source
-  recovery partly rescued op29 to `0.9067` final / `0.8978` step-600 handoff,
-  showing source maturity matters but adding prescriptive full-grid compute.
-  Treat forced-margin as a strong op19 staged benchmark, not range-scalable.
+  A shallow-head op29 range stress missed (`0.8533` final handoff), and low-LR
+  recovery only partly rescued it (`0.9067`), but adding a hidden result head
+  (`rhead64`) cleared op29 (`1.0000` final / step-600 handoff, low controls).
+  Treat forced-margin as a strong staged benchmark whose range scaling depends
+  on source-head capacity, but still not a scalable/non-prescriptive recipe.
 - Target propagation/local targets are now a ceiling and diagnostic, not the
   current scalable mainline. Exact `policy_reweighted_t1` is positive and
   survives retention, but full enumeration is not scalable. Simple
@@ -159,11 +158,10 @@ These branches should not continue without a new mechanism:
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark
    to beat; further forced-margin work must stress a new thesis-relevant axis
-   such as larger architecture or many-calculator cost, or remove hard
-   assignment / true-result forcing. Product-decoder parity cleared; op29 range
-   stress needed extra low-LR source recovery and still did not become a
-   scalable recipe, so do not jump to op49 with the same full-grid recipe or
-   extend the same recovery ladder as novelty.
+   such as many-calculator cost, fresh-seed/larger-range validation of the
+   op29 `rhead64` capacity fix, or remove hard assignment / true-result
+   forcing. Do not rerun op19, shallow op29, op29 low-LR recovery, or same-seed
+   op29 `rhead64` as novelty.
 4. If reducing hard-assignment cost, state the scalability hypothesis
    up front and compare against the exact-grid assignment ceiling rather than
    only against prior cheap selectors.

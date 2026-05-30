@@ -631,6 +631,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/127-a-hidden-result-head-rescues-op29-forced-margin-range-transfer",
+      "target": "researchMemory/hypotheses/phase7/127-a-hidden-result-head-rescues-op29-forced-margin-range-transfer.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -933,6 +938,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-op29-low-lr-source-recovery-diagnostic.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-op29-hidden-result-head-capacity-diagnostic.md",
       "type": "supported_by"
     },
     {
@@ -1968,6 +1978,13 @@
       "source_path": "researchMemory/hypotheses/phase7/126-op29-low-lr-source-recovery-partly-rescues-the-range-stress-but-adds-prescriptive-compute.md",
       "status": "MIXED-POSITIVE",
       "title": "op29 low-LR source recovery partly rescues the range stress but adds prescriptive compute."
+    },
+    {
+      "id": "doc/127-a-hidden-result-head-rescues-op29-forced-margin-range-transfer",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/127-a-hidden-result-head-rescues-op29-forced-margin-range-transfer.md",
+      "status": "POSITIVE",
+      "title": "A hidden result head rescues op29 forced-margin range transfer."
     },
     {
       "id": "doc/phase7-direction-memory",

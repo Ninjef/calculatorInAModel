@@ -787,3 +787,9 @@ Conclusion: Continuing the failed op29 product source step-630 checkpoint for `9
 Do not repeat: Do not rerun the same op29 step-630 to low-LR step-90 recovery and handoff as novelty, and do not extend the same continuation ladder unless explicitly diagnosing a new capacity/recovery hypothesis.
 Next allowed test: Further range work should change source acquisition, reduce assignment cost against an exact-grid ceiling, or test a materially different source-capacity/recovery mechanism rather than more of the same low-LR recovery.
 Source: `aiAgentWorkHistory/phase7/2026-05-30-op29-low-lr-source-recovery-diagnostic.md`
+
+POSITIVE: A hidden result head rescues op29 forced-margin range transfer.
+Conclusion: Adding `--calculator-result-head-hidden-size 64` to the op29 product forced-margin source changed the source-capacity picture. With the same op29 oracle decoder and automated one-negative forced-margin schedule, source calc reached `0.9978` at step `630` and final source eval was `0.9978`, versus `0.7133` for the shallow op29 source and `0.8233` after shallow low-LR recovery. The trusted 600-step frozen-policy additive handoff from the `rhead64` step-630 checkpoint reached `1.0000` final eval / `1.0000` step-600 normal, with low controls (`0.0244` injection-zero, `0.0156` forced-random at step `600`) and learned calc `0.9967`. This shows the op29 range failure was strongly source-capacity sensitive, but the method remains prescriptive and full-grid.
+Do not repeat: Do not rerun the same op29 `rhead64`, effective-seed-29 source-plus-handoff as novelty.
+Next allowed test: Test whether this capacity fix survives fresh seeds/larger ranges or can be paired with cheaper assignment; otherwise prioritize removing hard assignment / true-result forcing.
+Source: `aiAgentWorkHistory/phase7/2026-05-30-op29-hidden-result-head-capacity-diagnostic.md`

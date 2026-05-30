@@ -8443,3 +8443,38 @@ Follow-up interpretation:
   `0.9067` final / `0.8978` step-600 normal.
 - This is not a scalable fix. It adds another prescriptive full-grid source
   continuation on top of the hard-assignment forced-margin recipe.
+
+Hidden result-head capacity follow-up:
+
+```text
+runs/2026-05-30_phase7_forced_margin_range_stress/op29_rhead64_source630_cpu
+runs/2026-05-30_phase7_forced_margin_range_stress/op29_rhead64_handoff600_from_step630_cpu
+```
+
+| Run | Key result |
+| --- | --- |
+| `rhead64` source step `630` | `0.9978` normal/source calc, `0.0233` injection-zero, `1.0000` oracle, `0.0144` forced-random |
+| `rhead64` source final eval | `898/900 = 0.9978` |
+| `rhead64` handoff step `600` | `1.0000` normal, `0.0244` injection-zero, `1.0000` oracle, `0.9967` learned calc, `0.0156` forced-random |
+| `rhead64` handoff final eval | `900/900 = 1.0000` |
+
+Capacity:
+
+| Source | Total params | Result-head params |
+| --- | ---: | ---: |
+| op29 shallow result head | `28,311` | `7,611` |
+| op29 `rhead64` | `32,791` | `12,091` |
+
+Decision:
+
+```text
+op29_hidden_result_head_capacity_positive_but_prescriptive
+```
+
+Interpretation:
+
+- The op29 range miss was strongly source-capacity sensitive. A hidden result
+  head rescued source acquisition and trusted handoff without the extra low-LR
+  continuation ladder.
+- This remains prescriptive and full-grid. It improves the staged benchmark's
+  range story, but not the final scalable/non-prescriptive training method.

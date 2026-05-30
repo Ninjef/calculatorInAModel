@@ -21,12 +21,19 @@ very low controls (`0.0122` injection-zero, `0.0111` forced-random at step
 `600`). The calculator path remains causal, but the recovery is still
 prescriptive and expensive.
 
+A source-capacity diagnostic changed the picture more sharply. Adding a hidden
+result head (`--calculator-result-head-hidden-size 64`) to the same op29
+product forced-margin source reached `0.9978` final source eval and produced a
+perfect trusted handoff (`1.0000` final / step-600 normal) with low controls.
+The result head grew from `7,611` to `12,091` trainable parameters.
+
 ## What Should Stop
 
 Do not treat the op19 forced-margin recipe as range-scalable merely because it
 cleared product parity. Do not rerun op29 with the same source/handoff seed,
 repeat the same low-LR continuation ladder, or jump to op49 with the same
-full-grid hard-assignment recipe as novelty.
+full-grid hard-assignment recipe as novelty. Also do not rerun the same op29
+`rhead64` seed as novelty.
 
 Also do not respond by tuning local forced-margin knobs. The failure is aligned
 with the strategic bottleneck: source acquisition under larger candidate/result
@@ -40,14 +47,14 @@ Useful next work should make range scaling more true:
   true-result forced-margin pressure.
 - Reduce assignment cost with a declared scalability hypothesis and compare to
   the exact-grid ceiling.
-- If staying staged, test a materially different source-capacity or recovery
-  hypothesis. The simple low-LR continuation already showed source maturity
-  matters, so more of the same ladder is not a new mechanism.
+- If staying staged, validate whether the hidden result-head capacity fix
+  survives fresh seeds, larger ranges, or lower-cost assignment.
 
 ## Are We Closer?
 
-Yes, but mostly by clarifying the boundary. The staged benchmark is now strong
-for op19 and wider product decoders; op29 can be partially rescued by extra
-source recovery, but only by adding more prescriptive full-grid source compute.
-Future agents should treat range scaling as unresolved and should avoid
-repeating op19 success conditions or the same op29 continuation ladder.
+Yes. The staged benchmark is now strong for op19 and wider product decoders,
+and op29 can clear with a larger result policy head. The remaining gap is
+scalability/prescriptiveness: the successful op29 recipe still uses full-grid
+hard assignment, true-result forced-margin pressure, and extra per-calculator
+source-head capacity. Future agents should validate generality or reduce the
+assignment/capacity cost rather than repeating op19 or the same op29 runs.

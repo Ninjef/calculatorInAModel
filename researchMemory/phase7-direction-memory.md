@@ -326,6 +326,12 @@ Memory:
   step-600 normal with low controls. This means the op29 miss was partly
   source-maturity limited, but the rescue adds prescriptive full-grid source
   compute and is not a scalable fix.
+- A hidden result-head op29 capacity diagnostic is positive: adding
+  `--calculator-result-head-hidden-size 64` raised source final eval to
+  `0.9978` and the trusted handoff to `1.0000` final / step-600 normal with
+  low controls. The op29 range miss was strongly source-capacity sensitive, but
+  the fix adds per-calculator result-head parameters and keeps full-grid hard
+  assignment plus true-result forcing.
 - Forced-margin benchmark review: automated recovery is now the staged-transfer
   benchmark to beat, not the next knob branch. Future forced-margin compute
   must stress a new thesis-relevant axis such as product-decoder parity, larger
@@ -378,6 +384,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-product-decoder-parity.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-op29-range-stress.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-op29-low-lr-source-recovery-diagnostic.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-op29-hidden-result-head-capacity-diagnostic.md`
 - `researchReviews/2026-05-30-forced-margin-range-stress-review.md`
 - `researchReviews/2026-05-30-forced-margin-benchmark-direction-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-answer-derived-boundary-handoff.md`
