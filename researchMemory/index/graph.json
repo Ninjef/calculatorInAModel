@@ -671,6 +671,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/135-policy-topk-unique24-op19-source-handoff-survives-a-fresh-seed",
+      "target": "researchMemory/hypotheses/phase7/135-policy-topk-unique24-op19-source-handoff-survives-a-fresh-seed.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -783,6 +788,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-policy-topk-source-handoff-validation.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-policy-topk-fresh-seed-validation.md",
       "type": "supported_by"
     },
     {
@@ -2139,6 +2149,13 @@
       "source_path": "researchMemory/hypotheses/phase7/134-policy-topk-unique24-survives-longer-op19-source-training-and-trusted-additive-handoff.md",
       "status": "POSITIVE",
       "title": "Policy-topk unique24 survives longer op19 source training and trusted additive handoff."
+    },
+    {
+      "id": "doc/135-policy-topk-unique24-op19-source-handoff-survives-a-fresh-seed",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/135-policy-topk-unique24-op19-source-handoff-survives-a-fresh-seed.md",
+      "status": "POSITIVE",
+      "title": "Policy-topk unique24 op19 source/handoff survives a fresh seed."
     },
     {
       "id": "doc/phase7-direction-memory",

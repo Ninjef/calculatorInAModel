@@ -8705,3 +8705,37 @@ Follow-up interpretation:
 - This remains one seed and one operand range. Next validation should be
   fresh-seed stability, op29/range stress, many-calculator accounting, or a
   less-prescriptive variant.
+
+Fresh-seed staged validation:
+
+```text
+runs/2026-05-30_phase7_assignment_cost_reduction/op19_rhead64_topk8_unique24_fresh_seed_source630_cpu/2026-05-30_112358_350343_model-c-op0-19-fullgrid-direct_feedback_alignment-answer_decoder-adec-product/model-c-2digit-seed47
+runs/2026-05-30_phase7_assignment_cost_reduction/op19_rhead64_topk8_unique24_fresh_seed_handoff600_from_step630_cpu/2026-05-30_113149_357254_model-c-op0-19-fullgrid-adec-product/model-c-2digit-seed47
+```
+
+Both runs used CLI seed `45`, recorded as effective model seed `47`.
+
+| Run | Key result |
+| --- | --- |
+| Source step `630` | `1.0000` normal/source calc, `0.0325` injection-zero, `1.0000` oracle, `0.0250` forced-random |
+| Source final eval | `400/400 = 1.0000` |
+| Handoff step `600` | `1.0000` normal, `0.0475` injection-zero, `1.0000` oracle, `1.0000` learned calc, `0.0250` forced-random |
+| Handoff final eval | `400/400 = 1.0000`; final metrics forced-random `0.03125` |
+
+Fresh-seed decision:
+
+```text
+policy_topk_unique24_op19_fresh_seed_handoff_positive
+```
+
+Fresh-seed interpretation:
+
+- The policy-aware proposal is now a replicated op19 staged-transfer positive:
+  two source/handoff seeds have cleared while scoring `24/39` result classes
+  per assignment instead of the exact `39/39`.
+- This still does not solve the thesis because the method uses hard assignment,
+  forced-margin source shaping, a pretrained product decoder, and frozen-policy
+  additive transfer.
+- Do not run more op19 `rhead64` topk8+unique24 fresh-seed replications as
+  novelty. Next validation should move to range, many-calculator cost,
+  reduced prescriptiveness, or a non-enumerative replacement.

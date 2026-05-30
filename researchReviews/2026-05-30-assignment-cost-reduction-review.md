@@ -73,6 +73,13 @@ step `630` also reached `1.0000` final eval / step-600 normal with low controls
 from local source-screen positive to op19 staged-transfer positive, while still
 leaving fresh-seed/range/many-calculator validation open.
 
+Fresh-seed validation is also positive. Repeating the same staged recipe on CLI
+seed `45` / effective seed `47` again reached `1.0000` source final eval and
+`1.0000` trusted handoff final eval. The step-600 handoff controls stayed
+causal: injection-zero `0.0475`, learned calc `1.0000`, and forced-random
+`0.0250`. That makes the proposal a replicated op19 transfer result, but not
+yet a range-scaled, many-calculator, or non-prescriptive method.
+
 ## What Should Stop
 
 - Uniform sampled hard-assignment count ladders on the same op19 source gate.
@@ -90,11 +97,14 @@ leaving fresh-seed/range/many-calculator validation open.
   mapped at 16/24/32.
 - The same effective-seed-43 op19 topk8+unique24 source630 plus handoff600
   path. It cleared; repeat only with a new validation axis.
+- More op19 `rhead64` topk8+unique24 fresh-seed source630 plus handoff600
+  replications. Two seeds have cleared; the next axis should be about
+  scalability or prescriptiveness.
 
 ## What Deserves Compute
 
-- Validate policy-aware top-k proposals beyond the local op19 source gate:
-  fresh seed, larger range, or many-calculator cost.
+- Validate policy-aware top-k proposals beyond replicated op19 transfer:
+  larger range, many-calculator cost, or reduced prescriptiveness.
 - More active/non-uniform proposals only if they beat the topk8+unique baseline
   or explain when/why top-k coverage fails.
 - Structured proposals that exploit arithmetic/result geometry while still
@@ -108,8 +118,9 @@ leaving fresh-seed/range/many-calculator validation open.
 
 ## Are We Closer?
 
-Slightly. This did not solve scalable assignment, but it closed a tempting cheap
-path quickly and instrumented the code so future assignment approximations can
-report coverage and target-quality diagnostics. The next direction is narrower:
-reduce assignment cost only with a proposal/credit mechanism that preserves the
-exact source signal, not with duplicate-prone uniform sampling.
+Slightly more than before. This did not solve scalable assignment, but it
+closed tempting cheap paths and turned policy-aware sparse assignment into a
+replicated op19 baseline. The next direction is narrower: reduce assignment
+cost only with a proposal/credit mechanism that preserves this baseline under
+range or many-calculator pressure, or replace hard assignment with a less
+prescriptive credit signal.

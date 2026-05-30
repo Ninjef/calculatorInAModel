@@ -126,8 +126,8 @@ Active directions:
   policy-aware proposal is the first positive: topk8+unique24 scored `24/39`
   classes and reached `0.7500` final on the op19 `rhead64` source gate, while
   topk8+unique32 reached `0.8600`; exact scored `39/39` and reached `0.7350`.
-  A longer topk8+unique24 source and trusted handoff both reached `1.0000`
-  with low controls. Next: fresh seed, range, or many-calculator validation.
+  Topk8+unique24 staged source-plus-handoff has now cleared two op19 seeds at
+  `1.0000`; next: range, many-calculator, or reduced-prescriptiveness checks.
 
 ## Paused Or Deprioritized Branches
 
