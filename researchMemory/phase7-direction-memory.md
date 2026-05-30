@@ -192,10 +192,19 @@ Memory:
   to hooks `0` and `2` calls/projects only those hooks. This removes the
   all-hooks-forward waste from routed batches, but cloned/independent output
   projections still leave parameter scaling unresolved.
+- Shared routed output projection support is now implemented. The
+  `calculator_share_output_proj` config / `--share-calculator-output-proj` CLI
+  flag ties every extra hook's result-to-residual `output_proj` module to the
+  primary hook, so many routed calculators can share one semantic output
+  interface instead of cloning one matrix per hook. Tests verify object
+  identity, parameter-count reduction, older untied-checkpoint compatibility,
+  and config/metrics recording in a zero-step routed CLI smoke. This resolves
+  the known cloned-output parameter-slope issue, but tied-output source/handoff
+  training has not yet been validated.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
-  next work should share/tie routed output projections, reduce
+  next work should validate tied-output routed training, reduce
   prescriptiveness, pursue non-enumerative credit assignment, or stress op39
   with an explicit compute hypothesis.
 

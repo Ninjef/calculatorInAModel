@@ -9105,3 +9105,46 @@ Interpretation:
   positive routed recipe still uses cloned/independent output projections.
   Shared/tied output projection is the next implementation axis before another
   routed training gate.
+
+Shared routed output projection:
+
+Implementation:
+
+- Added `GPTConfig.calculator_share_output_proj`.
+- Added `TinyGPT.tie_calculator_output_projections()`, which assigns every
+  extra hook's `output_proj` module to the primary hook's `output_proj`.
+- Added `--share-calculator-output-proj` to `scripts/overfit_one_batch.py`.
+  It is mutually exclusive with `--clone-primary-calculator-output-proj`.
+- `make_model_config`, additive handoff probe construction, config JSON, and
+  metrics JSON now carry the shared-output flag.
+- Tied models canonicalize state dict loads so older untied checkpoints use
+  the primary hook's output projection value rather than allowing an extra
+  hook's old random projection to overwrite the shared module.
+- Semantic-decoder parameter grouping now recognizes extra-hook output
+  projections as semantic decoder parameters.
+
+Validation:
+
+```bash
+PYTHONPATH=. PYTHONPYCACHEPREFIX=/tmp/codex_pycache pytest tests/test_model.py::test_shared_calculator_output_projection_ties_extra_hooks tests/test_model.py::test_shared_calculator_output_projection_loads_primary_checkpoint_value tests/test_model.py::test_share_primary_calculator_output_projection_reduces_parameters tests/test_model.py::test_clone_primary_calculator_output_projection_to_extra_hooks tests/test_model.py::test_freeze_semantic_decoder_preserves_decoder_but_not_interface -q
+PYTHONPATH=. PYTHONPYCACHEPREFIX=/tmp/codex_pycache pytest tests/test_model.py tests/test_assignment_scaling.py tests/test_research_memory.py -q
+PYTHONPATH=. PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 scripts/overfit_one_batch.py --variant model-c --digits 1 --operand-max 2 --exhaustive-grid-batch --calculator-operand-vocab-size 3 --steps 0 --batch-size 9 --eval-samples 9 --snapshot-every 1 --snapshot-samples 9 --n-layer 1 --n-head 1 --n-embd 8 --mlp-expansion 1 --calculator-hook-after-layer 1 --calculator-hook-count 3 --calculator-hook-routing left_operand_mod --share-calculator-output-proj --calculator-estimator ste --calculator-action-head result_space --calculator-read-position operand_spans --calculator-read-span-width 1 --calculator-bottleneck-mode none --calculator-output-format sum --run-root /tmp/codex_shared_output_proj_smoke --device cpu
+```
+
+Results:
+
+- Focused shared-output tests: `5 passed`.
+- Broader regression set: `149 passed`.
+- The zero-step three-hook routed smoke wrote
+  `share_calculator_output_proj=True` in both `config.json` and `metrics.json`.
+- A three-hook `n_embd=8`, operand-vocab `3` shared model removes two extra
+  output projection matrices versus the independent model.
+
+Interpretation:
+
+- Routed many-calculator experiments no longer need cloned per-hook output
+  projections to share a semantic output interface.
+- This is still implementation evidence, not tied-output training evidence.
+  The next empirical gate should rerun a routed source/handoff check with
+  `--share-calculator-output-proj` and compare against the known cloned-output
+  positive.

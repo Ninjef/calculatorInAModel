@@ -37,6 +37,7 @@ def _small_calculator_cfg(
     answer_decoder_interaction: str = "none",
     hook_count: int = 1,
     hook_routing: str = "all",
+    share_output_proj: bool = False,
 ) -> GPTConfig:
     return GPTConfig(
         n_embd=32,
@@ -47,6 +48,7 @@ def _small_calculator_cfg(
         calculator_mode=mode,
         calculator_hook_count=hook_count,
         calculator_hook_routing=hook_routing,
+        calculator_share_output_proj=share_output_proj,
         calculator_estimator=estimator,
         calculator_injection_mode=injection_mode,
         calculator_bottleneck_mode=bottleneck_mode,
@@ -551,6 +553,39 @@ def test_routed_calculator_only_invokes_present_hooks() -> None:
     assert torch.allclose(
         diagnostics["calculator_injection"], hook_injections.sum(dim=0)
     )
+
+
+def test_shared_calculator_output_projection_ties_extra_hooks() -> None:
+    independent = TinyGPT(_small_calculator_cfg(hook_count=4))
+    shared = TinyGPT(_small_calculator_cfg(hook_count=4, share_output_proj=True))
+    assert shared.calculator_hook is not None
+
+    hooks = shared.calculator_hook_modules()
+    assert len(hooks) == 4
+    assert all(hook.output_proj is hooks[0].output_proj for hook in hooks)
+
+    output_param_count = hooks[0].output_proj.weight.numel()
+    assert independent.num_params() - shared.num_params() == 3 * output_param_count
+    output_names = [
+        name for name, _param in shared.named_parameters() if "output_proj" in name
+    ]
+    assert output_names == ["calculator_hook.output_proj.weight"]
+
+
+def test_shared_calculator_output_projection_loads_primary_checkpoint_value() -> None:
+    source = TinyGPT(_small_calculator_cfg(hook_count=2))
+    assert source.calculator_hook is not None
+    assert len(source.extra_calculator_hooks) == 1
+    with torch.no_grad():
+        source.calculator_hook.output_proj.weight.fill_(7.0)
+        source.extra_calculator_hooks[0].output_proj.weight.fill_(3.0)
+    target = TinyGPT(_small_calculator_cfg(hook_count=2, share_output_proj=True))
+
+    target.load_state_dict(source.state_dict())
+
+    assert target.calculator_hook is not None
+    assert target.calculator_hook.output_proj is target.extra_calculator_hooks[0].output_proj
+    assert torch.all(target.calculator_hook.output_proj.weight == 7.0)
 
 
 def test_temporary_injection_scale_applies_to_all_calculator_hooks() -> None:
@@ -4662,6 +4697,50 @@ def test_clone_primary_calculator_output_projection_to_extra_hooks() -> None:
         model.extra_calculator_hooks[0].output_proj.weight,
         model.calculator_hook.output_proj.weight,
     )
+
+
+def test_share_primary_calculator_output_projection_reduces_parameters() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_script_share_hook_output", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = overfit_script.make_model_config(
+        1,
+        "model-c",
+        operand_vocab_size=3,
+        calculator_estimator="ste",
+        calculator_hook_count=3,
+        calculator_share_output_proj=True,
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        mlp_expansion=1,
+        calculator_hook_after_layer=1,
+    )
+    shared = TinyGPT(cfg)
+    independent_cfg = overfit_script.make_model_config(
+        1,
+        "model-c",
+        operand_vocab_size=3,
+        calculator_estimator="ste",
+        calculator_hook_count=3,
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        mlp_expansion=1,
+        calculator_hook_after_layer=1,
+    )
+    independent = TinyGPT(independent_cfg)
+
+    hooks = shared.calculator_hook_modules()
+    assert all(hook.output_proj is hooks[0].output_proj for hook in hooks)
+    output_param_count = hooks[0].output_proj.weight.numel()
+    assert independent.num_params() - shared.num_params() == 2 * output_param_count
 
 
 def test_freeze_calculator_action_head_preserves_surrounding_model() -> None:

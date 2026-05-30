@@ -78,8 +78,7 @@ The best known non-bottleneck recipe is staged:
 4. Freeze or protect the calculator policy.
 5. Train downstream/readout and, when needed, continuation/readout stages.
 
-This can work, but it is not the final answer because it is costly,
-checkpoint-sensitive, and still prescriptive.
+This can work, but it is costly, checkpoint-sensitive, and still prescriptive.
 
 ## Active Strategic Bet
 
@@ -127,7 +126,8 @@ Active directions:
   projection. Corrected all-hook injection-zero controls show routed source and
   trusted handoff are causal; four routed hooks also clear source/handoff
   (`1.000` handoff, `0.040` zero, `0.020` forced-random). Routed execution is now
-  active-only; next is shared/tied output projection, then less-prescriptive credit assignment.
+  active-only; shared output projections remove cloned-output parameter growth.
+  Next: tied-output routed training, then less-prescriptive credit.
 
 ## Paused Or Deprioritized Branches
 

@@ -32,6 +32,7 @@ class GPTConfig:
     calculator_hook_after_layer: int = 2
     calculator_hook_count: int = 1
     calculator_hook_routing: str = "all"
+    calculator_share_output_proj: bool = False
     calculator_operand_vocab_size: int = 10
     calculator_result_vocab_size: int = 19
     calculator_injection_scale: float = 1.0
@@ -1081,7 +1082,6 @@ class TinyGPT(nn.Module):
         self.pos_emb = nn.Embedding(cfg.block_size, cfg.n_embd)
         self.blocks = nn.ModuleList([Block(cfg) for _ in range(cfg.n_layer)])
         self.calculator_hook: CalculatorHook | None = None
-        self.extra_calculator_hooks = nn.ModuleList()
         self.ln_f = nn.LayerNorm(cfg.n_embd)
         self.lm_head = nn.Linear(cfg.n_embd, cfg.vocab_size, bias=False)
         self.answer_offset_emb: nn.Embedding | None = None
@@ -1097,10 +1097,14 @@ class TinyGPT(nn.Module):
                 raise ValueError("calculator hook count must be positive")
             self.calculator_hook = CalculatorHook(cfg)
             self.calculator_hook.apply(self._init_weights)
+        self.extra_calculator_hooks = nn.ModuleList()
+        if cfg.calculator_enabled:
             for _ in range(cfg.calculator_hook_count - 1):
                 hook = CalculatorHook(cfg)
                 hook.apply(self._init_weights)
                 self.extra_calculator_hooks.append(hook)
+            if cfg.calculator_share_output_proj:
+                self.tie_calculator_output_projections()
 
     @staticmethod
     def _init_weights(module: nn.Module) -> None:
@@ -1118,6 +1122,61 @@ class TinyGPT(nn.Module):
         if self.calculator_hook is None:
             return []
         return [self.calculator_hook, *list(self.extra_calculator_hooks)]
+
+    def tie_calculator_output_projections(self) -> None:
+        if self.calculator_hook is None:
+            return
+        for hook in self.extra_calculator_hooks:
+            hook.output_proj = self.calculator_hook.output_proj
+        self.cfg.calculator_share_output_proj = True
+
+    def load_state_dict(self, state_dict: Any, *args: Any, **kwargs: Any) -> Any:
+        if (
+            self.cfg.calculator_share_output_proj
+            and self.calculator_hook is not None
+        ):
+            state_dict = self._canonicalize_shared_output_proj_state_dict(state_dict)
+            state_dict = self._fill_shared_output_proj_state_dict(state_dict)
+        return super().load_state_dict(state_dict, *args, **kwargs)
+
+    @staticmethod
+    def _canonicalize_shared_output_proj_state_dict(state_dict: Any) -> Any:
+        if not hasattr(state_dict, "items"):
+            return state_dict
+        canonical = state_dict.copy()
+        if hasattr(state_dict, "_metadata"):
+            canonical._metadata = state_dict._metadata
+        for name in list(canonical.keys()):
+            if not (
+                name.startswith("extra_calculator_hooks.")
+                and ".output_proj." in name
+            ):
+                continue
+            suffix = name.split(".output_proj.", maxsplit=1)[1]
+            primary_name = f"calculator_hook.output_proj.{suffix}"
+            if primary_name in canonical:
+                canonical[name] = canonical[primary_name]
+        return canonical
+
+    def _fill_shared_output_proj_state_dict(self, state_dict: Any) -> Any:
+        if not hasattr(state_dict, "items"):
+            return state_dict
+        canonical = state_dict.copy()
+        if hasattr(state_dict, "_metadata"):
+            canonical._metadata = state_dict._metadata
+        model_keys = self.state_dict().keys()
+        for name in model_keys:
+            if not (
+                name.startswith("extra_calculator_hooks.")
+                and ".output_proj." in name
+                and name not in canonical
+            ):
+                continue
+            suffix = name.split(".output_proj.", maxsplit=1)[1]
+            primary_name = f"calculator_hook.output_proj.{suffix}"
+            if primary_name in canonical:
+                canonical[name] = canonical[primary_name]
+        return canonical
 
     def _calculator_hook_routes(self, tokens: Tensor, hook_count: int) -> Tensor | None:
         if hook_count == 1 or self.cfg.calculator_hook_routing == "all":

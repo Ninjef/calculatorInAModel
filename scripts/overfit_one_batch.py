@@ -90,6 +90,7 @@ class TrainConfig:
     semantic_decoder_checkpoint: str | None
     semantic_decoder_checkpoint_load_scope: str
     clone_primary_calculator_output_proj: bool
+    share_calculator_output_proj: bool
     adaptive_interface_loss_weight: float
     adaptive_interface_loss_decay_steps: int
     adaptive_interface_loss_floor: float
@@ -3988,7 +3989,7 @@ def parameter_group_name(name: str) -> str:
         return "calculator_hook.input_proj"
     if name.startswith("calculator_hook.pair_proj."):
         return "calculator_hook.pair_proj"
-    if name.startswith(SEMANTIC_DECODER_CHECKPOINT_PREFIXES):
+    if is_semantic_decoder_parameter_name(name):
         return "semantic_decoder"
     return "upstream"
 
@@ -6598,11 +6599,16 @@ def summarize_adaptive_interface_rows(
     }
 
 
-SEMANTIC_DECODER_CHECKPOINT_PREFIXES = (
-    "answer_offset_emb.",
-    "answer_decoder.",
-    "calculator_hook.output_proj.",
-)
+def is_calculator_output_proj_parameter_name(name: str) -> bool:
+    return name.startswith("calculator_hook.output_proj.") or (
+        name.startswith("extra_calculator_hooks.") and ".output_proj." in name
+    )
+
+
+def is_semantic_decoder_parameter_name(name: str) -> bool:
+    return name.startswith(("answer_offset_emb.", "answer_decoder.")) or (
+        is_calculator_output_proj_parameter_name(name)
+    )
 
 
 def load_semantic_decoder_checkpoint(
@@ -6620,7 +6626,7 @@ def load_semantic_decoder_checkpoint(
         state_dict = {
             name: tensor
             for name, tensor in state_dict.items()
-            if name.startswith(SEMANTIC_DECODER_CHECKPOINT_PREFIXES)
+            if is_semantic_decoder_parameter_name(name)
         }
     if load_scope == "compatible_model":
         state_dict = {
@@ -6651,7 +6657,7 @@ def load_semantic_decoder_checkpoint(
         allowed_missing.update(
             name
             for name in model_state
-            if not name.startswith(SEMANTIC_DECODER_CHECKPOINT_PREFIXES)
+            if not is_semantic_decoder_parameter_name(name)
         )
     elif load_scope == "compatible_model":
         allowed_missing.update(name for name in model_state if name not in state_dict)
@@ -7097,6 +7103,7 @@ def make_model_config(
     answer_decoder_interaction: str | None = None,
     calculator_result_head_hidden_size: int = 0,
     calculator_hook_routing: str = "all",
+    calculator_share_output_proj: bool = False,
     relaxed_calculator_temperature: float = 1.0,
     relaxed_calculator_mode: str = "deterministic",
     relaxed_calculator_hard_forward: bool = True,
@@ -7128,6 +7135,7 @@ def make_model_config(
         calculator_hook_after_layer=calculator_hook_after_layer,
         calculator_hook_count=calculator_hook_count,
         calculator_hook_routing=calculator_hook_routing,
+        calculator_share_output_proj=calculator_share_output_proj,
         calculator_operand_vocab_size=operand_vocab_size,
         calculator_result_vocab_size=(2 * operand_vocab_size) - 1,
         calculator_injection_scale=injection_scale,
@@ -7176,6 +7184,7 @@ def make_additive_handoff_probe_model(
         calculator_read_span_width=args.calculator_read_span_width,
         calculator_injection_mode="add",
         calculator_hook_routing=args.calculator_hook_routing,
+        calculator_share_output_proj=args.share_calculator_output_proj,
         calculator_bottleneck_mode="none",
         calculator_output_format=args.calculator_output_format,
         answer_decoder_interaction=args.answer_decoder_interaction,
@@ -7322,6 +7331,7 @@ def run_variant(
         calculator_read_span_width=args.calculator_read_span_width,
         calculator_injection_mode=args.calculator_injection_mode,
         calculator_hook_routing=args.calculator_hook_routing,
+        calculator_share_output_proj=args.share_calculator_output_proj,
         calculator_bottleneck_mode=args.calculator_bottleneck_mode,
         calculator_output_format=args.calculator_output_format,
         answer_decoder_interaction=args.answer_decoder_interaction,
@@ -7350,6 +7360,8 @@ def run_variant(
         )
     if args.clone_primary_calculator_output_proj:
         clone_primary_calculator_output_proj_to_extra_hooks(model)
+    if args.share_calculator_output_proj:
+        model.tie_calculator_output_projections()
     input_proj_anchor = None
     if args.input_proj_anchor_checkpoint is not None:
         input_proj_anchor = load_input_proj_anchor(
@@ -7486,6 +7498,7 @@ def run_variant(
         ),
         semantic_decoder_checkpoint_load_scope=args.semantic_decoder_checkpoint_load_scope,
         clone_primary_calculator_output_proj=args.clone_primary_calculator_output_proj,
+        share_calculator_output_proj=args.share_calculator_output_proj,
         adaptive_interface_loss_weight=args.adaptive_interface_loss_weight,
         adaptive_interface_loss_decay_steps=args.adaptive_interface_loss_decay_steps,
         adaptive_interface_loss_floor=args.adaptive_interface_loss_floor,
@@ -10009,6 +10022,7 @@ def run_variant(
     metrics["clone_primary_calculator_output_proj"] = (
         args.clone_primary_calculator_output_proj
     )
+    metrics["share_calculator_output_proj"] = args.share_calculator_output_proj
     metrics["relaxed_calculator_temperature"] = args.relaxed_calculator_temperature
     metrics["relaxed_calculator_final_temperature"] = (
         args.relaxed_calculator_final_temperature
@@ -10512,6 +10526,14 @@ def parse_args() -> argparse.Namespace:
             "Copy the primary calculator hook output projection into extra hooks "
             "after checkpoint loading, so routed hooks share the same result-to-"
             "residual semantic interface at initialization."
+        ),
+    )
+    parser.add_argument(
+        "--share-calculator-output-proj",
+        action="store_true",
+        help=(
+            "Tie extra calculator hooks to the primary hook output projection "
+            "instead of allocating one result-to-residual projection per hook."
         ),
     )
     parser.add_argument(
@@ -12302,6 +12324,11 @@ def main() -> None:
         raise ValueError("--calculator-hook-count must be positive")
     if args.calculator_hook_routing != "all" and args.calculator_hook_count == 1:
         raise ValueError("--calculator-hook-routing requires --calculator-hook-count > 1")
+    if args.clone_primary_calculator_output_proj and args.share_calculator_output_proj:
+        raise ValueError(
+            "--clone-primary-calculator-output-proj and "
+            "--share-calculator-output-proj are mutually exclusive"
+        )
     device = pick_device(args.device)
     timestamp = datetime.now().strftime("%Y-%m-%d_%H%M%S_%f")
     suffix_parts = [args.variant]
@@ -12657,6 +12684,8 @@ def main() -> None:
             suffix_parts.append(f"rhead{args.calculator_result_head_hidden_size}")
         if args.clone_primary_calculator_output_proj:
             suffix_parts.append("cloneoutproj")
+        if args.share_calculator_output_proj:
+            suffix_parts.append("shareoutproj")
         if args.freeze_calculator_policy_backbone:
             suffix_parts.append("freezepolicybackbone")
         if args.freeze_calculator_action_head:

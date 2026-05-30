@@ -741,6 +741,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/149-routed-calculator-hooks-can-share-one-output-projection",
+      "target": "researchMemory/hypotheses/phase7/149-routed-calculator-hooks-can-share-one-output-projection.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -2357,6 +2362,13 @@
       "source_path": "researchMemory/hypotheses/phase7/148-routed-calculator-execution-is-now-active-only-for-present-routes.md",
       "status": "POSITIVE-IMPLEMENTATION",
       "title": "Routed calculator execution is now active-only for present routes."
+    },
+    {
+      "id": "doc/149-routed-calculator-hooks-can-share-one-output-projection",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/149-routed-calculator-hooks-can-share-one-output-projection.md",
+      "status": "POSITIVE-IMPLEMENTATION",
+      "title": "Routed calculator hooks can share one output projection."
     },
     {
       "id": "doc/phase7-direction-memory",
