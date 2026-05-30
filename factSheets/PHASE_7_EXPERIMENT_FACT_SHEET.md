@@ -8531,6 +8531,35 @@ Interpretation:
 - Do not wire this warm-start calibrated critic into source training as a
   solved assignment replacement.
 
+Sampled result-boundary source-training follow-up:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-sampled-result-boundary-source-gate.md
+runs/2026-05-30_phase7_sampled_result_boundary_source_gate/topk8_unique24_step200_cpu/.../model-c-2digit-seed4
+```
+
+- Added `--result-boundary-target-sample-count`,
+  `--result-boundary-target-unique-sampling`, and
+  `--result-boundary-target-policy-topk-count` to let result-boundary targets
+  score only a candidate subset during source training.
+- Tested the obvious bridge from the successful hard-assignment cost reducer:
+  policy top-8 plus unique sampled candidates, `24/39` scored result classes,
+  hard-best result-boundary target, 200-step upstream-open source gate.
+
+| Step | Scored classes | True coverage | Learned-best fraction | Snapshot normal/calc |
+| ---: | ---: | ---: | ---: | ---: |
+| `0` | `24/39` | `0.6025` | `0.0275` | `0.0250` |
+| `50` | `24/39` | `0.6450` | `0.1175` | `0.0375` |
+| `100` | `24/39` | `0.7950` | `0.1500` | `0.1000` |
+| `150` | `24/39` | `0.9075` | `0.2400` | `0.2525` |
+| `200` | `24/39` | `0.9600` | `0.3425` | `0.3675` |
+
+Final eval was `141/400 = 0.3525`. This is below matched full-enum hard-best
+result-boundary comparators (`0.5450`/`0.5475` in the soft-target gate and
+`0.4625`/`0.4225` in the regret-set gate). The failure is not mainly absence of
+the true result from candidates; candidate hard-best source training gives a
+weaker learning signal than full enumeration.
+
 Static approximation steering review:
 
 ```text

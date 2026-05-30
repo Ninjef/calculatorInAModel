@@ -555,6 +555,13 @@ Memory:
   `0.59` with `2` fresh scores/prompt), but even `8` fresh scores/prompt only
   reached `0.62`, below same-state step800 `0.79`. Do not tune small
   adapt-lr/epoch/count variants as novelty.
+- Direct sampled result-boundary source training with policy-topk candidates is
+  also insufficient. Scoring top-8 policy results plus unique candidates for
+  `24/39` classes raised true-candidate coverage to `0.9600` by step `200`,
+  but learned calc/final eval only reached `0.3425` training-curve learned-best,
+  `0.3675` snapshot calc, and `0.3525` final eval, below matched full-enum
+  hard-best source comparators. Do not respond with sample-count/top-k ladders;
+  change proposal/training co-design or target construction.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -615,6 +622,8 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-regret-set-training-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-cross-checkpoint-critic-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-online-calibrated-critic-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-sampled-result-boundary-source-gate.md`
+- `researchReviews/2026-05-30-sampled-result-boundary-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-set-target-steering-review.md`

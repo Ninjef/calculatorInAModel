@@ -118,6 +118,9 @@ class TrainConfig:
     result_boundary_target_temperature: float
     result_boundary_target_min_probability_floor: float
     result_boundary_target_chunk_size: int
+    result_boundary_target_sample_count: int
+    result_boundary_target_unique_sampling: bool
+    result_boundary_target_policy_topk_count: int
     result_policy_entropy_weight: float
     result_policy_batch_diversity_weight: float
     result_policy_improvement_assignment_weight: float
@@ -811,6 +814,14 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_boundary_target_temperature",
         "result_boundary_target_min_probability_floor",
         "result_boundary_target_chunk_size",
+        "result_boundary_target_sample_count",
+        "result_boundary_target_unique_sampling",
+        "result_boundary_target_policy_topk_count",
+        "result_boundary_target_scored_results",
+        "result_boundary_target_unique_scored_results",
+        "result_boundary_target_unique_candidate_fraction",
+        "result_boundary_target_true_candidate_coverage",
+        "result_boundary_target_forced_eval_count",
         "result_boundary_target_regret_set_fraction",
         "result_boundary_target_regret_set_true_fraction",
         "result_boundary_target_best_nll",
@@ -2797,6 +2808,9 @@ def result_boundary_target_loss(
     temperature: float,
     min_probability_floor: float,
     chunk_size: int,
+    sample_count: int = 0,
+    unique_sampling: bool = False,
+    policy_topk_count: int = 0,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     if target_mode not in {"hard_best_result", "soft_result", "regret_set"}:
         raise ValueError(
@@ -2809,21 +2823,68 @@ def result_boundary_target_loss(
         raise ValueError(
             "result-boundary target min probability floor must be non-negative"
         )
+    if sample_count < 0:
+        raise ValueError("result-boundary target sample count must be non-negative")
+    if policy_topk_count < 0:
+        raise ValueError("result-boundary target policy top-k count must be non-negative")
+    if policy_topk_count > sample_count:
+        raise ValueError(
+            "result-boundary target policy top-k count cannot exceed sample count"
+        )
     result_logits, _, _, _ = calculator_read_result_logits(model, batch)
-    full_losses = score_forced_result_classes_chunked(
-        model, batch, chunk_size=chunk_size
-    )
+    result_vocab_size = result_logits.shape[-1]
+    learned_result = result_logits.argmax(dim=-1)
+    if sample_count > 0:
+        priority_candidates = None
+        if policy_topk_count > 0:
+            priority_candidates = result_logits.detach().topk(
+                k=min(policy_topk_count, result_vocab_size), dim=-1
+            ).indices
+        candidates = sample_improvement_assignment_candidates(
+            learned_result.detach(),
+            result_count=result_vocab_size,
+            sample_count=sample_count,
+            unique=unique_sampling,
+            priority_candidates=priority_candidates,
+        )
+        candidate_losses = score_forced_result_candidate_classes(
+            model, batch, candidates, chunk_size=chunk_size
+        )
+        full_losses = result_logits.new_full(
+            (batch.x.shape[0], result_vocab_size), float("inf")
+        )
+        row_idx = torch.arange(batch.x.shape[0], device=batch.x.device)
+        for idx in range(candidates.shape[1]):
+            classes = candidates[:, idx]
+            current = full_losses[row_idx, classes]
+            full_losses[row_idx, classes] = torch.minimum(
+                current, candidate_losses[:, idx]
+            )
+        candidate_mask = torch.isfinite(full_losses)
+        unique_counts = candidate_mask.sum(dim=-1).to(result_logits.dtype)
+    else:
+        candidates = None
+        full_losses = score_forced_result_classes_chunked(
+            model, batch, chunk_size=chunk_size
+        )
+        candidate_mask = torch.ones_like(full_losses, dtype=torch.bool)
+        unique_counts = torch.full(
+            (batch.x.shape[0],),
+            float(result_vocab_size),
+            device=batch.x.device,
+            dtype=result_logits.dtype,
+        )
     best_result = full_losses.argmin(dim=-1)
     if target_mode == "hard_best_result":
-        target_weights = action_loss_weights_from_losses(
-            full_losses,
-            temperature=temperature,
-            min_probability_floor=min_probability_floor,
-        )
+        target_weights = torch.nn.functional.one_hot(
+            best_result, num_classes=result_vocab_size
+        ).to(result_logits.dtype)
         target_loss = torch.nn.functional.cross_entropy(result_logits, best_result)
     elif target_mode == "regret_set":
         best_nll = full_losses.gather(1, best_result.unsqueeze(-1)).squeeze(-1)
-        regret_mask = full_losses <= (best_nll.unsqueeze(-1) + temperature)
+        regret_mask = candidate_mask & (
+            full_losses <= (best_nll.unsqueeze(-1) + temperature)
+        )
         target_weights = regret_mask.float()
         target_weights = target_weights / target_weights.sum(
             dim=-1, keepdim=True
@@ -2832,18 +2893,31 @@ def result_boundary_target_loss(
             target_weights * result_logits.log_softmax(dim=-1)
         ).sum(dim=-1).mean()
     else:
-        target_weights = action_loss_weights_from_losses(
-            full_losses,
-            temperature=temperature,
-            min_probability_floor=min_probability_floor,
+        action_count = candidate_mask.sum(dim=-1)
+        if bool((min_probability_floor * action_count >= 1.0).any().item()):
+            raise ValueError(
+                "result-boundary target min probability floor times candidate "
+                "count must be < 1"
+            )
+        target_logits = (-full_losses / temperature).masked_fill(
+            ~candidate_mask, -1.0e9
         )
+        target_weights = torch.softmax(target_logits, dim=-1)
+        if min_probability_floor > 0:
+            target_weights = torch.where(
+                candidate_mask,
+                target_weights.clamp_min(min_probability_floor),
+                torch.zeros_like(target_weights),
+            )
+            target_weights = target_weights / target_weights.sum(
+                dim=-1, keepdim=True
+            ).clamp_min(1.0e-12)
         target_loss = -(
             target_weights * result_logits.log_softmax(dim=-1)
         ).sum(dim=-1).mean()
 
     true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
     true_sum = true_a + true_b
-    learned_result = result_logits.argmax(dim=-1)
     best_losses = full_losses.gather(1, best_result.unsqueeze(-1)).squeeze(-1)
     true_losses = full_losses.gather(1, true_sum.unsqueeze(-1)).squeeze(-1)
     learned_losses = full_losses.gather(1, learned_result.unsqueeze(-1)).squeeze(-1)
@@ -2853,6 +2927,7 @@ def result_boundary_target_loss(
     true_result_probability = target_weights.gather(
         1, true_sum.unsqueeze(-1)
     ).squeeze(-1)
+    true_candidate = candidate_mask.gather(1, true_sum.unsqueeze(-1)).squeeze(-1)
     if target_mode == "regret_set":
         regret_set_fraction = (target_weights > 0).float().mean(dim=-1)
         regret_set_true_fraction = (true_result_probability > 0).float()
@@ -2865,20 +2940,44 @@ def result_boundary_target_loss(
     true_result_strictly_beaten = full_losses < (
         true_losses.unsqueeze(-1) - tie_tolerance
     )
+    def finite_mean(values: torch.Tensor) -> float:
+        finite = torch.isfinite(values)
+        if not bool(finite.any().item()):
+            return float("nan")
+        return float(values[finite].mean().item())
+
     metrics = {
         "result_boundary_target_loss": float(target_loss.item()),
         "result_boundary_target_mode": target_mode,
         "result_boundary_target_temperature": float(temperature),
         "result_boundary_target_min_probability_floor": float(min_probability_floor),
         "result_boundary_target_chunk_size": int(chunk_size),
+        "result_boundary_target_sample_count": int(sample_count),
+        "result_boundary_target_unique_sampling": int(unique_sampling),
+        "result_boundary_target_policy_topk_count": int(policy_topk_count),
+        "result_boundary_target_scored_results": int(
+            sample_count if sample_count > 0 else result_vocab_size
+        ),
+        "result_boundary_target_unique_scored_results": float(
+            unique_counts.mean().item()
+        ),
+        "result_boundary_target_unique_candidate_fraction": float(
+            (unique_counts / result_vocab_size).mean().item()
+        ),
+        "result_boundary_target_true_candidate_coverage": float(
+            true_candidate.float().mean().item()
+        ),
+        "result_boundary_target_forced_eval_count": int(
+            batch.x.shape[0] * (sample_count if sample_count > 0 else result_vocab_size)
+        ),
         "result_boundary_target_best_nll": float(best_losses.mean().item()),
-        "result_boundary_target_true_nll": float(true_losses.mean().item()),
-        "result_boundary_target_learned_nll": float(learned_losses.mean().item()),
+        "result_boundary_target_true_nll": finite_mean(true_losses),
+        "result_boundary_target_learned_nll": finite_mean(learned_losses),
         "result_boundary_target_learned_minus_best_gap": float(
-            (learned_losses - best_losses).mean().item()
+            finite_mean(learned_losses - best_losses)
         ),
         "result_boundary_target_learned_minus_true_gap": float(
-            (learned_losses - true_losses).mean().item()
+            finite_mean(learned_losses - true_losses)
         ),
         "result_boundary_target_hard_best_equals_true_sum": float(
             (best_result == true_sum).float().mean().item()
@@ -7580,6 +7679,13 @@ def run_variant(
             args.result_boundary_target_min_probability_floor
         ),
         result_boundary_target_chunk_size=args.result_boundary_target_chunk_size,
+        result_boundary_target_sample_count=args.result_boundary_target_sample_count,
+        result_boundary_target_unique_sampling=(
+            args.result_boundary_target_unique_sampling
+        ),
+        result_boundary_target_policy_topk_count=(
+            args.result_boundary_target_policy_topk_count
+        ),
         result_policy_entropy_weight=args.result_policy_entropy_weight,
         result_policy_batch_diversity_weight=(
             args.result_policy_batch_diversity_weight
@@ -8644,6 +8750,9 @@ def run_variant(
                     args.result_boundary_target_min_probability_floor
                 ),
                 chunk_size=args.result_boundary_target_chunk_size,
+                sample_count=args.result_boundary_target_sample_count,
+                unique_sampling=args.result_boundary_target_unique_sampling,
+                policy_topk_count=args.result_boundary_target_policy_topk_count,
             )
             result_boundary_target_loss_value = result_boundary_target_metrics[
                 "result_boundary_target_loss"
@@ -9804,6 +9913,15 @@ def run_variant(
     metrics["result_boundary_target_chunk_size"] = (
         args.result_boundary_target_chunk_size
     )
+    metrics["result_boundary_target_sample_count"] = (
+        args.result_boundary_target_sample_count
+    )
+    metrics["result_boundary_target_unique_sampling"] = (
+        args.result_boundary_target_unique_sampling
+    )
+    metrics["result_boundary_target_policy_topk_count"] = (
+        args.result_boundary_target_policy_topk_count
+    )
     metrics["result_policy_entropy_weight"] = args.result_policy_entropy_weight
     metrics["result_policy_batch_diversity_weight"] = (
         args.result_policy_batch_diversity_weight
@@ -10764,6 +10882,32 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=64,
         help="Number of forced result classes to score per decoder chunk.",
+    )
+    parser.add_argument(
+        "--result-boundary-target-sample-count",
+        type=int,
+        default=0,
+        help=(
+            "Score only this many candidate result classes per prompt when "
+            "building result-boundary targets. 0 preserves full enumeration."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-unique-sampling",
+        action="store_true",
+        help=(
+            "When sampling result-boundary candidates, fill each prompt with "
+            "unique result classes."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-policy-topk-count",
+        type=int,
+        default=0,
+        help=(
+            "Reserve this many sampled result-boundary candidate slots for "
+            "the current result-policy top-k classes."
+        ),
     )
     parser.add_argument(
         "--result-policy-entropy-weight",
@@ -11939,6 +12083,49 @@ def main() -> None:
         )
     if args.result_boundary_target_chunk_size < 1:
         raise ValueError("--result-boundary-target-chunk-size must be positive")
+    result_vocab_size_for_args = (
+        args.operand_max * 2 + 1
+        if args.operand_max is not None
+        else 10 ** max(args.digits) * 2 - 1
+    )
+    if args.result_boundary_target_sample_count < 0:
+        raise ValueError("--result-boundary-target-sample-count must be non-negative")
+    if args.result_boundary_target_policy_topk_count < 0:
+        raise ValueError(
+            "--result-boundary-target-policy-topk-count must be non-negative"
+        )
+    if (
+        args.result_boundary_target_unique_sampling
+        and args.result_boundary_target_sample_count <= 0
+    ):
+        raise ValueError(
+            "--result-boundary-target-unique-sampling requires "
+            "--result-boundary-target-sample-count > 0"
+        )
+    if (
+        args.result_boundary_target_unique_sampling
+        and args.result_boundary_target_sample_count > result_vocab_size_for_args
+    ):
+        raise ValueError(
+            "--result-boundary-target-sample-count cannot exceed the result "
+            "vocabulary size when unique sampling is enabled"
+        )
+    if (
+        args.result_boundary_target_policy_topk_count > 0
+        and args.result_boundary_target_sample_count <= 0
+    ):
+        raise ValueError(
+            "--result-boundary-target-policy-topk-count requires "
+            "--result-boundary-target-sample-count > 0"
+        )
+    if (
+        args.result_boundary_target_policy_topk_count
+        > args.result_boundary_target_sample_count
+    ):
+        raise ValueError(
+            "--result-boundary-target-policy-topk-count cannot exceed "
+            "--result-boundary-target-sample-count"
+        )
     if args.result_policy_entropy_weight < 0:
         raise ValueError("--result-policy-entropy-weight must be non-negative")
     if args.result_policy_batch_diversity_weight < 0:
@@ -11991,7 +12178,7 @@ def main() -> None:
     if (
         args.result_policy_improvement_assignment_unique_sampling
         and args.result_policy_improvement_assignment_sample_count
-        > (args.operand_max * 2 + 1 if args.operand_max is not None else 10**args.digits * 2 - 1)
+        > result_vocab_size_for_args
     ):
         raise ValueError(
             "--result-policy-improvement-assignment-sample-count cannot exceed "
@@ -12573,6 +12760,14 @@ def main() -> None:
                 f"-rbtt{args.result_boundary_target_temperature:g}"
                 f"-rbtchunk{args.result_boundary_target_chunk_size}"
             )
+            if args.result_boundary_target_sample_count > 0:
+                suffix_parts.append(f"rbts{args.result_boundary_target_sample_count}")
+                if args.result_boundary_target_unique_sampling:
+                    suffix_parts.append("rbtuniq")
+                if args.result_boundary_target_policy_topk_count > 0:
+                    suffix_parts.append(
+                        f"rbttopk{args.result_boundary_target_policy_topk_count}"
+                    )
         if args.result_boundary_target_min_probability_floor > 0:
             suffix_parts.append(
                 "rbtfloor"
@@ -12889,7 +13084,10 @@ def main() -> None:
         f"mode={args.result_boundary_target_mode} "
         f"temperature={args.result_boundary_target_temperature} "
         f"min_probability_floor={args.result_boundary_target_min_probability_floor} "
-        f"chunk_size={args.result_boundary_target_chunk_size}"
+        f"chunk_size={args.result_boundary_target_chunk_size} "
+        f"sample_count={args.result_boundary_target_sample_count} "
+        f"unique_sampling={args.result_boundary_target_unique_sampling} "
+        f"policy_topk_count={args.result_boundary_target_policy_topk_count}"
     )
     print(
         "result policy stabilization: "

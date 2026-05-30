@@ -801,6 +801,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/161-policy-topk-unique24-sampled-result-boundary-source-targets-do-not-preserve-the-full-enum",
+      "target": "researchMemory/hypotheses/phase7/161-policy-topk-unique24-sampled-result-boundary-source-targets-do-not-preserve-the-full-enum-.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1253,6 +1258,16 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-result-boundary-online-calibrated-critic-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-sampled-result-boundary-source-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "researchReviews/2026-05-30-sampled-result-boundary-steering-review.md",
       "type": "supported_by"
     },
     {
@@ -2546,6 +2561,13 @@
       "source_path": "researchMemory/hypotheses/phase7/160-rank-normalized-expected-answer-loss-rescues-result-space-expected-cost-discovery.md",
       "status": "DISPROVEN",
       "title": "Rank-normalized expected answer loss rescues result-space expected-cost discovery."
+    },
+    {
+      "id": "doc/161-policy-topk-unique24-sampled-result-boundary-source-targets-do-not-preserve-the-full-enum",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/161-policy-topk-unique24-sampled-result-boundary-source-targets-do-not-preserve-the-full-enum-.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Policy-topk+unique24 sampled result-boundary source targets do not preserve the full-enum boundary source signal."
     },
     {
       "id": "doc/phase7-direction-memory",

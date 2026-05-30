@@ -993,3 +993,9 @@ Conclusion: Added `expected_answer_loss_cost_normalization=rank`, which replaces
 Do not repeat: Do not run rank-normalized expected answer-loss Stage 1, or rank/scale transforms of the same full-enum expected-cost objective, as novelty.
 Next allowed test: Expected-loss work needs a stronger structural estimator/objective, not another per-prompt monotonic cost normalization.
 Source: `aiAgentWorkHistory/phase7/2026-05-30-rank-normalized-expected-loss-gate.md`
+
+MIXED-NEGATIVE: Policy-topk+unique24 sampled result-boundary source targets do not preserve the full-enum boundary source signal.
+Conclusion: Added candidate-scored result-boundary target training, where each prompt scores the current policy top-8 results plus unique sampled candidates for `24/39` total result classes. In the 200-step upstream-open source gate, true-candidate coverage rose from `0.6025` to `0.9600`, but learned-best/source calculator accuracy reached only `0.3425` in the training curve, snapshot calculator accuracy `0.3675`, and final eval `141/400 = 0.3525`. This is materially below the matched full-enum hard-best result-boundary comparators (`0.5450`/`0.5475` in the soft-target gate, `0.4625`/`0.4225` in the regret-set gate).
+Do not repeat: Do not ladder `result-boundary-target-sample-count`, top-k count, or unique-sampling variants around this same policy-topk sampled target as novelty. The failure is not mainly candidate coverage; the sparse/candidate hard-best target gives a weaker source signal.
+Next allowed test: Result-boundary source work needs active proposal/training co-design, a stronger online/state-calibrated proposal, or a different target construction; otherwise move to another less-prescriptive credit-assignment family.
+Source: `aiAgentWorkHistory/phase7/2026-05-30-sampled-result-boundary-source-gate.md`

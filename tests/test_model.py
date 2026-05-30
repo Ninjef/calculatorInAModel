@@ -2171,6 +2171,95 @@ def test_result_boundary_target_uses_lowest_nll_result(monkeypatch) -> None:
     ] == pytest.approx(1.0)
 
 
+def test_sampled_result_boundary_target_uses_policy_topk_candidates(
+    monkeypatch,
+) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_sampled_result_boundary", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="gumbel_concrete_interface",
+        calculator_action_head="result_space",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    model = TinyGPT(cfg)
+    batch = ArithmeticBatch(
+        x=torch.tensor([[1, PLUS_ID, 2, EQ_ID], [0, PLUS_ID, 3, EQ_ID]]),
+        y=torch.zeros((2, 4), dtype=torch.long),
+        loss_mask=torch.zeros((2, 4), dtype=torch.bool),
+    )
+    result_logits = torch.tensor(
+        [
+            [0.0, 0.0, 0.0, -5.0, 0.0, 3.0, 2.0],
+            [0.0, 0.0, 0.0, -5.0, 0.0, 1.0, 3.0],
+        ],
+        requires_grad=True,
+    )
+    forced_losses = torch.tensor(
+        [
+            [5.0, 4.0, 3.0, 0.5, 3.5, 1.5, 2.0],
+            [7.0, 6.0, 5.0, 0.25, 4.0, 2.0, 1.5],
+        ]
+    )
+
+    monkeypatch.setattr(
+        overfit_script,
+        "calculator_read_result_logits",
+        lambda model_arg, batch_arg: (result_logits, None, None, None),
+    )
+
+    def fake_candidate_losses(model_arg, batch_arg, candidate_classes, *, chunk_size):
+        return forced_losses.gather(1, candidate_classes)
+
+    monkeypatch.setattr(
+        overfit_script,
+        "score_forced_result_candidate_classes",
+        fake_candidate_losses,
+    )
+
+    loss, metrics = overfit_script.result_boundary_target_loss(
+        model,
+        batch,
+        num_digits=1,
+        target_mode="hard_best_result",
+        temperature=1.0,
+        min_probability_floor=0.0,
+        chunk_size=4,
+        sample_count=2,
+        unique_sampling=True,
+        policy_topk_count=2,
+    )
+
+    assert loss.item() == pytest.approx(
+        torch.nn.functional.cross_entropy(
+            result_logits, torch.tensor([5, 6])
+        ).item()
+    )
+    assert metrics["result_boundary_target_scored_results"] == 2
+    assert metrics["result_boundary_target_true_candidate_coverage"] == pytest.approx(
+        0.0
+    )
+    assert metrics["result_boundary_target_hard_best_equals_true_sum"] == pytest.approx(
+        0.0
+    )
+
+
 def test_result_boundary_regret_set_targets_near_best_results(monkeypatch) -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location(
@@ -3431,6 +3520,15 @@ def test_result_boundary_cli_validation(monkeypatch, tmp_path) -> None:
         ["--result-boundary-target-loss-weight", "-0.1"],
         ["--result-boundary-target-temperature", "0"],
         ["--result-boundary-target-chunk-size", "0"],
+        ["--result-boundary-target-sample-count", "-1"],
+        ["--result-boundary-target-unique-sampling"],
+        ["--result-boundary-target-policy-topk-count", "1"],
+        [
+            "--result-boundary-target-sample-count",
+            "1",
+            "--result-boundary-target-policy-topk-count",
+            "2",
+        ],
         ["--exhaustive-grid-batch"],
     ]
     for extra in validation_cases:
