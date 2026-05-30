@@ -2470,6 +2470,33 @@ def test_result_space_expected_answer_loss_updates_result_projection_only(
     assert model.tok_emb.weight.grad is None
 
 
+def test_expected_answer_loss_rank_normalization_uses_per_prompt_ranks() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_expected_rank_normalization", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    costs = torch.tensor(
+        [
+            [4.0, 1.0, 3.0, 2.0],
+            [0.5, 2.0, 1.5, 1.0],
+        ]
+    )
+    normalized = overfit_script.normalize_expected_answer_costs(costs, mode="rank")
+
+    expected = torch.tensor(
+        [
+            [1.0, 0.0, 2.0 / 3.0, 1.0 / 3.0],
+            [0.0, 1.0, 2.0 / 3.0, 1.0 / 3.0],
+        ]
+    )
+    assert torch.allclose(normalized, expected)
+
+
 def test_boundary_feedback_updates_result_projection_and_open_upstream() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location(

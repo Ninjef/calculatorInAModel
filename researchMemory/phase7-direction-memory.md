@@ -58,6 +58,9 @@ Memory:
   raw expected-cost gradient, and that gradient anti-aligned with the boundary
   ceiling.
 - Exact result-marginal answer loss did not fix the direction.
+- Rank-normalizing forced-result costs only weakly flipped the result-head
+  cosine and left upstream cosine essentially zero, so it did not justify
+  Stage 1.
 - Decoder calibration improved local signs but still collapsed in Stage 1.
 - Conclusion: the failure is not mainly finite-sample variance or a slightly
   weak decoder.
@@ -65,6 +68,7 @@ Memory:
 Representative evidence:
 
 - `aiAgentWorkHistory/phase7/2026-05-14-exact-result-marginal-answer-loss-gradient-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-rank-normalized-expected-loss-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-14-gradient-friendly-result-decoder-alignment-gate.md`
 - `HYPOTHESIS_LEDGER.md`
 

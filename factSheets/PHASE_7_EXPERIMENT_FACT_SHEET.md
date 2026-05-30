@@ -813,6 +813,29 @@ cosine became weakly positive (`0.0764`), but upstream cosine remained
 non-positive (`-0.0007`). Stage 1 exact-marginal training was therefore
 skipped.
 
+Rank cost normalization follow-up:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-rank-normalized-expected-loss-gate.md
+runs/2026-05-30_phase7_rank_expected_answer_loss_gate/2026-05-30_170553_274497_model-c-op0-19-fullgrid-full_enum_expected_answer_loss-result_space-inlr0.01-uplr0.0003-expanspolt1-expanschunk64-rank-expansgraddiag-answer_decoder-adec-product/model-c-2digit-seed4/expected_answer_loss_gradient_diagnostic_summary.json
+```
+
+Added `expected_answer_loss_cost_normalization=rank`, mapping each prompt's
+forced-result NLLs to within-prompt ranks before the exact policy expectation.
+It also missed the upstream-open gate:
+
+| Metric | Value |
+| --- | ---: |
+| exact-vs-boundary result-proj cosine | `0.049551` |
+| exact-vs-boundary upstream cosine | `0.002584` |
+| PG-vs-exact result/upstream cosine | `0.723444 / 0.719965` |
+| PG-vs-boundary result/upstream cosine | `0.027483 / 0.016271` |
+
+Interpretation: rank normalization weakly changes the sign at the result head
+but leaves upstream alignment effectively zero, weaker than the later
+contrastive-margin decoder sign flip that still failed Stage 1. Do not run
+rank-normalized expected-loss Stage 1 as novelty.
+
 Decision:
 
 ```text

@@ -987,3 +987,9 @@ Conclusion: Extended the cross-checkpoint critic diagnostic with warm-start onli
 Do not repeat: Do not wire this warm-start calibrated critic into source training or spend mainline compute on small adapt-lr/epoch/sample-count tweaks as if the proposal mechanism were solved.
 Next allowed test: Only continue result-boundary proposals with a stronger online learner, active proposal/training co-design, or a materially different state-calibrated objective; otherwise move to a different less-prescriptive credit-assignment family.
 Source: `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-online-calibrated-critic-gate.md`
+
+DISPROVEN: Rank-normalized expected answer loss rescues result-space expected-cost discovery.
+Conclusion: Added `expected_answer_loss_cost_normalization=rank`, which replaces each prompt's forced-result NLLs with within-prompt ranks before the exact policy expectation. The full-grid Stage 0 diagnostic did not clear the gate: exact-vs-boundary result-proj cosine was only `0.049551` and upstream cosine was `0.002584`, weaker than an earlier contrastive-margin decoder sign flip that still failed Stage 1. Sampled PG remained aligned with the rank objective (`0.723444`/`0.719965`) but only barely aligned with the boundary target (`0.027483`/`0.016271`).
+Do not repeat: Do not run rank-normalized expected answer-loss Stage 1, or rank/scale transforms of the same full-enum expected-cost objective, as novelty.
+Next allowed test: Expected-loss work needs a stronger structural estimator/objective, not another per-prompt monotonic cost normalization.
+Source: `aiAgentWorkHistory/phase7/2026-05-30-rank-normalized-expected-loss-gate.md`

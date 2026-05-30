@@ -796,6 +796,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/160-rank-normalized-expected-answer-loss-rescues-result-space-expected-cost-discovery",
+      "target": "researchMemory/hypotheses/phase7/160-rank-normalized-expected-answer-loss-rescues-result-space-expected-cost-discovery.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -833,6 +838,11 @@
     {
       "source": "direction/plain-answer-loss-discovery",
       "target": "aiAgentWorkHistory/phase7/2026-05-14-exact-result-marginal-answer-loss-gradient-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/plain-answer-loss-discovery",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-rank-normalized-expected-loss-gate.md",
       "type": "supported_by"
     },
     {
@@ -2529,6 +2539,13 @@
       "source_path": "researchMemory/hypotheses/phase7/159-simple-online-calibrated-result-boundary-proposal-critics-do-not-restore-same-state-qualit.md",
       "status": "PARTIAL-NEGATIVE",
       "title": "Simple online-calibrated result-boundary proposal critics do not restore same-state quality."
+    },
+    {
+      "id": "doc/160-rank-normalized-expected-answer-loss-rescues-result-space-expected-cost-discovery",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/160-rank-normalized-expected-answer-loss-rescues-result-space-expected-cost-discovery.md",
+      "status": "DISPROVEN",
+      "title": "Rank-normalized expected answer loss rescues result-space expected-cost discovery."
     },
     {
       "id": "doc/phase7-direction-memory",

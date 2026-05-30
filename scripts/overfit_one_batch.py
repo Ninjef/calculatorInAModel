@@ -6052,9 +6052,19 @@ def normalize_expected_answer_costs(
         centered = costs - costs.mean(dim=-1, keepdim=True)
         scale = costs.std(dim=-1, keepdim=True, unbiased=False).clamp_min(1e-6)
         return centered / scale
+    if mode == "rank":
+        order = costs.argsort(dim=-1)
+        ranks = torch.empty_like(costs, dtype=torch.float32)
+        rank_values = torch.arange(
+            costs.shape[-1],
+            device=costs.device,
+            dtype=torch.float32,
+        ).expand_as(costs)
+        ranks.scatter_(dim=-1, index=order, src=rank_values)
+        return ranks / float(max(1, costs.shape[-1] - 1))
     raise ValueError(
         "expected answer-loss cost normalization must be one of "
-        "{'none', 'center', 'zscore'}"
+        "{'none', 'center', 'zscore', 'rank'}"
     )
 
 
@@ -10688,7 +10698,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--expected-answer-loss-cost-normalization",
-        choices=["none", "center", "zscore"],
+        choices=["none", "center", "zscore", "rank"],
         default="none",
         help="Optional detached per-example cost normalization for expected answer loss.",
     )

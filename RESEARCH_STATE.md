@@ -136,7 +136,7 @@ These branches should not continue without a new mechanism:
 
 - Oracle-only calculator success.
 - Generic target-off retention after scaffolding.
-- Vanilla result-space REINFORCE and ordinary expected answer-loss gradients.
+- Vanilla result-space REINFORCE and ordinary/rank expected answer-loss gradients.
 - Decoder calibration alone.
 - Simple output-projection direct feedback.
 - Fixed fit-once linear shadow feedback.
