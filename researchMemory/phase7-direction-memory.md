@@ -1,7 +1,7 @@
 # Phase 7 Direction Memory
 
 Status: active synthesis
-Last updated: 2026-05-29
+Last updated: 2026-05-30
 
 This file consolidates Phase 7 lessons by research direction. It is meant to
 be easier to retrieve than the chronological fact sheet.
@@ -343,7 +343,7 @@ Representative evidence:
 
 ## Direction: Target Propagation / Local Targets
 
-Status: active only with estimator, target-construction, or validated generalization changes
+Status: paused as a mainline; active only with estimator, target-construction, or validated generalization changes
 
 Memory:
 
@@ -421,6 +421,12 @@ Memory:
   with a different estimator, materially different target construction, or
   learned proposal validation explicitly tied to
   streaming/full-grid generalization.
+- Follow-up direction review after the pairwise negative: local-target
+  approximation is now a ceiling/diagnostic branch, not the current scalable
+  path. Do not run more sparse count ladders, replay-cache tuning, imputation
+  variants, learned-proposal hyperparameter sweeps, or pairwise count/gap
+  sweeps as novelty. Future local-target compute must predeclare the new
+  estimator/target mechanism and its streaming or heldout-generalization gate.
 
 Representative evidence:
 
@@ -443,3 +449,4 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-pretrained-learned-proposal-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-sampled-pairwise-preference-target-gate.md`
 - `researchReviews/2026-05-29-local-target-proposal-branch-review.md`
+- `researchReviews/2026-05-30-local-target-approximation-direction-review.md`

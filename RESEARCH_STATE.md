@@ -107,10 +107,10 @@ Active directions:
   evidence for staged transfer, but it remains prescriptive because it uses
   hard assignment and true-result contrastive forcing. Treat this as a
   benchmark source recipe, not a local knob branch.
-- A genuinely different credit-assignment family such as target propagation or
-  local targets. Exact `policy_reweighted_t1` is positive and survives
-  retention, but full enumeration is not scalable. Simple proposal
-  approximation is now paused after sparse/adaptive, replay-memory, corrected,
+- Target propagation/local targets are now a ceiling and diagnostic, not the
+  current scalable mainline. Exact `policy_reweighted_t1` is positive and
+  survives retention, but full enumeration is not scalable. Simple
+  approximation is paused after sparse/adaptive, replay-memory, corrected,
   online learned, pretrained learned, and sparse pairwise-preference variants
   failed scalability or Stage 1 stress. Continue only with a materially
   different estimator/target construction or explicit streaming validation.
@@ -139,9 +139,10 @@ These branches should not continue without a new mechanism:
 - Simple online MLP shadow-gradient variants that only tweak normalization,
   validation selection, dropout, or loss shape.
 - Hand-coded local-target candidate proposal variants, including raw
-  uniform/top-k sparse sampling, low-loss neighborhoods, and fixed/prompt-keyed
-  replay memory. Continue local targets only with a learned proposal, estimator
-  correction, or different target construction.
+  uniform/top-k sparse sampling, low-loss neighborhoods, fixed/prompt-keyed
+  replay memory, imputed sparse targets, simple learned proposals, and sparse
+  pairwise preferences. Continue local targets only with a materially different
+  estimator/target construction or predeclared streaming/generalization gate.
 - Cheap source selectors based on frozen-state readout, forced-result geometry,
   25/50/100-step loss slope, simple ridge over early traces, or 500-step
   embedded probe normal score alone. Use these only for logging, rejection

@@ -591,6 +591,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/119-local-target-approximation-is-a-ceiling-not-current-scalable-path",
+      "target": "researchMemory/hypotheses/phase7/119-local-target-approximation-is-a-ceiling-not-current-scalable-path.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -998,6 +1003,11 @@
     {
       "source": "direction/target-propagation-local-targets",
       "target": "researchReviews/2026-05-29-local-target-proposal-branch-review.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "researchReviews/2026-05-30-local-target-approximation-direction-review.md",
       "type": "supported_by"
     },
     {
@@ -1834,6 +1844,13 @@
       "title": "Sparse sampled pairwise-preference targets do not train result-space calculator use."
     },
     {
+      "id": "doc/119-local-target-approximation-is-a-ceiling-not-current-scalable-path",
+      "kind": "memory_document",
+      "source_path": "researchMemory/hypotheses/phase7/119-local-target-approximation-is-a-ceiling-not-current-scalable-path.md",
+      "status": "REVIEW / PAUSED",
+      "title": "Local-target approximation is a ceiling, not the current scalable path"
+    },
+    {
       "id": "doc/phase7-direction-memory",
       "kind": "memory_document",
       "source_path": "researchMemory/phase7-direction-memory.md",
@@ -1907,7 +1924,7 @@
       "id": "direction/target-propagation-local-targets",
       "kind": "direction_memory",
       "source_path": "researchMemory/phase7-direction-memory.md",
-      "status": "active only with estimator, target-construction, or validated generalization changes",
+      "status": "paused as a mainline; active only with estimator, target-construction, or validated generalization changes",
       "title": "Target Propagation / Local Targets"
     }
   ]

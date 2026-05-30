@@ -1,5 +1,39 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-30 Local-Target Approximation Direction Review
+
+Review:
+
+```text
+researchReviews/2026-05-30-local-target-approximation-direction-review.md
+```
+
+Result:
+
+```text
+local_target_approximation_paused_as_mainline
+```
+
+Exact `policy_reweighted_t1` remains a useful ceiling and proof of principle,
+but simple scalable approximations have now failed across sparse uniform/top-k
+sampling, adaptive neighborhoods, fixed replay memory, imputed sparse targets,
+online learned proposals, random-prompt learned-proposal warmup, and sparse
+pairwise preferences. The latest pairwise gate is the clearest target-change
+negative: `sampled_pairwise_preference_u32` had `0.8450` true-candidate
+coverage but reached only `0.0425` exact calc / `0.0234` sampled normal, while
+same-budget policy-reweighted `u32` reached `0.3350` / `0.3438`.
+
+Interpretation:
+
+- Treat exact local targets as a ceiling/diagnostic, not the active scalable
+  path.
+- Do not run more candidate-count, replay-cache, imputation, learned-proposal
+  hyperparameter, or pairwise count/gap sweeps as novelty.
+- Continue local-target work only with a materially different estimator/target
+  construction or explicit streaming/heldout-generalization validation.
+- Otherwise pivot compute to source-geometry objectives or answer-derived
+  boundary methods that reduce full forced-result enumeration.
+
 ## 2026-05-29 Adaptive Local-Target Proposal Gate
 
 Task/work log:
