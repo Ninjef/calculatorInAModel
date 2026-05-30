@@ -170,8 +170,13 @@ Memory:
   (`0.1875`) only while undertrained (`0.4150` normal). Extending frozen
   upstream to source630 recovered learning (`0.9750` normal, `0.9955/0.9494`
   hook calc) but injection-zero returned (`0.4400` snapshot, `0.5000` final
-  counterfactual). Routed source acquisition now needs explicit anti-leak
-  pressure or a stricter architecture before handoff.
+  counterfactual). This leakage conclusion was superseded by a control bug:
+  the temporary injection-scale helper zeroed only the primary hook. After
+  scaling every hook, source200 rerun had `0.9225` normal / `0.0200` zero,
+  source630 reload had `0.9950` normal / `0.0250` zero, and strict handoff600
+  reload had `0.9250` normal / `0.0000` zero. Routed source/handoff are causal
+  under corrected controls; next validate fresh seeds, more hooks, or shared
+  output projection.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;

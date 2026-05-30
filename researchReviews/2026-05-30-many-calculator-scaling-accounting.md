@@ -101,6 +101,16 @@ no longer only scorer count or hook observability; routed source training needs
 source-time anti-leak pressure or a stricter routed architecture before handoff
 results can be trusted.
 
+Correction after the review: those routed injection-zero controls were invalid
+because the temporary injection-scale helper zeroed only the primary hook. The
+fixed helper scales every routed hook. Corrected evidence is much stronger:
+source200 rerun reached `0.9225` normal / `0.0200` injection-zero, source630
+reload reached `0.9950` normal / `0.0250` injection-zero, and strict handoff600
+reload reached `0.9250` normal / `0.0000` injection-zero. The many-calculator
+bottleneck is no longer anti-leak routed acquisition; it is validating routed
+training across fresh seeds/more hooks and removing cloned per-hook output
+projection parameter growth.
+
 ## What Should Stop
 
 - More op19 or op29 topk8+unique24 seed replications as scalability evidence.

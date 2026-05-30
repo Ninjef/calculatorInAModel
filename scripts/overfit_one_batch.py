@@ -273,12 +273,15 @@ def temporary_calculator_injection_scale(
     if scale is None or model.calculator_hook is None:
         yield
         return
-    old_scale = model.calculator_hook.injection_scale
-    model.calculator_hook.injection_scale = scale
+    hooks = model.calculator_hook_modules()
+    old_scales = [hook.injection_scale for hook in hooks]
+    for hook in hooks:
+        hook.injection_scale = scale
     try:
         yield
     finally:
-        model.calculator_hook.injection_scale = old_scale
+        for hook, old_scale in zip(hooks, old_scales, strict=True):
+            hook.injection_scale = old_scale
 
 
 def generate_answer(

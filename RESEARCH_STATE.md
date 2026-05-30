@@ -125,9 +125,9 @@ Active directions:
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
   staged gates. A fair two-hook routed source needs cloned/shared output
-  projection. It trains both hooks, but open-upstream routed sources leak
-  (`0.998` normal, `0.460` injection-zero). Frozen upstream source630 still
-  leaks once it learns (`0.975` normal, `0.440-0.500` injection-zero); anti-leak routed acquisition is next.
+  projection. Corrected all-hook injection-zero controls show routed source and
+  handoff are causal (`0.995` source normal / `0.025` zero; `0.925` handoff
+  normal / `0.000` zero). Next: fresh seed, more hooks, or shared output proj.
 
 ## Paused Or Deprioritized Branches
 

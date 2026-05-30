@@ -711,13 +711,18 @@
       "type": "defined_in"
     },
     {
-      "source": "doc/143-routed-cloned-output-source-training-learns-both-hooks-but-leaks-through-the-upstream-resi",
-      "target": "researchMemory/hypotheses/phase7/143-routed-cloned-output-source-training-learns-both-hooks-but-leaks-through-the-upstream-resi.md",
+      "source": "doc/143-routed-cloned-output-source-handoff-controls-were-only-zeroing-the-primary-hook",
+      "target": "researchMemory/hypotheses/phase7/143-routed-cloned-output-source-handoff-controls-were-only-zeroing-the-primary-hook.md",
       "type": "defined_in"
     },
     {
-      "source": "doc/144-longer-frozen-upstream-routed-source-learns-both-hooks-but-leakage-returns",
-      "target": "researchMemory/hypotheses/phase7/144-longer-frozen-upstream-routed-source-learns-both-hooks-but-leakage-returns.md",
+      "source": "doc/144-longer-frozen-upstream-routed-source-did-not-prove-leakage-returns",
+      "target": "researchMemory/hypotheses/phase7/144-longer-frozen-upstream-routed-source-did-not-prove-leakage-returns.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/145-multi-hook-injection-zero-controls-now-ablate-every-routed-calculator-hook",
+      "target": "researchMemory/hypotheses/phase7/145-multi-hook-injection-zero-controls-now-ablate-every-routed-calculator-hook.md",
       "type": "defined_in"
     },
     {
@@ -2297,18 +2302,25 @@
       "title": "Cloned output projection makes a routed two-hook topk source train both hooks."
     },
     {
-      "id": "doc/143-routed-cloned-output-source-training-learns-both-hooks-but-leaks-through-the-upstream-resi",
+      "id": "doc/143-routed-cloned-output-source-handoff-controls-were-only-zeroing-the-primary-hook",
       "kind": "hypothesis_memory",
-      "source_path": "researchMemory/hypotheses/phase7/143-routed-cloned-output-source-training-learns-both-hooks-but-leaks-through-the-upstream-resi.md",
-      "status": "MIXED-NEGATIVE",
-      "title": "Routed cloned-output source training learns both hooks but leaks through the upstream residual."
+      "source_path": "researchMemory/hypotheses/phase7/143-routed-cloned-output-source-handoff-controls-were-only-zeroing-the-primary-hook.md",
+      "status": "SUPERSEDED-MEASUREMENT-BUG",
+      "title": "Routed cloned-output source/handoff controls were only zeroing the primary hook."
     },
     {
-      "id": "doc/144-longer-frozen-upstream-routed-source-learns-both-hooks-but-leakage-returns",
+      "id": "doc/144-longer-frozen-upstream-routed-source-did-not-prove-leakage-returns",
       "kind": "hypothesis_memory",
-      "source_path": "researchMemory/hypotheses/phase7/144-longer-frozen-upstream-routed-source-learns-both-hooks-but-leakage-returns.md",
-      "status": "MIXED-NEGATIVE",
-      "title": "Longer frozen-upstream routed source learns both hooks but leakage returns."
+      "source_path": "researchMemory/hypotheses/phase7/144-longer-frozen-upstream-routed-source-did-not-prove-leakage-returns.md",
+      "status": "SUPERSEDED-MEASUREMENT-BUG",
+      "title": "Longer frozen-upstream routed source did not prove leakage returns."
+    },
+    {
+      "id": "doc/145-multi-hook-injection-zero-controls-now-ablate-every-routed-calculator-hook",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/145-multi-hook-injection-zero-controls-now-ablate-every-routed-calculator-hook.md",
+      "status": "POSITIVE-CORRECTION",
+      "title": "Multi-hook injection-zero controls now ablate every routed calculator hook."
     },
     {
       "id": "doc/phase7-direction-memory",

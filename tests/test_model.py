@@ -501,6 +501,21 @@ def test_left_operand_mod_routes_examples_to_one_hook() -> None:
     )
 
 
+def test_temporary_injection_scale_applies_to_all_calculator_hooks() -> None:
+    from scripts.overfit_one_batch import temporary_calculator_injection_scale
+
+    model = TinyGPT(_small_calculator_cfg(hook_count=2, hook_routing="left_operand_mod"))
+    assert model.calculator_hook is not None
+    hooks = model.calculator_hook_modules()
+    hooks[0].injection_scale = 0.75
+    hooks[1].injection_scale = 1.25
+
+    with temporary_calculator_injection_scale(model, 0.0):
+        assert [hook.injection_scale for hook in hooks] == [0.0, 0.0]
+
+    assert [hook.injection_scale for hook in hooks] == [0.75, 1.25]
+
+
 def test_calculator_off_replace_mode_zeros_equals_residual_only() -> None:
     model = TinyGPT(_small_calculator_cfg(mode="off", injection_mode="replace"))
     h = torch.arange(40, dtype=torch.float32).reshape(1, 5, 8)

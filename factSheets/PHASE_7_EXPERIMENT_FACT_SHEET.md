@@ -9001,8 +9001,8 @@ Interpretation:
 - Cloning/sharing the output semantic interface is a prerequisite for fair
   multi-hook assignment diagnostics.
 - The cloned topk result is a routed source positive, not a solved thesis
-  result: injection-zero was still `0.4325`, and no additive handoff/fresh seed
-  has been run yet.
+  result. The originally reported `0.4325` injection-zero was later superseded
+  by the all-hook counterfactual-control fix below.
 
 Routed source leakage follow-up:
 
@@ -9012,6 +9012,9 @@ Implementation correction:
   `--calculator-estimator ste` handoff runs.
 - The CLI test now asserts `calculator_hook.output_proj.weight` is absent from
   trainable parameters when `--freeze-semantic-decoder` is used.
+- Later correction: `temporary_calculator_injection_scale` now scales every
+  module in `model.calculator_hook_modules()`, not just the primary hook. This
+  fixes routed multi-hook injection-zero, causal-gap, and forced-scale controls.
 
 Runs:
 
@@ -9020,23 +9023,29 @@ runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_ho
 runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks2_cloneout_embd32_source630_cpu/.../model-c-2digit-seed43
 runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks2_cloneout_embd32_freezeup_source200_cpu/.../model-c-2digit-seed43
 runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks2_cloneout_embd32_freezeup_source630_cpu/.../model-c-2digit-seed43
+runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks2_cloneout_embd32_source200_fixed_zero_cpu/.../model-c-2digit-seed43
+runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks2_cloneout_embd32_source630_fixed_zero_eval_cpu/.../model-c-2digit-seed43
+runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks2_cloneout_handoff600_strictfreeze_fixed_zero_eval_cpu/.../model-c-2digit-seed43
 ```
 
-| Run | Main result | Injection-zero | Hook calc |
-| --- | ---: | ---: | ---: |
-| Strict frozen handoff from source200 | `0.9075` final / `0.9175` step-600 normal | `0.4925` | `0.9438/0.8784` |
-| Fair `embd32` open-upstream source630 | `1.0000` final / `0.9975` step-630 normal | `0.4600` | `1.0000/0.9944` |
-| Fair `embd32` frozen-upstream source200 | `0.3925` final / `0.4150` step-200 normal | `0.1875` | `0.4384/0.3867` |
-| Fair `embd32` frozen-upstream source630 | `0.9475` final / `0.9750` step-630 normal | `0.4400` (`0.5000` final 128-sample) | `0.9955/0.9494` |
+| Run | Main result | Injection-zero | Hook calc | Status |
+| --- | ---: | ---: | ---: | --- |
+| Strict frozen handoff from source200 | `0.9075` final / `0.9175` step-600 normal | `0.4925` | `0.9438/0.8784` | invalid old zeroing |
+| Fair `embd32` open-upstream source630 | `1.0000` final / `0.9975` step-630 normal | `0.4600` | `1.0000/0.9944` | invalid old zeroing |
+| Fair `embd32` frozen-upstream source200 | `0.3925` final / `0.4150` step-200 normal | `0.1875` | `0.4384/0.3867` | invalid old zeroing |
+| Fair `embd32` frozen-upstream source630 | `0.9475` final / `0.9750` step-630 normal | `0.4400` (`0.5000` final 128-sample) | `0.9955/0.9494` | invalid old zeroing |
+| Corrected `embd32` source200 rerun | `0.9400` final / `0.9225` step-200 normal | `0.0200` | `0.9406/0.9006` | valid |
+| Corrected `embd32` source630 eval | `1.0000` final / `0.9950` step-630 reload normal | `0.0250` | `1.0000/0.9893` | valid |
+| Corrected strict handoff600 eval | `0.9075` final / `0.9250` step-600 reload normal | `0.0000` | `0.9108/0.9198` | valid |
 
 Interpretation:
 
-- The matched routed `embd32` source trains both hooks, so the result-policy
-  routing/scoring machinery works.
-- Unlike the single-hook `embd32` source630 (`0.0275` injection-zero), routed
-  open-upstream source acquisition leaks through the residual path.
-- Freezing upstream reduced the leak only while the source was undertrained.
-  At 630 steps it learned both hooks but injection-zero returned to `0.44-0.50`,
-  so longer frozen-upstream training alone is not the anti-leak solution.
-  Future routed-source work should add explicit source-time anti-leak pressure
-  before running more additive handoffs.
+- The matched routed `embd32` source trains both hooks, and corrected controls
+  show the source/handoff are calculator-causal.
+- The earlier routed leakage interpretation was a measurement bug: zeroing only
+  the primary hook leaves the other routed hook active, producing apparent
+  injection-zero near the fraction of examples routed to the extra hook.
+- Future routed work no longer needs anti-leak pressure as the immediate next
+  step. The useful next axis is stronger corrected-control handoff from the
+  `embd32` source630 checkpoint, fresh seeds, more hooks, or shared/tied output
+  projections to reduce many-calculator parameters.
