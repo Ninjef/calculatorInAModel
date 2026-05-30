@@ -125,7 +125,8 @@ Active directions:
   trusted handoff are causal; four routed hooks also clear source/handoff
   (`1.000` handoff, `0.040` zero, `0.020` forced-random). Routed execution is now
   active-only. Shared output projections remove cloned-output parameter growth
-  and train the 4-hook source, but miss trusted handoff (`0.78`).
+  and train the 4-hook source, but miss trusted handoff (`0.78`; matched
+  delayed-margin rerun `0.75`), despite near-perfect calculator accuracy.
   Next: shared-output geometry or less-prescriptive credit.
 
 ## Paused Or Deprioritized Branches

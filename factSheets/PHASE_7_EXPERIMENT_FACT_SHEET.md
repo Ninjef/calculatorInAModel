@@ -9223,6 +9223,28 @@ Equivalence audit:
 - This rules out shared/independent state-dict loading or forward tying as the
   explanation for the handoff miss.
 
+Matched delayed-margin audit:
+
+```text
+runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks4_shareout_embd32_source630_start50_cpu/2026-05-30_154953_427794_model-c-op0-19-fullgrid-direct_feedback_alignment-hooks4-routeleft_operand_mod-answer_decoder-adec-product/model-c-2digit-seed45
+runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks4_shareout_embd32_handoff600_start50_from_source630_matchedhead_cpu/2026-05-30_155644_455733_model-c-op0-19-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed45
+```
+
+- The first shared-output A/B was not perfectly matched: the cloned-output
+  positive used `--additive-forced-margin-start-step 50`, while the
+  shared-output run above used the default `0`.
+- Re-running the shared-output source with delayed margin still trained:
+  final eval `399/400 = 0.9975`, step-630 normal `0.9950`,
+  injection-zero `0.0425`, forced-random `0.0275`, and diagnostic
+  calculator-result accuracy `0.9922`.
+- The matched-head trusted frozen-policy additive handoff still missed:
+  final eval `299/400 = 0.7475`, step-600 normal `0.7225`,
+  injection-zero `0.0875`, forced-random `0.0725`, and step-600
+  calculator-result accuracy `0.9900`.
+- An earlier attempted handoff from this source omitted
+  `--calculator-result-head-hidden-size 64`, so the source policy head did not
+  load compatibly and the result is invalid; use only the matched-head run.
+
 Interpretation:
 
 - Shared output projection is compatible with routed source acquisition: all

@@ -209,6 +209,12 @@ Memory:
   frozen-policy additive handoff reached only `0.7625` final / `0.7800`
   step-600 normal, with calculator-result accuracy `0.9950`; a continuation
   to another 600 steps reached only `0.7925` final / `0.8050` snapshot normal.
+  A later audit found the first A/B had one config mismatch
+  (`additive_forced_margin_start_step=50` for cloned, default `0` for shared),
+  but a matched delayed-margin shared-output rerun still missed: source final
+  `0.9975`, diagnostic calculator-result accuracy `0.9922`, trusted handoff
+  final `0.7475`, step-600 normal `0.7225`, injection-zero `0.0875`, and
+  learned calculator-result accuracy `0.9900`.
   Shared output projections therefore remove parameter growth and preserve
   source trainability, but they are not a drop-in replacement for cloned
   output projections in the current non-bottleneck handoff geometry.
