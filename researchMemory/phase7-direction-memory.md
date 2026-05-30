@@ -134,12 +134,21 @@ Memory:
   was `899/900 = 0.9989`, trusted handoff final was `900/900 = 1.0000`, and
   step-600 handoff controls stayed causal (`0.0333` injection-zero, `0.0111`
   forced-random, `0.9989` learned calc).
+- Many-calculator accounting clarifies what the policy-aware proposal does and
+  does not solve. Under the current single-hook design, independent calculators
+  would multiply scorer cost by active calculator count: for op29 over 630
+  assignment steps, exact scoring is `33,453,000` forced evaluations per
+  calculator and topk8+unique24 is `13,608,000`; at 16 calculators that becomes
+  `535,248,000` versus `217,728,000`. Result-head parameters also scale
+  linearly if each calculator has an independent `rhead64` head (`12,091` each
+  at op29). This supports topk as a scorer-cost baseline, not as a complete
+  many-calculator architecture.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
-  next work should test many-calculator cost, reduce prescriptiveness, pursue
-  non-enumerative credit assignment, or stress op39 with an explicit compute
-  hypothesis.
+  next work should implement true multi-calculator/routing pressure, reduce
+  prescriptiveness, pursue non-enumerative credit assignment, or stress op39
+  with an explicit compute hypothesis.
 
 Representative evidence:
 
@@ -153,7 +162,9 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-fresh-seed-validation.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-range-validation.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-fresh-seed-validation.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
+- `researchReviews/2026-05-30-many-calculator-scaling-accounting.md`
 - `HYPOTHESIS_LEDGER.md`
 
 ## Direction: Non-Bottleneck Direct Training

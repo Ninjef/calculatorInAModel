@@ -8810,3 +8810,42 @@ Fresh-range interpretation:
 - Do not run more op29 `rhead64` topk8+unique24 seed replications as novelty.
   Next work should move to many-calculator cost/accounting, op39 with an
   explicit compute hypothesis, or reduced prescriptiveness.
+
+Many-calculator assignment scaling accounting:
+
+```text
+scripts/analyze_assignment_scaling.py
+```
+
+Command:
+
+```bash
+python3 scripts/analyze_assignment_scaling.py --operand-maxes 19,29,39,99 --calculator-counts 1,4,16,64 --sample-count 24 --assignment-steps 630 --n-embd 32 --span-width 2 --result-head-hidden-size 64
+```
+
+Key rows:
+
+| Range | Calculators | Exact forced evals | Topk8+unique24 forced evals | Eval savings | Result-head params |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| op29 | `1` | `33,453,000` | `13,608,000` | `19,845,000` (`59.3%`) | `12,091` |
+| op29 | `16` | `535,248,000` | `217,728,000` | `317,520,000` (`59.3%`) | `193,456` |
+| op39 | `1` | `79,632,000` | `24,192,000` | `55,440,000` (`69.6%`) | `13,391` |
+| op39 | `16` | `1,274,112,000` | `387,072,000` | `887,040,000` (`69.6%`) | `214,256` |
+| op99 | `16` | `20,059,200,000` | `2,419,200,000` | `17,640,000,000` (`87.9%`) | `339,056` |
+
+Accounting decision:
+
+```text
+policy_topk_many_calculator_accounting_review
+```
+
+Accounting interpretation:
+
+- Policy-topk sparse assignment changes the per-calculator result-class slope
+  from exact `O(result_vocab)` to `O(24)` for the tested proposal, which is a
+  real scorer-cost reduction as operand range grows.
+- It does not prove many-calculator scalability. The current implementation has
+  one calculator hook; independent calculators would still multiply scorer cost
+  and result-head parameters by the number of active calculators.
+- Future many-calculator claims need either a true multi-hook/routed diagnostic
+  or a non-enumerative target construction, not more op19/op29 seed replication.

@@ -686,6 +686,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/138-policy-topk-sparse-assignment-reduces-candidate-scoring-slope-but-does-not-solve-many-calc",
+      "target": "researchMemory/hypotheses/phase7/138-policy-topk-sparse-assignment-reduces-candidate-scoring-slope-but-does-not-solve-many-calc.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -817,7 +822,17 @@
     },
     {
       "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
       "target": "researchReviews/2026-05-30-assignment-cost-reduction-review.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "researchReviews/2026-05-30-many-calculator-scaling-accounting.md",
       "type": "supported_by"
     },
     {
@@ -2190,6 +2205,13 @@
       "source_path": "researchMemory/hypotheses/phase7/137-policy-topk-unique24-op29-range-source-handoff-replicates-on-a-fresh-seed.md",
       "status": "POSITIVE",
       "title": "Policy-topk unique24 op29 range source/handoff replicates on a fresh seed."
+    },
+    {
+      "id": "doc/138-policy-topk-sparse-assignment-reduces-candidate-scoring-slope-but-does-not-solve-many-calc",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/138-policy-topk-sparse-assignment-reduces-candidate-scoring-slope-but-does-not-solve-many-calc.md",
+      "status": "REVIEW",
+      "title": "Policy-topk sparse assignment reduces candidate-scoring slope but does not solve many-calculator scaling."
     },
     {
       "id": "doc/phase7-direction-memory",
