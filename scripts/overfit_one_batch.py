@@ -4,7 +4,7 @@ import json
 import math
 import random
 import sys
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from pathlib import Path
@@ -1689,6 +1689,7 @@ def score_forced_result_candidate_classes(
     candidate_classes: torch.Tensor,
     *,
     chunk_size: int,
+    calculator_bottleneck_mode: str | None = None,
 ) -> torch.Tensor:
     if chunk_size < 1:
         raise ValueError("result candidate score chunk size must be positive")
@@ -1703,19 +1704,25 @@ def score_forced_result_candidate_classes(
     model.eval()
     losses: list[torch.Tensor] = []
     try:
-        for start in range(0, candidate_count, chunk_size):
-            candidate_chunk = candidate_classes[:, start : start + chunk_size]
-            chunk_count = candidate_chunk.shape[1]
-            expanded_x = batch.x.repeat_interleave(chunk_count, dim=0)
-            expanded_y = batch.y.repeat_interleave(chunk_count, dim=0)
-            expanded_mask = batch.loss_mask.repeat_interleave(chunk_count, dim=0)
-            forced = candidate_chunk.reshape(-1)
-            logits = model(expanded_x, forced_calculator_result_class=forced)
-            losses.append(
-                masked_cross_entropy_per_example(
-                    logits, expanded_y, expanded_mask
-                ).reshape(batch_size, chunk_count)
-            )
+        context = (
+            temporary_calculator_bottleneck_mode(model, calculator_bottleneck_mode)
+            if calculator_bottleneck_mode is not None
+            else nullcontext()
+        )
+        with context:
+            for start in range(0, candidate_count, chunk_size):
+                candidate_chunk = candidate_classes[:, start : start + chunk_size]
+                chunk_count = candidate_chunk.shape[1]
+                expanded_x = batch.x.repeat_interleave(chunk_count, dim=0)
+                expanded_y = batch.y.repeat_interleave(chunk_count, dim=0)
+                expanded_mask = batch.loss_mask.repeat_interleave(chunk_count, dim=0)
+                forced = candidate_chunk.reshape(-1)
+                logits = model(expanded_x, forced_calculator_result_class=forced)
+                losses.append(
+                    masked_cross_entropy_per_example(
+                        logits, expanded_y, expanded_mask
+                    ).reshape(batch_size, chunk_count)
+                )
     finally:
         if was_training:
             model.train()
@@ -2769,6 +2776,7 @@ def score_forced_result_classes_chunked(
     batch: ArithmeticBatch,
     *,
     chunk_size: int,
+    calculator_bottleneck_mode: str | None = None,
 ) -> torch.Tensor:
     if chunk_size < 1:
         raise ValueError("result-boundary target chunk size must be positive")
@@ -2779,24 +2787,30 @@ def score_forced_result_classes_chunked(
     model.eval()
     losses: list[torch.Tensor] = []
     try:
-        for start in range(0, result_vocab_size, chunk_size):
-            forced_classes = torch.arange(
-                start,
-                min(start + chunk_size, result_vocab_size),
-                device=batch.x.device,
-            )
-            expanded_x = batch.x.repeat_interleave(len(forced_classes), dim=0)
-            expanded_y = batch.y.repeat_interleave(len(forced_classes), dim=0)
-            expanded_mask = batch.loss_mask.repeat_interleave(
-                len(forced_classes), dim=0
-            )
-            forced = forced_classes.repeat(batch.x.shape[0])
-            logits = model(expanded_x, forced_calculator_result_class=forced)
-            losses.append(
-                masked_cross_entropy_per_example(
-                    logits, expanded_y, expanded_mask
-                ).reshape(batch.x.shape[0], len(forced_classes))
-            )
+        context = (
+            temporary_calculator_bottleneck_mode(model, calculator_bottleneck_mode)
+            if calculator_bottleneck_mode is not None
+            else nullcontext()
+        )
+        with context:
+            for start in range(0, result_vocab_size, chunk_size):
+                forced_classes = torch.arange(
+                    start,
+                    min(start + chunk_size, result_vocab_size),
+                    device=batch.x.device,
+                )
+                expanded_x = batch.x.repeat_interleave(len(forced_classes), dim=0)
+                expanded_y = batch.y.repeat_interleave(len(forced_classes), dim=0)
+                expanded_mask = batch.loss_mask.repeat_interleave(
+                    len(forced_classes), dim=0
+                )
+                forced = forced_classes.repeat(batch.x.shape[0])
+                logits = model(expanded_x, forced_calculator_result_class=forced)
+                losses.append(
+                    masked_cross_entropy_per_example(
+                        logits, expanded_y, expanded_mask
+                    ).reshape(batch.x.shape[0], len(forced_classes))
+                )
     finally:
         if was_training:
             model.train()
@@ -2805,12 +2819,20 @@ def score_forced_result_classes_chunked(
 
 @torch.no_grad()
 def score_injection_zero_answer_losses(
-    model: TinyGPT, batch: ArithmeticBatch
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    calculator_bottleneck_mode: str | None = None,
 ) -> torch.Tensor:
     was_training = model.training
     model.eval()
     try:
-        with temporary_calculator_injection_scale(model, 0.0):
+        bottleneck_context = (
+            temporary_calculator_bottleneck_mode(model, calculator_bottleneck_mode)
+            if calculator_bottleneck_mode is not None
+            else nullcontext()
+        )
+        with bottleneck_context, temporary_calculator_injection_scale(model, 0.0):
             logits = model(batch.x)
         losses = masked_cross_entropy_per_example(logits, batch.y, batch.loss_mask)
     finally:
@@ -2837,10 +2859,12 @@ def result_boundary_target_loss(
         "soft_result",
         "regret_set",
         "zero_improvement",
+        "additive_zero_improvement",
     }:
         raise ValueError(
             "result-boundary target mode must be 'hard_best_result', "
-            "'soft_result', 'regret_set', or 'zero_improvement'"
+            "'soft_result', 'regret_set', 'zero_improvement', or "
+            "'additive_zero_improvement'"
         )
     if temperature <= 0:
         raise ValueError("result-boundary target temperature must be positive")
@@ -2859,6 +2883,9 @@ def result_boundary_target_loss(
     result_logits, _, _, _ = calculator_read_result_logits(model, batch)
     result_vocab_size = result_logits.shape[-1]
     learned_result = result_logits.argmax(dim=-1)
+    scoring_bottleneck_mode = (
+        "none" if target_mode == "additive_zero_improvement" else None
+    )
     if sample_count > 0:
         priority_candidates = None
         if policy_topk_count > 0:
@@ -2872,9 +2899,18 @@ def result_boundary_target_loss(
             unique=unique_sampling,
             priority_candidates=priority_candidates,
         )
-        candidate_losses = score_forced_result_candidate_classes(
-            model, batch, candidates, chunk_size=chunk_size
-        )
+        if scoring_bottleneck_mode is None:
+            candidate_losses = score_forced_result_candidate_classes(
+                model, batch, candidates, chunk_size=chunk_size
+            )
+        else:
+            candidate_losses = score_forced_result_candidate_classes(
+                model,
+                batch,
+                candidates,
+                chunk_size=chunk_size,
+                calculator_bottleneck_mode=scoring_bottleneck_mode,
+            )
         full_losses = result_logits.new_full(
             (batch.x.shape[0], result_vocab_size), float("inf")
         )
@@ -2889,9 +2925,17 @@ def result_boundary_target_loss(
         unique_counts = candidate_mask.sum(dim=-1).to(result_logits.dtype)
     else:
         candidates = None
-        full_losses = score_forced_result_classes_chunked(
-            model, batch, chunk_size=chunk_size
-        )
+        if scoring_bottleneck_mode is None:
+            full_losses = score_forced_result_classes_chunked(
+                model, batch, chunk_size=chunk_size
+            )
+        else:
+            full_losses = score_forced_result_classes_chunked(
+                model,
+                batch,
+                chunk_size=chunk_size,
+                calculator_bottleneck_mode=scoring_bottleneck_mode,
+            )
         candidate_mask = torch.ones_like(full_losses, dtype=torch.bool)
         unique_counts = torch.full(
             (batch.x.shape[0],),
@@ -2921,8 +2965,15 @@ def result_boundary_target_loss(
         target_loss = -(
             target_weights * result_logits.log_softmax(dim=-1)
         ).sum(dim=-1).mean()
-    elif target_mode == "zero_improvement":
-        zero_losses = score_injection_zero_answer_losses(model, batch)
+    elif target_mode in {"zero_improvement", "additive_zero_improvement"}:
+        if scoring_bottleneck_mode is None:
+            zero_losses = score_injection_zero_answer_losses(model, batch)
+        else:
+            zero_losses = score_injection_zero_answer_losses(
+                model,
+                batch,
+                calculator_bottleneck_mode=scoring_bottleneck_mode,
+            )
         improvements = (
             zero_losses.unsqueeze(-1) - full_losses
         ).masked_fill(~candidate_mask, 0.0).clamp_min(0.0)
@@ -2974,7 +3025,7 @@ def result_boundary_target_loss(
         1, true_sum.unsqueeze(-1)
     ).squeeze(-1)
     true_candidate = candidate_mask.gather(1, true_sum.unsqueeze(-1)).squeeze(-1)
-    if target_mode == "zero_improvement":
+    if target_mode in {"zero_improvement", "additive_zero_improvement"}:
         zero_improvement_true_fraction = true_result_probability > 0
     if target_mode == "regret_set":
         regret_set_fraction = (target_weights > 0).float().mean(dim=-1)
@@ -2997,6 +3048,9 @@ def result_boundary_target_loss(
     metrics = {
         "result_boundary_target_loss": float(target_loss.item()),
         "result_boundary_target_mode": target_mode,
+        "result_boundary_target_scoring_bottleneck_mode": (
+            scoring_bottleneck_mode or model.cfg.calculator_bottleneck_mode
+        ),
         "result_boundary_target_temperature": float(temperature),
         "result_boundary_target_min_probability_floor": float(min_probability_floor),
         "result_boundary_target_chunk_size": int(chunk_size),
@@ -10929,12 +10983,15 @@ def parse_args() -> argparse.Namespace:
             "soft_result",
             "regret_set",
             "zero_improvement",
+            "additive_zero_improvement",
         ],
         default="hard_best_result",
         help=(
             "CE to the lowest-NLL forced result, CE/KL to a soft result target, "
             "CE/KL to the set of results within temperature NLL of best, or "
-            "CE/KL to results that improve answer loss over zero injection."
+            "CE/KL to results that improve answer loss over zero injection. "
+            "The additive_zero_improvement variant scores the same improvement "
+            "through the non-bottleneck additive path."
         ),
     )
     parser.add_argument(

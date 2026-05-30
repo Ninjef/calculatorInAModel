@@ -118,7 +118,7 @@ Active directions:
   soft/regret/sampled hard-best targets are weak, and simple online calibration
   is partial. Zero-injection improvement is the active lead: mature full-enum
   trains a strong source but only partially clears causal handoff; sampled
-  topk8+unique24 is also partial.
+  topk8+unique24 is partial and naive additive-path scoring is negative.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29

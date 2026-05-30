@@ -578,6 +578,13 @@ Memory:
   800-step source handoff (`0.3650` final), but this still trails the old
   hard-best boundary handoff (`0.8825` final). Continue only with a new
   handoff-aware geometry mechanism or scalable proposal.
+- Naive additive-path zero-improvement is not that mechanism. Scoring
+  zero-improvement through the non-bottleneck additive path before the additive
+  readout is trained made the source learn a non-arithmetic target: step-200
+  learned-best reached `0.6025`, but target best=true was only `0.0325`,
+  true-result target probability `0.0225`, and final/snapshot calc stayed
+  `0.0200`. Additive-path targets need readout preconditioning/co-training,
+  not a longer run from an untrained additive loss table.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -641,6 +648,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-sampled-result-boundary-source-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-zero-improvement-boundary-source-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-zero-improvement-boundary-handoff.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-additive-zero-improvement-source-gate.md`
 - `researchReviews/2026-05-30-sampled-result-boundary-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`

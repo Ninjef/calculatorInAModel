@@ -1,5 +1,43 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-30 Additive Zero-Improvement Source Gate
+
+Task/work log:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-additive-zero-improvement-source-gate.md
+```
+
+Run root:
+
+```text
+runs/2026-05-30_phase7_additive_zero_improvement_boundary/source200_full_enum_cpu
+```
+
+Result:
+
+```text
+additive_zero_improvement_naive_source_gate_negative
+```
+
+Added `result_boundary_target_mode=additive_zero_improvement`, which scores
+forced-result answer-loss improvement over zero injection through
+`calculator_bottleneck_mode=none` instead of through the answer-decoder
+bottleneck. In the matched 200-step full-enum source gate, it optimized the
+additive-path target but not the arithmetic calculator policy: step-200
+`learned_best=0.6025`, `hard_best_equals_true_sum=0.0325`, true-result target
+probability `0.0225`, final eval `8/400 = 0.0200`, and snapshot calculator
+result accuracy `0.0200`.
+
+Interpretation:
+
+- This is not a viable handoff-aware source-shaping signal by itself.
+- The additive forced-result loss table is arbitrary before the additive
+  readout is trained, so the answer-derived target chases non-arithmetic
+  result codes.
+- Do not spend compute on longer plain `additive_zero_improvement` source or
+  handoff runs without a real readout-preconditioning/co-training mechanism.
+
 ## 2026-05-30 Forced-Margin Benchmark Direction Review
 
 Review:
