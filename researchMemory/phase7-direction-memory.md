@@ -175,8 +175,11 @@ Memory:
   scaling every hook, source200 rerun had `0.9225` normal / `0.0200` zero,
   source630 reload had `0.9950` normal / `0.0250` zero, and strict handoff600
   reload had `0.9250` normal / `0.0000` zero. Routed source/handoff are causal
-  under corrected controls; next validate fresh seeds, more hooks, or shared
-  output projection.
+  under corrected controls. The stronger routed `embd32` source630 then cleared
+  a trusted 600-step additive handoff: final/step-600 normal `1.0000`, step-600
+  injection-zero `0.0550`, forced-random `0.0300`, and hook calc
+  `1.0000/0.9955`. Next validate fresh seeds, more hooks, or shared output
+  projection.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;

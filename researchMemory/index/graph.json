@@ -726,6 +726,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/146-corrected-control-routed-embd32-source630-clears-trusted-additive-handoff",
+      "target": "researchMemory/hypotheses/phase7/146-corrected-control-routed-embd32-source630-clears-trusted-additive-handoff.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -2321,6 +2326,13 @@
       "source_path": "researchMemory/hypotheses/phase7/145-multi-hook-injection-zero-controls-now-ablate-every-routed-calculator-hook.md",
       "status": "POSITIVE-CORRECTION",
       "title": "Multi-hook injection-zero controls now ablate every routed calculator hook."
+    },
+    {
+      "id": "doc/146-corrected-control-routed-embd32-source630-clears-trusted-additive-handoff",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/146-corrected-control-routed-embd32-source630-clears-trusted-additive-handoff.md",
+      "status": "POSITIVE",
+      "title": "Corrected-control routed embd32 source630 clears trusted additive handoff."
     },
     {
       "id": "doc/phase7-direction-memory",

@@ -126,8 +126,8 @@ Active directions:
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
   staged gates. A fair two-hook routed source needs cloned/shared output
   projection. Corrected all-hook injection-zero controls show routed source and
-  handoff are causal (`0.995` source normal / `0.025` zero; `0.925` handoff
-  normal / `0.000` zero). Next: fresh seed, more hooks, or shared output proj.
+  trusted handoff are causal (`1.000` handoff normal, `0.055` zero, `0.030`
+  forced-random). Next: fresh seed, more hooks, or shared output projection.
 
 ## Paused Or Deprioritized Branches
 

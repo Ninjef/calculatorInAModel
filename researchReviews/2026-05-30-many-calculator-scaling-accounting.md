@@ -111,6 +111,14 @@ bottleneck is no longer anti-leak routed acquisition; it is validating routed
 training across fresh seeds/more hooks and removing cloned per-hook output
 projection parameter growth.
 
+The next corrected-control gate did validate a stronger routed handoff:
+the `embd32` source630 checkpoint reached `1.0000` final and `1.0000`
+step-600 normal in trusted additive handoff, with `0.0550` injection-zero,
+`0.0300` forced-random, and hook calc `1.0000/0.9955`. This upgrades routed
+sparse assignment from source-only evidence to a real two-hook non-bottleneck
+positive, while leaving fresh-seed/more-hook/shared-output validation as the
+remaining scalability work.
+
 ## What Should Stop
 
 - More op19 or op29 topk8+unique24 seed replications as scalability evidence.
