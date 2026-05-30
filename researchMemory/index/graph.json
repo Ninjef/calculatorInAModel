@@ -601,6 +601,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/121-automated-forced-margin-recovery-survives-a-wider-model-scale-stress",
+      "target": "researchMemory/hypotheses/phase7/121-automated-forced-margin-recovery-survives-a-wider-model-scale-stress.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -883,6 +888,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-forced-margin-second-fresh-seed-stability.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-forced-margin-wider-model-scale-stress.md",
       "type": "supported_by"
     },
     {
@@ -1866,6 +1876,13 @@
       "source_path": "researchMemory/hypotheses/phase7/120-automated-forced-margin-recovery-clears-a-second-fresh-seed-but-with-variance.md",
       "status": "MIXED-POSITIVE",
       "title": "Automated forced-margin recovery clears a second fresh seed but with variance."
+    },
+    {
+      "id": "doc/121-automated-forced-margin-recovery-survives-a-wider-model-scale-stress",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/121-automated-forced-margin-recovery-survives-a-wider-model-scale-stress.md",
+      "status": "POSITIVE",
+      "title": "Automated forced-margin recovery survives a wider model scale stress."
     },
     {
       "id": "doc/phase7-direction-memory",

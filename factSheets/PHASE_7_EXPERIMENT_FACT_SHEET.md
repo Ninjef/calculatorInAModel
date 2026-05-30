@@ -1,5 +1,45 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-30 Forced-Margin Wider-Model Scale Stress
+
+Task/work log:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-forced-margin-wider-model-scale-stress.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-30_phase7_forced_margin_scale_stress/embd32_source_smoke
+runs/2026-05-30_phase7_forced_margin_scale_stress/embd32_source630_cpu
+runs/2026-05-30_phase7_forced_margin_scale_stress/embd32_handoff600_from_step630_cpu
+```
+
+Result:
+
+```text
+automated_forced_margin_recovery_wider_model_scale_positive
+```
+
+The automated one-negative forced-margin recovery benchmark survived a wider
+model stress using an existing `n_embd=32`, `n_head=2` semantic decoder. The
+wider source improved source calc from `0.7825` at step `600` to `0.8825` at
+step `630` and reached final source eval `0.9125`. The trusted frozen-policy
+additive handoff reached `1.0000` final eval and `1.0000` step-600 normal,
+with injection-zero `0.0625`, forced-random `0.0325`, and learned calc
+`0.8850` at step `600`.
+
+Interpretation:
+
+- The staged forced-margin benchmark can scale to a wider model in this setup.
+- This is still not the final solution: the source is prescriptive, uses hard
+  assignment and true-result forced-margin pressure, and the non-bottleneck
+  handoff freezes a transferred policy.
+- Caveat: the existing wider semantic decoder used the older non-product
+  answer decoder, so future scale claims should either train a matching product
+  decoder or explicitly compare decoder variants.
+
 ## 2026-05-30 Forced-Margin Second Fresh-Seed Stability
 
 Task/work log:

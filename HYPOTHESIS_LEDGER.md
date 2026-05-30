@@ -751,3 +751,9 @@ Conclusion: Repeating the automated one-negative forced-margin recovery recipe o
 Do not repeat: Do not rerun the same CLI seed-19/effective-seed-21 automated forced-margin recovery source plus 600-step handoff as novelty.
 Next allowed test: Forced-margin work should either test broader stability/scale or remove prescriptiveness by replacing hard assignment or true-result forcing; do not tune start step, margin, negative count, or recovery length on this setup as novelty.
 Source: `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-second-fresh-seed-stability.md`
+
+POSITIVE: Automated forced-margin recovery survives a wider model scale stress.
+Conclusion: Using an existing wider semantic decoder (`n_embd=32`, `n_head=2`, non-product answer decoder), the automated one-negative forced-margin recovery recipe remained viable and transferred strongly. The wider source reached `0.9125` final eval and improved source calc from `0.7825` at step `600` to `0.8825` at step `630`. The trusted frozen-policy additive handoff from step `630` reached `1.0000` final eval and `1.0000` step-600 normal, with zero-injection `0.0625`, forced-random `0.0325`, and learned calc `0.8850` at step `600`. This supports scale/stability of the staged benchmark, but it is still prescriptive and has a non-product decoder caveat.
+Do not repeat: Do not rerun the same `n_embd=32`, `n_head=2`, effective-seed-25 wider forced-margin source plus 600-step handoff as novelty.
+Next allowed test: Further scale work should use a matching product semantic decoder, larger operand range, larger architecture family, or remove hard assignment / true-result forcing rather than tuning local forced-margin knobs.
+Source: `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-wider-model-scale-stress.md`

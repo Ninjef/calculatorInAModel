@@ -299,6 +299,13 @@ Memory:
   cleared trusted handoff (`0.8975` final / `0.9050` step-600 normal,
   zero-injection `0.0000`, forced-random `0.0350`). This confirms the benchmark
   is real but seed-variable, below the prior `0.9875` handoff.
+- A wider-model scale stress is positive with a caveat: using an existing
+  `n_embd=32`, `n_head=2` non-product semantic decoder, the automated
+  forced-margin source reached `0.9125` final eval and the trusted 600-step
+  handoff reached `1.0000` final / `1.0000` step-600 normal with low controls
+  (`0.0625` zero-injection, `0.0325` forced-random). This supports staged
+  scale/stability but does not remove prescriptiveness or prove product-decoder
+  parity.
 - A less-prescriptive answer-derived bridge is positive but constrained: the
   older full-grid `result_boundary_target` source checkpoint transfers into
   the trusted frozen-policy additive gate at `0.8825` final / `0.8425`
@@ -341,6 +348,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-forced-margin-low-lr-source-recovery.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-automated-forced-margin-source-recovery.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-second-fresh-seed-stability.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-wider-model-scale-stress.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-answer-derived-boundary-handoff.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-amortized-critic-diagnostic.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`

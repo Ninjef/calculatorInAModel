@@ -96,12 +96,14 @@ Active directions:
   source-accuracy/forced-loss triggers are not robust. One-negative
   forced-margin with late recovery is the current benchmark: manual recovery
   raised handoff to `0.8700`; automated recovery hit `0.9875` final /
-  `0.9800` step-600 normal on one fresh seed, and a second fresh seed cleared
-  the gate at `0.8975` final / `0.9050` step-600 normal with zero-injection
-  `0.0000` and forced-random `0.0350`. This is useful staged-transfer evidence
-  with seed variance, but remains prescriptive because it uses hard assignment
-  and true-result contrastive forcing. Treat it as a benchmark source recipe,
-  not a local knob branch.
+  `0.9800` step-600 normal on one fresh seed; a second fresh seed cleared at
+  `0.8975` / `0.9050`; and a wider `n_embd=32`, `n_head=2` stress with the
+  older non-product decoder reached `1.0000` final / step-600 normal with
+  zero-injection `0.0625`, forced-random `0.0325`, and learned calc `0.8850`.
+  This is useful staged-transfer evidence with seed/decoder caveats, but
+  remains prescriptive because it uses hard assignment and true-result
+  contrastive forcing. Treat it as a benchmark source recipe, not a local knob
+  branch.
 - Target propagation/local targets are now a ceiling and diagnostic, not the
   current scalable mainline. Exact `policy_reweighted_t1` is positive and
   survives retention, but full enumeration is not scalable. Simple
