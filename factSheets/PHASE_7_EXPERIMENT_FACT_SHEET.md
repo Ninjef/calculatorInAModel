@@ -8415,3 +8415,31 @@ Interpretation:
 - Do not treat the current full-grid hard-assignment forced-margin recipe as a
   scalable range solution. Further range work needs changed source acquisition
   or a declared assignment-cost reduction strategy.
+
+Follow-up low-LR source recovery:
+
+```text
+runs/2026-05-30_phase7_forced_margin_range_stress/op29_low_lr_recovery_from_step630_steps90_cpu
+runs/2026-05-30_phase7_forced_margin_range_stress/op29_handoff600_from_low_lr_recovery_step90_cpu
+```
+
+| Run | Key result |
+| --- | --- |
+| Recovered source step `90` | `0.8211` normal/source calc, `0.0256` injection-zero, `1.0000` oracle, `0.0178` forced-random |
+| Recovered source final eval | `741/900 = 0.8233` |
+| Handoff step `600` | `0.8978` normal, `0.0122` injection-zero, `0.9611` oracle, `0.8233` learned calc, `0.0111` forced-random |
+| Handoff final eval | `816/900 = 0.9067` |
+
+Follow-up decision:
+
+```text
+op29_low_lr_source_recovery_diagnostic_mixed_positive
+```
+
+Follow-up interpretation:
+
+- The op29 miss was partly source-policy-maturity limited: low-LR recovery
+  moved the trusted handoff from `0.8533` final / `0.8278` step-600 normal to
+  `0.9067` final / `0.8978` step-600 normal.
+- This is not a scalable fix. It adds another prescriptive full-grid source
+  continuation on top of the hard-assignment forced-margin recipe.

@@ -320,6 +320,12 @@ Memory:
   step-600 normal with low controls. Range scaling is therefore an unresolved
   source-acquisition/assignment-cost problem; do not jump to op49 with the same
   full-grid recipe as novelty.
+- A low-LR op29 source-recovery diagnostic is mixed-positive: continuing the
+  op29 step-630 source for `90` steps at `lr=0.0003` raised source calc to
+  `0.8211`, and trusted handoff improved to `0.9067` final / `0.8978`
+  step-600 normal with low controls. This means the op29 miss was partly
+  source-maturity limited, but the rescue adds prescriptive full-grid source
+  compute and is not a scalable fix.
 - Forced-margin benchmark review: automated recovery is now the staged-transfer
   benchmark to beat, not the next knob branch. Future forced-margin compute
   must stress a new thesis-relevant axis such as product-decoder parity, larger
@@ -371,6 +377,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-wider-model-scale-stress.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-product-decoder-parity.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-forced-margin-op29-range-stress.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-op29-low-lr-source-recovery-diagnostic.md`
 - `researchReviews/2026-05-30-forced-margin-range-stress-review.md`
 - `researchReviews/2026-05-30-forced-margin-benchmark-direction-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-answer-derived-boundary-handoff.md`

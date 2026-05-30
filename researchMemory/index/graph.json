@@ -626,6 +626,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/126-op29-low-lr-source-recovery-partly-rescues-the-range-stress-but-adds-prescriptive-compute",
+      "target": "researchMemory/hypotheses/phase7/126-op29-low-lr-source-recovery-partly-rescues-the-range-stress-but-adds-prescriptive-compute.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -923,6 +928,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-forced-margin-op29-range-stress.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-op29-low-lr-source-recovery-diagnostic.md",
       "type": "supported_by"
     },
     {
@@ -1951,6 +1961,13 @@
       "source_path": "researchMemory/hypotheses/phase7/125-the-staged-forced-margin-benchmark-is-strong-at-op19-but-not-range-scalable-yet.md",
       "status": "REVIEW",
       "title": "The staged forced-margin benchmark is strong at op19 but not range-scalable yet."
+    },
+    {
+      "id": "doc/126-op29-low-lr-source-recovery-partly-rescues-the-range-stress-but-adds-prescriptive-compute",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/126-op29-low-lr-source-recovery-partly-rescues-the-range-stress-but-adds-prescriptive-compute.md",
+      "status": "MIXED-POSITIVE",
+      "title": "op29 low-LR source recovery partly rescues the range stress but adds prescriptive compute."
     },
     {
       "id": "doc/phase7-direction-memory",

@@ -101,8 +101,10 @@ Active directions:
   product-decoder op19 stresses both reached `1.0000` final / step-600 normal.
   But the first range stress, op29 product, missed the high gate: source calc
   recovered only `0.3533 -> 0.6889`, and trusted handoff reached `0.8533`
-  final / `0.8278` step-600 normal with low controls. Treat forced-margin as a
-  strong op19 staged benchmark, not a range-scalable recipe.
+  final / `0.8278` step-600 normal with low controls. A 90-step low-LR source
+  recovery partly rescued op29 to `0.9067` final / `0.8978` step-600 handoff,
+  showing source maturity matters but adding prescriptive full-grid compute.
+  Treat forced-margin as a strong op19 staged benchmark, not range-scalable.
 - Target propagation/local targets are now a ceiling and diagnostic, not the
   current scalable mainline. Exact `policy_reweighted_t1` is positive and
   survives retention, but full enumeration is not scalable. Simple
@@ -159,8 +161,9 @@ These branches should not continue without a new mechanism:
    to beat; further forced-margin work must stress a new thesis-relevant axis
    such as larger architecture or many-calculator cost, or remove hard
    assignment / true-result forcing. Product-decoder parity cleared; op29 range
-   stress missed, so do not jump to op49 with the same full-grid recipe as
-   novelty.
+   stress needed extra low-LR source recovery and still did not become a
+   scalable recipe, so do not jump to op49 with the same full-grid recipe or
+   extend the same recovery ladder as novelty.
 4. If reducing hard-assignment cost, state the scalability hypothesis
    up front and compare against the exact-grid assignment ceiling rather than
    only against prior cheap selectors.
