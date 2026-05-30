@@ -105,7 +105,8 @@ Active directions:
   frozen-policy handoff reached `0.9875` final / `0.9800` step-600 normal with
   injection-zero `0.0156-0.0250` and forced-random `0.0938`. This is useful
   evidence for staged transfer, but it remains prescriptive because it uses
-  hard assignment and true-result contrastive forcing.
+  hard assignment and true-result contrastive forcing. Treat this as a
+  benchmark source recipe, not a local knob branch.
 - A genuinely different credit-assignment family such as target propagation or
   local targets. Exact `policy_reweighted_t1` is positive and survives
   retention, but full enumeration is not scalable. Simple proposal
@@ -148,9 +149,9 @@ These branches should not continue without a new mechanism:
    with an explicit streaming/generalization validation objective.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
-3. If staying in forced-margin, do not rerun the seed-15 manual recovery or
-   seed-16 automated recovery gates as novelty. The next question must be
-   broader stability/scale or a less-prescriptive target-construction bridge.
+3. Do not tune forced-margin locally. Use automated recovery as a benchmark;
+   further work must stress stability/scale or remove hard assignment /
+   true-result forcing with a new target construction or estimator.
 4. If reducing hard-assignment cost, state the scalability hypothesis
    up front and compare against the exact-grid assignment ceiling rather than
    only against prior cheap selectors.

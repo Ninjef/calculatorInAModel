@@ -7959,3 +7959,29 @@ Interpretation:
 - It remains a staged, prescriptive recipe because source training still uses
   hard improvement assignment and true-result contrastive forcing.
 - Do not rerun the same seed-16 automated recovery plus handoff as novelty.
+
+## 2026-05-30 Forced-Margin Recovery Review
+
+Review:
+
+```text
+researchReviews/2026-05-30-forced-margin-recovery-review.md
+```
+
+Decision:
+
+```text
+forced_margin_recovery_is_staged_transfer_benchmark
+```
+
+Summary:
+
+- The two allowed post-review follow-ups have now been run: manual low-LR
+  recovery and automated fresh-seed recovery.
+- Automated one-negative forced-margin recovery is the current best
+  staged-transfer source recipe, with `0.9875` trusted handoff final eval.
+- It remains prescriptive and does not solve answer-loss-only discovery,
+  scalable assignment, or non-bottleneck discovery without frozen transfer.
+- Do not continue same-setup forced-margin knob tuning. Future work should
+  either stress stability/scale or remove hard assignment / true-result
+  forcing with a new target construction or estimator.

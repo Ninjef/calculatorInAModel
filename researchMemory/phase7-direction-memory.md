@@ -288,6 +288,11 @@ Memory:
   reached `0.9875` final / `0.9800` step-600 normal with injection-zero
   `0.0156-0.0250`, forced-random `0.0938`, and learned calc `0.8906`. This is
   strong staged-transfer evidence, but still prescriptive.
+- Follow-up review decision: automated one-negative forced-margin recovery is
+  now a staged-transfer benchmark, not a local knob branch. Do not tune
+  start-step, margin, negative count, or recovery length on the same setup as
+  novelty. Future forced-margin compute should stress stability/scale or
+  remove prescriptiveness by replacing hard assignment or true-result forcing.
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -318,6 +323,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-automated-forced-margin-source-recovery.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 - `researchReviews/2026-05-29-forced-margin-branch-review.md`
+- `researchReviews/2026-05-30-forced-margin-recovery-review.md`
 
 ## Direction: Target Propagation / Local Targets
 

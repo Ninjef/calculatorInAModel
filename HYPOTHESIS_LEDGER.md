@@ -709,3 +709,9 @@ Conclusion: Adding `--late-source-recovery-additive-forced-margin-loss-weight` f
 Do not repeat: Do not rerun the same seed-16 630-step automated forced-margin recovery with late step `600`, LR multiplier `0.1`, margin weight override `0.1`, and the same 600-step frozen-policy handoff as novelty.
 Next allowed test: If staying in forced-margin, test broader stability/scale or use it as a stepping stone toward less-prescriptive target construction; otherwise pivot back to scalable credit assignment, because this does not solve answer-loss-only discovery.
 Source: `aiAgentWorkHistory/phase7/2026-05-30-automated-forced-margin-source-recovery.md`
+
+REVIEW: Forced-margin recovery is now a staged-transfer benchmark, not a local knob branch.
+Conclusion: The forced-margin branch answered its post-review questions. Manual low-LR recovery raised one-negative forced-margin handoff to `0.8700` final / `0.9050` step-600 normal, and automated fresh-seed recovery raised source calc `0.5825 -> 0.8825` during the late window and reached `0.9875` trusted frozen-policy handoff final eval / `0.9800` step-600 normal. This makes automated one-negative forced-margin recovery the current best staged-transfer source recipe and a benchmark for future objectives, but not the final solution because it still depends on hard improvement assignment, true-result forced-margin pressure, and frozen-policy staged transfer.
+Do not repeat: Do not rerun seed-15 manual recovery, seed-16 automated recovery plus handoff, or same-setup forced-margin start-step/margin/negative-count/late recovery length tweaks as novelty.
+Next allowed test: Use the recipe as a benchmark; future compute should either stress scale/stability or remove prescriptiveness by replacing hard assignment or true-result forcing with a new target construction or estimator.
+Source: `researchReviews/2026-05-30-forced-margin-recovery-review.md`

@@ -566,6 +566,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/114-forced-margin-recovery-is-now-a-staged-transfer-benchmark-not-a-local-knob-branch",
+      "target": "researchMemory/hypotheses/phase7/114-forced-margin-recovery-is-now-a-staged-transfer-benchmark-not-a-local-knob-branch.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -853,6 +858,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "researchReviews/2026-05-29-forced-margin-branch-review.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "researchReviews/2026-05-30-forced-margin-recovery-review.md",
       "type": "supported_by"
     },
     {
@@ -1747,6 +1757,13 @@
       "source_path": "researchMemory/hypotheses/phase7/113-automated-forced-margin-recovery-replicates-strongly-on-a-fresh-seed.md",
       "status": "POSITIVE, constrained.",
       "title": "Automated forced-margin recovery replicates strongly on a fresh seed."
+    },
+    {
+      "id": "doc/114-forced-margin-recovery-is-now-a-staged-transfer-benchmark-not-a-local-knob-branch",
+      "kind": "memory_document",
+      "source_path": "researchMemory/hypotheses/phase7/114-forced-margin-recovery-is-now-a-staged-transfer-benchmark-not-a-local-knob-branch.md",
+      "status": "REVIEW / STEERING.",
+      "title": "Forced-margin recovery is now a staged-transfer benchmark, not a local knob branch."
     },
     {
       "id": "doc/phase7-direction-memory",
