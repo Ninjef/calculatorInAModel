@@ -538,6 +538,13 @@ Memory:
   with evolving-checkpoint validation, calibrated proposal learning, adaptive
   uncertainty/regret selection, or a genuinely different less-prescriptive
   credit-assignment mechanism.
+- Cross-checkpoint validation shows frozen sparse proposal critics are
+  state-local. Same-state top-8 proposal recovery improved with source
+  maturity (`0.48` step100, `0.74` step400, `0.79` step800), but forward
+  transfer collapsed: train step100 to eval step400/800 gave only
+  `0.11`/`0.12`, and train step400 to eval step800 gave `0.23`. Do not wire a
+  frozen critic into source training; result-boundary proposals need online
+  refresh, state calibration, or a different mechanism.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -596,6 +603,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-adaptive-proposal-diagnostic.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-soft-target-training-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-regret-set-training-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-cross-checkpoint-critic-gate.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-set-target-steering-review.md`

@@ -3,6 +3,6 @@
   "dim": 384,
   "model": "BAAI/bge-small-en-v1.5",
   "openai_dimensions": null,
-  "record_count": 168,
-  "view_count": 1323
+  "record_count": 169,
+  "view_count": 1331
 }

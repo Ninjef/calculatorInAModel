@@ -786,6 +786,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/158-frozen-result-boundary-proposal-critics-generalize-across-evolving-checkpoints",
+      "target": "researchMemory/hypotheses/phase7/158-frozen-result-boundary-proposal-critics-generalize-across-evolving-checkpoints.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1223,6 +1228,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-result-boundary-regret-set-training-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-result-boundary-cross-checkpoint-critic-gate.md",
       "type": "supported_by"
     },
     {
@@ -2495,6 +2505,13 @@
       "source_path": "researchMemory/hypotheses/phase7/157-static-result-boundary-set-targets-are-paused-after-soft-and-regret-set-negatives.md",
       "status": "REVIEW",
       "title": "Static result-boundary set targets are paused after soft and regret-set negatives."
+    },
+    {
+      "id": "doc/158-frozen-result-boundary-proposal-critics-generalize-across-evolving-checkpoints",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/158-frozen-result-boundary-proposal-critics-generalize-across-evolving-checkpoints.md",
+      "status": "DISPROVEN",
+      "title": "Frozen result-boundary proposal critics generalize across evolving checkpoints."
     },
     {
       "id": "doc/phase7-direction-memory",

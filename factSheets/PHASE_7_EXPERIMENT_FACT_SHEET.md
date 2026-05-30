@@ -8440,6 +8440,41 @@ researchReviews/2026-05-30-result-boundary-set-target-steering-review.md
   calibrated proposal learning, adaptive uncertainty/regret selection, or a
   different less-prescriptive credit-assignment family.
 
+Cross-checkpoint proposal critic follow-up:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-result-boundary-cross-checkpoint-critic-gate.md
+scripts/diagnose_result_boundary_cross_checkpoint_critic.py
+runs/2026-05-30_phase7_result_boundary_cross_checkpoint_critic/train100_eval400_800_single_pairwise_k8.json
+runs/2026-05-30_phase7_result_boundary_cross_checkpoint_critic/train400_eval800_single_pairwise_k8.json
+runs/2026-05-30_phase7_result_boundary_cross_checkpoint_critic/train800_eval100_400_single_pairwise_k8.json
+```
+
+- Added a diagnostic that trains a sparse result-boundary critic on one source
+  checkpoint and evaluates proposal-plus-rescoring on other checkpoints from
+  the same lineage.
+- Settings: `300` train prompts, `100` heldout prompts, `8` sparse forced
+  scores per train prompt, single pairwise critic, top-8 proposal.
+
+| Train checkpoint | Eval checkpoint | Top-8 recovery | Mean regret | Direct argmin recovery |
+| --- | --- | ---: | ---: | ---: |
+| step `100` | step `100` | `0.48` | `1.70` | `0.06` |
+| step `100` | step `400` | `0.11` | `5.59` | `0.00` |
+| step `100` | step `800` | `0.12` | `5.29` | `0.00` |
+| step `400` | step `400` | `0.74` | `0.82` | `0.22` |
+| step `400` | step `800` | `0.23` | `3.70` | `0.03` |
+| step `800` | step `800` | `0.79` | `0.67` | `0.20` |
+| step `800` | step `100` | `0.42` | `2.15` | `0.02` |
+| step `800` | step `400` | `0.58` | `1.45` | `0.13` |
+
+Interpretation:
+
+- Static sparse critics are state-local. Same-state proposal rescoring improves
+  as the source matures, but forward transfer through training collapses.
+- Do not treat a frozen result-boundary critic as a scalable bridge into
+  source training; proposal methods need online refresh, state calibration, or
+  a different evolving objective.
+
 Static approximation steering review:
 
 ```text

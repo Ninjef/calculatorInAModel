@@ -5535,6 +5535,96 @@ def test_result_boundary_adaptive_candidate_expansion() -> None:
     assert metrics["heldout_adaptive_margin_mean_regret"] == 0.0
 
 
+def test_result_boundary_cross_checkpoint_diagnostic_main(monkeypatch, tmp_path) -> None:
+    scripts_dir = str(Path("scripts").resolve())
+    if scripts_dir not in sys.path:
+        sys.path.insert(0, scripts_dir)
+    script_path = Path("scripts/diagnose_result_boundary_cross_checkpoint_critic.py")
+    spec = importlib.util.spec_from_file_location(
+        "result_boundary_cross_checkpoint_diagnostic",
+        script_path,
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    diagnostic = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(diagnostic)
+
+    class ToyCritic(torch.nn.Module):
+        def __init__(self) -> None:
+            super().__init__()
+            self.feature_mean = torch.zeros((1, 2))
+            self.feature_std = torch.ones((1, 2))
+            self.target_mean = torch.tensor(0.0)
+            self.target_std = torch.tensor(1.0)
+
+        def forward(self, x: torch.Tensor) -> torch.Tensor:
+            return x[:, :1]
+
+    def fake_checkpoint_tensors(checkpoint, *, config, device, chunk_size):
+        offset = 0.0 if str(checkpoint) == "train.pt" else 0.25
+        features = torch.tensor(
+            [
+                [[0.0, 0.0], [1.0, 0.0], [2.0, 0.0]],
+                [[2.0, 0.0], [0.0, 0.0], [1.0, 0.0]],
+                [[1.0, 0.0], [2.0, 0.0], [0.0, 0.0]],
+                [[0.0, 0.0], [2.0, 0.0], [1.0, 0.0]],
+            ]
+        ) + offset
+        full_losses = features[..., 0]
+        true_sum = full_losses.argmin(dim=-1)
+        return {
+            "features": features,
+            "full_losses": full_losses,
+            "true_sum": true_sum,
+        }
+
+    monkeypatch.setattr(diagnostic, "load_config", lambda path: {})
+    monkeypatch.setattr(diagnostic, "checkpoint_tensors", fake_checkpoint_tensors)
+    monkeypatch.setattr(
+        diagnostic,
+        "train_critic",
+        lambda *args, **kwargs: (ToyCritic(), {"critic_train_loss": 0.0}),
+    )
+    output_json = tmp_path / "cross.json"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "diagnose_result_boundary_cross_checkpoint_critic.py",
+            "--config",
+            "config.json",
+            "--train-checkpoint",
+            "train.pt",
+            "--train-label",
+            "step0",
+            "--eval-checkpoint",
+            "eval.pt",
+            "--eval-label",
+            "step100",
+            "--samples-per-prompt",
+            "1",
+            "--heldout-prompts",
+            "2",
+            "--epochs",
+            "1",
+            "--proposal-candidates",
+            "1",
+            "--output-json",
+            str(output_json),
+        ],
+    )
+
+    diagnostic.main()
+
+    rows = json.loads(output_json.read_text())["rows"]
+    assert [row["eval_label"] for row in rows] == ["step0", "step100"]
+    assert all(row["train_label"] == "step0" for row in rows)
+    assert rows[0]["heldout_mean_proposal_scored_best_equals_full_best"] == 1.0
+    assert rows[1]["feature_standardized_abs_mean"] > rows[0][
+        "feature_standardized_abs_mean"
+    ]
+
+
 def test_phase7_streaming_batch_and_prompt_memory_tables() -> None:
     script_path = Path("scripts/run_phase7_local_target_stage1_lift_gate.py")
     spec = importlib.util.spec_from_file_location("phase7_local_target_runner", script_path)
