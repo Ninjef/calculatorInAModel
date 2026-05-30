@@ -8496,3 +8496,44 @@ Interpretation:
   seed.
 - This remains prescriptive and full-grid. It improves the staged benchmark's
   range story, but not the final scalable/non-prescriptive training method.
+
+Larger-range op39 `rhead64` stress:
+
+```text
+runs/2026-05-30_phase7_forced_margin_range_stress/op39_product_oracle_decoder_steps1000_cpu
+runs/2026-05-30_phase7_forced_margin_range_stress/op39_rhead64_source630_cpu
+runs/2026-05-30_phase7_forced_margin_range_stress/op39_rhead64_step540_eval_cpu
+runs/2026-05-30_phase7_forced_margin_range_stress/op39_rhead64_recovery_from_step540_cpu
+runs/2026-05-30_phase7_forced_margin_range_stress/op39_rhead64_handoff600_from_recovery_step90_cpu
+```
+
+CLI seed was `37`; run directories record effective model seed `39`.
+
+| Run | Key result |
+| --- | --- |
+| Product op39 oracle decoder | `1600/1600 = 1.0000`; oracle snapshots `1.0000` by step `300` |
+| Interrupted `rhead64` source step `540` eval | `869/1600 = 0.543` final eval; snapshot normal/calc `0.5469`, `0.0181` injection-zero, `0.0075` forced-random |
+| Step-540 continuation step `90` | `0.9431` normal/source calc, `0.0213` injection-zero, `1.0000` oracle, `0.0113` forced-random |
+| Step-540 continuation final eval | `1504/1600 = 0.9400` |
+| Handoff step `600` | `0.9419` normal, `0.0000` injection-zero, `0.9725` oracle, `0.9375` learned calc, `0.0138` forced-random |
+| Handoff final eval | `1516/1600 = 0.9475` |
+
+Decision:
+
+```text
+op39_rhead64_range_stress_causal_but_costly_mixed_positive
+```
+
+Interpretation:
+
+- The hidden-head staged recipe can produce causal larger-range transfer at
+  op39: normal handoff accuracy is far above zero-injection and forced-random
+  controls.
+- It no longer looks like the op29 perfect gate. The source was only `0.543`
+  at saved step `540`, needed a continuation to reach `0.940`, and the trusted
+  handoff plateaued around `0.94-0.95`.
+- The cost/scalability warning sharpened. The exact full-grid op39 source run
+  was interrupted after about `33` minutes of local CPU time with checkpoints
+  only through step `540`, so future range work should not simply run op49
+  full-grid. It needs cheaper assignment, many-calculator cost accounting, or a
+  materially different source-capacity/credit-assignment mechanism.

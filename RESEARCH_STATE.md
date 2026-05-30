@@ -99,11 +99,12 @@ Active directions:
   `0.9800` step-600 normal on one fresh seed; a second fresh seed cleared at
   `0.8975` / `0.9050`; and wider `n_embd=32`, `n_head=2` non-product and
   product-decoder op19 stresses both reached `1.0000` final / step-600 normal.
-  A shallow-head op29 range stress missed (`0.8533` final handoff), low-LR
-  recovery only partly rescued it (`0.9067`), but a hidden result head
-  (`rhead64`) cleared op29 on two seeds (`1.0000` handoff, low controls).
-  Treat forced-margin as a strong staged benchmark whose range scaling depends
-  on source-head capacity, but still not a scalable/non-prescriptive recipe.
+  A shallow-head op29 range stress missed (`0.8533`), low-LR recovery partly
+  rescued it (`0.9067`), and `rhead64` cleared op29 on two seeds (`1.0000`).
+  The first op39 `rhead64` stress was causal but costly and sub-perfect
+  (`0.9475` handoff after checkpoint continuation). Treat forced-margin as a
+  strong staged benchmark whose range scaling depends on source-head capacity,
+  but still not a scalable/non-prescriptive recipe.
 - Target propagation/local targets are now a ceiling and diagnostic, not the
   current scalable mainline. Exact `policy_reweighted_t1` is positive and
   survives retention, but full enumeration is not scalable. Simple
@@ -158,10 +159,10 @@ These branches should not continue without a new mechanism:
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark
    to beat; further forced-margin work must stress a new thesis-relevant axis
-   such as many-calculator cost, larger-range validation of the op29 `rhead64`
-   capacity fix, cheaper assignment, or removal of hard assignment /
-   true-result forcing. Do not rerun op19, shallow op29, op29 low-LR recovery,
-   or either completed op29 `rhead64` seed as novelty.
+   such as many-calculator cost, cheaper assignment, or removal of hard
+   assignment / true-result forcing. Do not rerun op19, shallow op29, op29
+   low-LR recovery, either completed op29 `rhead64` seed, or the same op39
+   full-grid checkpoint-continuation path as novelty.
 4. If reducing hard-assignment cost, state the scalability hypothesis
    up front and compare against the exact-grid assignment ceiling rather than
    only against prior cheap selectors.

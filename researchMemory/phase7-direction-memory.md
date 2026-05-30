@@ -334,6 +334,13 @@ Memory:
   with low controls. The op29 range miss was strongly source-capacity
   sensitive, but the fix adds per-calculator result-head parameters and keeps
   full-grid hard assignment plus true-result forcing.
+- The first op39 `rhead64` stress is mixed-positive and costly. The op39
+  product oracle decoder reached `1.0000`, but the exact full-grid source run
+  was interrupted after about `33` local CPU minutes with checkpoints through
+  step `540`; step `540` eval was only `0.543`. A 90-step continuation rescued
+  source eval to `0.940`, and trusted handoff reached `0.9475` final /
+  `0.9419` step-600 normal with low controls. This is causal larger-range
+  transfer, but not op29-style perfect scaling and not a scalable recipe.
 - Forced-margin benchmark review: automated recovery is now the staged-transfer
   benchmark to beat, not the next knob branch. Future forced-margin compute
   must stress a new thesis-relevant axis such as product-decoder parity, larger
@@ -388,6 +395,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-op29-low-lr-source-recovery-diagnostic.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-op29-hidden-result-head-capacity-diagnostic.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-op29-rhead64-fresh-seed-replication.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-op39-rhead64-range-stress.md`
 - `researchReviews/2026-05-30-forced-margin-range-stress-review.md`
 - `researchReviews/2026-05-30-forced-margin-benchmark-direction-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-answer-derived-boundary-handoff.md`

@@ -30,13 +30,23 @@ seed repeated the result: source step `630` reached `0.9967`, and the trusted
 handoff again reached `1.0000` final / step-600 normal with low controls
 (`0.0344` injection-zero, `0.0111` forced-random at step `600`).
 
+The next larger-range check is more sobering. At `operand_max=39`, the product
+oracle decoder again cleared (`1600/1600 = 1.0000`), but the exact full-grid
+`rhead64` source run was interrupted after about `33` local CPU minutes with
+checkpoints only through step `540`; step `540` eval was `0.543`. A bounded
+90-step continuation recovered source eval to `0.940`, and the trusted handoff
+reached `0.9475` final / `0.9419` step-600 normal with low controls
+(`0.0000` injection-zero, `0.0138` forced-random). This is causal transfer, but
+not the perfect op29 gate and not a scalable training story.
+
 ## What Should Stop
 
 Do not treat the op19 forced-margin recipe as range-scalable merely because it
 cleared product parity. Do not rerun op29 with the same source/handoff seed,
-repeat the same low-LR continuation ladder, or jump to op49 with the same
-full-grid hard-assignment recipe as novelty. Also do not rerun either completed
-op29 `rhead64` seed as novelty.
+repeat the same low-LR continuation ladder, jump to op49 with the same
+full-grid hard-assignment recipe as novelty, or rerun either completed op29
+`rhead64` seed. Also do not rerun the same op39 full-grid step-540 continuation
+and handoff path as novelty.
 
 Also do not respond by tuning local forced-margin knobs. The failure is aligned
 with the strategic bottleneck: source acquisition under larger candidate/result
@@ -50,15 +60,16 @@ Useful next work should make range scaling more true:
   true-result forced-margin pressure.
 - Reduce assignment cost with a declared scalability hypothesis and compare to
   the exact-grid ceiling.
-- If staying staged, validate whether the hidden result-head capacity fix
-  survives larger ranges, many-calculator cost, or lower-cost assignment.
+- If staying staged, validate many-calculator cost or lower-cost assignment
+  before more larger-range full-grid runs.
 
 ## Are We Closer?
 
-Yes. The staged benchmark is now strong for op19 and wider product decoders,
-and op29 can clear with a larger result policy head across two seeds. The
-remaining gap is scalability/prescriptiveness: the successful op29 recipe still
-uses full-grid hard assignment, true-result forced-margin pressure, and extra
-per-calculator source-head capacity. Future agents should validate larger
-generality or reduce the assignment/capacity cost rather than repeating op19 or
-the same op29 runs.
+Yes, but the warning is sharper. The staged benchmark is strong for op19 and
+wider product decoders, op29 clears with a larger result policy head across two
+seeds, and op39 can transfer causally after source continuation. The remaining
+gap is scalability/prescriptiveness: op39 already shows high local CPU cost and
+sub-perfect handoff while still using full-grid hard assignment, true-result
+forced-margin pressure, and extra per-calculator source-head capacity. Future
+agents should reduce assignment/capacity cost rather than repeating op19/op29
+or pushing full-grid range alone.

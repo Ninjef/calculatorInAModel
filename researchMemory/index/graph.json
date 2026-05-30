@@ -641,6 +641,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/129-op39-rhead64-larger-range-stress-is-causal-but-costly-and-below-the-perfect-gate",
+      "target": "researchMemory/hypotheses/phase7/129-op39-rhead64-larger-range-stress-is-causal-but-costly-and-below-the-perfect-gate.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -953,6 +958,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-op29-rhead64-fresh-seed-replication.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-op39-rhead64-range-stress.md",
       "type": "supported_by"
     },
     {
@@ -2002,6 +2012,13 @@
       "source_path": "researchMemory/hypotheses/phase7/128-op29-hidden-result-head-capacity-fix-survives-a-fresh-seed.md",
       "status": "POSITIVE",
       "title": "op29 hidden result-head capacity fix survives a fresh seed."
+    },
+    {
+      "id": "doc/129-op39-rhead64-larger-range-stress-is-causal-but-costly-and-below-the-perfect-gate",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/129-op39-rhead64-larger-range-stress-is-causal-but-costly-and-below-the-perfect-gate.md",
+      "status": "MIXED-POSITIVE",
+      "title": "op39 rhead64 larger-range stress is causal but costly and below the perfect gate."
     },
     {
       "id": "doc/phase7-direction-memory",
