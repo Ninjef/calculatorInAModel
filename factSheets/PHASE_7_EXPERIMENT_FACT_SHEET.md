@@ -8537,3 +8537,49 @@ Interpretation:
   only through step `540`, so future range work should not simply run op49
   full-grid. It needs cheaper assignment, many-calculator cost accounting, or a
   materially different source-capacity/credit-assignment mechanism.
+
+## Sampled Hard-Assignment Cost Gate
+
+Question:
+
+Can exact hard improvement assignment be replaced with learned-result plus
+uniform sampled result candidates while preserving the op19 `rhead64` source
+signal?
+
+Runs:
+
+```text
+runs/2026-05-30_phase7_assignment_cost_reduction/op19_rhead64_exact_source200_cpu
+runs/2026-05-30_phase7_assignment_cost_reduction/op19_rhead64_sample16_source200_cpu
+runs/2026-05-30_phase7_assignment_cost_reduction/op19_rhead64_sample32_source200_cpu
+```
+
+All runs used the same wider product semantic decoder and CLI seed `41`
+(effective model seed `43`).
+
+| Assignment | Scored results | Step-200 true coverage | Step-200 target acc | Best snapshot normal | Final eval |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Exact | `39/39` | `1.0000` | `0.9900` | `0.8625` at step `150` | `294/400 = 0.7350` |
+| Sample16 | `16/39` | `0.6125` | `0.4581` | `0.3650` at step `200` | `141/400 = 0.3525` |
+| Sample32 | `32/39` | `0.7400` | `0.6773` | `0.4050` at step `150` | `152/400 = 0.3800` |
+
+Approximate local wall time was only modestly better for sampling:
+`115s` exact, `88s` sample16, and `106s` sample32.
+
+Decision:
+
+```text
+uniform_sampled_hard_assignment_disproven_for_op19_rhead64_cost_gate
+```
+
+Interpretation:
+
+- Uniform sampled hard assignment does not preserve the exact source signal.
+  Even sample32 scored most of the 39-class result vocabulary but reached only
+  `0.7400` true-result coverage and `0.6773` assignment target accuracy at
+  step `200`.
+- The loss is a coverage/target-quality failure, not a causal-wiring failure;
+  ablation controls stayed low.
+- Do not run more uniform count ladders as novelty. Assignment-cost reduction
+  needs coverage-aware/active/structured proposals or a different
+  non-enumerative credit signal, compared against an exact-grid ceiling.

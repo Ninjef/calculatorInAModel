@@ -646,6 +646,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/130-uniform-sampled-hard-assignment-does-not-preserve-the-op19-exact-assignment-ceiling",
+      "target": "researchMemory/hypotheses/phase7/130-uniform-sampled-hard-assignment-does-not-preserve-the-op19-exact-assignment-ceiling.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -733,6 +738,16 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-convergence-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-sampled-hard-assignment-cost-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "researchReviews/2026-05-30-assignment-cost-reduction-review.md",
       "type": "supported_by"
     },
     {
@@ -988,6 +1003,16 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "researchReviews/2026-05-30-result-boundary-approximation-review.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-sampled-hard-assignment-cost-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "researchReviews/2026-05-30-assignment-cost-reduction-review.md",
       "type": "supported_by"
     },
     {
@@ -2019,6 +2044,13 @@
       "source_path": "researchMemory/hypotheses/phase7/129-op39-rhead64-larger-range-stress-is-causal-but-costly-and-below-the-perfect-gate.md",
       "status": "MIXED-POSITIVE",
       "title": "op39 rhead64 larger-range stress is causal but costly and below the perfect gate."
+    },
+    {
+      "id": "doc/130-uniform-sampled-hard-assignment-does-not-preserve-the-op19-exact-assignment-ceiling",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/130-uniform-sampled-hard-assignment-does-not-preserve-the-op19-exact-assignment-ceiling.md",
+      "status": "DISPROVEN",
+      "title": "Uniform sampled hard-assignment does not preserve the op19 exact assignment ceiling."
     },
     {
       "id": "doc/phase7-direction-memory",

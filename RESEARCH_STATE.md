@@ -121,8 +121,11 @@ Active directions:
   Hidden-state/candidate-output critics do not look like the scalable bridge:
   pointwise recovery stayed at `0.08-0.26`, and the best pairwise result was
   only `0.40` heldout argmin recovery while using `24/39` result scores.
-- Lower-cost assignment is useful only when it changes scalability, not merely
-  proxy selection.
+- Lower-cost assignment is useful only when it changes scalability. Uniform
+  sampled hard assignment is negative: sample16/sample32 on op19 `rhead64`
+  failed to preserve exact source signal (`0.3650`/`0.4050` best snapshots vs
+  `0.8625` exact) while saving only modest wall time. Next attempts need
+  coverage-aware/active/structured proposals or a non-enumerative credit signal.
 
 ## Paused Or Deprioritized Branches
 
@@ -152,8 +155,7 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Do not run more simple local-target proposal or pairwise-preference variants;
-   continue local targets only via materially different target construction,
+1. Continue local targets only via materially different target construction,
    estimator changes, or explicit streaming/generalization validation.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
@@ -161,20 +163,16 @@ These branches should not continue without a new mechanism:
    to beat; further forced-margin work must stress a new thesis-relevant axis
    such as many-calculator cost, cheaper assignment, or removal of hard
    assignment / true-result forcing. Do not rerun op19, shallow op29, op29
-   low-LR recovery, either completed op29 `rhead64` seed, or the same op39
-   full-grid checkpoint-continuation path as novelty.
-4. If reducing hard-assignment cost, state the scalability hypothesis
-   up front and compare against the exact-grid assignment ceiling rather than
-   only against prior cheap selectors.
+   low-LR recovery, completed op29 `rhead64` seeds, or the same op39 path.
+4. If reducing hard-assignment cost, state the scalability hypothesis up front
+   and compare against the exact-grid ceiling. Do not run more uniform sampled
+   count ladders on op19 `rhead64`; improve coverage/target quality or change
+   the estimator.
 5. Use answer-derived result-boundary transfer as a bridge, not a recipe:
    next work should approximate or replace the full forced-result enumeration
    that selected the best-result target. Do not continue pointwise/rank
    hidden-output critic variants; use different target construction,
    uncertainty-aware compute, or validation across evolving model states.
-
-Do not run another local selector/proxy experiment unless it is explicitly
-designed to replace a named compute bottleneck and has a predeclared validation
-against fresh-family 600-step handoff outcomes.
 
 ## What Would Change Our Mind
 

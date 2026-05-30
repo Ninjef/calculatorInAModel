@@ -119,6 +119,7 @@ class TrainConfig:
     result_policy_improvement_assignment_weight: float
     result_policy_improvement_assignment_min_improvement: float
     result_policy_improvement_assignment_quota_multiplier: float
+    result_policy_improvement_assignment_sample_count: int
     result_policy_stabilization_temperature: float
     result_policy_stabilization_decay_steps: int
     result_policy_anchor_weight: float
@@ -764,6 +765,10 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_policy_improvement_assignment_objective",
         "result_policy_improvement_assignment_min_improvement",
         "result_policy_improvement_assignment_quota_multiplier",
+        "result_policy_improvement_assignment_sample_count",
+        "result_policy_improvement_assignment_scored_count",
+        "result_policy_improvement_assignment_true_coverage",
+        "result_policy_improvement_assignment_unique_candidate_fraction",
         "result_policy_improvement_assignment_quota",
         "result_policy_improvement_assignment_fraction",
         "result_policy_improvement_assignment_mean_improvement",
@@ -1514,6 +1519,145 @@ def hard_improvement_assignment_targets(
     return targets, metrics
 
 
+@torch.no_grad()
+def sample_improvement_assignment_candidates(
+    learned_result: torch.Tensor,
+    *,
+    result_count: int,
+    sample_count: int,
+) -> torch.Tensor:
+    if sample_count < 1:
+        raise ValueError("assignment sample count must be positive")
+    if result_count < 1:
+        raise ValueError("assignment result count must be positive")
+    candidates = [learned_result.unsqueeze(-1)]
+    random_count = sample_count - 1
+    if random_count > 0:
+        random_candidates = torch.randint(
+            low=0,
+            high=result_count,
+            size=(learned_result.shape[0], random_count),
+            device=learned_result.device,
+        )
+        candidates.append(random_candidates)
+    return torch.cat(candidates, dim=-1)
+
+
+@torch.no_grad()
+def score_forced_result_candidate_classes(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    candidate_classes: torch.Tensor,
+    *,
+    chunk_size: int,
+) -> torch.Tensor:
+    if chunk_size < 1:
+        raise ValueError("result candidate score chunk size must be positive")
+    if candidate_classes.ndim != 2:
+        raise ValueError("candidate result classes must have shape [batch, candidates]")
+    if candidate_classes.shape[0] != batch.x.shape[0]:
+        raise ValueError("candidate result classes batch dimension mismatch")
+    if model.calculator_hook is None:
+        raise ValueError("candidate result scoring requires a calculator hook")
+    batch_size, candidate_count = candidate_classes.shape
+    was_training = model.training
+    model.eval()
+    losses: list[torch.Tensor] = []
+    try:
+        for start in range(0, candidate_count, chunk_size):
+            candidate_chunk = candidate_classes[:, start : start + chunk_size]
+            chunk_count = candidate_chunk.shape[1]
+            expanded_x = batch.x.repeat_interleave(chunk_count, dim=0)
+            expanded_y = batch.y.repeat_interleave(chunk_count, dim=0)
+            expanded_mask = batch.loss_mask.repeat_interleave(chunk_count, dim=0)
+            forced = candidate_chunk.reshape(-1)
+            logits = model(expanded_x, forced_calculator_result_class=forced)
+            losses.append(
+                masked_cross_entropy_per_example(
+                    logits, expanded_y, expanded_mask
+                ).reshape(batch_size, chunk_count)
+            )
+    finally:
+        if was_training:
+            model.train()
+    return torch.cat(losses, dim=-1)
+
+
+def hard_improvement_assignment_targets_from_candidates(
+    candidate_losses: torch.Tensor,
+    candidate_results: torch.Tensor,
+    learned_result: torch.Tensor,
+    *,
+    result_count: int,
+    min_improvement: float,
+    quota_multiplier: float,
+) -> tuple[torch.Tensor, dict[str, float | int]]:
+    if min_improvement < 0:
+        raise ValueError("assignment min improvement must be non-negative")
+    if quota_multiplier <= 0:
+        raise ValueError("assignment quota multiplier must be positive")
+    if candidate_losses.shape != candidate_results.shape:
+        raise ValueError("candidate losses/results shape mismatch")
+    batch_size, candidate_count = candidate_losses.shape
+    quota = max(1, math.ceil((batch_size / result_count) * quota_multiplier))
+    learned_matches = candidate_results == learned_result.unsqueeze(-1)
+    learned_losses = candidate_losses.masked_fill(~learned_matches, float("inf")).min(
+        dim=-1
+    ).values
+    improvements = learned_losses.unsqueeze(-1) - candidate_losses
+    flat_order = torch.argsort(improvements.reshape(-1), descending=True)
+    targets = learned_result.new_full((batch_size,), -1)
+    result_counts = learned_result.new_zeros((result_count,))
+    assigned_improvements: list[float] = []
+    with torch.no_grad():
+        for flat_index_tensor in flat_order:
+            flat_index = int(flat_index_tensor.item())
+            example_index = flat_index // candidate_count
+            candidate_index = flat_index % candidate_count
+            result_index = int(candidate_results[example_index, candidate_index].item())
+            improvement = float(improvements[example_index, candidate_index].item())
+            if improvement <= min_improvement:
+                break
+            if int(targets[example_index].item()) >= 0:
+                continue
+            if int(result_counts[result_index].item()) >= quota:
+                continue
+            targets[example_index] = result_index
+            result_counts[result_index] += 1
+            assigned_improvements.append(improvement)
+            if len(assigned_improvements) == batch_size:
+                break
+    assigned_mask = targets >= 0
+    assigned_count = int(assigned_mask.sum().item())
+    unique_per_example = torch.tensor(
+        [
+            candidate_results[row].unique().numel()
+            for row in range(candidate_results.shape[0])
+        ],
+        device=candidate_losses.device,
+        dtype=candidate_losses.dtype,
+    )
+    metrics: dict[str, float | int] = {
+        "result_policy_improvement_assignment_quota": int(quota),
+        "result_policy_improvement_assignment_fraction": (
+            assigned_count / max(batch_size, 1)
+        ),
+        "result_policy_improvement_assignment_mean_improvement": (
+            float(sum(assigned_improvements) / assigned_count)
+            if assigned_count > 0
+            else 0.0
+        ),
+        "result_policy_improvement_assignment_unique_results": int(
+            result_counts.gt(0).sum().item()
+        ),
+        "result_policy_improvement_assignment_scored_count": int(candidate_count),
+        "result_policy_improvement_assignment_unique_candidate_fraction": float(
+            (unique_per_example / max(candidate_count, 1)).mean().detach().item()
+        ),
+    }
+    return targets, metrics
+
+
 def result_policy_stabilization_loss(
     model: TinyGPT,
     batch: ArithmeticBatch,
@@ -1525,6 +1669,7 @@ def result_policy_stabilization_loss(
     improvement_assignment_weight: float,
     improvement_assignment_min_improvement: float,
     improvement_assignment_quota_multiplier: float,
+    improvement_assignment_sample_count: int,
     chunk_size: int,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     if temperature <= 0:
@@ -1563,15 +1708,57 @@ def result_policy_stabilization_loss(
     assignment_metrics: dict[str, float | int] = {}
     assignment_objective = result_logits.new_zeros(())
     if improvement_assignment_weight > 0:
-        full_losses = score_forced_result_classes_chunked(
-            model, batch, chunk_size=chunk_size
-        ).detach()
-        assignment_targets, assignment_metrics = hard_improvement_assignment_targets(
-            full_losses,
-            result_pred.detach(),
-            min_improvement=improvement_assignment_min_improvement,
-            quota_multiplier=improvement_assignment_quota_multiplier,
-        )
+        if improvement_assignment_sample_count > 0:
+            candidate_results = sample_improvement_assignment_candidates(
+                result_pred.detach(),
+                result_count=result_logits.shape[-1],
+                sample_count=improvement_assignment_sample_count,
+            )
+            candidate_losses = score_forced_result_candidate_classes(
+                model,
+                batch,
+                candidate_results,
+                chunk_size=chunk_size,
+            ).detach()
+            assignment_targets, assignment_metrics = (
+                hard_improvement_assignment_targets_from_candidates(
+                    candidate_losses,
+                    candidate_results,
+                    result_pred.detach(),
+                    result_count=result_logits.shape[-1],
+                    min_improvement=improvement_assignment_min_improvement,
+                    quota_multiplier=improvement_assignment_quota_multiplier,
+                )
+            )
+            assignment_metrics[
+                "result_policy_improvement_assignment_true_coverage"
+            ] = float(
+                (candidate_results == true_sum.unsqueeze(-1))
+                .any(dim=-1)
+                .float()
+                .mean()
+                .detach()
+                .item()
+            )
+        else:
+            full_losses = score_forced_result_classes_chunked(
+                model, batch, chunk_size=chunk_size
+            ).detach()
+            assignment_targets, assignment_metrics = hard_improvement_assignment_targets(
+                full_losses,
+                result_pred.detach(),
+                min_improvement=improvement_assignment_min_improvement,
+                quota_multiplier=improvement_assignment_quota_multiplier,
+            )
+            assignment_metrics[
+                "result_policy_improvement_assignment_scored_count"
+            ] = int(result_logits.shape[-1])
+            assignment_metrics[
+                "result_policy_improvement_assignment_true_coverage"
+            ] = 1.0
+            assignment_metrics[
+                "result_policy_improvement_assignment_unique_candidate_fraction"
+            ] = 1.0
         assignment_mask = assignment_targets >= 0
         if bool(assignment_mask.any().item()):
             assignment_objective = torch.nn.functional.cross_entropy(
@@ -1621,6 +1808,9 @@ def result_policy_stabilization_loss(
         ),
         "result_policy_improvement_assignment_quota_multiplier": float(
             improvement_assignment_quota_multiplier
+        ),
+        "result_policy_improvement_assignment_sample_count": int(
+            improvement_assignment_sample_count
         ),
         "result_policy_stabilization_temperature": float(temperature),
         "result_policy_entropy": float(result_entropy.mean().detach().item()),
@@ -7050,6 +7240,9 @@ def run_variant(
         result_policy_improvement_assignment_quota_multiplier=(
             args.result_policy_improvement_assignment_quota_multiplier
         ),
+        result_policy_improvement_assignment_sample_count=(
+            args.result_policy_improvement_assignment_sample_count
+        ),
         result_policy_stabilization_temperature=(
             args.result_policy_stabilization_temperature
         ),
@@ -8139,6 +8332,9 @@ def run_variant(
                 ),
                 improvement_assignment_quota_multiplier=(
                     args.result_policy_improvement_assignment_quota_multiplier
+                ),
+                improvement_assignment_sample_count=(
+                    args.result_policy_improvement_assignment_sample_count
                 ),
                 chunk_size=args.result_boundary_target_chunk_size,
             )
@@ -9243,6 +9439,9 @@ def run_variant(
     metrics["result_policy_improvement_assignment_quota_multiplier"] = (
         args.result_policy_improvement_assignment_quota_multiplier
     )
+    metrics["result_policy_improvement_assignment_sample_count"] = (
+        args.result_policy_improvement_assignment_sample_count
+    )
     metrics["result_policy_stabilization_temperature"] = (
         args.result_policy_stabilization_temperature
     )
@@ -10190,6 +10389,16 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Per-result assignment quota multiplier relative to batch/result "
             "count for the hard improvement-assignment target."
+        ),
+    )
+    parser.add_argument(
+        "--result-policy-improvement-assignment-sample-count",
+        type=int,
+        default=0,
+        help=(
+            "If positive, approximate hard improvement assignment by scoring "
+            "only this many result classes per prompt: the learned result plus "
+            "uniform random candidates. 0 preserves exact full result-class scoring."
         ),
     )
     parser.add_argument(
@@ -11282,6 +11491,10 @@ def main() -> None:
             "--result-policy-improvement-assignment-quota-multiplier must be "
             "positive"
         )
+    if args.result_policy_improvement_assignment_sample_count < 0:
+        raise ValueError(
+            "--result-policy-improvement-assignment-sample-count must be non-negative"
+        )
     if args.result_policy_stabilization_temperature <= 0:
         raise ValueError(
             "--result-policy-stabilization-temperature must be positive"
@@ -11849,6 +12062,11 @@ def main() -> None:
                 "rpolassignq"
                 f"{args.result_policy_improvement_assignment_quota_multiplier:g}"
             )
+            if args.result_policy_improvement_assignment_sample_count > 0:
+                suffix_parts.append(
+                    "rpolassigns"
+                    f"{args.result_policy_improvement_assignment_sample_count}"
+                )
         if (
             args.result_policy_entropy_weight > 0
             or args.result_policy_batch_diversity_weight > 0
@@ -12124,6 +12342,8 @@ def main() -> None:
         f"{args.result_policy_improvement_assignment_min_improvement} "
         "improvement_assignment_quota_multiplier="
         f"{args.result_policy_improvement_assignment_quota_multiplier} "
+        "improvement_assignment_sample_count="
+        f"{args.result_policy_improvement_assignment_sample_count} "
         f"temperature={args.result_policy_stabilization_temperature} "
         f"decay_steps={args.result_policy_stabilization_decay_steps}"
     )

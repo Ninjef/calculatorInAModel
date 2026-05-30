@@ -100,13 +100,23 @@ Memory:
 - Always-on assignment can train natural result-level calculator policies.
 - Plain target-off decay failed, and the method is expensive/prescriptive
   because it scores candidate calculator results.
+- A direct uniform-sampling cost reduction is negative: on the op19 `rhead64`
+  200-step source gate, exact assignment scored `39/39` results and reached
+  best snapshot `0.8625`, while sample16 reached only `0.3650` and sample32
+  only `0.4050`. Step-200 true coverage and target accuracy were too low
+  (`0.6125`/`0.4581` for sample16, `0.7400`/`0.6773` for sample32), and wall
+  time savings were modest.
 - The open question is scalability: can this be approximated or replaced
-  without losing the source-policy result?
+  without losing the source-policy result? Uniform random result sampling is
+  now ruled out as the simple answer; next work needs coverage-aware, active,
+  structured, or non-enumerative credit assignment.
 
 Representative evidence:
 
 - `aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-28-hard-improvement-assignment-convergence-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-sampled-hard-assignment-cost-gate.md`
+- `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `HYPOTHESIS_LEDGER.md`
 
 ## Direction: Non-Bottleneck Direct Training
@@ -360,6 +370,10 @@ Memory:
   the trained checkpoint to `0.40` heldout argmin recovery at `k=24`, but that
   already scores most of the 39-class result vocabulary. Do not continue
   pointwise/pairwise/hybrid critic-loss variants as novelty.
+- Uniform sampled hard assignment does not fix the exact full-grid cost:
+  sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
+  exact assignment while saving only modest wall time. Future cost reduction
+  must improve candidate coverage/target quality or change the credit signal.
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -401,6 +415,8 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-answer-derived-boundary-handoff.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-result-boundary-amortized-critic-diagnostic.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-sampled-hard-assignment-cost-gate.md`
+- `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 - `researchReviews/2026-05-29-forced-margin-branch-review.md`
 - `researchReviews/2026-05-30-forced-margin-recovery-review.md`

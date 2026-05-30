@@ -3218,6 +3218,57 @@ def test_hard_improvement_assignment_targets_respect_quota() -> None:
     )
 
 
+def test_sampled_improvement_assignment_targets_use_scored_candidates_only() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_sampled_assignment", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    candidate_results = torch.tensor(
+        [
+            [0, 2, 4],
+            [0, 1, 3],
+            [0, 3, 4],
+        ]
+    )
+    candidate_losses = torch.tensor(
+        [
+            [5.0, 1.0, 4.0],
+            [4.0, 4.5, 0.5],
+            [3.0, 0.25, 2.0],
+        ]
+    )
+    learned_result = torch.zeros(3, dtype=torch.long)
+
+    targets, metrics = (
+        overfit_script.hard_improvement_assignment_targets_from_candidates(
+            candidate_losses,
+            candidate_results,
+            learned_result,
+            result_count=5,
+            min_improvement=0.5,
+            quota_multiplier=2.0,
+        )
+    )
+
+    assert targets.tolist() == [2, 3, 3]
+    assert metrics["result_policy_improvement_assignment_scored_count"] == 3
+    assert metrics["result_policy_improvement_assignment_fraction"] == pytest.approx(
+        1.0
+    )
+    assert metrics[
+        "result_policy_improvement_assignment_mean_improvement"
+    ] == pytest.approx((4.0 + 3.5 + 2.75) / 3)
+    assert metrics["result_policy_improvement_assignment_unique_results"] == 2
+    assert metrics[
+        "result_policy_improvement_assignment_unique_candidate_fraction"
+    ] == pytest.approx(1.0)
+
+
 def test_joint_pair_relaxed_metrics_report_soft_result_hardening(monkeypatch) -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_relaxed_metrics", script_path)
@@ -3383,6 +3434,8 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
             "0.25",
             "--result-policy-improvement-assignment-quota-multiplier",
             "1.5",
+            "--result-policy-improvement-assignment-sample-count",
+            "8",
             "--result-policy-stabilization-temperature",
             "1.5",
             "--result-policy-stabilization-decay-steps",
@@ -3409,6 +3462,7 @@ def test_result_space_relaxed_metrics_and_cli_validation(monkeypatch) -> None:
     assert parsed.result_policy_improvement_assignment_quota_multiplier == (
         pytest.approx(1.5)
     )
+    assert parsed.result_policy_improvement_assignment_sample_count == 8
     assert parsed.result_policy_stabilization_temperature == pytest.approx(1.5)
     assert parsed.result_policy_stabilization_decay_steps == 40
     assert parsed.optimizer_step_max_delta_norm == pytest.approx(0.125)
