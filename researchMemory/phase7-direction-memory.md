@@ -201,10 +201,21 @@ Memory:
   and config/metrics recording in a zero-step routed CLI smoke. This resolves
   the known cloned-output parameter-slope issue, but tied-output source/handoff
   training has not yet been validated.
+- The tied-output training gate is mixed. Replacing cloned output projections
+  with `--share-calculator-output-proj` in the known four-hook op19 `embd32`
+  topk8+unique24 recipe still trained the source perfectly: final eval
+  `1.0000`, step-630 normal/calc `1.0000`, injection-zero `0.0275`, and all
+  hooks at calculator-result accuracy `1.0000`. But the trusted 600-step
+  frozen-policy additive handoff reached only `0.7625` final / `0.7800`
+  step-600 normal, with calculator-result accuracy `0.9950`; a continuation
+  to another 600 steps reached only `0.7925` final / `0.8050` snapshot normal.
+  Shared output projections therefore remove parameter growth and preserve
+  source trainability, but they are not a drop-in replacement for cloned
+  output projections in the current non-bottleneck handoff geometry.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
-  next work should validate tied-output routed training, reduce
+  next work should change shared-output transfer geometry, reduce
   prescriptiveness, pursue non-enumerative credit assignment, or stress op39
   with an explicit compute hypothesis.
 

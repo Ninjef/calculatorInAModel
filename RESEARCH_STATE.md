@@ -1,8 +1,6 @@
-# Research State
+# Research State (Last updated: 2026-05-30)
 
-Last updated: 2026-05-30
-
-Maintenance rule: keep under about `200` lines; move stale context to reviews, memories, fact sheets, or work logs.
+Maintenance rule: keep near `200` lines; move stale context to reviews, memories, fact sheets, or work logs.
 
 ## Overarching Goal
 
@@ -126,8 +124,9 @@ Active directions:
   projection. Corrected all-hook injection-zero controls show routed source and
   trusted handoff are causal; four routed hooks also clear source/handoff
   (`1.000` handoff, `0.040` zero, `0.020` forced-random). Routed execution is now
-  active-only; shared output projections remove cloned-output parameter growth.
-  Next: tied-output routed training, then less-prescriptive credit.
+  active-only. Shared output projections remove cloned-output parameter growth
+  and train the 4-hook source, but miss trusted handoff (`0.78`).
+  Next: shared-output geometry or less-prescriptive credit.
 
 ## Paused Or Deprioritized Branches
 

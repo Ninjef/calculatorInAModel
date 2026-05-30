@@ -9148,3 +9148,82 @@ Interpretation:
   The next empirical gate should rerun a routed source/handoff check with
   `--share-calculator-output-proj` and compare against the known cloned-output
   positive.
+
+Shared-output routed source/handoff gate:
+
+Question:
+
+- Does the known four-hook routed recipe still train and transfer when cloned
+  output projections are replaced by one shared output projection?
+
+Matched source run:
+
+```text
+runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks4_shareout_embd32_source630_cpu/2026-05-30_152821_990258_model-c-op0-19-fullgrid-direct_feedback_alignment-hooks4-routeleft_operand_mod-answer_decoder-adec-product/model-c-2digit-seed43
+```
+
+Source settings:
+
+- Matched the cloned-output four-hook source recipe.
+- Replaced `--clone-primary-calculator-output-proj` with
+  `--share-calculator-output-proj`.
+- Kept `--calculator-hook-count 4`, `--calculator-hook-routing left_operand_mod`,
+  `--calculator-result-head-hidden-size 64`, `topk8+unique24`, product decoder
+  parity checkpoint, and late recovery at step `600`.
+
+Source results:
+
+- Final eval: `400/400 = 1.0000`.
+- Step-630 normal/source-calc: `1.0000`.
+- Step-630 injection-zero: `0.0275`.
+- Step-630 forced-random: `0.0300`.
+- Step-630 oracle: `1.0000`.
+- Step-630 hook calculator-result accuracy:
+  `1.0000/1.0000/1.0000/1.0000`.
+- Final 128-sample counterfactuals: `0.0391` injection-zero, `0.0234`
+  forced-random.
+
+Trusted handoff run:
+
+```text
+runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks4_shareout_embd32_handoff600_from_source630_cpu/2026-05-30_153417_398814_model-c-op0-19-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed43
+```
+
+Handoff results:
+
+- Final eval: `305/400 = 0.7625`.
+- Step-600 normal: `0.7800`.
+- Step-600 injection-zero: `0.0875`.
+- Step-600 forced-random: `0.0725`.
+- Step-600 oracle: `0.7800`.
+- Step-600 calculator-result accuracy: `0.9950`.
+- Step-600 hook normal: `0.7255/0.8095/0.8289/0.7604`.
+- Final 128-sample counterfactuals: `0.1016` injection-zero, `0.0781`
+  forced-random, `0.7422` oracle-at-eval.
+
+Continuation diagnostic:
+
+```text
+runs/2026-05-30_phase7_routed_multi_hook_training/op19_rhead64_topk8_unique24_hooks4_shareout_embd32_handoff_continue600_from_handoff600_cpu/2026-05-30_153624_227984_model-c-op0-19-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed43
+```
+
+- Continued from the handoff600 final checkpoint for another `600` steps.
+- Final eval: `317/400 = 0.7925`.
+- Step-600 continuation normal: `0.8050`.
+- Step-600 continuation injection-zero: `0.0725`.
+- Step-600 continuation forced-random: `0.0800`.
+- Step-600 continuation calculator-result accuracy: `0.9950`.
+
+Interpretation:
+
+- Shared output projection is compatible with routed source acquisition: all
+  four policies trained to perfect calculator-result accuracy with low
+  all-hook counterfactual controls.
+- It is not yet compatible with the trusted cloned-output handoff recipe. The
+  learned calculator remains accurate in handoff, but the downstream additive
+  readout does not reach the cloned-output non-bottleneck gate within 600
+  steps, and a 600-step continuation barely helps.
+- This suggests the shared-output source creates a different transfer/readout
+  geometry even though source accuracy is perfect. Do not treat tied output as
+  a solved many-calculator recipe until a handoff-aware source or readout
+  mechanism clears the trusted gate.

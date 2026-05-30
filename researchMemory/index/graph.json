@@ -746,6 +746,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/150-shared-output-four-hook-routed-source-trains-but-trusted-handoff-misses-the-cloned-output",
+      "target": "researchMemory/hypotheses/phase7/150-shared-output-four-hook-routed-source-trains-but-trusted-handoff-misses-the-cloned-output-.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -2369,6 +2374,13 @@
       "source_path": "researchMemory/hypotheses/phase7/149-routed-calculator-hooks-can-share-one-output-projection.md",
       "status": "POSITIVE-IMPLEMENTATION",
       "title": "Routed calculator hooks can share one output projection."
+    },
+    {
+      "id": "doc/150-shared-output-four-hook-routed-source-trains-but-trusted-handoff-misses-the-cloned-output",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/150-shared-output-four-hook-routed-source-trains-but-trusted-handoff-misses-the-cloned-output-.md",
+      "status": "MIXED",
+      "title": "Shared-output four-hook routed source trains, but trusted handoff misses the cloned-output gate."
     },
     {
       "id": "doc/phase7-direction-memory",
