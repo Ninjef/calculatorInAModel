@@ -49,6 +49,22 @@ remaining candidates are sampled without replacement per prompt.
 Duplicate removal clearly helps, but unique32 still scores most of the result
 vocabulary and remains below the exact ceiling.
 
+The first non-uniform proposal is different. Reserving 8 candidate slots for
+the model's current result-policy top-k classes and filling the rest with
+unique random candidates recovered much more of the exact signal:
+
+| Assignment | Scored results | Step-200 true coverage | Best snapshot normal | Final eval |
+| --- | ---: | ---: | ---: | ---: |
+| Exact | `39/39` | `1.0000` | `0.8625` | `0.7350` |
+| Topk8+unique16 | `16/39` | `1.0000` | `0.6850` | `0.6725` |
+| Topk8+unique24 | `24/39` | `1.0000` | `0.7725` | `0.7500` |
+| Topk8+unique32 | `32/39` | `1.0000` | `0.7925` | `0.8600` |
+
+This is the first assignment-cost proposal worth validating further. It is not
+a solved scalable recipe yet because the result is one op19 source gate, but it
+changes the next direction from "uniform coverage is insufficient" to
+"policy-aware proposals can preserve target coverage at lower scorer count."
+
 ## What Should Stop
 
 - Uniform sampled hard-assignment count ladders on the same op19 source gate.
@@ -62,13 +78,15 @@ vocabulary and remains below the exact ceiling.
   mechanism.
 - Unique-uniform sample-count ladders on the same gate. Unique32 is the useful
   diagnostic point: coverage helps, but it is still not enough.
+- Topk8 unique count ladders on the same gate. The useful threshold is already
+  mapped at 16/24/32.
 
 ## What Deserves Compute
 
-- Coverage-aware or active candidate construction that explicitly raises
-  true/best-result inclusion without scoring the full vocabulary.
-- Non-uniform proposals that beat unique32 at lower scorer count or close the
-  gap to exact at similar count.
+- Validate policy-aware top-k proposals beyond the local op19 source gate:
+  longer source plus handoff, fresh seed, larger range, or many-calculator cost.
+- More active/non-uniform proposals only if they beat the topk8+unique baseline
+  or explain when/why top-k coverage fails.
 - Structured proposals that exploit arithmetic/result geometry while still
   being validated against exact-grid assignment ceilings.
 - Non-enumerative credit signals that avoid hard assignment rather than

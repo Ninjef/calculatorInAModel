@@ -114,11 +114,15 @@ Memory:
   duplicate candidates lifts sample32 from `0.4050` to `0.6250` best snapshot
   and step-200 true coverage from `0.7400` to `0.9275`, but unique32 still
   scores most of the vocabulary and misses exact (`0.8625` best snapshot).
+- Policy-aware top-k proposals are the first lower-cost positive. Topk8 plus
+  unique random candidates reached true coverage `1.0000` at `16/39`, `24/39`,
+  and `32/39` scored classes; topk8+unique24 reached final `0.7500` and
+  topk8+unique32 final `0.8600`, versus exact final `0.7350`.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
-  next work needs non-uniform active/structured proposals, adaptive refresh, or
-  non-enumerative credit assignment.
+  next work should validate policy-aware proposals beyond the op19 source gate
+  or pursue non-enumerative credit assignment.
 
 Representative evidence:
 
@@ -127,6 +131,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-sampled-hard-assignment-cost-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-exact-assignment-refresh-cadence-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-unique-sampled-assignment-coverage-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-assignment-proposal-gate.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `HYPOTHESIS_LEDGER.md`
 
@@ -391,6 +396,10 @@ Memory:
 - Unique sampled assignment improves coverage and source learning, but still
   misses exact despite scoring `32/39` classes. Candidate proposals need to be
   smarter than duplicate-free uniform coverage.
+- Policy-topk plus unique random candidates is now the proposal to validate:
+  it preserves true-result coverage and source learning much better than
+  uniform unique sampling at matched scored count, but still needs handoff,
+  fresh-seed, range, or many-calculator validation.
 - Forced-result geometry alone remains a triage signal; actual handoff/readout
   gates remain decisive.
 
@@ -435,6 +444,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-sampled-hard-assignment-cost-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-exact-assignment-refresh-cadence-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-unique-sampled-assignment-coverage-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-assignment-proposal-gate.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-29-scheduled-source-geometry-review.md`
 - `researchReviews/2026-05-29-forced-margin-branch-review.md`

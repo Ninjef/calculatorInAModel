@@ -8642,3 +8642,36 @@ Interpretation:
   scores most of the result vocabulary.
 - Do not run more unique-uniform count ladders. Candidate-cost reduction needs
   a smarter non-uniform proposal or different credit signal.
+
+Follow-up policy-topk proposal gate:
+
+```text
+runs/2026-05-30_phase7_assignment_cost_reduction/op19_rhead64_topk8_unique16_source200_cpu
+runs/2026-05-30_phase7_assignment_cost_reduction/op19_rhead64_topk8_unique24_source200_cpu
+runs/2026-05-30_phase7_assignment_cost_reduction/op19_rhead64_topk8_unique32_source200_cpu
+```
+
+| Assignment | Scored results | Step-200 true coverage | Step-200 target acc | Best snapshot normal/calc | Final eval |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Exact | `39/39` | `1.0000` | `0.9900` | `0.8625` | `294/400 = 0.7350` |
+| Unique16 | `16/39` | `0.6525` | `0.5317` | `0.3625` | `162/400 = 0.4050` |
+| Topk8+unique16 | `16/39` | `1.0000` | `0.9333` | `0.6850` | `269/400 = 0.6725` |
+| Topk8+unique24 | `24/39` | `1.0000` | `1.0000` | `0.7725` | `300/400 = 0.7500` |
+| Unique32 | `32/39` | `0.9275` | `0.8156` | `0.6250` | `244/400 = 0.6100` |
+| Topk8+unique32 | `32/39` | `1.0000` | `0.9412` | `0.7925` | `344/400 = 0.8600` |
+
+Decision:
+
+```text
+policy_topk_unique_assignment_proposal_mixed_positive
+```
+
+Interpretation:
+
+- Policy top-k proposal is the first lower-cost assignment proposal to preserve
+  much of the exact source signal.
+- It is not yet a solved recipe: this is a single op19 source gate, not a
+  fresh-seed, range, handoff, or many-calculator validation.
+- Do not run more topk8 count ladders on this exact gate. Next validation
+  should test longer source/handoff, fresh seed, larger range, or many-calculator
+  cost accounting.

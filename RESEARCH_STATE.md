@@ -122,13 +122,11 @@ Active directions:
   pointwise recovery stayed at `0.08-0.26`, and the best pairwise result was
   only `0.40` heldout argmin recovery while using `24/39` result scores.
 - Lower-cost assignment is useful only when it changes scalability. Uniform
-  sampled hard assignment is negative: sample16/sample32 on op19 `rhead64`
-  failed to preserve exact source signal (`0.3650`/`0.4050` best snapshots vs
-  `0.8625` exact). Fixed exact-target refresh is also mixed-negative:
-  refresh2/refresh5 reached only `0.5875`/`0.4950`. Unique32 improves coverage
-  and reaches `0.6250`, but still scores `32/39` classes and misses exact. Next
-  attempts need non-uniform active/structured proposals, adaptive freshness, or
-  a non-enumerative credit signal.
+  sampling, fixed refresh, and unique-uniform sampling are insufficient. A
+  policy-aware proposal is the first positive: topk8+unique24 scored `24/39`
+  classes and reached `0.7500` final on the op19 `rhead64` source gate, while
+  topk8+unique32 reached `0.8600`; exact scored `39/39` and reached `0.7350`
+  final / `0.8625` best snapshot. Validate this beyond one op19 source gate.
 
 ## Paused Or Deprioritized Branches
 
@@ -170,7 +168,8 @@ These branches should not continue without a new mechanism:
 4. If reducing hard-assignment cost, state the scalability hypothesis up front
    and compare against the exact-grid ceiling. Do not run more uniform sampled
    count ladders or fixed refresh-interval ladders on op19 `rhead64`; improve
-   proposal quality beyond duplicate-free uniform coverage or change estimator.
+   policy-aware proposals via handoff/range/fresh-seed validation or change
+   estimator.
 5. Use answer-derived result-boundary transfer as a bridge, not a recipe:
    next work should approximate or replace the full forced-result enumeration
    that selected the best-result target. Do not continue pointwise/rank
