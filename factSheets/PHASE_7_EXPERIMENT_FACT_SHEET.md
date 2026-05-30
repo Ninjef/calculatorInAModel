@@ -7634,3 +7634,58 @@ Interpretation:
   helped, 400 continuation steps degraded source final eval.
 - Near-perfect forced-result geometry still did not guarantee the best final
   handoff, so actual 600-step handoff remains the arbiter.
+
+## 2026-05-29 Corrected Sparse Local-Target Gate
+
+Task:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-29-corrected-sparse-local-target-gate.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-29_phase7_corrected_local_target_gate/smoke_op3
+runs/2026-05-29_phase7_corrected_local_target_gate/corrected_sparse_200
+```
+
+Question:
+
+Can a sparse policy-reweighted local target be corrected by preserving current
+policy mass on unscored result classes, rather than zeroing all unscored
+classes out of the target?
+
+Tooling:
+
+- Added `corrected_policy_reweighted_t<T>_u<U>_b<mean|current|max>` to
+  `scripts/run_phase7_local_target_stage1_lift_gate.py`.
+- The branch scores uniform candidates and imputes a baseline loss for
+  unscored classes.
+
+200-step gate:
+
+| Branch | Scored results | True coverage | Target argmax | Exact-grid calc | Sampled normal |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `policy_reweighted_t1` | full | n/a | `0.9925` | `0.5600` | `0.5391` |
+| `sampled_policy_reweighted_t1_k0_u32` | `32` | `0.8450` | `0.8350` | `0.3350` | `0.3438` |
+| `corrected_policy_reweighted_t1_u8_bmean` | `8` | `0.1850` | `0.1925` | `0.1150` | `0.0938` |
+| `corrected_policy_reweighted_t1_u8_bcurrent` | `8` | `0.1850` | `0.1875` | `0.1100` | `0.0938` |
+| `corrected_policy_reweighted_t1_u8_bmax` | `8` | `0.1850` | `0.1850` | `0.0675` | `0.0625` |
+| `corrected_policy_reweighted_t1_u16_bmean` | `16` | `0.4050` | `0.4050` | `0.2100` | `0.2500` |
+| `corrected_policy_reweighted_t1_u16_bcurrent` | `16` | `0.4050` | `0.4125` | `0.2500` | `0.2500` |
+
+Decision:
+
+```text
+corrected_sparse_policy_reweighted_target_negative
+```
+
+Interpretation:
+
+- Preserving unscored policy mass did not fix sparse local-target learning.
+- The correction mostly diluted target pressure while true-candidate coverage
+  stayed too low.
+- Do not tune these mean/current/max imputation branches as novelty. The next
+  local-target approximation needs a learned/generalized proposal, a stronger
+  estimator correction, or a different target construction.

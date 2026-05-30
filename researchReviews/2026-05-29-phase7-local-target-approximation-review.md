@@ -245,3 +245,27 @@ still a useful clue that cached candidate proposals can matter, but next
 local-target work needs a learned/generalized proposal, estimator correction,
 or a different target construction. Otherwise, mainline compute should return
 to source objectives that improve additive handoff/readout geometry.
+
+## Addendum: Corrected Sparse Target
+
+A simple estimator/target correction did not rescue sparse local targets:
+
+- Added `corrected_policy_reweighted_t<T>_u<U>_b<mean|current|max>`.
+- The branch scores uniform candidates but keeps unscored result classes in the
+  target with an imputed baseline loss, instead of forcing all target mass onto
+  the sampled candidate set.
+- In the 200-step gate, exact `policy_reweighted_t1` reached `0.5600` exact
+  calc / `0.5391` sampled normal; raw uniform `u32` reached `0.3350` /
+  `0.3438`.
+- Corrected branches underperformed: `u8_bmean` `0.1150` / `0.0938`,
+  `u8_bcurrent` `0.1100` / `0.0938`, `u8_bmax` `0.0675` / `0.0625`,
+  `u16_bmean` `0.2100` / `0.2500`, and `u16_bcurrent` `0.2500` / `0.2500`.
+- True-candidate coverage remained the binding issue (`0.1850` for `u8`,
+  `0.4050` for `u16`), and preserving unscored mass mostly diluted target
+  pressure rather than correcting the sparse estimator.
+
+Updated steering: do not tune imputed mean/current/max sparse targets or treat
+"preserve unscored mass" as the missing estimator correction. Local-target
+approximation still needs a learned/generalized proposal, a correction with a
+stronger bias/variance argument, or a target construction that can create
+useful pressure without requiring high true-result coverage.

@@ -96,6 +96,7 @@ def parse_branch_specs(text: str) -> list[str]:
         "expected_loss",
         "policy_reweighted_t",
         "sampled_policy_reweighted_t",
+        "corrected_policy_reweighted_t",
         "adaptive_policy_reweighted_t",
         "memory_policy_reweighted_t",
         "logit_descent_p",
@@ -126,6 +127,28 @@ def parse_sampled_policy_reweighted_branch(branch: str) -> tuple[float, int, int
     if top_k + uniform_samples < 1:
         raise ValueError("sampled policy-reweighted branch needs at least one candidate")
     return temperature, top_k, uniform_samples
+
+
+def parse_corrected_policy_reweighted_branch(branch: str) -> tuple[float, int, str]:
+    prefix = "corrected_policy_reweighted_t"
+    if not branch.startswith(prefix):
+        raise ValueError(f"not a corrected policy-reweighted branch: {branch!r}")
+    parts = branch.removeprefix(prefix).split("_")
+    if len(parts) != 3 or not parts[1].startswith("u") or not parts[2].startswith("b"):
+        raise ValueError(
+            "corrected policy-reweighted branch must look like "
+            "'corrected_policy_reweighted_t1_u8_bmean'"
+        )
+    temperature = float(parts[0].replace("p", "."))
+    uniform_samples = int(parts[1].removeprefix("u"))
+    baseline_mode = parts[2].removeprefix("b")
+    if temperature <= 0:
+        raise ValueError("corrected policy-reweighted temperature must be positive")
+    if uniform_samples < 1:
+        raise ValueError("corrected branch needs at least one uniform sample")
+    if baseline_mode not in {"mean", "current", "max"}:
+        raise ValueError("corrected branch baseline must be mean, current, or max")
+    return temperature, uniform_samples, baseline_mode
 
 
 def parse_adaptive_policy_reweighted_branch(branch: str) -> tuple[float, int, int, int]:
@@ -492,6 +515,111 @@ def sampled_policy_reweighted_loss(
     }
 
 
+def corrected_policy_reweighted_loss(
+    model,
+    batch,
+    *,
+    branch: str,
+    args: argparse.Namespace,
+) -> tuple[torch.Tensor, dict[str, float | str]]:
+    temperature, uniform_samples, baseline_mode = parse_corrected_policy_reweighted_branch(
+        branch
+    )
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    result_vocab_size = result_logits.shape[-1]
+    batch_size = batch.x.shape[0]
+    candidates = sample_uniform_result_candidates(
+        batch_size=batch_size,
+        result_vocab_size=result_vocab_size,
+        count=uniform_samples,
+        device=batch.x.device,
+    )
+    candidate_losses = score_forced_candidate_result_classes(
+        model,
+        batch,
+        candidates,
+        chunk_size=args.result_chunk_size,
+    )
+    selected_log_probs = result_logits.log_softmax(dim=-1).gather(1, candidates)
+    if baseline_mode == "mean":
+        baseline_loss = candidate_losses.mean(dim=-1)
+    elif baseline_mode == "max":
+        baseline_loss = candidate_losses.max(dim=-1).values
+    elif baseline_mode == "current":
+        candidate_current_weights = torch.softmax(selected_log_probs.detach(), dim=-1)
+        baseline_loss = (candidate_current_weights * candidate_losses).sum(dim=-1)
+    else:
+        raise ValueError(f"unknown corrected baseline {baseline_mode!r}")
+
+    row_idx = torch.arange(batch_size, device=batch.x.device)
+    imputed_losses = baseline_loss.unsqueeze(-1).expand(-1, result_vocab_size).clone()
+    candidate_mask = torch.zeros(
+        (batch_size, result_vocab_size),
+        dtype=torch.bool,
+        device=batch.x.device,
+    )
+    for idx in range(candidates.shape[1]):
+        classes = candidates[:, idx]
+        current = imputed_losses[row_idx, classes]
+        imputed_losses[row_idx, classes] = torch.minimum(
+            current,
+            candidate_losses[:, idx],
+        )
+        candidate_mask[row_idx, classes] = True
+
+    log_probs = result_logits.log_softmax(dim=-1)
+    target_logits = log_probs.detach() - (imputed_losses / temperature)
+    weights = torch.softmax(target_logits, dim=-1).detach()
+    if args.min_probability_floor > 0:
+        action_count = weights.shape[-1]
+        if args.min_probability_floor * action_count >= 1.0:
+            raise ValueError("min probability floor times result count must be < 1")
+        weights = weights.clamp_min(args.min_probability_floor)
+        weights = weights / weights.sum(dim=-1, keepdim=True)
+
+    loss = -(weights * log_probs).sum(dim=-1).mean()
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=args.digits)
+    true_sum = true_a + true_b
+    target_entropy = -(weights * weights.clamp_min(1e-12).log()).sum(dim=-1)
+    target_argmax = weights.argmax(dim=-1)
+    true_candidate = candidate_mask[row_idx, true_sum]
+    true_prob = weights[row_idx, true_sum]
+    current_probs = log_probs.detach().exp()
+    target_imputed_loss = (weights * imputed_losses).sum(dim=-1)
+    current_imputed_loss = (current_probs * imputed_losses).sum(dim=-1)
+    unique_counts = candidate_mask.sum(dim=-1).to(torch.float32)
+    scored_mass = (weights * candidate_mask.to(weights.dtype)).sum(dim=-1)
+    return loss, {
+        "branch_loss_mode": branch,
+        "branch_loss": float(loss.detach().item()),
+        "target_family": "corrected_policy_reweighted",
+        "target_temperature": float(temperature),
+        "target_uniform_samples": int(uniform_samples),
+        "target_correction_baseline": baseline_mode,
+        "target_scored_results": int(candidates.shape[1]),
+        "target_unique_scored_results": float(unique_counts.mean().item()),
+        "target_scored_fraction": float(candidates.shape[1] / result_vocab_size),
+        "target_unique_scored_fraction": float(
+            (unique_counts / result_vocab_size).mean().item()
+        ),
+        "target_true_candidate_coverage": float(true_candidate.float().mean().item()),
+        "target_entropy": float(target_entropy.mean().item()),
+        "target_effective_results": float(target_entropy.exp().mean().item()),
+        "target_scored_probability": float(scored_mass.mean().item()),
+        "target_unscored_probability": float((1.0 - scored_mass).mean().item()),
+        "target_true_probability": float(true_prob.mean().item()),
+        "target_argmax_accuracy": float((target_argmax == true_sum).float().mean().item()),
+        "target_argmax_matches_current": float(
+            (target_argmax == result_logits.detach().argmax(dim=-1)).float().mean().item()
+        ),
+        "target_candidate_expected_loss": float(target_imputed_loss.mean().item()),
+        "current_candidate_expected_loss": float(current_imputed_loss.mean().item()),
+        "target_candidate_expected_improvement": float(
+            (current_imputed_loss - target_imputed_loss).mean().item()
+        ),
+    }
+
+
 def adaptive_policy_reweighted_loss(
     model,
     batch,
@@ -763,6 +891,8 @@ def branch_loss(
         }
     if branch.startswith("sampled_policy_reweighted_t"):
         return sampled_policy_reweighted_loss(model, batch, branch=branch, args=args)
+    if branch.startswith("corrected_policy_reweighted_t"):
+        return corrected_policy_reweighted_loss(model, batch, branch=branch, args=args)
     if branch.startswith("adaptive_policy_reweighted_t"):
         return adaptive_policy_reweighted_loss(model, batch, branch=branch, args=args)
     if branch.startswith("memory_policy_reweighted_t"):

@@ -536,6 +536,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/108-preserving-unscored-policy-mass-does-not-rescue-sparse-policy-reweighted-local-targets",
+      "target": "researchMemory/hypotheses/phase7/108-preserving-unscored-policy-mass-does-not-rescue-sparse-policy-reweighted-local-targets.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -888,6 +893,11 @@
     {
       "source": "direction/target-propagation-local-targets",
       "target": "aiAgentWorkHistory/phase7/2026-05-29-replay-memory-streaming-prompt-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/target-propagation-local-targets",
+      "target": "aiAgentWorkHistory/phase7/2026-05-29-corrected-sparse-local-target-gate.md",
       "type": "supported_by"
     },
     {
@@ -1645,6 +1655,13 @@
       "source_path": "researchMemory/hypotheses/phase7/107-one-negative-forced-margin-is-a-useful-auxiliary-not-a-standalone-new-mainline.md",
       "status": "CONSTRAINED",
       "title": "One-negative forced-margin is a useful auxiliary, not a standalone new mainline."
+    },
+    {
+      "id": "doc/108-preserving-unscored-policy-mass-does-not-rescue-sparse-policy-reweighted-local-targets",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/108-preserving-unscored-policy-mass-does-not-rescue-sparse-policy-reweighted-local-targets.md",
+      "status": "DISPROVEN",
+      "title": "Preserving unscored policy mass does not rescue sparse policy-reweighted local targets."
     },
     {
       "id": "doc/phase7-direction-memory",

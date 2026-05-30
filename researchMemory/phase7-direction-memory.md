@@ -352,6 +352,11 @@ Memory:
   lift. At 800 steps with batch `16`, exact `policy_reweighted_t1` and raw
   uniform `u32` both reached `0.2450` exact calc, `u8_m24` was only comparable
   at `0.2650`, and `u2_m30` lagged at `0.1850`.
+- A simple estimator/target correction also failed: preserving current policy
+  mass on unscored result classes with imputed mean/current/max losses reached
+  at best `0.2500` exact calc / `0.2500` sampled normal at `u16`, below raw
+  uniform `u32` (`0.3350`/`0.3438`) and far below exact policy-reweighted
+  (`0.5600`/`0.5391`).
 - The durable lesson is negative for fixed hand-coded proposals. Exact
   `policy_reweighted_t1` remains a useful ceiling, but fixed replay memory is
   not a scalable method. Next local-target work needs learned/generalized
@@ -373,3 +378,4 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-rescore-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-reset-stress-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-29-replay-memory-streaming-prompt-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-29-corrected-sparse-local-target-gate.md`

@@ -4510,11 +4510,29 @@ def test_phase7_memory_local_target_branch_parser() -> None:
     spec.loader.exec_module(runner)
 
     assert runner.parse_branch_specs(
-        "memory_policy_reweighted_t1_u8_m24,sampled_policy_reweighted_t1_k0_u32"
+        "memory_policy_reweighted_t1_u8_m24,sampled_policy_reweighted_t1_k0_u32,corrected_policy_reweighted_t1_u8_bmean"
     ) == [
         "memory_policy_reweighted_t1_u8_m24",
         "sampled_policy_reweighted_t1_k0_u32",
+        "corrected_policy_reweighted_t1_u8_bmean",
     ]
+    assert runner.parse_corrected_policy_reweighted_branch(
+        "corrected_policy_reweighted_t1_u8_bmean"
+    ) == (1.0, 8, "mean")
+    assert runner.parse_corrected_policy_reweighted_branch(
+        "corrected_policy_reweighted_t0p5_u16_bcurrent"
+    ) == (0.5, 16, "current")
+    assert runner.parse_corrected_policy_reweighted_branch(
+        "corrected_policy_reweighted_t1_u4_bmax"
+    ) == (1.0, 4, "max")
+    with pytest.raises(ValueError, match="at least one uniform"):
+        runner.parse_corrected_policy_reweighted_branch(
+            "corrected_policy_reweighted_t1_u0_bmean"
+        )
+    with pytest.raises(ValueError, match="baseline"):
+        runner.parse_corrected_policy_reweighted_branch(
+            "corrected_policy_reweighted_t1_u8_bmedian"
+        )
     assert runner.parse_memory_policy_reweighted_branch(
         "memory_policy_reweighted_t1_u8_m24"
     ) == (1.0, 8, 24, 0, 0)
