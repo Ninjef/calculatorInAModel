@@ -2525,6 +2525,74 @@ def test_additive_zero_improvement_scores_additive_path(monkeypatch) -> None:
     ] == pytest.approx(1.0)
 
 
+def test_additive_semantic_distillation_uses_answer_decoder_teacher(
+    monkeypatch,
+) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_additive_semantic_distill", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="gumbel_concrete_interface",
+        calculator_action_head="result_space",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    model = TinyGPT(cfg)
+    batch = ArithmeticBatch(
+        x=torch.tensor([[1, PLUS_ID, 2, EQ_ID], [0, PLUS_ID, 3, EQ_ID]]),
+        y=torch.zeros((2, 4), dtype=torch.long),
+        loss_mask=torch.ones((2, 4), dtype=torch.bool),
+    )
+    mode_calls: list[str] = []
+
+    monkeypatch.setattr(
+        overfit_script.torch,
+        "randint",
+        lambda *args, **kwargs: torch.tensor([[1], [2]]),
+    )
+
+    def fake_forward(x, *, forced_calculator_result_class=None, **_kwargs):
+        mode_calls.append(model.cfg.calculator_bottleneck_mode)
+        logits = torch.zeros((x.shape[0], x.shape[1], cfg.vocab_size))
+        if model.cfg.calculator_bottleneck_mode == "answer_decoder":
+            logits[:, :, 3] = 4.0
+            return logits
+        logits[:, :, 4] = 4.0
+        return logits.requires_grad_()
+
+    monkeypatch.setattr(model, "forward", fake_forward)
+
+    loss, metrics = overfit_script.additive_semantic_distillation_loss(
+        model,
+        batch,
+        sample_count=1,
+        temperature=1.0,
+    )
+
+    assert loss.item() > 0
+    assert mode_calls == ["answer_decoder", "none"]
+    assert metrics["additive_semantic_distill_sample_count"] == pytest.approx(1.0)
+    assert metrics["additive_semantic_distill_token_argmax_agreement"] == pytest.approx(
+        0.0
+    )
+    assert model.cfg.calculator_bottleneck_mode == "answer_decoder"
+
+
 def test_result_boundary_target_updates_result_projection_only(monkeypatch) -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location(

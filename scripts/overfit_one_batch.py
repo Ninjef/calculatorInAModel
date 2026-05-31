@@ -975,6 +975,26 @@ def masked_cross_entropy_per_example(
     return (loss * mask_f).sum(dim=-1) / mask_f.sum(dim=-1).clamp(min=1.0)
 
 
+def masked_kl_per_example(
+    student_logits: torch.Tensor,
+    teacher_logits: torch.Tensor,
+    mask: torch.Tensor,
+    *,
+    temperature: float,
+) -> torch.Tensor:
+    if temperature <= 0:
+        raise ValueError("masked KL temperature must be positive")
+    student_log_probs = torch.log_softmax(student_logits / temperature, dim=-1)
+    teacher_probs = torch.softmax(teacher_logits.detach() / temperature, dim=-1)
+    token_kl = torch.nn.functional.kl_div(
+        student_log_probs,
+        teacher_probs,
+        reduction="none",
+    ).sum(dim=-1) * (temperature * temperature)
+    mask_f = mask.to(token_kl.dtype)
+    return (token_kl * mask_f).sum(dim=-1) / mask_f.sum(dim=-1).clamp(min=1.0)
+
+
 def single_eq_trace_values(
     trace: dict[str, torch.Tensor], batch: ArithmeticBatch, key: str
 ) -> torch.Tensor:
@@ -4461,6 +4481,78 @@ def additive_forced_margin_result_loss(
         ),
         "additive_forced_margin_active_fraction": float(
             (per_example_margin > 0).float().mean().detach().item()
+        ),
+    }
+
+
+def additive_semantic_distillation_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    sample_count: int,
+    temperature: float,
+    generator: torch.Generator | None = None,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    if model.calculator_hook is None:
+        raise ValueError("additive semantic distillation requires a calculator hook")
+    if model.calculator_hook.result_vocab_size is None:
+        raise ValueError("additive semantic distillation requires result-space hook")
+    if model.answer_decoder is None:
+        raise ValueError("additive semantic distillation requires answer_decoder")
+    if sample_count < 1:
+        raise ValueError("additive semantic distillation sample count must be positive")
+    if temperature <= 0:
+        raise ValueError("additive semantic distillation temperature must be positive")
+    result_vocab_size = int(model.calculator_hook.result_vocab_size)
+    forced_classes = torch.randint(
+        low=0,
+        high=result_vocab_size,
+        size=(batch.x.shape[0], sample_count),
+        device=batch.x.device,
+        generator=generator,
+    )
+    expanded_x = batch.x.repeat_interleave(sample_count, dim=0)
+    expanded_y = batch.y.repeat_interleave(sample_count, dim=0)
+    expanded_mask = batch.loss_mask.repeat_interleave(sample_count, dim=0)
+    forced = forced_classes.reshape(-1)
+    with temporary_calculator_bottleneck_mode(model, "answer_decoder"), torch.no_grad():
+        teacher_logits = model(expanded_x, forced_calculator_result_class=forced)
+    with temporary_calculator_bottleneck_mode(model, "none"):
+        student_logits = model(expanded_x, forced_calculator_result_class=forced)
+    per_example = masked_kl_per_example(
+        student_logits,
+        teacher_logits,
+        expanded_mask,
+        temperature=temperature,
+    )
+    loss = per_example.mean()
+    student_nll = masked_cross_entropy_per_example(
+        student_logits,
+        expanded_y,
+        expanded_mask,
+    )
+    teacher_nll = masked_cross_entropy_per_example(
+        teacher_logits,
+        expanded_y,
+        expanded_mask,
+    )
+    answer_positions = expanded_mask
+    agreement = (
+        student_logits.detach().argmax(dim=-1)[answer_positions]
+        == teacher_logits.detach().argmax(dim=-1)[answer_positions]
+    ).float()
+    return loss, {
+        "additive_semantic_distill_loss": float(loss.detach().item()),
+        "additive_semantic_distill_sample_count": float(sample_count),
+        "additive_semantic_distill_temperature": float(temperature),
+        "additive_semantic_distill_student_nll": float(
+            student_nll.mean().detach().item()
+        ),
+        "additive_semantic_distill_teacher_nll": float(
+            teacher_nll.mean().detach().item()
+        ),
+        "additive_semantic_distill_token_argmax_agreement": float(
+            agreement.mean().detach().item() if agreement.numel() else float("nan")
         ),
     }
 
@@ -8684,6 +8776,9 @@ def run_variant(
         result_policy_stabilization_metrics: dict[str, float] = {}
         result_policy_anchor_objective_value = None
         result_policy_anchor_metrics: dict[str, float | str] = {}
+        additive_semantic_distill_loss_value = None
+        additive_semantic_distill_objective_value = None
+        additive_semantic_distill_metrics: dict[str, float] = {}
         additive_forced_true_loss_value = None
         additive_forced_true_objective_value = None
         additive_forced_true_metrics: dict[str, float] = {}
@@ -9031,6 +9126,38 @@ def run_variant(
                 current_result_policy_anchor_weight
                 * result_policy_anchor_objective
             )
+        if args.additive_semantic_distill_weight > 0:
+            if use_reinforce:
+                raise ValueError(
+                    "additive semantic distillation is not supported with reinforce"
+                )
+            (
+                additive_semantic_distill_loss_tensor,
+                additive_semantic_distill_metrics,
+            ) = additive_semantic_distillation_loss(
+                model,
+                batch,
+                sample_count=args.additive_semantic_distill_sample_count,
+                temperature=args.additive_semantic_distill_temperature,
+                generator=candidate_generator,
+            )
+            additive_semantic_distill_loss_value = float(
+                additive_semantic_distill_loss_tensor.detach().item()
+            )
+            additive_semantic_distill_objective = (
+                args.additive_semantic_distill_weight
+                * additive_semantic_distill_loss_tensor
+            )
+            additive_semantic_distill_objective_value = float(
+                additive_semantic_distill_objective.detach().item()
+            )
+            additive_semantic_distill_metrics[
+                "additive_semantic_distill_weight"
+            ] = float(args.additive_semantic_distill_weight)
+            additive_semantic_distill_metrics[
+                "additive_semantic_distill_objective"
+            ] = additive_semantic_distill_objective_value
+            loss = loss + additive_semantic_distill_objective
         current_additive_forced_true_weight = effective_additive_forced_true_weight(
             initial_weight=args.additive_forced_true_loss_weight,
             start_step=args.additive_forced_true_start_step,
@@ -9483,6 +9610,8 @@ def run_variant(
                     result_policy_anchor_objective_value
                 )
                 curve_row.update(result_policy_anchor_metrics)
+            if additive_semantic_distill_metrics:
+                curve_row.update(additive_semantic_distill_metrics)
             if additive_forced_true_metrics:
                 curve_row.update(additive_forced_true_metrics)
             if additive_forced_margin_metrics:
@@ -9596,6 +9725,16 @@ def run_variant(
                     f" policy_anchor_agree={result_policy_anchor_metrics['result_policy_anchor_argmax_agreement']:.3f}"
                     f" policy_anchor_acc={result_policy_anchor_metrics['result_policy_anchor_current_argmax_accuracy']:.3f}"
                     if result_policy_anchor is not None
+                    else ""
+                )
+                + (
+                    " additive_semantic_distill_loss="
+                    f"{additive_semantic_distill_loss_value:.4f}"
+                    " additive_semantic_distill_obj="
+                    f"{additive_semantic_distill_objective_value:.4f}"
+                    " additive_semantic_distill_agree="
+                    f"{additive_semantic_distill_metrics['additive_semantic_distill_token_argmax_agreement']:.3f}"
+                    if additive_semantic_distill_metrics
                     else ""
                 )
                 + (
@@ -10041,6 +10180,15 @@ def run_variant(
     )
     metrics["result_boundary_target_policy_topk_count"] = (
         args.result_boundary_target_policy_topk_count
+    )
+    metrics["additive_semantic_distill_weight"] = (
+        args.additive_semantic_distill_weight
+    )
+    metrics["additive_semantic_distill_sample_count"] = (
+        args.additive_semantic_distill_sample_count
+    )
+    metrics["additive_semantic_distill_temperature"] = (
+        args.additive_semantic_distill_temperature
     )
     metrics["result_policy_entropy_weight"] = args.result_policy_entropy_weight
     metrics["result_policy_batch_diversity_weight"] = (
@@ -11219,6 +11367,29 @@ def parse_args() -> argparse.Namespace:
         help="Anchor to the initial result policy by KL over probabilities or logit MSE.",
     )
     parser.add_argument(
+        "--additive-semantic-distill-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Readout preconditioning auxiliary: force arbitrary result classes, "
+            "match the additive non-bottleneck logits to the frozen "
+            "answer-decoder bottleneck logits, and do not use prompt-specific "
+            "true-result targets."
+        ),
+    )
+    parser.add_argument(
+        "--additive-semantic-distill-sample-count",
+        type=int,
+        default=1,
+        help="Random forced result classes per prompt for additive semantic distillation.",
+    )
+    parser.add_argument(
+        "--additive-semantic-distill-temperature",
+        type=float,
+        default=1.0,
+        help="KL temperature for additive semantic distillation.",
+    )
+    parser.add_argument(
         "--additive-forced-true-loss-weight",
         type=float,
         default=0.0,
@@ -12118,6 +12289,25 @@ def main() -> None:
         raise ValueError(
             "--action-loss-full-enum-min-probability-floor must be non-negative"
         )
+    if args.additive_semantic_distill_weight < 0:
+        raise ValueError("--additive-semantic-distill-weight must be non-negative")
+    if args.additive_semantic_distill_sample_count < 1:
+        raise ValueError(
+            "--additive-semantic-distill-sample-count must be positive"
+        )
+    if args.additive_semantic_distill_temperature <= 0:
+        raise ValueError("--additive-semantic-distill-temperature must be positive")
+    if args.additive_semantic_distill_weight > 0:
+        if args.variant != "model-c":
+            raise ValueError("--additive-semantic-distill-weight requires model-c")
+        if args.calculator_action_head != "result_space":
+            raise ValueError(
+                "--additive-semantic-distill-weight requires result_space head"
+            )
+        if args.calculator_bottleneck_mode != "answer_decoder":
+            raise ValueError(
+                "--additive-semantic-distill-weight requires answer_decoder mode"
+            )
     if args.additive_forced_true_loss_weight < 0:
         raise ValueError("--additive-forced-true-loss-weight must be non-negative")
     if args.additive_forced_true_start_step < 0:
@@ -12902,6 +13092,17 @@ def main() -> None:
                 "rbtfloor"
                 f"{args.result_boundary_target_min_probability_floor:g}"
             )
+        if args.additive_semantic_distill_weight > 0:
+            suffix_parts.append(
+                f"addsemdist{args.additive_semantic_distill_weight:g}"
+            )
+            suffix_parts.append(
+                f"addsemdists{args.additive_semantic_distill_sample_count}"
+            )
+            if args.additive_semantic_distill_temperature != 1.0:
+                suffix_parts.append(
+                    f"addsemdistt{args.additive_semantic_distill_temperature:g}"
+                )
         if args.result_policy_entropy_weight > 0:
             suffix_parts.append(f"rpolent{args.result_policy_entropy_weight:g}")
         if args.result_policy_batch_diversity_weight > 0:
@@ -13217,6 +13418,12 @@ def main() -> None:
         f"sample_count={args.result_boundary_target_sample_count} "
         f"unique_sampling={args.result_boundary_target_unique_sampling} "
         f"policy_topk_count={args.result_boundary_target_policy_topk_count}"
+    )
+    print(
+        "additive semantic distillation: "
+        f"weight={args.additive_semantic_distill_weight} "
+        f"sample_count={args.additive_semantic_distill_sample_count} "
+        f"temperature={args.additive_semantic_distill_temperature}"
     )
     print(
         "result policy stabilization: "

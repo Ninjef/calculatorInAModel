@@ -821,6 +821,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/165-semantic-readout-distillation-repairs-additive-target-quality-but-not-source-policy-uptake",
+      "target": "researchMemory/hypotheses/phase7/165-semantic-readout-distillation-repairs-additive-target-quality-but-not-source-policy-uptake.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1293,6 +1298,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-additive-zero-improvement-source-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-semantic-distilled-additive-zero-improvement.md",
       "type": "supported_by"
     },
     {
@@ -2619,6 +2629,13 @@
       "source_path": "researchMemory/hypotheses/phase7/164-naive-additive-path-zero-improvement-targets-provide-handoff-aware-source-shaping.md",
       "status": "DISPROVEN",
       "title": "Naive additive-path zero-improvement targets provide handoff-aware source shaping."
+    },
+    {
+      "id": "doc/165-semantic-readout-distillation-repairs-additive-target-quality-but-not-source-policy-uptake",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/165-semantic-readout-distillation-repairs-additive-target-quality-but-not-source-policy-uptake.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Semantic readout distillation repairs additive target quality but not source-policy uptake."
     },
     {
       "id": "doc/phase7-direction-memory",

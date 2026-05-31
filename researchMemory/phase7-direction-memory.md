@@ -585,6 +585,14 @@ Memory:
   true-result target probability `0.0225`, and final/snapshot calc stayed
   `0.0200`. Additive-path targets need readout preconditioning/co-training,
   not a longer run from an untrained additive loss table.
+- Semantic readout distillation is a partial repair but not enough. A 300-step
+  arbitrary-result distill preconditioner raised additive/semantic token
+  agreement to `0.7694` and repaired additive target quality (`best=true`
+  `0.5225` at source step 0, `0.8200` by step 200 with ongoing distill), but
+  source uptake stayed weak (`learned_best=0.1400`, calc `0.0675`). Without
+  ongoing distill the table drifted non-arithmetic again (`best=true=0.1575`)
+  while learned-best rose to `0.6950`. Next variants must address policy
+  uptake or target drift, not just readout semantics.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -649,6 +657,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-zero-improvement-boundary-source-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-zero-improvement-boundary-handoff.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-additive-zero-improvement-source-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-semantic-distilled-additive-zero-improvement.md`
 - `researchReviews/2026-05-30-sampled-result-boundary-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`

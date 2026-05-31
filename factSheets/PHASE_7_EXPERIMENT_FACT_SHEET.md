@@ -1,5 +1,56 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-30 Semantic-Distilled Additive Zero-Improvement
+
+Task/work log:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-semantic-distilled-additive-zero-improvement.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-30_phase7_additive_zero_improvement_boundary/semantic_distill_source200_full_enum_cpu
+runs/2026-05-30_phase7_additive_zero_improvement_boundary/semantic_distill_precondition300_cpu
+runs/2026-05-30_phase7_additive_zero_improvement_boundary/preconditioned_source200_full_enum_cpu
+runs/2026-05-30_phase7_additive_zero_improvement_boundary/preconditioned_source200_no_distill_cpu
+```
+
+Result:
+
+```text
+semantic_distilled_additive_zero_improvement_mixed_negative
+```
+
+Added `--additive-semantic-distill-*`, an arbitrary-result readout
+preconditioning auxiliary. It forces sampled result classes and trains the
+additive non-bottleneck path to match the frozen answer-decoder bottleneck
+logits. This teaches result-readout semantics without saying which result is
+useful for a prompt.
+
+Evidence:
+
+| Gate | Target quality | Source uptake | Calc/snapshot |
+| --- | ---: | ---: | ---: |
+| naive additive zero-improvement | best=true `0.0325` | learned-best `0.6025` | `0.0200` |
+| co-train distill + target | best=true `0.1775` | learned-best `0.7100` | `0.0825` |
+| distill precondition only | token agreement `0.7694` | n/a | n/a |
+| preconditioned source + distill | best=true `0.8200` | learned-best `0.1400` | `0.0675` |
+| preconditioned source, distill off | best=true `0.1575` | learned-best `0.6950` | `0.0900` |
+
+Interpretation:
+
+- Distillation repairs the additive forced-result loss table: best=true rises
+  from `0.0325` to `0.5225` at source step 0 and `0.8200` by step 200 with
+  ongoing distillation.
+- Repaired target quality does not by itself produce calculator-policy uptake.
+- If distillation is removed, the additive table drifts back toward
+  non-arithmetic preferences while the source learns that wrong target.
+- Do not tune distill weight/count/length locally; next work needs a mechanism
+  that couples repaired readout semantics to policy uptake or freezes/protects
+  the repaired target table.
+
 ## 2026-05-30 Additive Zero-Improvement Source Gate
 
 Task/work log:
