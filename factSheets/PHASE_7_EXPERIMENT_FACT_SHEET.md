@@ -1,5 +1,54 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-30 Cached Teacher Target Table
+
+Task/work log:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-cached-teacher-target-table.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-30_phase7_additive_zero_improvement_boundary/cached_teacher_anchor_target_weights_source800_cpu
+runs/2026-05-30_phase7_additive_zero_improvement_boundary/cached_teacher_anchor_hard_best_source800_cpu
+runs/2026-05-30_phase7_additive_zero_improvement_boundary/cached_teacher_anchor_hard_best_source1600_cpu
+```
+
+Result:
+
+```text
+cached_teacher_table_mixed
+```
+
+Added `--result-boundary-target-cache`, which builds the frozen teacher
+result-boundary target table once on the exhaustive grid and trains live result
+policy logits against that cached table. `target_weights` uses the soft
+zero-improvement distribution; `hard_best` trains CE to the teacher table's
+best result.
+
+Evidence:
+
+| Gate | Teacher quality | Source uptake | Calc/final |
+| --- | ---: | ---: | ---: |
+| online frozen teacher, 800 | best=true `0.5225` | learned-best `0.4125` | `0.1700` / `0.1750` |
+| cached target weights, 800 | best=true `0.5225` | learned-best `0.4000` | `0.1650` / `0.1650` |
+| cached hard best, 800 | best=true `0.5225` | learned-best `0.6675` | `0.3300` / `0.3375` |
+| cached hard best, 1600 | best=true `0.5225` | learned-best `0.7100` | `0.3575` / `0.3725` |
+
+Interpretation:
+
+- Removing repeated forced-result rescoring does not fix the soft target:
+  cached soft weights match the online frozen-teacher plateau.
+- Hard teacher-best is much easier for the policy to imitate, so part of the
+  previous failure was a diffuse/weak target-distribution uptake problem.
+- The hard teacher table is not correct enough: its best result is true only
+  `0.5225` of prompts, so stronger imitation still cannot produce a good
+  calculator source.
+- Do not run more same-teacher cache length/LR sweeps; use cached tables only
+  as a cheap diagnostic for better answer-derived target constructions.
+
 ## 2026-05-30 Frozen-Teacher Additive Target Anchor
 
 Task/work log:

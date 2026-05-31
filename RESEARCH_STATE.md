@@ -116,9 +116,9 @@ Active directions:
   Static approximations are paused: critics/proposals are costly or state-local,
   soft/regret/sampled hard-best targets are weak, and simple online calibration
   is partial. Zero-injection improvement is still the best less-prescriptive
-  bridge, but additive-path scoring remains weak: semantic distillation repairs
-  target quality, and frozen-teacher anchoring preserves it, yet policy uptake
-  plateaus low (`0.4125` learned-best / `0.1750` final after 800 steps).
+  bridge, but additive-path scoring remains weak: readout repair plus frozen
+  target/cached-table anchoring improves diagnosis, yet soft uptake plateaus
+  low and hard cached teacher-best tops out at `0.3725` final.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29

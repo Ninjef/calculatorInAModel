@@ -2599,6 +2599,79 @@ def test_result_boundary_target_teacher_scores_frozen_model(monkeypatch) -> None
     assert metrics["result_boundary_target_teacher"] == 1
 
 
+def test_cached_result_boundary_target_avoids_rescoring(monkeypatch) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_result_boundary_cache", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="gumbel_concrete_interface",
+        calculator_action_head="result_space",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    model = TinyGPT(cfg)
+    batch = ArithmeticBatch(
+        x=torch.tensor([[1, PLUS_ID, 2, EQ_ID]]),
+        y=torch.zeros((1, 4), dtype=torch.long),
+        loss_mask=torch.zeros((1, 4), dtype=torch.bool),
+    )
+    result_logits = torch.zeros((1, 7), requires_grad=True)
+
+    monkeypatch.setattr(
+        overfit_script,
+        "score_forced_result_classes_chunked",
+        lambda *args, **kwargs: torch.tensor([[5.0, 4.0, 3.0, 0.5, 2.5, 4.5, 5.5]]),
+    )
+    cached = overfit_script.build_cached_result_boundary_target(
+        model,
+        batch,
+        num_digits=1,
+        target_mode="hard_best_result",
+        temperature=1.0,
+        min_probability_floor=0.0,
+        chunk_size=4,
+    )
+    monkeypatch.setattr(
+        overfit_script,
+        "score_forced_result_classes_chunked",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("rescored")),
+    )
+    monkeypatch.setattr(
+        overfit_script,
+        "calculator_read_result_logits",
+        lambda model_arg, batch_arg: (result_logits, None, None, None),
+    )
+
+    loss, metrics = overfit_script.cached_result_boundary_target_loss(
+        model,
+        batch,
+        cached,
+        cache_mode="hard_best",
+    )
+
+    assert loss.item() == pytest.approx(torch.log(torch.tensor(7.0)).item())
+    assert metrics["result_boundary_target_cached"] == 1
+    assert metrics["result_boundary_target_cache_mode"] == "hard_best"
+    assert metrics["result_boundary_target_learned_best_fraction"] == pytest.approx(
+        0.0
+    )
+
+
 def test_additive_semantic_distillation_uses_answer_decoder_teacher(
     monkeypatch,
 ) -> None:

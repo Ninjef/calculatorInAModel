@@ -123,6 +123,8 @@ class TrainConfig:
     result_boundary_target_policy_topk_count: int
     result_boundary_target_teacher_checkpoint: str | None
     result_boundary_target_teacher_load_scope: str
+    result_boundary_target_cache: bool
+    result_boundary_target_cache_mode: str
     result_policy_entropy_weight: float
     result_policy_batch_diversity_weight: float
     result_policy_improvement_assignment_weight: float
@@ -233,6 +235,23 @@ class TrainConfig:
     mlp_expansion: int
     calculator_hook_after_layer: int
     model: dict[str, object]
+
+
+@dataclass(frozen=True)
+class CachedResultBoundaryTarget:
+    x: torch.Tensor
+    target_weights: torch.Tensor
+    best_result: torch.Tensor
+    true_sum: torch.Tensor
+    true_result_probability: torch.Tensor
+    target_entropy: torch.Tensor
+    best_losses: torch.Tensor
+    true_losses: torch.Tensor
+    full_losses: torch.Tensor
+    zero_losses: torch.Tensor | None
+    target_mode: str
+    scoring_bottleneck_mode: str
+    forced_eval_count: int
 
 
 def pick_device(preference: str = "auto") -> str:
@@ -820,6 +839,8 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_boundary_target_sample_count",
         "result_boundary_target_unique_sampling",
         "result_boundary_target_policy_topk_count",
+        "result_boundary_target_cached",
+        "result_boundary_target_cache_mode",
         "result_boundary_target_scored_results",
         "result_boundary_target_unique_scored_results",
         "result_boundary_target_unique_candidate_fraction",
@@ -3152,6 +3173,208 @@ def result_boundary_target_loss(
         ),
     }
     return target_loss, metrics
+
+
+@torch.no_grad()
+def build_cached_result_boundary_target(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    target_mode: str,
+    temperature: float,
+    min_probability_floor: float,
+    chunk_size: int,
+) -> CachedResultBoundaryTarget:
+    if target_mode not in {
+        "hard_best_result",
+        "soft_result",
+        "regret_set",
+        "zero_improvement",
+        "additive_zero_improvement",
+    }:
+        raise ValueError(f"unknown result-boundary target mode: {target_mode}")
+    if temperature <= 0:
+        raise ValueError("result-boundary target temperature must be positive")
+    if min_probability_floor < 0:
+        raise ValueError(
+            "result-boundary target min probability floor must be non-negative"
+        )
+    result_vocab_size = model.cfg.calculator_result_vocab_size
+    forced_mode = "none" if target_mode == "additive_zero_improvement" else None
+    scoring_bottleneck_mode = (
+        forced_mode if forced_mode is not None else model.cfg.calculator_bottleneck_mode
+    )
+    full_losses = score_forced_result_classes_chunked(
+        model,
+        batch,
+        chunk_size=chunk_size,
+        calculator_bottleneck_mode=forced_mode,
+    )
+    best_result = full_losses.argmin(dim=-1)
+    candidate_mask = torch.ones_like(full_losses, dtype=torch.bool)
+    zero_losses = None
+    if target_mode == "hard_best_result":
+        target_weights = torch.nn.functional.one_hot(
+            best_result, num_classes=result_vocab_size
+        ).to(full_losses.dtype)
+    elif target_mode == "regret_set":
+        best_nll = full_losses.gather(1, best_result.unsqueeze(-1)).squeeze(-1)
+        regret_mask = candidate_mask & (
+            full_losses <= (best_nll.unsqueeze(-1) + temperature)
+        )
+        target_weights = regret_mask.float()
+        target_weights = target_weights / target_weights.sum(
+            dim=-1, keepdim=True
+        ).clamp_min(1.0)
+    elif target_mode in {"zero_improvement", "additive_zero_improvement"}:
+        zero_losses = score_injection_zero_answer_losses(
+            model,
+            batch,
+            calculator_bottleneck_mode=forced_mode,
+        )
+        improvements = (
+            zero_losses.unsqueeze(-1) - full_losses
+        ).clamp_min(0.0)
+        target_weights = improvements / improvements.sum(
+            dim=-1, keepdim=True
+        ).clamp_min(1.0e-12)
+    else:
+        action_count = candidate_mask.sum(dim=-1)
+        if bool((min_probability_floor * action_count >= 1.0).any().item()):
+            raise ValueError(
+                "result-boundary target min probability floor times candidate "
+                "count must be < 1"
+            )
+        target_weights = torch.softmax(-full_losses / temperature, dim=-1)
+        if min_probability_floor > 0:
+            target_weights = target_weights.clamp_min(min_probability_floor)
+            target_weights = target_weights / target_weights.sum(
+                dim=-1, keepdim=True
+            ).clamp_min(1.0e-12)
+
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = true_a + true_b
+    target_entropy = -(
+        target_weights * target_weights.clamp_min(1.0e-12).log()
+    ).sum(dim=-1)
+    true_result_probability = target_weights.gather(
+        1, true_sum.unsqueeze(-1)
+    ).squeeze(-1)
+    best_losses = full_losses.gather(1, best_result.unsqueeze(-1)).squeeze(-1)
+    true_losses = full_losses.gather(1, true_sum.unsqueeze(-1)).squeeze(-1)
+    return CachedResultBoundaryTarget(
+        x=batch.x.detach().clone(),
+        target_weights=target_weights.detach(),
+        best_result=best_result.detach(),
+        true_sum=true_sum.detach(),
+        true_result_probability=true_result_probability.detach(),
+        target_entropy=target_entropy.detach(),
+        best_losses=best_losses.detach(),
+        true_losses=true_losses.detach(),
+        full_losses=full_losses.detach(),
+        zero_losses=zero_losses.detach() if zero_losses is not None else None,
+        target_mode=target_mode,
+        scoring_bottleneck_mode=scoring_bottleneck_mode,
+        forced_eval_count=int(batch.x.shape[0] * result_vocab_size),
+    )
+
+
+def cached_result_boundary_target_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    cached: CachedResultBoundaryTarget,
+    *,
+    cache_mode: str,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    if cache_mode not in {"target_weights", "hard_best"}:
+        raise ValueError(
+            "result-boundary target cache mode must be 'target_weights' or 'hard_best'"
+        )
+    cached_x = cached.x.to(batch.x.device)
+    if batch.x.shape != cached_x.shape or not torch.equal(batch.x, cached_x):
+        raise ValueError(
+            "cached result-boundary target requires the same fixed batch used "
+            "to build the cache"
+        )
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    target_weights = cached.target_weights.to(result_logits.device)
+    best_result = cached.best_result.to(result_logits.device)
+    true_sum = cached.true_sum.to(result_logits.device)
+    if cache_mode == "hard_best":
+        target_loss = torch.nn.functional.cross_entropy(result_logits, best_result)
+        effective_weights = torch.nn.functional.one_hot(
+            best_result, num_classes=result_logits.shape[-1]
+        ).to(result_logits.dtype)
+    else:
+        target_loss = -(
+            target_weights * result_logits.log_softmax(dim=-1)
+        ).sum(dim=-1).mean()
+        effective_weights = target_weights
+    learned_result = result_logits.argmax(dim=-1)
+    full_losses = cached.full_losses.to(result_logits.device)
+    learned_losses = full_losses.gather(1, learned_result.unsqueeze(-1)).squeeze(-1)
+    true_losses = cached.true_losses.to(result_logits.device)
+    target_entropy = -(
+        effective_weights * effective_weights.clamp_min(1.0e-12).log()
+    ).sum(dim=-1)
+    return target_loss, {
+        "result_boundary_target_loss": float(target_loss.detach().item()),
+        "result_boundary_target_mode": cached.target_mode,
+        "result_boundary_target_scoring_bottleneck_mode": cached.scoring_bottleneck_mode,
+        "result_boundary_target_temperature": float("nan"),
+        "result_boundary_target_min_probability_floor": float("nan"),
+        "result_boundary_target_chunk_size": 0,
+        "result_boundary_target_sample_count": 0,
+        "result_boundary_target_unique_sampling": 0,
+        "result_boundary_target_policy_topk_count": 0,
+        "result_boundary_target_teacher": 1,
+        "result_boundary_target_cached": 1,
+        "result_boundary_target_cache_mode": cache_mode,
+        "result_boundary_target_scored_results": int(result_logits.shape[-1]),
+        "result_boundary_target_unique_scored_results": float(result_logits.shape[-1]),
+        "result_boundary_target_unique_candidate_fraction": 1.0,
+        "result_boundary_target_true_candidate_coverage": 1.0,
+        "result_boundary_target_forced_eval_count": cached.forced_eval_count,
+        "result_boundary_target_zero_loss": (
+            float(cached.zero_losses.mean().item())
+            if cached.zero_losses is not None
+            else float("nan")
+        ),
+        "result_boundary_target_zero_improvement_positive_fraction": float("nan"),
+        "result_boundary_target_zero_improvement_true_fraction": float(
+            (cached.true_result_probability > 0).float().mean().item()
+        ),
+        "result_boundary_target_zero_improvement_mean_positive_mass": float("nan"),
+        "result_boundary_target_best_nll": float(cached.best_losses.mean().item()),
+        "result_boundary_target_true_nll": float(cached.true_losses.mean().item()),
+        "result_boundary_target_learned_nll": float(learned_losses.mean().item()),
+        "result_boundary_target_learned_minus_best_gap": float(
+            (learned_losses - cached.best_losses.to(result_logits.device)).mean().item()
+        ),
+        "result_boundary_target_learned_minus_true_gap": float(
+            (learned_losses - true_losses).mean().item()
+        ),
+        "result_boundary_target_hard_best_equals_true_sum": float(
+            (best_result == true_sum).float().mean().item()
+        ),
+        "result_boundary_target_tie_aware_true_result_best_fraction": float("nan"),
+        "result_boundary_target_true_result_probability": float(
+            effective_weights.gather(1, true_sum.unsqueeze(-1)).mean().item()
+        ),
+        "result_boundary_target_entropy": float(target_entropy.mean().item()),
+        "result_boundary_target_effective_results": float(
+            target_entropy.exp().mean().item()
+        ),
+        "result_boundary_target_regret_set_fraction": float("nan"),
+        "result_boundary_target_regret_set_true_fraction": float("nan"),
+        "result_boundary_target_learned_best_fraction": float(
+            (learned_result == best_result).float().mean().item()
+        ),
+        "result_boundary_target_hard_learned_calc_accuracy": float(
+            (learned_result == true_sum).float().mean().item()
+        ),
+    }
 
 
 def _selected_eq_rows(tensor: torch.Tensor, tokens: torch.Tensor) -> torch.Tensor:
@@ -7787,6 +8010,22 @@ def run_variant(
             answer_format=args.answer_format,
         )
         exhaustive_grid_size = int(exhaustive_grid_batch.x.shape[0])
+    cached_result_boundary_target = None
+    if args.result_boundary_target_cache:
+        if exhaustive_grid_batch is None:
+            raise ValueError(
+                "--result-boundary-target-cache requires --exhaustive-grid-batch"
+            )
+        cache_source = result_boundary_target_teacher or model
+        cached_result_boundary_target = build_cached_result_boundary_target(
+            cache_source,
+            exhaustive_grid_batch,
+            num_digits=num_digits,
+            target_mode=args.result_boundary_target_mode,
+            temperature=args.result_boundary_target_temperature,
+            min_probability_floor=args.result_boundary_target_min_probability_floor,
+            chunk_size=args.result_boundary_target_chunk_size,
+        )
     if (
         args.calculator_estimator
         in {
@@ -7934,6 +8173,8 @@ def run_variant(
         result_boundary_target_teacher_load_scope=(
             args.result_boundary_target_teacher_load_scope
         ),
+        result_boundary_target_cache=args.result_boundary_target_cache,
+        result_boundary_target_cache_mode=args.result_boundary_target_cache_mode,
         result_policy_entropy_weight=args.result_policy_entropy_weight,
         result_policy_batch_diversity_weight=(
             args.result_policy_batch_diversity_weight
@@ -8989,24 +9230,35 @@ def run_variant(
             )
             loss = loss + expected_answer_loss_objective
         if use_result_boundary_target:
-            (
-                result_boundary_loss,
-                result_boundary_target_metrics,
-            ) = result_boundary_target_loss(
-                model,
-                batch,
-                num_digits=num_digits,
-                target_mode=args.result_boundary_target_mode,
-                temperature=args.result_boundary_target_temperature,
-                min_probability_floor=(
-                    args.result_boundary_target_min_probability_floor
-                ),
-                chunk_size=args.result_boundary_target_chunk_size,
-                sample_count=args.result_boundary_target_sample_count,
-                unique_sampling=args.result_boundary_target_unique_sampling,
-                policy_topk_count=args.result_boundary_target_policy_topk_count,
-                target_model=result_boundary_target_teacher,
-            )
+            if cached_result_boundary_target is not None:
+                (
+                    result_boundary_loss,
+                    result_boundary_target_metrics,
+                ) = cached_result_boundary_target_loss(
+                    model,
+                    batch,
+                    cached_result_boundary_target,
+                    cache_mode=args.result_boundary_target_cache_mode,
+                )
+            else:
+                (
+                    result_boundary_loss,
+                    result_boundary_target_metrics,
+                ) = result_boundary_target_loss(
+                    model,
+                    batch,
+                    num_digits=num_digits,
+                    target_mode=args.result_boundary_target_mode,
+                    temperature=args.result_boundary_target_temperature,
+                    min_probability_floor=(
+                        args.result_boundary_target_min_probability_floor
+                    ),
+                    chunk_size=args.result_boundary_target_chunk_size,
+                    sample_count=args.result_boundary_target_sample_count,
+                    unique_sampling=args.result_boundary_target_unique_sampling,
+                    policy_topk_count=args.result_boundary_target_policy_topk_count,
+                    target_model=result_boundary_target_teacher,
+                )
             result_boundary_target_loss_value = result_boundary_target_metrics[
                 "result_boundary_target_loss"
             ]
@@ -10227,6 +10479,10 @@ def run_variant(
     metrics["result_boundary_target_teacher_load_scope"] = (
         args.result_boundary_target_teacher_load_scope
     )
+    metrics["result_boundary_target_cache"] = args.result_boundary_target_cache
+    metrics["result_boundary_target_cache_mode"] = (
+        args.result_boundary_target_cache_mode
+    )
     metrics["additive_semantic_distill_weight"] = (
         args.additive_semantic_distill_weight
     )
@@ -11248,6 +11504,24 @@ def parse_args() -> argparse.Namespace:
         choices=["full_model", "semantic_decoder_only", "compatible_model"],
         default="full_model",
         help="Checkpoint load scope for --result-boundary-target-teacher-checkpoint.",
+    )
+    parser.add_argument(
+        "--result-boundary-target-cache",
+        action="store_true",
+        help=(
+            "Build the result-boundary target table once on the exhaustive grid "
+            "and train live result logits against the cached table. Intended as "
+            "a policy-uptake diagnostic, not a scalable final recipe."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-cache-mode",
+        choices=["target_weights", "hard_best"],
+        default="target_weights",
+        help=(
+            "Use the cached soft/weighted target distribution or a hard CE target "
+            "to the cached teacher best result."
+        ),
     )
     parser.add_argument(
         "--result-policy-entropy-weight",
@@ -12526,6 +12800,16 @@ def main() -> None:
             "--result-boundary-target-teacher-checkpoint does not exist: "
             f"{args.result_boundary_target_teacher_checkpoint}"
         )
+    if args.result_boundary_target_cache:
+        if not args.exhaustive_grid_batch:
+            raise ValueError(
+                "--result-boundary-target-cache requires --exhaustive-grid-batch"
+            )
+        if args.result_boundary_target_sample_count > 0:
+            raise ValueError(
+                "--result-boundary-target-cache requires full enumeration "
+                "with --result-boundary-target-sample-count 0"
+            )
     if args.result_policy_entropy_weight < 0:
         raise ValueError("--result-policy-entropy-weight must be non-negative")
     if args.result_policy_batch_diversity_weight < 0:
@@ -13170,6 +13454,8 @@ def main() -> None:
                     )
             if args.result_boundary_target_teacher_checkpoint is not None:
                 suffix_parts.append("rbtteacher")
+            if args.result_boundary_target_cache:
+                suffix_parts.append(f"rbtcache{args.result_boundary_target_cache_mode}")
         if args.result_boundary_target_min_probability_floor > 0:
             suffix_parts.append(
                 "rbtfloor"
@@ -13503,7 +13789,9 @@ def main() -> None:
         f"sample_count={args.result_boundary_target_sample_count} "
         f"unique_sampling={args.result_boundary_target_unique_sampling} "
         f"policy_topk_count={args.result_boundary_target_policy_topk_count} "
-        f"teacher_checkpoint={args.result_boundary_target_teacher_checkpoint}"
+        f"teacher_checkpoint={args.result_boundary_target_teacher_checkpoint} "
+        f"cache={args.result_boundary_target_cache} "
+        f"cache_mode={args.result_boundary_target_cache_mode}"
     )
     print(
         "additive semantic distillation: "

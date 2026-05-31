@@ -831,6 +831,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/167-cached-teacher-tables-separate-policy-imitation-from-teacher-target-quality",
+      "target": "researchMemory/hypotheses/phase7/167-cached-teacher-tables-separate-policy-imitation-from-teacher-target-quality.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1313,6 +1318,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-frozen-teacher-additive-target-anchor.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-cached-teacher-target-table.md",
       "type": "supported_by"
     },
     {
@@ -2653,6 +2663,13 @@
       "source_path": "researchMemory/hypotheses/phase7/166-frozen-teacher-additive-target-anchoring-preserves-target-quality-but-leaves-policy-uptake.md",
       "status": "MIXED-NEGATIVE",
       "title": "Frozen-teacher additive target anchoring preserves target quality but leaves policy uptake weak."
+    },
+    {
+      "id": "doc/167-cached-teacher-tables-separate-policy-imitation-from-teacher-target-quality",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/167-cached-teacher-tables-separate-policy-imitation-from-teacher-target-quality.md",
+      "status": "MIXED",
+      "title": "Cached teacher tables separate policy imitation from teacher-target quality."
     },
     {
       "id": "doc/phase7-direction-memory",

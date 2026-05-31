@@ -601,6 +601,13 @@ Memory:
   the post-calculator decoder still let pre-hook residual changes drift the
   target (`best=true=0.1575`). Do not run same-checkpoint anchor sweeps as
   novelty; policy uptake needs a different mechanism.
+- Cached teacher target tables separate uptake from target quality. Cached
+  soft zero-improvement weights reproduced the online anchor (`0.4000`
+  learned-best / `0.1650` final), so repeated rescoring was not the bottleneck.
+  Cached hard-best was much easier to imitate (`0.7100` learned-best after
+  1600 steps), but final eval reached only `0.3725` because the teacher-best
+  table is true for only `0.5225` of prompts. Use cache as a diagnostic for
+  better target construction, not as the next recipe.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -667,6 +674,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-additive-zero-improvement-source-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-semantic-distilled-additive-zero-improvement.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-frozen-teacher-additive-target-anchor.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-cached-teacher-target-table.md`
 - `researchReviews/2026-05-30-sampled-result-boundary-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`
