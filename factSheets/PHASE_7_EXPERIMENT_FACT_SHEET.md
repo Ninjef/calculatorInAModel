@@ -10401,6 +10401,9 @@ Implementation:
 - Added `scripts/diagnose_amortized_prior_from_trace.py`, which fits the same
   prior from `train_prompt_trace_rows.csv` and evaluates it on
   `heldout_prompt_trace_rows.csv`.
+- Added `scripts/run_amortized_prior_replay_gate.py`, which loads the
+  heldout-failed source, fits the prior from train traces, replays pseudo-targets
+  into the source result head, and reports train/heldout calculator accuracy.
 - Added a focused unit test that the prior can learn prompt-memory targets.
 
 Diagnostic inputs:
@@ -10414,6 +10417,8 @@ Diagnostic outputs:
 ```text
 runs/amortized_prior_trace_diagnostics/heldout20_source_embedding_prior_fit.json
 runs/amortized_prior_trace_diagnostics/heldout20_source_numeric_prior_fit.json
+runs/amortized_prior_replay_gates/heldout20_numeric_result_head_trainmix500/summary.json
+runs/amortized_prior_replay_gates/heldout20_embedding_result_head_trainmix500/summary.json
 ```
 
 Results:
@@ -10424,9 +10429,12 @@ Results:
   heldout-vs-true `0.0000` with mean confidence `0.7452`.
 - Numeric prior: fit train memory at `1.000`, train-vs-true `0.996875`, and
   heldout-vs-true `0.9125` with mean confidence `0.8486`.
-- Tiny integrated smoke runs verified that embedding and numeric prior replay
-  paths execute inside `overfit_one_batch.py`, but they were intentionally too
-  short to test model uptake.
+- Post-hoc result-head replay with numeric prior pseudo-targets and train replay
+  weight `1`: heldout exact/calc moved from `0.0875` to `0.9125`, while train
+  stayed high at `0.990625`.
+- Matched embedding-prior replay control: heldout fell to `0.0125` and train
+  reached `0.959375`, consistent with the embedding prior memorizing seen keys
+  rather than supplying useful fresh-prompt targets.
 
 Interpretation:
 
@@ -10435,6 +10443,8 @@ Interpretation:
 - Normalized numeric operand features are a promising amortized target prior:
   they recover most heldout targets from answer-derived discovered train
   targets without forced-scoring heldout prompts.
-- This is not yet a model-training success. The next gate must test whether
-  numeric-prior replay raises heldout calculator-result accuracy in the source
-  model above the no-prior `0.0875` boundary.
+- Post-hoc numeric replay shows the source result head can absorb those targets
+  and repair heldout prompts while preserving seen prompts.
+- This is not yet an end-to-end source-training success. The next gate should
+  integrate numeric-prior replay during streaming source training, then test
+  heldout and train prompts before any trusted handoff.

@@ -120,8 +120,8 @@ Active directions:
   `1.000` with low controls while freezing memory after `173,568` forced evals.
   A 20% heldout-prompt split exposed the limit: train prompts reached `0.997`
   calc/exact, but heldout prompts only `0.0875`. Next work needs a mechanism
-  for fresh-prompt generalization; a numeric amortized prior is the first
-  promising diagnostic (`0.9125` heldout target accuracy), not yet a source gate.
+  for fresh-prompt generalization; numeric-prior post-hoc replay lifted heldout
+  to `0.9125` while preserving train at `0.9906`, but end-to-end source training is open.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
@@ -161,7 +161,7 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Run the numeric amortized-prior heldout source gate; prompt-keyed memory alone fails heldout prompts.
+1. Integrate numeric-prior replay into the streaming source; post-hoc replay works, prompt-keyed memory alone fails heldout prompts.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark

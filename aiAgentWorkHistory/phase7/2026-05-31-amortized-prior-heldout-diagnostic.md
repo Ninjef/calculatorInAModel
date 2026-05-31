@@ -18,6 +18,9 @@ useful calculator-result targets for prompts that were not forced-scored?
   `--result-boundary-target-amortized-prior-replay-batch-size`.
 - Added `scripts/diagnose_amortized_prior_from_trace.py` to fit the same prior
   from trace CSVs and evaluate train/heldout target generalization.
+- Added `scripts/run_amortized_prior_replay_gate.py` to load the heldout-failed
+  source, fit the prior, replay pseudo-targets into the source result head, and
+  measure train/heldout uptake.
 - Added a unit test that the prior can learn prompt-memory targets.
 
 ## Evidence
@@ -33,6 +36,9 @@ Diagnostic outputs:
 ```text
 runs/amortized_prior_trace_diagnostics/heldout20_source_embedding_prior_fit.json
 runs/amortized_prior_trace_diagnostics/heldout20_source_numeric_prior_fit.json
+runs/amortized_prior_replay_gates/heldout20_numeric_result_head_500/summary.json
+runs/amortized_prior_replay_gates/heldout20_numeric_result_head_trainmix500/summary.json
+runs/amortized_prior_replay_gates/heldout20_embedding_result_head_trainmix500/summary.json
 ```
 
 Results:
@@ -43,8 +49,13 @@ Results:
   heldout-vs-true `0.0000`, confidence `0.7452`.
 - Numeric prior: train-memory fit `1.000`, train-vs-true `0.996875`,
   heldout-vs-true `0.9125`, confidence `0.8486`.
-- Tiny integrated smoke runs verified both online prior replay paths execute;
-  those runs were not intended as performance gates.
+- Heldout-only numeric result-head replay moved heldout exact/calc from
+  `0.0875` to `0.9000`, but damaged train exact/calc to `0.365625`.
+- Mixed train+heldout numeric result-head replay moved heldout exact/calc from
+  `0.0875` to `0.9125` while preserving train at `0.990625`.
+- Mixed train+heldout embedding-prior replay reached only `0.0125` heldout and
+  `0.959375` train, confirming that numeric features supply the useful
+  fresh-prompt target signal.
 
 ## Interpretation
 
@@ -52,12 +63,14 @@ The arbitrary embedding prior simply memorizes prompt keys, so it repeats the
 transductive-memory failure. Normalized numeric operand features are a real
 fresh-prompt target-generalization signal: they recover most heldout targets
 from answer-derived discovered train targets, without forced-scoring heldout
+prompts. Post-hoc replay shows the heldout-failed source result head can absorb
+those pseudo-targets and repair heldout calculator use without sacrificing seen
 prompts.
 
-This is not enough to claim the calculator source works on heldout prompts. The
-next required gate is a full numeric-prior heldout source run that measures
-whether detached prior pseudo-target replay lifts heldout calculator-result
-accuracy above the no-prior `0.0875` boundary.
+This is still not enough to claim end-to-end source training works on heldout
+prompts. The next required gate is to integrate numeric-prior replay during the
+streaming source run itself, then measure seen and heldout calculator accuracy
+before any trusted handoff.
 
 ## Verification
 
@@ -66,4 +79,5 @@ PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 -m py_compile scripts/overfit_one
 PYTHONPATH=. PYTHONPYCACHEPREFIX=/tmp/codex_pycache pytest tests/test_model.py -q -k "amortized_prior"
 PYTHONPATH=. PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 scripts/diagnose_amortized_prior_from_trace.py ... --feature-mode embedding --steps 600
 PYTHONPATH=. PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 scripts/diagnose_amortized_prior_from_trace.py ... --feature-mode numeric --steps 2000
+PYTHONPYCACHEPREFIX=/tmp/codex_pycache python3 scripts/run_amortized_prior_replay_gate.py ... --prior-feature-mode numeric --train-replay-weight 1
 ```

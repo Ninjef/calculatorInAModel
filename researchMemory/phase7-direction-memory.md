@@ -278,9 +278,10 @@ Memory:
   `320` discovered train-memory targets fit train memory but got `0.0000`
   heldout target accuracy, while the same prior with normalized numeric operand
   features reached `0.9125` heldout target accuracy on the `80` unscored
-  prompts. This is not a source-policy success yet; tiny integrated smoke runs
-  only verify the replay path executes. The next gate is whether numeric-prior
-  pseudo-targets raise heldout calculator-result accuracy in the model.
+  prompts. Post-hoc result-head replay with numeric pseudo-targets lifted
+  heldout exact/calc from `0.0875` to `0.9125` while keeping train at `0.9906`;
+  the embedding replay control reached only `0.0125` heldout. Next gate:
+  integrate numeric-prior replay during source training itself.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
