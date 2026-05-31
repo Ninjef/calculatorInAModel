@@ -1,7 +1,7 @@
 # Phase 7 Direction Memory
 
 Status: active synthesis
-Last updated: 2026-05-30
+Last updated: 2026-05-31
 
 This file consolidates Phase 7 lessons by research direction. It is meant to
 be easier to retrieve than the chronological fact sheet.
@@ -608,14 +608,22 @@ Memory:
   1600. Teacher quality matters, but this remains cached/full-enum and below
   the teacher's `0.8200` best-true ceiling. Use cache as a diagnostic for
   better target construction, not as the recipe.
-- Online hard result-boundary memory is the new sparse answer-derived lead.
+- Online hard result-boundary memory is the sparse answer-derived lead.
   Topk8+unique24 zero-improvement scoring fills a hard per-prompt memory, and
   the freeze-full branch stops rescoring after `86,400` forced evals while
   reaching `0.9675` calc / `0.9725` final at 800. The first trusted additive
   handoff missed (`0.465` final / `0.485` normal) despite preserved frozen calc
   (`0.9575`), so source discovery is strong but handoff/readout geometry is not.
-  Next work needs handoff-aware shaping, fresh-seed handoff, or streaming/fresh
-  prompts; do not run source-only repeats as novelty.
+- Adding arbitrary-result additive semantic distillation during that source
+  training repairs the handoff geometry on the op19 fixed-grid gate. The
+  combined source reached `1.0000` final/calc and semantic token agreement
+  `0.7459`; the trusted frozen-policy additive handoff reached `1.0000`
+  final / step-600 normal with low controls (`0.0525` injection-zero, `0.0050`
+  forced-zero, `0.0175` forced-random). The auxiliary teaches the additive
+  path what result classes mean without specifying which result each prompt
+  should request. Next work must test fresh seeds, streaming/fresh prompts,
+  larger ranges, or routed/many-calculator versions; do not tune the same op19
+  weight/sample/length as novelty.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -685,6 +693,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-cached-teacher-target-table.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-high-quality-cached-teacher-table.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-result-boundary.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-handoff.md`
 - `researchReviews/2026-05-30-sampled-result-boundary-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`

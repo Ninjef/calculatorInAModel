@@ -1,5 +1,6 @@
 import argparse
 import csv
+import hashlib
 import json
 import math
 import random
@@ -40,6 +41,7 @@ DEFAULT_SEED = 0
 LOG_EVERY = 50
 SHADOW_FEEDBACK_TARGET_NORMALIZATION_EPS = 1e-6
 SHADOW_FEEDBACK_FEATURE_NORMALIZATION_EPS = 1e-6
+RUN_SUFFIX_MAX_LENGTH = 180
 
 
 @dataclass(frozen=True)
@@ -1004,6 +1006,16 @@ def create_unique_dir(path: Path) -> Path:
         except FileExistsError:
             continue
     raise FileExistsError(f"could not create a unique run directory for {path}")
+
+
+def shorten_run_suffix(suffix: str, max_length: int = RUN_SUFFIX_MAX_LENGTH) -> str:
+    if len(suffix) <= max_length:
+        return suffix
+    digest = hashlib.sha1(suffix.encode("utf-8")).hexdigest()[:10]
+    keep = max_length - len(digest) - 1
+    if keep < 1:
+        return digest[:max_length]
+    return f"{suffix[:keep]}-{digest}"
 
 
 def masked_cross_entropy_per_example(
@@ -14064,7 +14076,7 @@ def main() -> None:
             suffix_parts.append(f"auxdecay{args.aux_operand_loss_decay_steps}")
         if args.aux_operand_loss_floor > 0:
             suffix_parts.append(f"auxfloor{args.aux_operand_loss_floor:g}")
-    suffix = "-".join(suffix_parts)
+    suffix = shorten_run_suffix("-".join(suffix_parts))
     base_run_dir = create_unique_dir(args.run_root / f"{timestamp}_{suffix}")
 
     print(f"device: {device}")

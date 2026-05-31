@@ -1716,6 +1716,23 @@ def test_full_enum_action_loss_builds_soft_marginals() -> None:
     )
 
 
+def test_long_run_suffix_is_shortened_with_stable_digest() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location("overfit_suffix", script_path)
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    suffix = "model-c-" + ("verylongoption-" * 40)
+    shortened = overfit_script.shorten_run_suffix(suffix, max_length=64)
+
+    assert len(shortened) == 64
+    assert shortened == overfit_script.shorten_run_suffix(suffix, max_length=64)
+    assert shortened.startswith("model-c-")
+    assert shortened != suffix
+
+
 def test_exhaustive_range_batch_covers_ordered_pairs_once() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location("overfit_exhaustive_batch", script_path)

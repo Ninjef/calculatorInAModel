@@ -846,6 +846,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/170-additive-semantic-distillation-repairs-online-hard-memory-handoff-geometry-on-the-op19-gat",
+      "target": "researchMemory/hypotheses/phase7/170-additive-semantic-distillation-repairs-online-hard-memory-handoff-geometry-on-the-op19-gat.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1343,6 +1348,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-result-boundary.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-handoff.md",
       "type": "supported_by"
     },
     {
@@ -2704,6 +2714,13 @@
       "source_path": "researchMemory/hypotheses/phase7/169-online-hard-result-boundary-memory-turns-sparse-zero-improvement-discovery-into-a-strong-s.md",
       "status": "MIXED-POSITIVE",
       "title": "Online hard result-boundary memory turns sparse zero-improvement discovery into a strong source but misses handoff."
+    },
+    {
+      "id": "doc/170-additive-semantic-distillation-repairs-online-hard-memory-handoff-geometry-on-the-op19-gat",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/170-additive-semantic-distillation-repairs-online-hard-memory-handoff-geometry-on-the-op19-gat.md",
+      "status": "POSITIVE",
+      "title": "Additive semantic distillation repairs online-hard-memory handoff geometry on the op19 gate."
     },
     {
       "id": "doc/phase7-direction-memory",

@@ -9917,3 +9917,91 @@ Interpretation:
   geometry even though source accuracy is perfect. Do not treat tied output as
   a solved many-calculator recipe until a handoff-aware source or readout
   mechanism clears the trusted gate.
+
+## Online Hard Memory Plus Semantic Distillation Handoff
+
+Question:
+
+- Can the strong sparse online-hard-memory zero-improvement source be made
+  handoff-compatible by adding a non-prescriptive additive readout-semantics
+  auxiliary during source training?
+
+Tooling note:
+
+- Long combinations of CLI flags can exceed macOS path-component limits when
+  the run suffix is auto-generated. Added deterministic run-suffix shortening
+  with a stable hash digest so dense experiment names still launch while full
+  settings remain in `config.json` and `metrics.json`.
+
+Source run:
+
+```text
+runs/ohm_semdist_src800/2026-05-30_193507_633991_model-c-op0-19-fullgrid-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rbtonlinehardmem-rbtmem-44b570a4cc/model-c-2digit-seed6
+```
+
+Source settings:
+
+- `operand_max=19`, exhaustive `400`-prompt grid.
+- `result_boundary_target_mode=zero_improvement`.
+- Sparse candidate scoring with `topk8+unique24`.
+- `--result-boundary-target-online-hard-memory`.
+- `--result-boundary-target-online-memory-freeze-when-full`.
+- Added `--additive-semantic-distill-weight 1`.
+- Added `--additive-semantic-distill-sample-count 8`.
+- Same frozen product semantic decoder checkpoint as the preceding online-hard
+  source.
+
+Source results:
+
+- Final eval: `400/400 = 1.0000`.
+- Step-800 normal/source calc: `1.0000`.
+- Step-800 injection-zero: `0.0450`.
+- Diagnostic calculator-result accuracy: `1.0000`.
+- Final counterfactuals on 128 samples: injection-zero `0.0391`,
+  forced-zero `0.0000`, forced-random `0.0391`.
+- Online hard memory was full/frozen by step `50` and stayed at `86,400`
+  cumulative forced-result evaluations.
+- Additive semantic distillation token agreement rose to `0.7459` by step
+  `800`.
+
+Trusted handoff run:
+
+```text
+runs/ohm_semdist_handoff600/2026-05-30_193842_897628_model-c-op0-19-fullgrid-adec-product/model-c-2digit-seed6
+```
+
+Handoff settings:
+
+- Loaded the source final checkpoint with
+  `--semantic-decoder-checkpoint-load-scope compatible_model`.
+- `calculator_bottleneck_mode=none`.
+- `calculator_estimator=ste`.
+- `--freeze-semantic-decoder`.
+- `--freeze-calculator-policy`.
+- `answer_loss_weight=1`.
+- `600` downstream/readout steps.
+
+Handoff results:
+
+- Final eval: `400/400 = 1.0000`.
+- Step-600 normal: `1.0000`.
+- Step-600 injection-zero: `0.0525`.
+- Step-600 forced-zero: `0.0050`.
+- Step-600 forced-random: `0.0175`.
+- Step-600 oracle-at-eval: `1.0000`.
+- Step-600 calculator-result accuracy: `1.0000`.
+- Final 128-sample counterfactuals: injection-zero `0.0547`,
+  forced-zero `0.0000`, forced-random `0.0312`.
+
+Interpretation:
+
+- This directly fixes the previous online-hard-memory handoff miss on the same
+  fixed-grid op19 gate: prior source-only online hard memory had high source
+  calc (`0.9575`) but handoff final only `0.4650`; adding semantic readout
+  distillation made both source and trusted handoff perfect.
+- The auxiliary is less prescriptive than forced-true/margin: it trains the
+  additive path to understand arbitrary result classes, but it does not specify
+  which result each prompt should request.
+- This is still not the full thesis. It remains a fixed-grid memory result
+  with sparse candidate scoring, so the next evidence must be fresh-seed,
+  streaming/fresh-prompt, larger-range, or many-calculator validation.

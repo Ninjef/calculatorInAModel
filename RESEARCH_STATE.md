@@ -1,4 +1,4 @@
-# Research State (Last updated: 2026-05-30)
+# Research State (Last updated: 2026-05-31)
 Maintenance rule: keep near `200` lines; move stale context to reviews, memories, fact sheets, or work logs.
 ## Overarching Goal
 
@@ -113,12 +113,14 @@ Active directions:
   required, but full enumeration and frozen transfer remain unsolved issues.
   Static approximations are paused: critics/proposals are costly or state-local,
   soft/regret/sampled hard-best targets are weak, and simple online calibration
-  is partial. Zero-injection plus online hard memory is the new lead: sparse
-  topk8+unique24 scoring fills a true hard target memory, freezes after only
-  `86,400` forced evals, and reaches `0.973` final / `0.967` calc at 800.
-  First frozen additive handoff missed (`0.465` final / `0.485` normal despite
-  `0.958` calc); next work must address handoff geometry or streaming/fresh
-  prompts, not source accuracy alone.
+  is partial. Zero-injection plus online hard memory is the sparse source lead:
+  topk8+unique24 fills a true hard target memory and freezes after only
+  `86,400` forced evals. Source-only memory missed handoff (`0.465` final
+  despite `0.958` calc), but adding non-prescriptive additive semantic
+  distillation during source training fixed the handoff geometry on the same
+  gate: source and trusted frozen additive handoff both reached `1.000` final
+  with low zero/random controls. Next stress fresh seeds, streaming prompts, or
+  many-calculator scaling before treating it as a recipe.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
@@ -154,14 +156,12 @@ These branches should not continue without a new mechanism:
   warnings, or hypothesis generation unless validated against fresh-family
   600-step handoff outcomes.
 - Source accuracy as a source-checkpoint selector.
-- Slight weight/seed/length changes to already failed source-stabilization
-  recipes unless tied to a new transfer-geometry objective.
+- Slight weight/seed/length tweaks unless tied to a new transfer objective.
 
 ## Next 1-3 Experiments
 
-1. Move mainline compute toward less-prescriptive answer-derived credit:
-   changed target construction/estimators, streaming validation, or replacing
-   forced-result enumeration.
+1. Validate online-hard-memory plus semantic distillation beyond fixed op19:
+   fresh seed, streaming/fresh prompts, or many-calculator scaling.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark
