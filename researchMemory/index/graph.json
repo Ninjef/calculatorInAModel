@@ -896,6 +896,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/180-sustained-train-memory-convergence-gating-reduces-full-memory-prior-updates-below-every-2",
+      "target": "researchMemory/hypotheses/phase7/180-sustained-train-memory-convergence-gating-reduces-full-memory-prior-updates-below-every-2-.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1103,6 +1108,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-05-31-amortized-prior-fit-cadence-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-31-amortized-prior-convergence-stop-gate.md",
       "type": "supported_by"
     },
     {
@@ -2904,6 +2914,13 @@
       "source_path": "researchMemory/hypotheses/phase7/179-every-other-step-full-memory-prior-fitting-preserves-the-integrated-numeric-prior-source-a.md",
       "status": "POSITIVE-WITH-CAVEAT",
       "title": "Every-other-step full-memory prior fitting preserves the integrated numeric-prior source and handoff result, but every-10 underfits."
+    },
+    {
+      "id": "doc/180-sustained-train-memory-convergence-gating-reduces-full-memory-prior-updates-below-every-2",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/180-sustained-train-memory-convergence-gating-reduces-full-memory-prior-updates-below-every-2-.md",
+      "status": "POSITIVE-WITH-CAVEAT",
+      "title": "Sustained train-memory convergence gating reduces full-memory prior updates below every-2 while preserving heldout source and handoff quality."
     },
     {
       "id": "doc/phase7-direction-memory",

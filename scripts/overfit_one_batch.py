@@ -141,6 +141,8 @@ class TrainConfig:
     result_boundary_target_amortized_prior_replay_batch_size: int
     result_boundary_target_amortized_prior_fit_batch_size: int
     result_boundary_target_amortized_prior_fit_every: int
+    result_boundary_target_amortized_prior_stop_train_accuracy: float
+    result_boundary_target_amortized_prior_stop_patience: int
     result_boundary_target_amortized_prior_train_replay_weight: float
     result_policy_entropy_weight: float
     result_policy_batch_diversity_weight: float
@@ -353,6 +355,9 @@ class ResultBoundaryAmortizedPrior:
     fit_every: int
     train_steps: int = 1
     train_updates: int = 0
+    fit_converged_steps: int = 0
+    fit_stopped: bool = False
+    last_train_accuracy: float = float("nan")
 
 
 def pick_device(preference: str = "auto") -> str:
@@ -3601,6 +3606,12 @@ def train_result_boundary_amortized_prior(
                 prior.train_updates
             ),
             "result_boundary_target_amortized_prior_fit_step": 0.0,
+            "result_boundary_target_amortized_prior_fit_converged_steps": float(
+                prior.fit_converged_steps
+            ),
+            "result_boundary_target_amortized_prior_fit_stopped": float(
+                prior.fit_stopped
+            ),
         }
     a_all, b_all, y_all = entry_batch
     entry_count = int(y_all.shape[0])
@@ -3613,6 +3624,12 @@ def train_result_boundary_amortized_prior(
                 prior.train_updates
             ),
             "result_boundary_target_amortized_prior_fit_step": 0.0,
+            "result_boundary_target_amortized_prior_fit_converged_steps": float(
+                prior.fit_converged_steps
+            ),
+            "result_boundary_target_amortized_prior_fit_stopped": float(
+                prior.fit_stopped
+            ),
         }
     loss_value = float("nan")
     fit_step = 0.0
@@ -3640,14 +3657,42 @@ def train_result_boundary_amortized_prior(
     with torch.no_grad():
         train_logits = prior.model(a_all, b_all)
         train_accuracy = (train_logits.argmax(dim=-1) == y_all).float().mean()
+    prior.last_train_accuracy = float(train_accuracy.item())
     return {
         "result_boundary_target_amortized_prior_entries": float(entry_count),
         "result_boundary_target_amortized_prior_loss": loss_value,
         "result_boundary_target_amortized_prior_train_accuracy": float(
-            train_accuracy.item()
+            prior.last_train_accuracy
         ),
         "result_boundary_target_amortized_prior_updates": float(prior.train_updates),
         "result_boundary_target_amortized_prior_fit_step": fit_step,
+        "result_boundary_target_amortized_prior_fit_converged_steps": float(
+            prior.fit_converged_steps
+        ),
+        "result_boundary_target_amortized_prior_fit_stopped": float(
+            prior.fit_stopped
+        ),
+    }
+
+
+def skipped_result_boundary_amortized_prior_metrics(
+    prior: ResultBoundaryAmortizedPrior,
+    memory: ResultBoundaryPromptHardMemory,
+) -> dict[str, float]:
+    return {
+        "result_boundary_target_amortized_prior_entries": float(len(memory.entries)),
+        "result_boundary_target_amortized_prior_loss": float("nan"),
+        "result_boundary_target_amortized_prior_train_accuracy": float(
+            prior.last_train_accuracy
+        ),
+        "result_boundary_target_amortized_prior_updates": float(prior.train_updates),
+        "result_boundary_target_amortized_prior_fit_step": 0.0,
+        "result_boundary_target_amortized_prior_fit_converged_steps": float(
+            prior.fit_converged_steps
+        ),
+        "result_boundary_target_amortized_prior_fit_stopped": float(
+            prior.fit_stopped
+        ),
     }
 
 
@@ -9216,6 +9261,12 @@ def run_variant(
         result_boundary_target_amortized_prior_fit_every=(
             args.result_boundary_target_amortized_prior_fit_every
         ),
+        result_boundary_target_amortized_prior_stop_train_accuracy=(
+            args.result_boundary_target_amortized_prior_stop_train_accuracy
+        ),
+        result_boundary_target_amortized_prior_stop_patience=(
+            args.result_boundary_target_amortized_prior_stop_patience
+        ),
         result_boundary_target_amortized_prior_train_replay_weight=(
             args.result_boundary_target_amortized_prior_train_replay_weight
         ),
@@ -10367,18 +10418,64 @@ def run_variant(
                 result_boundary_amortized_prior is not None
                 and result_boundary_prompt_hard_memory is not None
             ):
-                prior_should_fit = (
-                    result_boundary_amortized_prior.train_updates == 0
-                    or step % result_boundary_amortized_prior.fit_every == 0
+                prompt_memory_expected = (
+                    result_boundary_prompt_hard_memory.expected_prompt_count
                 )
-                prior_train_metrics = train_result_boundary_amortized_prior(
-                    result_boundary_amortized_prior,
-                    result_boundary_prompt_hard_memory,
-                    num_digits=num_digits,
-                    device=device,
-                    rng=rng,
-                    update=prior_should_fit,
+                prompt_memory_full = (
+                    prompt_memory_expected is not None
+                    and len(result_boundary_prompt_hard_memory.entries)
+                    >= prompt_memory_expected
                 )
+                if result_boundary_amortized_prior.fit_stopped:
+                    prior_train_metrics = skipped_result_boundary_amortized_prior_metrics(
+                        result_boundary_amortized_prior,
+                        result_boundary_prompt_hard_memory,
+                    )
+                else:
+                    prior_should_fit = (
+                        result_boundary_amortized_prior.train_updates == 0
+                        or step % result_boundary_amortized_prior.fit_every == 0
+                    )
+                    prior_train_metrics = train_result_boundary_amortized_prior(
+                        result_boundary_amortized_prior,
+                        result_boundary_prompt_hard_memory,
+                        num_digits=num_digits,
+                        device=device,
+                        rng=rng,
+                        update=prior_should_fit,
+                    )
+                    stop_accuracy = (
+                        args.result_boundary_target_amortized_prior_stop_train_accuracy
+                    )
+                    prior_fit_step = bool(
+                        prior_train_metrics[
+                            "result_boundary_target_amortized_prior_fit_step"
+                        ]
+                    )
+                    prior_train_accuracy = prior_train_metrics[
+                        "result_boundary_target_amortized_prior_train_accuracy"
+                    ]
+                    if stop_accuracy > 0 and prompt_memory_full and prior_fit_step:
+                        if prior_train_accuracy >= stop_accuracy:
+                            result_boundary_amortized_prior.fit_converged_steps += 1
+                        else:
+                            result_boundary_amortized_prior.fit_converged_steps = 0
+                        if (
+                            result_boundary_amortized_prior.fit_converged_steps
+                            >= args.result_boundary_target_amortized_prior_stop_patience
+                        ):
+                            result_boundary_amortized_prior.fit_stopped = True
+                        prior_train_metrics[
+                            "result_boundary_target_amortized_prior_fit_converged_steps"
+                        ] = float(
+                            result_boundary_amortized_prior.fit_converged_steps
+                        )
+                        prior_train_metrics[
+                            "result_boundary_target_amortized_prior_fit_stopped"
+                        ] = float(result_boundary_amortized_prior.fit_stopped)
+                prior_train_metrics[
+                    "result_boundary_target_amortized_prior_memory_full"
+                ] = float(prompt_memory_full)
                 result_boundary_target_metrics.update(prior_train_metrics)
                 prior_entries = prior_train_metrics[
                     "result_boundary_target_amortized_prior_entries"
@@ -11715,6 +11812,12 @@ def run_variant(
     metrics["result_boundary_target_amortized_prior_fit_every"] = (
         args.result_boundary_target_amortized_prior_fit_every
     )
+    metrics["result_boundary_target_amortized_prior_stop_train_accuracy"] = (
+        args.result_boundary_target_amortized_prior_stop_train_accuracy
+    )
+    metrics["result_boundary_target_amortized_prior_stop_patience"] = (
+        args.result_boundary_target_amortized_prior_stop_patience
+    )
     metrics["result_boundary_target_amortized_prior_train_replay_weight"] = (
         args.result_boundary_target_amortized_prior_train_replay_weight
     )
@@ -12994,6 +13097,26 @@ def parse_args() -> argparse.Namespace:
             "Fit the operand-conditioned prior every N training steps after "
             "enough memory entries exist. The first eligible fit always runs; "
             "default 1 preserves prior behavior."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-stop-train-accuracy",
+        type=float,
+        default=0.0,
+        help=(
+            "When positive, stop fitting the operand-conditioned prior after "
+            "prompt memory is full and prior train-memory accuracy reaches this "
+            "threshold for the configured patience. Replay keeps using the "
+            "frozen prior."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-stop-patience",
+        type=int,
+        default=1,
+        help=(
+            "Number of full-memory prior fit updates at or above the stop "
+            "train-accuracy threshold before fitting is stopped."
         ),
     )
     parser.add_argument(
@@ -14351,6 +14474,19 @@ def main() -> None:
         raise ValueError(
             "--result-boundary-target-amortized-prior-fit-every must be positive"
         )
+    if not (
+        0.0
+        <= args.result_boundary_target_amortized_prior_stop_train_accuracy
+        <= 1.0
+    ):
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-stop-train-accuracy "
+            "must be in [0, 1]"
+        )
+    if args.result_boundary_target_amortized_prior_stop_patience < 1:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-stop-patience must be positive"
+        )
     if args.result_boundary_target_amortized_prior_train_replay_weight < 0:
         raise ValueError(
             "--result-boundary-target-amortized-prior-train-replay-weight "
@@ -15106,6 +15242,19 @@ def main() -> None:
                         f"{args.result_boundary_target_amortized_prior_fit_every}"
                     )
                 if (
+                    args.result_boundary_target_amortized_prior_stop_train_accuracy
+                    > 0
+                ):
+                    suffix_parts.append(
+                        "rbtpriorstop"
+                        f"{args.result_boundary_target_amortized_prior_stop_train_accuracy:g}"
+                    )
+                    if args.result_boundary_target_amortized_prior_stop_patience != 1:
+                        suffix_parts.append(
+                            "rbtpriorstoppat"
+                            f"{args.result_boundary_target_amortized_prior_stop_patience}"
+                        )
+                if (
                     args.result_boundary_target_amortized_prior_train_replay_weight
                     > 0
                 ):
@@ -15470,6 +15619,10 @@ def main() -> None:
         f"{args.result_boundary_target_amortized_prior_fit_batch_size} "
         "amortized_prior_fit_every="
         f"{args.result_boundary_target_amortized_prior_fit_every} "
+        "amortized_prior_stop_train_accuracy="
+        f"{args.result_boundary_target_amortized_prior_stop_train_accuracy} "
+        "amortized_prior_stop_patience="
+        f"{args.result_boundary_target_amortized_prior_stop_patience} "
         "amortized_prior_train_replay_weight="
         f"{args.result_boundary_target_amortized_prior_train_replay_weight}"
     )

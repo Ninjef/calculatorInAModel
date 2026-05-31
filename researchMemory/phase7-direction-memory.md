@@ -297,6 +297,13 @@ Memory:
   overall `0.9950`, and causal trusted handoff `0.9875`. Do not run a cadence
   ladder; next work should use convergence-gated fitting, post-freeze refresh,
   or coreset/reservoir batches to beat the every-2 update count.
+- Sustained train-memory convergence gating beats every-2 update cost without
+  losing the gate, but first-hit convergence is too optimistic. Stopping at the
+  first prior train accuracy `1.0` cut updates to `1029` and dropped heldout to
+  `0.875`. Requiring `100` converged fit updates preserved source overall
+  `0.9950`, heldout `0.9125`, and trusted handoff `0.9925` with low controls
+  while cutting prior updates to `1889`. Next work should use validation-aware
+  stopping or coreset/reservoir fitting, not patience ladders.
 
 Representative evidence:
 
@@ -325,6 +332,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-31-integrated-amortized-prior-source-replay.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-integrated-amortized-prior-source-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-amortized-prior-fit-cadence-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-amortized-prior-convergence-stop-gate.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-30-many-calculator-scaling-accounting.md`
 - `researchReviews/2026-05-31-prompt-keyed-streaming-memory-review.md`

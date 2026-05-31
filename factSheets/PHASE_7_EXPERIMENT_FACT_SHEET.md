@@ -10658,3 +10658,92 @@ Interpretation:
 - Next work should not run a cadence ladder. Use convergence-gated fitting,
   fit-until-prior-train-accuracy after memory freeze, or coreset/reservoir
   prior batches to reduce below `2501` updates while matching every-2 quality.
+
+## 2026-05-31 Amortized Prior Convergence-Stop Gate
+
+Question: can the trainer stop full-memory prior fitting after the prompt
+memory and prior have converged, preserving the every-2 source/handoff result
+with fewer than `2501` prior updates?
+
+Implementation:
+
+- Added `--result-boundary-target-amortized-prior-stop-train-accuracy`.
+- Added `--result-boundary-target-amortized-prior-stop-patience`.
+- The stop rule is active only after prompt memory is full.
+- Replay keeps using the latest prior after fitting stops.
+- Added metrics:
+  `result_boundary_target_amortized_prior_fit_converged_steps`,
+  `result_boundary_target_amortized_prior_fit_stopped`, and
+  `result_boundary_target_amortized_prior_memory_full`.
+
+Smoke:
+
+```text
+runs/smoke_amortized_prior_stop_fit/2026-05-31_132837_802776_model-c-op0-19-fullgrid-streamb8-heldout0.2-gumbel_concrete_interface-result_space-rbt1-zero_improvement-rbtt1-rbtchunk8-rbts4-rbtuniq-rbttopk2-rbtonlinehardmem-rbtmempr-e56a33a2e0/model-c-2digit-seed9
+```
+
+First-hit convergence stop:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fitfull_every2_stop1_src5000/2026-05-31_132937_811869_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rb-ce92d753c1/model-c-2digit-seed9
+```
+
+Results:
+
+- Stop rule: `--result-boundary-target-amortized-prior-stop-train-accuracy 1.0`
+  and patience `1`.
+- Overall exact/calc `393/400 = 0.9825`.
+- Train exact/calc `320/320 = 1.0000`.
+- Heldout exact/calc `70/80 = 0.8750`.
+- Heldout controls: injection-zero `0.0500`, forced-zero `0.0000`,
+  forced-random `0.0125`.
+- Prior updates `1029`.
+- Prior train/heldout accuracy `1.0000` / `0.8750`.
+
+Interpretation: first-hit train-memory convergence stops too early. It overfits
+the stored train targets before the numeric prior is stable enough for heldout
+prompts.
+
+Sustained convergence source:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fitfull_every2_stop1pat100_src5000/2026-05-31_134344_475019_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-a869378bc1/model-c-2digit-seed9
+```
+
+Results:
+
+- Stop rule: train-memory accuracy `1.0` for `100` fit updates.
+- Overall exact/calc `398/400 = 0.9950`.
+- Train exact/calc `320/320 = 1.0000`.
+- Heldout exact/calc `73/80 = 0.9125`.
+- Heldout controls: injection-zero `0.0500`, forced-zero `0.0000`,
+  forced-random `0.0125`.
+- Prior updates `1889` versus `2501` for every-2 and `5001` for full-fit.
+- Prior train/heldout accuracy `1.0000` / `0.9125`.
+- Forced-result evals stayed `86,016`.
+
+Trusted additive handoff from sustained-convergence source:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fitfull_every2_stop1pat100_handoff600/2026-05-31_135657_342042_model-c-op0-19-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed9
+```
+
+Results:
+
+- Final eval `397/400 = 0.9925`.
+- Final 128-sample controls: injection-zero `0.0546875`, forced-zero
+  `0.0078125`, forced-random `0.0078125`.
+- Diagnostic calculator-result accuracy `0.984375`.
+- Routed hook calculator-result accuracy:
+  hook0 `0.9574`, hook1 `1.0000`, hook2 `1.0000`, hook3 `1.0000`.
+
+Interpretation:
+
+- Sustained train-memory convergence is a real cost reduction over every-2:
+  `1889` prior updates while preserving heldout source and trusted handoff
+  quality.
+- Train-memory convergence alone is not enough; patience `1` failed. Do not
+  run a patience ladder as novelty.
+- Next work should introduce a validation/heldout-prior stopping signal or a
+  coreset/reservoir prior fit to push below `1889` updates without sacrificing
+  the heldout/handoff gate.

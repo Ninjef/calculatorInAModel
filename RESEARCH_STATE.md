@@ -1,10 +1,9 @@
 # Research State (Last updated: 2026-05-31)
-Maintenance rule: keep near `200` lines; move stale context to reviews, memories, fact sheets, or work logs.
+Keep near `200` lines; move stale context to reviews, memories, fact sheets, or work logs.
 ## Overarching Goal
 Prove that a model can be trained from scratch to use a non-differentiable
-calculator embedded inside its neural computation, in a way that is scalable
-and works both when the calculator is a bottleneck and when a pure-neuron path
-also exists.
+calculator inside its neural computation, in a scalable way that works both
+with a calculator bottleneck and when a pure-neuron path also exists.
 
 The ideal method is non-prescriptive: it lets the model discover useful
 calculator queries rather than telling it which query/result to request for
@@ -123,7 +122,9 @@ Active directions:
   `1.000`, heldout `0.9125`, overall `0.995`, and trusted handoff `1.000` with
   low controls. Fitting every other step preserves the result and clears handoff
   (`0.9875`) with half the prior updates; every `10` steps underfits and drops
-  heldout to `0.7625`. Next: convergence-gated or coreset prior fitting.
+  heldout to `0.7625`. Sustained convergence (`1.0` train accuracy for `100`
+  fits) preserves source/handoff and cuts updates to `1889`; first-`1.0`
+  stopping drops heldout to `0.875`. Next: validation-aware or coreset fitting.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
@@ -162,8 +163,8 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Replace cadence-only prior-fit thinning with convergence-gated or coreset
-   prior fitting that preserves every-2 quality with fewer than `2501` updates.
+1. Try validation-aware or coreset prior fitting that preserves quality with
+   fewer than `1889` updates.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark
@@ -194,7 +195,6 @@ These branches should not continue without a new mechanism:
 
 ## Review Cadence
 
-Write or update a `researchReviews/` memo after 5-10 new experiments, a clear
-family-level negative, a strategic-bet change, or when the next task feels like
-another local variant. Reviews answer what changed, what should stop, what
-deserves compute, and whether the project is closer to the goal.
+Write/update a `researchReviews/` memo after 5-10 new experiments, a clear
+family-level negative, a strategic-bet change, or when the next task feels
+local. Reviews say what changed, what should stop, and what deserves compute.

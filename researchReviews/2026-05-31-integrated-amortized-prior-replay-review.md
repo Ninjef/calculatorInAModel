@@ -100,3 +100,25 @@ now every-2; every-10 shows update starvation. The next scalable mechanism
 should fit until the prior/memory has converged, refresh after memory changes,
 or use coreset/reservoir batches to beat `2501` full-memory updates without
 losing the heldout/handoff gate.
+
+## Convergence-Stop Follow-Up
+
+Sustained train-memory convergence is a better cost reducer than cadence alone,
+but the stopping signal has to be conservative.
+
+Stopping at the first prior train-memory accuracy `1.0` saved many updates
+(`1029`), but it stopped too early for heldout generalization: source overall
+fell to `0.9825`, heldout exact/calc to `0.8750`, and prior heldout accuracy to
+`0.8750`. This disproves "first train fit means prior is ready."
+
+Requiring `100` converged fit updates preserved the benchmark while reducing
+cost: source overall `0.9950`, train `1.0000`, heldout `0.9125`, controls low,
+prior train/heldout `1.0000`/`0.9125`, and only `1889` prior updates versus
+`2501` for every-2 and `5001` for full-fit. The trusted handoff also passed:
+`397/400 = 0.9925`, diagnostic calc `0.984375`, with 128-sample controls
+`0.0546875` injection-zero, `0.0078125` forced-zero, `0.0078125` forced-random.
+
+Steering update: patience-100 is the new safe train-convergence benchmark, but
+do not run patience ladders as novelty. The next mechanism should use a
+validation/heldout-prior signal or coreset/reservoir fitting to beat `1889`
+updates while preserving the same source/handoff gate.
