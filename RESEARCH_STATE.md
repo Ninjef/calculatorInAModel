@@ -1,6 +1,5 @@
 # Research State (Last updated: 2026-05-30)
 Maintenance rule: keep near `200` lines; move stale context to reviews, memories, fact sheets, or work logs.
-
 ## Overarching Goal
 
 Prove that a model can be trained from scratch to use a non-differentiable
@@ -117,8 +116,9 @@ Active directions:
   is partial. Zero-injection plus online hard memory is the new lead: sparse
   topk8+unique24 scoring fills a true hard target memory, freezes after only
   `86,400` forced evals, and reaches `0.973` final / `0.967` calc at 800.
-  This still needs fresh-seed, streaming/fresh-prompt, handoff, and
-  many-calculator validation; additive-path scoring remains diagnostic only.
+  First frozen additive handoff missed (`0.465` final / `0.485` normal despite
+  `0.958` calc); next work must address handoff geometry or streaming/fresh
+  prompts, not source accuracy alone.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29

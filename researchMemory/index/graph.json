@@ -2702,8 +2702,8 @@
       "id": "doc/169-online-hard-result-boundary-memory-turns-sparse-zero-improvement-discovery-into-a-strong-s",
       "kind": "hypothesis_memory",
       "source_path": "researchMemory/hypotheses/phase7/169-online-hard-result-boundary-memory-turns-sparse-zero-improvement-discovery-into-a-strong-s.md",
-      "status": "PARTIAL-POSITIVE",
-      "title": "Online hard result-boundary memory turns sparse zero-improvement discovery into a strong source."
+      "status": "MIXED-POSITIVE",
+      "title": "Online hard result-boundary memory turns sparse zero-improvement discovery into a strong source but misses handoff."
     },
     {
       "id": "doc/phase7-direction-memory",

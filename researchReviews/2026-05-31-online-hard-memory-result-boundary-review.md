@@ -20,17 +20,23 @@ continue after discovery on this gate: cumulative forced-result evaluations
 stopped at `86,400`, yet the final result matched the continuously rescored
 branch.
 
+The first trusted additive handoff from the freeze-full source missed:
+`0.4650` final / `0.4850` step-600 normal. Frozen calculator accuracy remained
+high (`0.9575`), and injection-zero stayed low (`0.0100`), so the failure is
+handoff/readout geometry rather than source calculator collapse.
+
 ## What Should Stop
 
 - Do not run more same-seed op19 online-hard-memory length/LR repeats.
+- Do not treat the source result as proof of non-bottleneck success.
 - Do not compare more soft target temperatures against this branch unless the
   target construction changes materially.
 - Do not claim the fixed-grid memory result proves streaming scalability.
 
 ## What Deserves Compute
 
-1. Fresh-seed replication of the source gate.
-2. Trusted additive handoff from the step-800 source.
+1. Handoff-aware geometry shaping for the online hard-memory source.
+2. Fresh-seed replication with trusted additive handoff.
 3. Streaming/fresh-prompt validation where prompt-keyed memory cannot simply
    memorize a closed train grid.
 4. Many-calculator/routed-hook accounting once source and handoff replication
@@ -38,8 +44,9 @@ branch.
 
 ## Strategic Status
 
-This is now the main less-prescriptive answer-derived lead. It is not solved,
-because fixed-grid hard memory can be transductive. But unlike prior sampled
-zero-improvement, cached teacher, and critic/proposal branches, it combines a
-plausibly cheaper sparse discovery phase with hard-target source acquisition
-that reaches mature calculator accuracy.
+This is now the main less-prescriptive answer-derived source-acquisition lead.
+It is not solved, because fixed-grid hard memory can be transductive and the
+first additive handoff missed. But unlike prior sampled zero-improvement,
+cached teacher, and critic/proposal branches, it combines a plausibly cheaper
+sparse discovery phase with hard-target source acquisition that reaches mature
+calculator accuracy.

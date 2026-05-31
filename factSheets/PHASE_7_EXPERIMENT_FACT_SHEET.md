@@ -14,6 +14,7 @@ Run roots:
 runs/2026-05-31_phase7_online_hard_memory_result_boundary/online_hard_memory_zero_improvement_topk8_unique24_source200_cpu
 runs/2026-05-31_phase7_online_hard_memory_result_boundary/online_hard_memory_zero_improvement_topk8_unique24_source800_cpu
 runs/2026-05-31_phase7_online_hard_memory_result_boundary/online_hard_memory_freeze_full_zero_improvement_topk8_unique24_source800_cpu
+runs/2026-05-31_phase7_online_hard_memory_result_boundary/handoff600_from_freeze_full_source800_cpu
 ```
 
 Result:
@@ -35,6 +36,7 @@ Evidence:
 | online hard memory 200 | topk8+unique24 every step | best=true `1.0000` by step 200 | `0.4550` / `0.4350` |
 | online hard memory 800 | topk8+unique24 every step | best=true `1.0000` | `0.9675` / `0.9725` |
 | online hard memory freeze-full 800 | stops after memory full | `86,400` cumulative forced evals | `0.9675` / `0.9725` |
+| trusted handoff from freeze-full source | frozen policy | calc `0.9575`, zero `0.0100` | normal `0.4850`, final `0.4650` |
 
 Interpretation:
 
@@ -45,9 +47,9 @@ Interpretation:
 - Freezing rescoring after memory fill preserves the result and cuts cumulative
   forced-result scoring from about `7.69M` to `86.4k` evaluations for this
   fixed-grid source gate.
-- This is not solved yet: it is fixed-grid prompt memory and still needs
-  fresh-seed, streaming/fresh-prompt, additive handoff, and many-calculator
-  validation.
+- This is not solved yet: the first trusted additive handoff missed badly
+  despite preserved calculator accuracy, so the next mechanism must address
+  handoff geometry or streaming/fresh-prompt generalization.
 
 ## 2026-05-30 High-Quality Cached Teacher Table
 

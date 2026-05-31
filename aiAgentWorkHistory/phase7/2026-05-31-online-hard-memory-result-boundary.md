@@ -47,6 +47,7 @@ Run roots:
 runs/2026-05-31_phase7_online_hard_memory_result_boundary/online_hard_memory_zero_improvement_topk8_unique24_source200_cpu
 runs/2026-05-31_phase7_online_hard_memory_result_boundary/online_hard_memory_zero_improvement_topk8_unique24_source800_cpu
 runs/2026-05-31_phase7_online_hard_memory_result_boundary/online_hard_memory_freeze_full_zero_improvement_topk8_unique24_source800_cpu
+runs/2026-05-31_phase7_online_hard_memory_result_boundary/handoff600_from_freeze_full_source800_cpu
 ```
 
 ## Results
@@ -57,6 +58,7 @@ runs/2026-05-31_phase7_online_hard_memory_result_boundary/online_hard_memory_fre
 | online hard memory 200 | topk8+unique24 every step | best=true `1.0000` | `0.4550` / `0.4350` |
 | online hard memory 800 | topk8+unique24 every step | best=true `1.0000` | `0.9675` / `0.9725` |
 | online hard memory freeze-full 800 | stop after full memory | best=true `1.0000` | `0.9675` / `0.9725` |
+| trusted handoff from freeze-full source | frozen policy | calc `0.9575`, zero `0.0100` | normal `0.4850`, final `0.4650` |
 
 Freeze-full curve:
 
@@ -93,8 +95,11 @@ while capping cumulative forced-result scoring at `86,400`, versus about
 
 This does not yet prove scalability. The memory is keyed by the fixed training
 grid, so it may be transductive like earlier replay-memory local targets. It
-also has not yet been validated through the trusted additive handoff or across
-fresh seeds/many calculators.
+also does not yet solve non-bottleneck transfer: the trusted 600-step
+frozen-policy additive handoff from the freeze-full source reached only
+`0.4650` final / `0.4850` step-600 normal. The frozen calculator policy stayed
+accurate (`0.9575`), and injection-zero stayed low (`0.0100`), so the miss is
+handoff/readout geometry rather than calculator-policy collapse.
 
 ## Decision
 
@@ -105,7 +110,8 @@ online_hard_memory_result_boundary_partial_positive
 Do not tune same-seed op19 length/LR variants. The next valuable tests are:
 
 - fresh-seed replication;
-- trusted additive handoff from the source checkpoint;
+- handoff-aware geometry shaping for the online hard-memory source;
+- fresh-seed source plus trusted additive handoff;
 - streaming/fresh-prompt validation where prompt memory cannot simply memorize
   a closed grid;
 - many-calculator cost accounting or routed-hook validation.

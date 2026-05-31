@@ -611,10 +611,11 @@ Memory:
 - Online hard result-boundary memory is the new sparse answer-derived lead.
   Topk8+unique24 zero-improvement scoring fills a hard per-prompt memory, and
   the freeze-full branch stops rescoring after `86,400` forced evals while
-  reaching `0.9675` calc / `0.9725` final at 800. This converts sparse
-  answer-derived discovery into mature source quality, but it is still
-  fixed-grid prompt memory; validate fresh seed, streaming/fresh prompts,
-  trusted additive handoff, and many-calculator cost before calling it scalable.
+  reaching `0.9675` calc / `0.9725` final at 800. The first trusted additive
+  handoff missed (`0.465` final / `0.485` normal) despite preserved frozen calc
+  (`0.9575`), so source discovery is strong but handoff/readout geometry is not.
+  Next work needs handoff-aware shaping, fresh-seed handoff, or streaming/fresh
+  prompts; do not run source-only repeats as novelty.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
