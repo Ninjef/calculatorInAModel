@@ -9,8 +9,11 @@ than by seed, range, checkpoint, or diagnostic.
 
 ## Count
 
-Strict count: about nine distinct training-method families plus two
-architecture/scaling extensions.
+Strict count: ten distinct training-method families plus two
+architecture/scaling extensions. Some of the ten are broad umbrellas with many
+internal variants; count variants only when they change the learning signal or
+training structure, not when they change seed, range, checkpoint, or a scalar
+hyperparameter.
 
 Training-method families tried:
 
