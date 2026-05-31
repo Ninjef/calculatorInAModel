@@ -63,6 +63,20 @@ single-hook fresh semantic-distilled source had missed trusted handoff, so
 routing/shared-output geometry may be making the readout problem easier rather
 than merely preserving the original lucky source.
 
+The op29 range stress is now also positive. With `operand_max=29`, a
+`900`-prompt grid, four `left_operand_mod` routed hooks,
+`--share-calculator-output-proj`, matched `operand_spans` readout, and shallow
+result heads, the source reached `900/900 = 1.0000`, memory filled/froze by
+step `50`, and cumulative forced-result evals stayed at `367,200`. The trusted
+600-step frozen-policy additive handoff also reached `900/900 = 1.0000` final
+/ step-600 normal with calculator-result accuracy `1.0000`. Step-600 controls
+were causal: `0.0133` injection-zero, `0.0022` forced-zero, and `0.0156`
+forced-random. All four routed hooks reached calculator-result accuracy
+`1.0000`. A first accidental `eq`-readout run also cleared, but the
+`operand_spans` rerun closes that config confound. This means the current
+method has now cleared both replicated op19 routed/shared gates and an op29
+fixed-grid range stress.
+
 ## What Should Stop
 
 - Do not tune semantic-distill weight, sample count, or source length on this
@@ -70,6 +84,8 @@ than merely preserving the original lucky source.
 - Do not repeat the same four-hook shared-output routed seed as novelty.
 - Do not spend more mainline compute on same op19 four-hook routed/shared seed
   repeats; two seeds now clear.
+- Do not spend more mainline compute on fixed-grid op29 four-hook routed/shared
+  repeats as novelty; the range stress now clears.
 - Do not run another source-only online-hard-memory job as evidence of
   progress unless it changes the memory/generalization setting.
 - Do not return to plain additive semantic distillation without a policy-uptake
@@ -79,14 +95,10 @@ than merely preserving the original lucky source.
 
 ## What Deserves Compute
 
-- Handoff robustness diagnostics: geometry/readout objectives or selection
-  criteria that predict the 600-step gate.
-- Streaming/fresh-prompt memory: verify the method is not just fixed-grid
-  prompt memorization.
-- Larger-range stress after the fresh-seed check.
 - Streaming/fresh-prompt memory, where per-prompt hard memory cannot simply
   memorize the fixed grid.
-- Larger-range routed/shared stress.
+- A materially different many-calculator scaling gate only if it changes the
+  memory/generalization setting or real compute/parameter slope.
 
 ## Strategic Update
 
@@ -97,6 +109,7 @@ combination repaired both on the first seed and replicated source acquisition
 on a fresh seed.
 
 The result is still not the full thesis. It uses sparse forced-result scoring
-until memory fills and stores per-prompt targets on a fixed grid. The next
-research direction should therefore move away from op19 seed replication and
-toward streaming/fresh-prompt memory or larger-range routed/shared stress.
+until memory fills and stores per-prompt targets on a fixed grid. Since the
+fixed-grid routed/shared branch now clears replicated op19 and op29 gates, the
+next research direction should move away from range/seed replication and toward
+streaming or fresh-prompt memory.

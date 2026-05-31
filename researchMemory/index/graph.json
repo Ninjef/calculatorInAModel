@@ -866,6 +866,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/174-semantic-distilled-online-hard-memory-four-hook-shared-output-handoff-clears-the-op29-rang",
+      "target": "researchMemory/hypotheses/phase7/174-semantic-distilled-online-hard-memory-four-hook-shared-output-handoff-clears-the-op29-rang.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -2782,6 +2787,13 @@
       "source_path": "researchMemory/hypotheses/phase7/173-semantic-distilled-online-hard-memory-four-hook-shared-output-handoff-replicates-on-the-fr.md",
       "status": "POSITIVE",
       "title": "Semantic-distilled online-hard-memory four-hook shared-output handoff replicates on the fresh handoff-sensitive seed."
+    },
+    {
+      "id": "doc/174-semantic-distilled-online-hard-memory-four-hook-shared-output-handoff-clears-the-op29-rang",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/174-semantic-distilled-online-hard-memory-four-hook-shared-output-handoff-clears-the-op29-rang.md",
+      "status": "POSITIVE",
+      "title": "Semantic-distilled online-hard-memory four-hook shared-output handoff clears the op29 range stress."
     },
     {
       "id": "doc/phase7-direction-memory",

@@ -238,11 +238,21 @@ Memory:
   per-prompt memory before fill.
 - Fresh routed/shared replication cleared the same gate on CLI seed `7` /
   effective seed `9`, the seed lineage where single-hook semantic-distilled
-  handoff had missed. The fresh source and trusted handoff both reached
-  `1.0000`, all hooks had calculator-result accuracy `1.0000`, and step-600
-  controls were low (`0.0525` injection-zero, `0.0075` forced-zero, `0.0125`
-  forced-random). This reduces the concern that the routed/shared pass was only
-  the original handoff-friendly source geometry.
+  source had missed trusted handoff. The four-hook shared-output source
+  reached final/calc `1.0000`, memory froze after `86,400` forced evals, all
+  four hooks reached calc `1.0000`, and the trusted handoff reached `1.0000`
+  final / step-600 normal with low controls. This means the routed/shared
+  positive is not just the original handoff-friendly seed.
+- The routed/shared semantic-distilled method also clears op29 range stress
+  with `operand_spans` readout and shallow result heads. At `operand_max=29`
+  over a `900`-prompt grid, the source reached final/calc `1.0000`, memory
+  froze by step `50` with `367,200` cumulative forced-result evals, all four
+  routed hooks reached calc `1.0000`, and the trusted frozen-policy additive
+  handoff reached `900/900 = 1.0000` final / step-600 normal. Step-600 controls stayed causal:
+  injection-zero `0.0133`, forced-zero `0.0022`, forced-random `0.0156`.
+  Fixed-grid routed/shared op19 and op29 are now proven for this mechanism;
+  the next bottleneck is streaming/fresh-prompt memory, not another
+  fixed-grid range or seed repeat.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;

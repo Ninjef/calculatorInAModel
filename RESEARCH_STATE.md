@@ -1,7 +1,6 @@
 # Research State (Last updated: 2026-05-31)
 Maintenance rule: keep near `200` lines; move stale context to reviews, memories, fact sheets, or work logs.
 ## Overarching Goal
-
 Prove that a model can be trained from scratch to use a non-differentiable
 calculator embedded inside its neural computation, in a way that is scalable
 and works both when the calculator is a bottleneck and when a pure-neuron path
@@ -119,9 +118,10 @@ Active directions:
   sensitive: one single-hook source cleared trusted handoff across two seeds; a
   fresh source missed (`0.647` / `0.632`) despite calc `1.000`. The same
   mechanism now clears four-hook left-routed shared-output source/handoff on
-  the original and fresh seeds (`1.000` final, low controls), unlike prior
-  shared-output hard-assignment misses. Next test streaming/fresh-prompt memory
-  or larger-range routed/shared stress.
+  the original and fresh op19 seeds and an op29 range stress (`1.000` final,
+  low controls), unlike prior shared-output hard-assignment misses. Next test
+  streaming/fresh-prompt memory; do not spend more mainline compute re-proving
+  fixed-grid routed/shared op19/op29.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
@@ -129,8 +129,9 @@ Active directions:
   source and trusted handoff are causal, and routed execution is active-only.
   Shared output removes cloned-output parameter growth but hard-assignment
   handoff missed (`0.78`; matched `0.75`); semantic-distilled online hard
-  memory is the first shared-output routed handoff family to replicate. Next
-  shared-output work needs streaming or range stress, not op19 seed repeats.
+  memory is the first shared-output routed handoff family to replicate and pass
+  op29. Next shared-output work needs streaming/fresh-prompt memory, not more
+  fixed-grid op19/op29 repeats.
 
 ## Paused Or Deprioritized Branches
 
@@ -159,8 +160,8 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Improve online-hard-memory plus semantic distillation handoff geometry, or
-   test it under fresh prompts / many-calculator scaling.
+1. Test online-hard-memory plus semantic distillation under streaming or fresh
+   prompts, where fixed-grid per-prompt memory cannot simply memorize targets.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark

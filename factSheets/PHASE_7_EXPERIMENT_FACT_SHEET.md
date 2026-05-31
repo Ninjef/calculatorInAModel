@@ -10179,3 +10179,76 @@ Fresh-seed interpretation:
   Further same-source accuracy runs are low value; the next work should target
   handoff robustness, downstream seed variance, streaming memory, or
   many-calculator scaling.
+
+## 2026-05-31 Online Hard Memory Semantic-Distill Routed Shared Output Op29
+
+Question: does the four-hook shared-output online-hard-memory plus additive
+semantic-distillation recipe survive `operand_max=29`, or was the op19
+routed/shared result a small-grid artifact?
+
+Source run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_op29_src800/2026-05-30_204714_735170_model-c-op0-29-fullgrid-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rbtonlinehardmem-rbtmem-483c97d99c/model-c-2digit-seed9
+```
+
+Superseding matched source run with `operand_spans` readout:
+
+```text
+runs/ohm_semdist_hooks4_shareout_op29_spans_src800/2026-05-30_210136_997305_model-c-op0-29-fullgrid-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rbtonlinehardmem-rbtmem-483c97d99c/model-c-2digit-seed9
+```
+
+Handoff run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_op29_handoff600/2026-05-30_205452_274599_model-c-op0-29-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed9
+```
+
+Superseding matched handoff run with `operand_spans` readout:
+
+```text
+runs/ohm_semdist_hooks4_shareout_op29_spans_handoff600/2026-05-30_210938_275842_model-c-op0-29-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed9
+```
+
+Settings:
+
+- CLI seed `7`, effective seed `9`.
+- op29 exhaustive `900`-prompt grid, product decoder, `n_embd=32`, `n_head=2`.
+- Matched `operand_spans` readout, span width `2`.
+- Four `left_operand_mod` routed hooks with `--share-calculator-output-proj`.
+- Shallow result head: `calculator_result_head_hidden_size=0`.
+- Sparse zero-improvement online hard memory, topk8+unique24, freeze when full.
+- Additive semantic distillation weight `1`, sample count `8`.
+- Trusted handoff loaded source final with `compatible_model`, froze semantic
+  decoder and calculator policy, and trained additive readout for `600` steps.
+
+Source results:
+
+- Final eval: `900/900 = 1.0000`.
+- Step-800 snapshot: normal/calc `1.0000`, injection-zero `0.0233`,
+  forced-zero `0.0011`, forced-random `0.0200`.
+- Final 128-sample diagnostic: calculator-result accuracy `1.0000`.
+- All four routed hooks reached calculator-result accuracy `1.0000`.
+- Memory filled/froze by step `50`; cumulative forced-result evals stayed at
+  `367,200`.
+
+Trusted handoff results:
+
+- Final eval: `900/900 = 1.0000`.
+- Step-600 snapshot: normal/calc `1.0000`, injection-zero `0.0133`,
+  forced-zero `0.0022`, forced-random `0.0156`.
+- Final 128-sample diagnostic: normal `1.0000`, calculator-result accuracy
+  `1.0000`; counterfactuals injection-zero `0.0156`, forced-zero `0.0000`,
+  forced-random `0.0156`.
+- All four routed hooks reached calculator-result accuracy `1.0000`.
+
+Interpretation:
+
+- The method survives a larger fixed grid and result vocabulary with shared
+  output projection and shallow result heads.
+- This is stronger than the earlier forced-margin op29 shallow-head range
+  stress, which missed and needed `rhead64` to clear.
+- This still does not solve the full thesis because the method stores
+  per-prompt hard targets after sparse forced-result candidate scoring.
+- Next high-leverage test: streaming or fresh-prompt memory; do not repeat
+  fixed-grid op19/op29 routed/shared seeds as novelty.
