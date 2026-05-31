@@ -881,6 +881,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/177-a-numeric-amortized-prior-can-generalize-discovered-prompt-memory-targets",
+      "target": "researchMemory/hypotheses/phase7/177-a-numeric-amortized-prior-can-generalize-discovered-prompt-memory-targets.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1068,6 +1073,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-05-31-prompt-keyed-online-hard-memory-heldout.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-31-amortized-prior-heldout-diagnostic.md",
       "type": "supported_by"
     },
     {
@@ -2843,6 +2853,13 @@
       "source_path": "researchMemory/hypotheses/phase7/176-prompt-keyed-online-hard-memory-does-not-generalize-to-heldout-prompts.md",
       "status": "MIXED-NEGATIVE",
       "title": "Prompt-keyed online-hard-memory does not generalize to heldout prompts."
+    },
+    {
+      "id": "doc/177-a-numeric-amortized-prior-can-generalize-discovered-prompt-memory-targets",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/177-a-numeric-amortized-prior-can-generalize-discovered-prompt-memory-targets.md",
+      "status": "PARTIAL-POSITIVE",
+      "title": "A numeric amortized prior can generalize discovered prompt-memory targets."
     },
     {
       "id": "doc/phase7-direction-memory",

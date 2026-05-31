@@ -274,6 +274,13 @@ Memory:
   with low forced controls. This is a clear transductive-memory boundary: the
   next mechanism must amortize target discovery or otherwise supply
   fresh-prompt credit, not merely store prompt-keyed hard targets.
+- First amortized-prior diagnostic: an operand-embedding prior trained from the
+  `320` discovered train-memory targets fit train memory but got `0.0000`
+  heldout target accuracy, while the same prior with normalized numeric operand
+  features reached `0.9125` heldout target accuracy on the `80` unscored
+  prompts. This is not a source-policy success yet; tiny integrated smoke runs
+  only verify the replay path executes. The next gate is whether numeric-prior
+  pseudo-targets raise heldout calculator-result accuracy in the model.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
@@ -304,6 +311,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output-op29.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-prompt-keyed-online-hard-memory-streaming.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-prompt-keyed-online-hard-memory-heldout.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-amortized-prior-heldout-diagnostic.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-30-many-calculator-scaling-accounting.md`
 - `researchReviews/2026-05-31-prompt-keyed-streaming-memory-review.md`

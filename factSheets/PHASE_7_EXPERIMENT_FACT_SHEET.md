@@ -10385,3 +10385,56 @@ Interpretation:
 - Next work needs amortized target discovery, learned target initialization, or
   another answer-derived credit signal that can supply calculator targets for
   prompts not already stored in memory.
+
+## 2026-05-31 Amortized Prior Heldout Diagnostic
+
+Question: can a learned target prior, trained only from discovered prompt-memory
+targets, supply useful targets for prompts that were not forced-scored?
+
+Implementation:
+
+- Added an operand-conditioned `OperandResultPrior` with two feature modes:
+  arbitrary operand embeddings and normalized numeric operand values.
+- Added `--result-boundary-target-amortized-prior-*` options to train the prior
+  online from prompt hard-memory entries and optionally replay unscored heldout
+  prompts against detached prior pseudo-targets.
+- Added `scripts/diagnose_amortized_prior_from_trace.py`, which fits the same
+  prior from `train_prompt_trace_rows.csv` and evaluates it on
+  `heldout_prompt_trace_rows.csv`.
+- Added a focused unit test that the prior can learn prompt-memory targets.
+
+Diagnostic inputs:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_src5000/2026-05-30_214753_463974_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-7006aed4f3/model-c-2digit-seed9
+```
+
+Diagnostic outputs:
+
+```text
+runs/amortized_prior_trace_diagnostics/heldout20_source_embedding_prior_fit.json
+runs/amortized_prior_trace_diagnostics/heldout20_source_numeric_prior_fit.json
+```
+
+Results:
+
+- The train-memory labels were already nearly correct:
+  `memory_target_matches_true = 0.996875`.
+- Embedding prior: fit train memory at `1.000`, train-vs-true `0.996875`, but
+  heldout-vs-true `0.0000` with mean confidence `0.7452`.
+- Numeric prior: fit train memory at `1.000`, train-vs-true `0.996875`, and
+  heldout-vs-true `0.9125` with mean confidence `0.8486`.
+- Tiny integrated smoke runs verified that embedding and numeric prior replay
+  paths execute inside `overfit_one_batch.py`, but they were intentionally too
+  short to test model uptake.
+
+Interpretation:
+
+- A naive embedding prior just memorizes prompt keys and repeats the
+  transductive failure.
+- Normalized numeric operand features are a promising amortized target prior:
+  they recover most heldout targets from answer-derived discovered train
+  targets without forced-scoring heldout prompts.
+- This is not yet a model-training success. The next gate must test whether
+  numeric-prior replay raises heldout calculator-result accuracy in the source
+  model above the no-prior `0.0875` boundary.

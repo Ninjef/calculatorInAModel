@@ -2610,6 +2610,65 @@ def test_streaming_heldout_split_samples_only_train_prompts() -> None:
     ) == [(0, 0), (1, 1), (2, 2)]
 
 
+def test_amortized_prior_learns_prompt_memory_targets() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_amortized_prior", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    exhaustive = overfit_script.make_exhaustive_range_batch(
+        num_digits=1,
+        operand_max=2,
+        fixed_width=True,
+        device="cpu",
+        answer_format="sum",
+    )
+    memory = overfit_script.ResultBoundaryPromptHardMemory(
+        entries={},
+        target_mode="zero_improvement",
+        scoring_bottleneck_mode="answer_decoder",
+        expected_prompt_count=int(exhaustive.x.shape[0]),
+    )
+    keys = overfit_script.prompt_memory_keys(exhaustive)
+    a, b = overfit_script.fixed_width_operands_from_batch(exhaustive.x, num_digits=1)
+    for idx, key in enumerate(keys):
+        memory.entries[key] = {
+            "best_result": int((a[idx] + b[idx]).item()),
+            "best_loss": 0.0,
+        }
+
+    prior = overfit_script.init_result_boundary_amortized_prior(
+        operand_vocab_size=3,
+        result_vocab_size=5,
+        hidden_size=16,
+        feature_mode="embedding",
+        lr=0.05,
+        min_entries=1,
+        replay_batch_size=0,
+        device="cpu",
+    )
+    rng = random.Random(11)
+    for _ in range(120):
+        metrics = overfit_script.train_result_boundary_amortized_prior(
+            prior,
+            memory,
+            num_digits=1,
+            device="cpu",
+            rng=rng,
+        )
+    assert metrics["result_boundary_target_amortized_prior_train_accuracy"] > 0.95
+    eval_metrics = overfit_script.evaluate_result_boundary_amortized_prior(
+        prior,
+        [(0, 0), (1, 2), (2, 2)],
+        device="cpu",
+    )
+    assert eval_metrics["accuracy"] == 1.0
+
+
 def test_result_boundary_regret_set_targets_near_best_results(monkeypatch) -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location(

@@ -133,6 +133,12 @@ class TrainConfig:
     result_boundary_target_online_hard_memory: bool
     result_boundary_target_online_memory_key_mode: str
     result_boundary_target_online_memory_freeze_when_full: bool
+    result_boundary_target_amortized_prior_weight: float
+    result_boundary_target_amortized_prior_feature_mode: str
+    result_boundary_target_amortized_prior_hidden_size: int
+    result_boundary_target_amortized_prior_lr: float
+    result_boundary_target_amortized_prior_min_entries: int
+    result_boundary_target_amortized_prior_replay_batch_size: int
     result_policy_entropy_weight: float
     result_policy_batch_diversity_weight: float
     result_policy_improvement_assignment_weight: float
@@ -282,6 +288,66 @@ class ResultBoundaryPromptHardMemory:
     scoring_bottleneck_mode: str
     expected_prompt_count: int | None = None
     forced_eval_count: int = 0
+
+
+class OperandResultPrior(torch.nn.Module):
+    def __init__(
+        self,
+        *,
+        operand_vocab_size: int,
+        result_vocab_size: int,
+        hidden_size: int,
+        feature_mode: str = "embedding",
+    ) -> None:
+        super().__init__()
+        if hidden_size < 1:
+            raise ValueError("amortized prior hidden size must be positive")
+        if feature_mode not in {"embedding", "numeric"}:
+            raise ValueError("amortized prior feature mode must be embedding or numeric")
+        self.feature_mode = feature_mode
+        self.operand_vocab_size = operand_vocab_size
+        self.operand_embedding = (
+            torch.nn.Embedding(operand_vocab_size, hidden_size)
+            if feature_mode == "embedding"
+            else None
+        )
+        input_size = hidden_size * 2 if feature_mode == "embedding" else 2
+        self.net = torch.nn.Sequential(
+            torch.nn.Linear(input_size, hidden_size),
+            torch.nn.GELU(),
+            torch.nn.Linear(hidden_size, result_vocab_size),
+        )
+
+    def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+        if self.feature_mode == "embedding":
+            assert self.operand_embedding is not None
+            features = torch.cat(
+                [
+                    self.operand_embedding(a.long()),
+                    self.operand_embedding(b.long()),
+                ],
+                dim=-1,
+            )
+        else:
+            scale = max(float(self.operand_vocab_size - 1), 1.0)
+            features = torch.stack(
+                [
+                    a.to(dtype=torch.float32).div(scale),
+                    b.to(dtype=torch.float32).div(scale),
+                ],
+                dim=-1,
+            )
+        return self.net(features)
+
+
+@dataclass
+class ResultBoundaryAmortizedPrior:
+    model: OperandResultPrior
+    optimizer: torch.optim.Optimizer
+    min_entries: int
+    replay_batch_size: int
+    train_steps: int = 1
+    train_updates: int = 0
 
 
 def pick_device(preference: str = "auto") -> str:
@@ -3457,6 +3523,164 @@ def init_result_boundary_prompt_hard_memory(
 
 def prompt_memory_keys(batch: ArithmeticBatch) -> list[tuple[int, ...]]:
     return [tuple(int(token) for token in row.tolist()) for row in batch.x.detach().cpu()]
+
+
+def init_result_boundary_amortized_prior(
+    *,
+    operand_vocab_size: int,
+    result_vocab_size: int,
+    hidden_size: int,
+    feature_mode: str,
+    lr: float,
+    min_entries: int,
+    replay_batch_size: int,
+    device: str | torch.device,
+) -> ResultBoundaryAmortizedPrior:
+    prior_model = OperandResultPrior(
+        operand_vocab_size=operand_vocab_size,
+        result_vocab_size=result_vocab_size,
+        hidden_size=hidden_size,
+        feature_mode=feature_mode,
+    ).to(device)
+    return ResultBoundaryAmortizedPrior(
+        model=prior_model,
+        optimizer=torch.optim.AdamW(prior_model.parameters(), lr=lr),
+        min_entries=min_entries,
+        replay_batch_size=replay_batch_size,
+    )
+
+
+def prompt_memory_entry_batch(
+    memory: ResultBoundaryPromptHardMemory,
+    *,
+    num_digits: int,
+    device: str | torch.device,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None:
+    if not memory.entries:
+        return None
+    xs: list[list[int]] = []
+    targets: list[int] = []
+    for key, entry in memory.entries.items():
+        xs.append(list(key))
+        targets.append(int(entry["best_result"]))
+    x = torch.tensor(xs, dtype=torch.long, device=device)
+    a, b = fixed_width_operands_from_batch(x, num_digits=num_digits)
+    y = torch.tensor(targets, dtype=torch.long, device=device)
+    return a, b, y
+
+
+def train_result_boundary_amortized_prior(
+    prior: ResultBoundaryAmortizedPrior,
+    memory: ResultBoundaryPromptHardMemory,
+    *,
+    num_digits: int,
+    device: str | torch.device,
+    rng: random.Random,
+) -> dict[str, float]:
+    entry_batch = prompt_memory_entry_batch(
+        memory,
+        num_digits=num_digits,
+        device=device,
+    )
+    if entry_batch is None:
+        return {
+            "result_boundary_target_amortized_prior_entries": 0.0,
+            "result_boundary_target_amortized_prior_loss": float("nan"),
+            "result_boundary_target_amortized_prior_train_accuracy": float("nan"),
+        }
+    a_all, b_all, y_all = entry_batch
+    entry_count = int(y_all.shape[0])
+    if entry_count < prior.min_entries:
+        return {
+            "result_boundary_target_amortized_prior_entries": float(entry_count),
+            "result_boundary_target_amortized_prior_loss": float("nan"),
+            "result_boundary_target_amortized_prior_train_accuracy": float("nan"),
+        }
+    loss_value = float("nan")
+    for _ in range(prior.train_steps):
+        if prior.replay_batch_size > 0 and entry_count > prior.replay_batch_size:
+            indices = torch.tensor(
+                [rng.randrange(entry_count) for _ in range(prior.replay_batch_size)],
+                dtype=torch.long,
+                device=a_all.device,
+            )
+            a = a_all.index_select(0, indices)
+            b = b_all.index_select(0, indices)
+            y = y_all.index_select(0, indices)
+        else:
+            a, b, y = a_all, b_all, y_all
+        logits = prior.model(a, b)
+        prior_loss = torch.nn.functional.cross_entropy(logits, y)
+        prior.optimizer.zero_grad(set_to_none=True)
+        prior_loss.backward()
+        prior.optimizer.step()
+        prior.train_updates += 1
+        loss_value = float(prior_loss.detach().item())
+    with torch.no_grad():
+        train_logits = prior.model(a_all, b_all)
+        train_accuracy = (train_logits.argmax(dim=-1) == y_all).float().mean()
+    return {
+        "result_boundary_target_amortized_prior_entries": float(entry_count),
+        "result_boundary_target_amortized_prior_loss": loss_value,
+        "result_boundary_target_amortized_prior_train_accuracy": float(
+            train_accuracy.item()
+        ),
+        "result_boundary_target_amortized_prior_updates": float(prior.train_updates),
+    }
+
+
+def result_boundary_amortized_prior_model_loss(
+    model: TinyGPT,
+    prior: ResultBoundaryAmortizedPrior,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    a, b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = (a + b).to(result_logits.device)
+    with torch.no_grad():
+        prior_logits = prior.model(a.to(result_logits.device), b.to(result_logits.device))
+        prior_targets = prior_logits.argmax(dim=-1)
+        prior_confidence = prior_logits.softmax(dim=-1).max(dim=-1).values
+    model_loss = torch.nn.functional.cross_entropy(result_logits, prior_targets)
+    return model_loss, {
+        "result_boundary_target_amortized_prior_model_loss": float(
+            model_loss.detach().item()
+        ),
+        "result_boundary_target_amortized_prior_pseudo_accuracy": float(
+            (prior_targets == true_sum).float().mean().item()
+        ),
+        "result_boundary_target_amortized_prior_pseudo_confidence": float(
+            prior_confidence.mean().item()
+        ),
+    }
+
+
+@torch.no_grad()
+def evaluate_result_boundary_amortized_prior(
+    prior: ResultBoundaryAmortizedPrior,
+    pairs: list[tuple[int, int]],
+    *,
+    device: str | torch.device,
+) -> dict[str, float]:
+    if not pairs:
+        return {
+            "count": 0.0,
+            "accuracy": float("nan"),
+            "confidence": float("nan"),
+        }
+    a = torch.tensor([pair[0] for pair in pairs], dtype=torch.long, device=device)
+    b = torch.tensor([pair[1] for pair in pairs], dtype=torch.long, device=device)
+    y = a + b
+    logits = prior.model(a, b)
+    probabilities = logits.softmax(dim=-1)
+    prediction = probabilities.argmax(dim=-1)
+    return {
+        "count": float(len(pairs)),
+        "accuracy": float((prediction == y).float().mean().item()),
+        "confidence": float(probabilities.max(dim=-1).values.mean().item()),
+    }
 
 
 def result_boundary_online_hard_memory_loss(
@@ -8659,6 +8883,7 @@ def run_variant(
     exhaustive_grid_batch = None
     exhaustive_grid_size = None
     streaming_train_pool_batch = None
+    streaming_heldout_pool_batch = None
     streaming_train_indices = None
     streaming_heldout_indices = None
     streaming_train_pairs: list[tuple[int, int]] = []
@@ -8688,6 +8913,9 @@ def run_variant(
         streaming_train_pool_batch = subset_arithmetic_batch(
             exhaustive_grid_batch, streaming_train_indices
         )
+        streaming_heldout_pool_batch = subset_arithmetic_batch(
+            exhaustive_grid_batch, streaming_heldout_indices
+        )
         streaming_train_pairs = exhaustive_indices_to_pairs(
             streaming_train_indices, operand_max=operand_max
         )
@@ -8697,6 +8925,7 @@ def run_variant(
     cached_result_boundary_target = None
     result_boundary_online_hard_memory = None
     result_boundary_prompt_hard_memory = None
+    result_boundary_amortized_prior = None
     if args.result_boundary_target_cache:
         if exhaustive_grid_batch is None:
             raise ValueError(
@@ -8745,6 +8974,22 @@ def run_variant(
                 "unknown result-boundary online memory key mode: "
                 f"{args.result_boundary_target_online_memory_key_mode}"
             )
+    if args.result_boundary_target_amortized_prior_weight > 0:
+        if result_boundary_prompt_hard_memory is None:
+            raise ValueError(
+                "--result-boundary-target-amortized-prior-weight requires "
+                "prompt-keyed online hard memory"
+            )
+        result_boundary_amortized_prior = init_result_boundary_amortized_prior(
+            operand_vocab_size=calculator_operand_vocab_size,
+            result_vocab_size=cfg.calculator_result_vocab_size,
+            hidden_size=args.result_boundary_target_amortized_prior_hidden_size,
+            feature_mode=args.result_boundary_target_amortized_prior_feature_mode,
+            lr=args.result_boundary_target_amortized_prior_lr,
+            min_entries=args.result_boundary_target_amortized_prior_min_entries,
+            replay_batch_size=args.result_boundary_target_amortized_prior_replay_batch_size,
+            device=device,
+        )
     if (
         args.calculator_estimator
         in {
@@ -8905,6 +9150,24 @@ def run_variant(
         ),
         result_boundary_target_online_memory_freeze_when_full=(
             args.result_boundary_target_online_memory_freeze_when_full
+        ),
+        result_boundary_target_amortized_prior_weight=(
+            args.result_boundary_target_amortized_prior_weight
+        ),
+        result_boundary_target_amortized_prior_feature_mode=(
+            args.result_boundary_target_amortized_prior_feature_mode
+        ),
+        result_boundary_target_amortized_prior_hidden_size=(
+            args.result_boundary_target_amortized_prior_hidden_size
+        ),
+        result_boundary_target_amortized_prior_lr=(
+            args.result_boundary_target_amortized_prior_lr
+        ),
+        result_boundary_target_amortized_prior_min_entries=(
+            args.result_boundary_target_amortized_prior_min_entries
+        ),
+        result_boundary_target_amortized_prior_replay_batch_size=(
+            args.result_boundary_target_amortized_prior_replay_batch_size
         ),
         result_policy_entropy_weight=args.result_policy_entropy_weight,
         result_policy_batch_diversity_weight=(
@@ -10050,6 +10313,53 @@ def run_variant(
                 result_boundary_objective.item()
             )
             loss = loss + result_boundary_objective
+            if (
+                result_boundary_amortized_prior is not None
+                and result_boundary_prompt_hard_memory is not None
+            ):
+                prior_train_metrics = train_result_boundary_amortized_prior(
+                    result_boundary_amortized_prior,
+                    result_boundary_prompt_hard_memory,
+                    num_digits=num_digits,
+                    device=device,
+                    rng=rng,
+                )
+                result_boundary_target_metrics.update(prior_train_metrics)
+                prior_entries = prior_train_metrics[
+                    "result_boundary_target_amortized_prior_entries"
+                ]
+                if (
+                    prior_entries
+                    >= args.result_boundary_target_amortized_prior_min_entries
+                    and streaming_heldout_pool_batch is not None
+                    and args.result_boundary_target_amortized_prior_replay_batch_size
+                    > 0
+                ):
+                    prior_batch = sample_arithmetic_batch_from_pool(
+                        streaming_heldout_pool_batch,
+                        batch_size=(
+                            args.result_boundary_target_amortized_prior_replay_batch_size
+                        ),
+                        rng=rng,
+                    )
+                    (
+                        prior_model_loss,
+                        prior_model_metrics,
+                    ) = result_boundary_amortized_prior_model_loss(
+                        model,
+                        result_boundary_amortized_prior,
+                        prior_batch,
+                        num_digits=num_digits,
+                    )
+                    prior_objective = (
+                        args.result_boundary_target_amortized_prior_weight
+                        * prior_model_loss
+                    )
+                    loss = loss + prior_objective
+                    result_boundary_target_metrics.update(prior_model_metrics)
+                    result_boundary_target_metrics[
+                        "result_boundary_target_amortized_prior_objective"
+                    ] = float(prior_objective.detach().item())
         if use_result_policy_stabilization:
             current_result_policy_entropy_weight = (
                 result_policy_stabilization_weight(
@@ -11280,6 +11590,24 @@ def run_variant(
     metrics["result_boundary_target_online_memory_freeze_when_full"] = (
         args.result_boundary_target_online_memory_freeze_when_full
     )
+    metrics["result_boundary_target_amortized_prior_weight"] = (
+        args.result_boundary_target_amortized_prior_weight
+    )
+    metrics["result_boundary_target_amortized_prior_feature_mode"] = (
+        args.result_boundary_target_amortized_prior_feature_mode
+    )
+    metrics["result_boundary_target_amortized_prior_hidden_size"] = (
+        args.result_boundary_target_amortized_prior_hidden_size
+    )
+    metrics["result_boundary_target_amortized_prior_lr"] = (
+        args.result_boundary_target_amortized_prior_lr
+    )
+    metrics["result_boundary_target_amortized_prior_min_entries"] = (
+        args.result_boundary_target_amortized_prior_min_entries
+    )
+    metrics["result_boundary_target_amortized_prior_replay_batch_size"] = (
+        args.result_boundary_target_amortized_prior_replay_batch_size
+    )
     if result_boundary_prompt_hard_memory is not None:
         metrics["result_boundary_target_prompt_memory_entries"] = len(
             result_boundary_prompt_hard_memory.entries
@@ -11289,6 +11617,36 @@ def run_variant(
         )
         metrics["result_boundary_target_online_memory_forced_eval_count"] = (
             result_boundary_prompt_hard_memory.forced_eval_count
+        )
+    if result_boundary_amortized_prior is not None:
+        metrics["result_boundary_target_amortized_prior_updates"] = (
+            result_boundary_amortized_prior.train_updates
+        )
+        prior_train_eval = evaluate_result_boundary_amortized_prior(
+            result_boundary_amortized_prior,
+            streaming_train_pairs,
+            device=device,
+        )
+        prior_heldout_eval = evaluate_result_boundary_amortized_prior(
+            result_boundary_amortized_prior,
+            streaming_heldout_pairs,
+            device=device,
+        )
+        metrics["train_prompt_amortized_prior_accuracy"] = prior_train_eval[
+            "accuracy"
+        ]
+        metrics["train_prompt_amortized_prior_confidence"] = prior_train_eval[
+            "confidence"
+        ]
+        metrics["heldout_prompt_amortized_prior_accuracy"] = prior_heldout_eval[
+            "accuracy"
+        ]
+        metrics["heldout_prompt_amortized_prior_confidence"] = prior_heldout_eval[
+            "confidence"
+        ]
+        torch.save(
+            result_boundary_amortized_prior.model.state_dict(),
+            run_dir / "result_boundary_amortized_prior.pt",
         )
     metrics["additive_semantic_distill_weight"] = (
         args.additive_semantic_distill_weight
@@ -12460,6 +12818,52 @@ def parse_args() -> argparse.Namespace:
         help=(
             "For online hard result-boundary memory, stop scoring new "
             "candidates once every fixed-grid prompt has a discovered target."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Weight for using an operand-conditioned prior, trained only from "
+            "prompt hard-memory entries, to supply pseudo-targets for unscored "
+            "heldout replay prompts."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-hidden-size",
+        type=int,
+        default=64,
+        help="Hidden size for the operand-conditioned hard-memory target prior.",
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-feature-mode",
+        choices=["embedding", "numeric"],
+        default="embedding",
+        help=(
+            "Use arbitrary operand embeddings or normalized operand values as "
+            "features for the hard-memory target prior."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-lr",
+        type=float,
+        default=1e-3,
+        help="Learning rate for the separate hard-memory target prior optimizer.",
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-min-entries",
+        type=int,
+        default=32,
+        help="Minimum prompt-memory entries before training or using the prior.",
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-replay-batch-size",
+        type=int,
+        default=0,
+        help=(
+            "When positive with a heldout split, sample this many heldout prompts "
+            "per step and train result logits to detached prior pseudo-targets."
         ),
     )
     parser.add_argument(
@@ -13778,6 +14182,41 @@ def main() -> None:
                 "--result-boundary-target-online-hard-memory supports only "
                 "hard_best_result, zero_improvement, or additive_zero_improvement"
             )
+    if args.result_boundary_target_amortized_prior_weight < 0:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-weight must be non-negative"
+        )
+    if args.result_boundary_target_amortized_prior_hidden_size < 1:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-hidden-size must be positive"
+        )
+    if args.result_boundary_target_amortized_prior_lr <= 0:
+        raise ValueError("--result-boundary-target-amortized-prior-lr must be positive")
+    if args.result_boundary_target_amortized_prior_min_entries < 1:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-min-entries must be positive"
+        )
+    if args.result_boundary_target_amortized_prior_replay_batch_size < 0:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-replay-batch-size "
+            "must be non-negative"
+        )
+    if args.result_boundary_target_amortized_prior_weight > 0:
+        if not args.result_boundary_target_online_hard_memory:
+            raise ValueError(
+                "--result-boundary-target-amortized-prior-weight requires "
+                "--result-boundary-target-online-hard-memory"
+            )
+        if args.result_boundary_target_online_memory_key_mode != "prompt":
+            raise ValueError(
+                "--result-boundary-target-amortized-prior-weight requires "
+                "--result-boundary-target-online-memory-key-mode prompt"
+            )
+        if args.streaming_train_heldout_fraction <= 0:
+            raise ValueError(
+                "--result-boundary-target-amortized-prior-weight currently "
+                "requires --streaming-train-heldout-fraction > 0"
+            )
     if args.streaming_train_batch_size < 0:
         raise ValueError("--streaming-train-batch-size must be non-negative")
     if not 0.0 <= args.streaming_train_heldout_fraction < 1.0:
@@ -14473,9 +14912,26 @@ def main() -> None:
                 ):
                     suffix_parts.append(
                         f"rbtmem{args.result_boundary_target_online_memory_key_mode}"
-                    )
+                )
                 if args.result_boundary_target_online_memory_freeze_when_full:
                     suffix_parts.append("rbtmemfreeze")
+            if args.result_boundary_target_amortized_prior_weight > 0:
+                suffix_parts.append(
+                    "rbtprior"
+                    f"{args.result_boundary_target_amortized_prior_weight:g}"
+                )
+                if (
+                    args.result_boundary_target_amortized_prior_feature_mode
+                    != "embedding"
+                ):
+                    suffix_parts.append(
+                        "rbtprior"
+                        f"{args.result_boundary_target_amortized_prior_feature_mode}"
+                    )
+                suffix_parts.append(
+                    "rbtpriorreplay"
+                    f"{args.result_boundary_target_amortized_prior_replay_batch_size}"
+                )
         if args.result_boundary_target_min_probability_floor > 0:
             suffix_parts.append(
                 "rbtfloor"
@@ -14822,7 +15278,13 @@ def main() -> None:
         "online_memory_key_mode="
         f"{args.result_boundary_target_online_memory_key_mode} "
         "online_memory_freeze_when_full="
-        f"{args.result_boundary_target_online_memory_freeze_when_full}"
+        f"{args.result_boundary_target_online_memory_freeze_when_full} "
+        "amortized_prior_weight="
+        f"{args.result_boundary_target_amortized_prior_weight} "
+        "amortized_prior_feature_mode="
+        f"{args.result_boundary_target_amortized_prior_feature_mode} "
+        "amortized_prior_replay="
+        f"{args.result_boundary_target_amortized_prior_replay_batch_size}"
     )
     print(
         "additive semantic distillation: "
