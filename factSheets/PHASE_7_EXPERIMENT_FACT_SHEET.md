@@ -10577,3 +10577,84 @@ Interpretation:
   before memory fill.
 - Next work should preserve this heldout/handoff result while reducing prior
   fit cost.
+
+## 2026-05-31 Amortized Prior Fit Cadence Gate
+
+Question: can lower-frequency full-memory prior fitting preserve the integrated
+numeric-prior heldout source/handoff result while reducing prior optimizer
+updates?
+
+Implementation:
+
+- Added `--result-boundary-target-amortized-prior-fit-every`.
+- Default `1` preserves prior behavior.
+- The first eligible fit always runs; later fits occur every `N` steps while
+  replay can still use the latest prior.
+- Added `result_boundary_target_amortized_prior_fit_step` and kept
+  `result_boundary_target_amortized_prior_updates` in the curve/metrics.
+
+Smoke:
+
+```text
+runs/smoke_amortized_prior_fit_every/2026-05-31_125322_862659_model-c-op0-19-fullgrid-streamb8-heldout0.2-gumbel_concrete_interface-result_space-rbt1-zero_improvement-rbtt1-rbtchunk8-rbts4-rbtuniq-rbttopk2-rbtonlinehardmem-rbtmempr-40ddd0d949/model-c-2digit-seed9
+```
+
+- Exercised full-memory fit batch `0`, fit cadence `10`, train replay, and
+  heldout replay on a two-step op19 path.
+
+Every-10 source:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fitfull_every10_src5000/2026-05-31_125426_550266_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-7a4bd26fd0/model-c-2digit-seed9
+```
+
+Results:
+
+- Overall exact/calc `379/400 = 0.9475`.
+- Train exact/calc `313/320 = 0.978125`.
+- Heldout exact/calc `61/80 = 0.7625`.
+- Heldout controls: injection-zero `0.0500`, forced-zero `0.0000`,
+  forced-random `0.0125`.
+- Prior updates `501`; prior train/heldout accuracy `0.953125` / `0.7875`.
+- Interpretation: every-10 is too sparse and update-starves the prior.
+
+Every-2 source:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fitfull_every2_src5000/2026-05-31_130618_663672_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-1c87b969de/model-c-2digit-seed9
+```
+
+Results:
+
+- Overall exact/calc `398/400 = 0.9950`.
+- Train exact/calc `320/320 = 1.0000`.
+- Heldout exact/calc `73/80 = 0.9125`.
+- Heldout controls: injection-zero `0.0500`, forced-zero `0.0000`,
+  forced-random `0.0125`.
+- Prior updates `2501` versus `5001` for the full-fit benchmark.
+- Prior train/heldout accuracy `1.0000` / `0.9125`.
+- Forced-result evals stayed `86,016`.
+
+Trusted additive handoff from every-2 source:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fitfull_every2_handoff600/2026-05-31_131746_414262_model-c-op0-19-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed9
+```
+
+Results:
+
+- Final eval `395/400 = 0.9875`.
+- Final 128-sample controls: injection-zero `0.015625`, forced-zero
+  `0.0078125`, forced-random `0.0078125`.
+- Diagnostic calculator-result accuracy `0.984375`.
+- Routed hook calculator-result accuracy:
+  hook0 `0.9574`, hook1 `1.0000`, hook2 `1.0000`, hook3 `1.0000`.
+
+Interpretation:
+
+- Lower-frequency prior fitting can reduce prior updates by 2x without losing
+  the heldout source gate or trusted non-bottleneck handoff causality.
+- A 10x reduction by cadence alone fails through prior underfitting.
+- Next work should not run a cadence ladder. Use convergence-gated fitting,
+  fit-until-prior-train-accuracy after memory freeze, or coreset/reservoir
+  prior batches to reduce below `2501` updates while matching every-2 quality.

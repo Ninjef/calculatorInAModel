@@ -121,8 +121,9 @@ Active directions:
   calc/exact, but heldout prompts only `0.0875`. Integrated numeric-prior replay
   with full-memory prior fitting fixes that heldout gate: source train
   `1.000`, heldout `0.9125`, overall `0.995`, and trusted handoff `1.000` with
-  low controls. The open issue is scalability: full-memory prior fitting works
-  but must be made cheaper for many calculators/larger memories.
+  low controls. Fitting every other step preserves the result and clears handoff
+  (`0.9875`) with half the prior updates; every `10` steps underfits and drops
+  heldout to `0.7625`. Next: convergence-gated or coreset prior fitting.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
@@ -131,9 +132,8 @@ Active directions:
   Shared output removes cloned-output parameter growth but hard-assignment
   handoff missed (`0.78`; matched `0.75`); semantic-distilled online hard
   memory is the first shared-output routed handoff family to replicate, pass
-  op29, train under stochastic minibatches with matched exposure, and now pass
-  a heldout-prompt source/handoff gate with numeric-prior replay. Next work
-  should reduce the prior-fit cost, not repeat fixed-grid or same-seed passes.
+  op29, train under stochastic minibatches with matched exposure, and pass a
+  heldout-prompt source/handoff gate with numeric-prior replay.
 
 ## Paused Or Deprioritized Branches
 
@@ -162,8 +162,8 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Reduce numeric-prior fit cost while preserving the heldout source/handoff
-   result; full-memory prior fit works but is not yet the scalable recipe.
+1. Replace cadence-only prior-fit thinning with convergence-gated or coreset
+   prior fitting that preserves every-2 quality with fewer than `2501` updates.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark

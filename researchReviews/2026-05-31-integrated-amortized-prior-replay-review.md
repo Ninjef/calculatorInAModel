@@ -77,3 +77,26 @@ Treat integrated numeric-prior replay with full-memory prior fit as the new
 positive benchmark for fresh-prompt source acquisition and trusted handoff.
 Mainline work should now reduce the prior-fit cost while preserving heldout
 source accuracy and handoff causality.
+
+## Cadence Follow-Up
+
+Lower-frequency full-memory prior fitting partially reduces this bottleneck,
+but simple cadence thinning has a sharp quality limit.
+
+Every-10 fitting cut prior updates to `501`, but underfit the prior and missed
+the benchmark: source overall `0.9475`, train `0.978125`, heldout `0.7625`,
+prior train/heldout `0.953125`/`0.7875`.
+
+Every-2 fitting preserved the source gate with half the prior updates: overall
+`0.9950`, train `1.0000`, heldout `0.9125`, heldout controls low, prior
+train/heldout `1.0000`/`0.9125`, and `2501` prior updates instead of `5001`.
+Its trusted frozen-policy additive handoff remained causal and high:
+`395/400 = 0.9875`, diagnostic calculator-result accuracy `0.984375`, and
+128-sample controls `0.015625` injection-zero, `0.0078125` forced-zero,
+`0.0078125` forced-random.
+
+Steering update: do not run a cadence ladder as novelty. The safe benchmark is
+now every-2; every-10 shows update starvation. The next scalable mechanism
+should fit until the prior/memory has converged, refresh after memory changes,
+or use coreset/reservoir batches to beat `2501` full-memory updates without
+losing the heldout/handoff gate.

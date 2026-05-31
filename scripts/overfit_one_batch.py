@@ -140,6 +140,7 @@ class TrainConfig:
     result_boundary_target_amortized_prior_min_entries: int
     result_boundary_target_amortized_prior_replay_batch_size: int
     result_boundary_target_amortized_prior_fit_batch_size: int
+    result_boundary_target_amortized_prior_fit_every: int
     result_boundary_target_amortized_prior_train_replay_weight: float
     result_policy_entropy_weight: float
     result_policy_batch_diversity_weight: float
@@ -349,6 +350,7 @@ class ResultBoundaryAmortizedPrior:
     min_entries: int
     replay_batch_size: int
     fit_batch_size: int
+    fit_every: int
     train_steps: int = 1
     train_updates: int = 0
 
@@ -3539,6 +3541,7 @@ def init_result_boundary_amortized_prior(
     replay_batch_size: int,
     device: str | torch.device,
     fit_batch_size: int | None = None,
+    fit_every: int = 1,
 ) -> ResultBoundaryAmortizedPrior:
     prior_model = OperandResultPrior(
         operand_vocab_size=operand_vocab_size,
@@ -3552,6 +3555,7 @@ def init_result_boundary_amortized_prior(
         min_entries=min_entries,
         replay_batch_size=replay_batch_size,
         fit_batch_size=replay_batch_size if fit_batch_size is None else fit_batch_size,
+        fit_every=fit_every,
     )
 
 
@@ -3581,6 +3585,7 @@ def train_result_boundary_amortized_prior(
     num_digits: int,
     device: str | torch.device,
     rng: random.Random,
+    update: bool = True,
 ) -> dict[str, float]:
     entry_batch = prompt_memory_entry_batch(
         memory,
@@ -3592,6 +3597,10 @@ def train_result_boundary_amortized_prior(
             "result_boundary_target_amortized_prior_entries": 0.0,
             "result_boundary_target_amortized_prior_loss": float("nan"),
             "result_boundary_target_amortized_prior_train_accuracy": float("nan"),
+            "result_boundary_target_amortized_prior_updates": float(
+                prior.train_updates
+            ),
+            "result_boundary_target_amortized_prior_fit_step": 0.0,
         }
     a_all, b_all, y_all = entry_batch
     entry_count = int(y_all.shape[0])
@@ -3600,27 +3609,34 @@ def train_result_boundary_amortized_prior(
             "result_boundary_target_amortized_prior_entries": float(entry_count),
             "result_boundary_target_amortized_prior_loss": float("nan"),
             "result_boundary_target_amortized_prior_train_accuracy": float("nan"),
+            "result_boundary_target_amortized_prior_updates": float(
+                prior.train_updates
+            ),
+            "result_boundary_target_amortized_prior_fit_step": 0.0,
         }
     loss_value = float("nan")
-    for _ in range(prior.train_steps):
-        if prior.fit_batch_size > 0 and entry_count > prior.fit_batch_size:
-            indices = torch.tensor(
-                [rng.randrange(entry_count) for _ in range(prior.fit_batch_size)],
-                dtype=torch.long,
-                device=a_all.device,
-            )
-            a = a_all.index_select(0, indices)
-            b = b_all.index_select(0, indices)
-            y = y_all.index_select(0, indices)
-        else:
-            a, b, y = a_all, b_all, y_all
-        logits = prior.model(a, b)
-        prior_loss = torch.nn.functional.cross_entropy(logits, y)
-        prior.optimizer.zero_grad(set_to_none=True)
-        prior_loss.backward()
-        prior.optimizer.step()
-        prior.train_updates += 1
-        loss_value = float(prior_loss.detach().item())
+    fit_step = 0.0
+    if update:
+        fit_step = 1.0
+        for _ in range(prior.train_steps):
+            if prior.fit_batch_size > 0 and entry_count > prior.fit_batch_size:
+                indices = torch.tensor(
+                    [rng.randrange(entry_count) for _ in range(prior.fit_batch_size)],
+                    dtype=torch.long,
+                    device=a_all.device,
+                )
+                a = a_all.index_select(0, indices)
+                b = b_all.index_select(0, indices)
+                y = y_all.index_select(0, indices)
+            else:
+                a, b, y = a_all, b_all, y_all
+            logits = prior.model(a, b)
+            prior_loss = torch.nn.functional.cross_entropy(logits, y)
+            prior.optimizer.zero_grad(set_to_none=True)
+            prior_loss.backward()
+            prior.optimizer.step()
+            prior.train_updates += 1
+            loss_value = float(prior_loss.detach().item())
     with torch.no_grad():
         train_logits = prior.model(a_all, b_all)
         train_accuracy = (train_logits.argmax(dim=-1) == y_all).float().mean()
@@ -3631,6 +3647,7 @@ def train_result_boundary_amortized_prior(
             train_accuracy.item()
         ),
         "result_boundary_target_amortized_prior_updates": float(prior.train_updates),
+        "result_boundary_target_amortized_prior_fit_step": fit_step,
     }
 
 
@@ -9011,6 +9028,7 @@ def run_variant(
                 if args.result_boundary_target_amortized_prior_fit_batch_size >= 0
                 else None
             ),
+            fit_every=args.result_boundary_target_amortized_prior_fit_every,
             device=device,
         )
     if (
@@ -9194,6 +9212,9 @@ def run_variant(
         ),
         result_boundary_target_amortized_prior_fit_batch_size=(
             args.result_boundary_target_amortized_prior_fit_batch_size
+        ),
+        result_boundary_target_amortized_prior_fit_every=(
+            args.result_boundary_target_amortized_prior_fit_every
         ),
         result_boundary_target_amortized_prior_train_replay_weight=(
             args.result_boundary_target_amortized_prior_train_replay_weight
@@ -10346,12 +10367,17 @@ def run_variant(
                 result_boundary_amortized_prior is not None
                 and result_boundary_prompt_hard_memory is not None
             ):
+                prior_should_fit = (
+                    result_boundary_amortized_prior.train_updates == 0
+                    or step % result_boundary_amortized_prior.fit_every == 0
+                )
                 prior_train_metrics = train_result_boundary_amortized_prior(
                     result_boundary_amortized_prior,
                     result_boundary_prompt_hard_memory,
                     num_digits=num_digits,
                     device=device,
                     rng=rng,
+                    update=prior_should_fit,
                 )
                 result_boundary_target_metrics.update(prior_train_metrics)
                 prior_entries = prior_train_metrics[
@@ -11686,6 +11712,9 @@ def run_variant(
     metrics["result_boundary_target_amortized_prior_fit_batch_size"] = (
         args.result_boundary_target_amortized_prior_fit_batch_size
     )
+    metrics["result_boundary_target_amortized_prior_fit_every"] = (
+        args.result_boundary_target_amortized_prior_fit_every
+    )
     metrics["result_boundary_target_amortized_prior_train_replay_weight"] = (
         args.result_boundary_target_amortized_prior_train_replay_weight
     )
@@ -12955,6 +12984,16 @@ def parse_args() -> argparse.Namespace:
             "Batch size for fitting the operand-conditioned prior from prompt "
             "memory entries. The default -1 reuses the replay batch size for "
             "backward compatibility; 0 fits on all current memory entries."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-fit-every",
+        type=int,
+        default=1,
+        help=(
+            "Fit the operand-conditioned prior every N training steps after "
+            "enough memory entries exist. The first eligible fit always runs; "
+            "default 1 preserves prior behavior."
         ),
     )
     parser.add_argument(
@@ -14308,6 +14347,10 @@ def main() -> None:
             "--result-boundary-target-amortized-prior-fit-batch-size "
             "must be -1, 0, or positive"
         )
+    if args.result_boundary_target_amortized_prior_fit_every < 1:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-fit-every must be positive"
+        )
     if args.result_boundary_target_amortized_prior_train_replay_weight < 0:
         raise ValueError(
             "--result-boundary-target-amortized-prior-train-replay-weight "
@@ -15057,6 +15100,11 @@ def main() -> None:
                         "rbtpriorfit"
                         f"{args.result_boundary_target_amortized_prior_fit_batch_size}"
                     )
+                if args.result_boundary_target_amortized_prior_fit_every != 1:
+                    suffix_parts.append(
+                        "rbtpriorfit_every"
+                        f"{args.result_boundary_target_amortized_prior_fit_every}"
+                    )
                 if (
                     args.result_boundary_target_amortized_prior_train_replay_weight
                     > 0
@@ -15420,6 +15468,8 @@ def main() -> None:
         f"{args.result_boundary_target_amortized_prior_replay_batch_size} "
         "amortized_prior_fit_batch="
         f"{args.result_boundary_target_amortized_prior_fit_batch_size} "
+        "amortized_prior_fit_every="
+        f"{args.result_boundary_target_amortized_prior_fit_every} "
         "amortized_prior_train_replay_weight="
         f"{args.result_boundary_target_amortized_prior_train_replay_weight}"
     )

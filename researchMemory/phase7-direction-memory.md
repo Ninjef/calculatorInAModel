@@ -290,9 +290,13 @@ Memory:
   train `1.0000`, heldout `0.9125`, overall `0.9950`, with heldout controls low
   and online prior heldout accuracy `0.9250`. The trusted frozen-policy
   additive handoff from this source reached `1.0000` final with low controls.
-- The open question is scalability: full-memory prior fitting fixes fresh
-  prompts but is a costly stabilizer. Next work should reduce prior-fit cost
-  while preserving the heldout source and trusted handoff result.
+- Lower-frequency full-memory prior fitting has a narrow safe zone. Fitting
+  every `10` steps reduced prior updates to `501` but underfit the prior and
+  dropped heldout source exact/calc to `0.7625`. Fitting every `2` steps reduced
+  updates to `2501` while preserving source train `1.0000`, heldout `0.9125`,
+  overall `0.9950`, and causal trusted handoff `0.9875`. Do not run a cadence
+  ladder; next work should use convergence-gated fitting, post-freeze refresh,
+  or coreset/reservoir batches to beat the every-2 update count.
 
 Representative evidence:
 
@@ -320,6 +324,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-31-amortized-prior-heldout-diagnostic.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-integrated-amortized-prior-source-replay.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-integrated-amortized-prior-source-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-amortized-prior-fit-cadence-gate.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-30-many-calculator-scaling-accounting.md`
 - `researchReviews/2026-05-31-prompt-keyed-streaming-memory-review.md`

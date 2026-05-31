@@ -891,6 +891,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/179-every-other-step-full-memory-prior-fitting-preserves-the-integrated-numeric-prior-source-a",
+      "target": "researchMemory/hypotheses/phase7/179-every-other-step-full-memory-prior-fitting-preserves-the-integrated-numeric-prior-source-a.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1093,6 +1098,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-05-31-integrated-amortized-prior-source-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-31-amortized-prior-fit-cadence-gate.md",
       "type": "supported_by"
     },
     {
@@ -2887,6 +2897,13 @@
       "source_path": "researchMemory/hypotheses/phase7/178-integrated-numeric-prior-replay-fixes-the-heldout-prompt-source-gate-when-the-prior-is-fit.md",
       "status": "POSITIVE-WITH-CAVEAT",
       "title": "Integrated numeric-prior replay fixes the heldout prompt source gate when the prior is fit on full memory."
+    },
+    {
+      "id": "doc/179-every-other-step-full-memory-prior-fitting-preserves-the-integrated-numeric-prior-source-a",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/179-every-other-step-full-memory-prior-fitting-preserves-the-integrated-numeric-prior-source-a.md",
+      "status": "POSITIVE-WITH-CAVEAT",
+      "title": "Every-other-step full-memory prior fitting preserves the integrated numeric-prior source and handoff result, but every-10 underfits."
     },
     {
       "id": "doc/phase7-direction-memory",
