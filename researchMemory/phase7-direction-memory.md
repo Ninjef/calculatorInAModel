@@ -304,6 +304,12 @@ Memory:
   `0.9950`, heldout `0.9125`, and trusted handoff `0.9925` with low controls
   while cutting prior updates to `1889`. Next work should use validation-aware
   stopping or coreset/reservoir fitting, not patience ladders.
+- Uniform random coreset/minibatch prior fitting is not enough. Half-memory
+  prior fits (`fit_batch_size=160`) under the every-2 patience-100 recipe never
+  converged (`0.9094` train prior, `0.7750` heldout prior), kept `2501` updates,
+  and dropped heldout source exact/calc to `0.8125`. Do not run random
+  fit-batch ladders; use structured/coverage-aware coresets or validation-aware
+  stopping.
 
 Representative evidence:
 
@@ -333,6 +339,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-31-integrated-amortized-prior-source-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-amortized-prior-fit-cadence-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-amortized-prior-convergence-stop-gate.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-random-half-memory-prior-fit-gate.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-30-many-calculator-scaling-accounting.md`
 - `researchReviews/2026-05-31-prompt-keyed-streaming-memory-review.md`

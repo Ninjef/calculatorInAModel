@@ -122,3 +122,19 @@ Steering update: patience-100 is the new safe train-convergence benchmark, but
 do not run patience ladders as novelty. The next mechanism should use a
 validation/heldout-prior signal or coreset/reservoir fitting to beat `1889`
 updates while preserving the same source/handoff gate.
+
+## Random-Coreset Follow-Up
+
+Uniform random half-memory prior fits do not preserve the gate.
+
+Using `--result-boundary-target-amortized-prior-fit-batch-size 160` with the
+every-2 patience-100 recipe reduced examples per prior fit, but the prior never
+converged: final train/heldout prior accuracy was only `0.909375`/`0.7750`,
+the stop rule never activated, and prior updates remained `2501`. The source
+kept train exact/calc high (`0.996875`) but missed heldout (`0.8125`) and
+overall (`0.9675`), with controls still low.
+
+Steering update: do not run random fit-batch-size ladders as novelty. The
+negative is consistent with the earlier batch64 underfit. Any coreset/reservoir
+next step needs to be structured, coverage-aware, or validated by a heldout
+prior signal, not another uniform random batch size.

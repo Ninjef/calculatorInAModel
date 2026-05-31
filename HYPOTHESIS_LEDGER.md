@@ -25,7 +25,7 @@ future agents to infer it from chronology.
 | Bottleneck-to-additive staged handoff | Active but constrained | Proves non-bottleneck viability, but source quality and policy protection remain bottlenecks. |
 | Cheap source-checkpoint selectors | Paused | Frozen-state, geometry, short-slope, ridge, and embedded 500-step probes are not reliable replacements for actual handoff gates. |
 | Source acquisition for transfer geometry | Active | Current best strategic direction if it directly targets handoff/readout behavior. |
-| Online hard result-boundary memory + numeric prior | Active benchmark, constrained | Full-memory numeric-prior replay fixes the heldout prompt source gate and clears trusted handoff. Every-2 plus sustained train-memory convergence cuts prior updates to `1889`; first-hit convergence and every-10 underfit. Continue with validation-aware or coreset fitting. |
+| Online hard result-boundary memory + numeric prior | Active benchmark, constrained | Full-memory numeric-prior replay fixes the heldout prompt source gate and clears trusted handoff. Every-2 plus sustained train-memory convergence cuts prior updates to `1889`; first-hit convergence, every-10 cadence, and random half-memory fits underfit. Continue with validation-aware or structured coreset fitting. |
 | Target propagation / local targets | Active candidate, constrained | Exact/full-enum local-target gates are positive, but simple proposal approximations are paused after sparse/adaptive, replay, corrected, online learned, and pretrained learned variants failed scalability stress; continue only with a different estimator, different target construction, or explicitly streaming/generalizing learned proposal. |
 
 Rule: if a proposed experiment belongs to a paused family, it needs a new
@@ -1114,3 +1114,9 @@ Conclusion: Added `--result-boundary-target-amortized-prior-stop-train-accuracy`
 Do not repeat: Do not run patience ladders as novelty. First-hit convergence is disproven; patience-100 is the new safe train-convergence benchmark.
 Next allowed test: Use a validation/heldout-prior signal or coreset/reservoir prior batches to reduce below `1889` updates while preserving the same heldout source and trusted handoff gate.
 Source: `aiAgentWorkHistory/phase7/2026-05-31-amortized-prior-convergence-stop-gate.md`
+
+MIXED-NEGATIVE: Random half-memory prior fit batches do not preserve the integrated numeric-prior heldout source gate.
+Conclusion: Tested the coreset-style cost lever by setting `--result-boundary-target-amortized-prior-fit-batch-size 160` with the every-2, stop-accuracy-1.0, patience-100 source recipe. This halves examples per prior fit, but the prior never converged: final prior train/heldout accuracy was only `0.909375` / `0.7750`, stop never activated, and updates remained `2501`. Source train stayed high (`0.996875`), but heldout exact/calc fell to `65/80 = 0.8125` and overall to `387/400 = 0.9675`, with heldout controls still low (`0.0500` injection-zero, `0.0000` forced-zero, `0.0125` forced-random). No trusted handoff was run because the source gate missed.
+Do not repeat: Do not run random prior fit-batch-size ladders as novelty. Batch `64` already left heldout at `0.7125`, and random batch `160` still underfits at `0.8125`.
+Next allowed test: Use a structured/coverage-aware coreset, reservoir with balanced operand coverage, or validation-aware stopping signal rather than uniform random prior-fit minibatches.
+Source: `aiAgentWorkHistory/phase7/2026-05-31-random-half-memory-prior-fit-gate.md`

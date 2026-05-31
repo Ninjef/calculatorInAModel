@@ -10747,3 +10747,46 @@ Interpretation:
 - Next work should introduce a validation/heldout-prior stopping signal or a
   coreset/reservoir prior fit to push below `1889` updates without sacrificing
   the heldout/handoff gate.
+
+## 2026-05-31 Random Half-Memory Prior Fit Gate
+
+Question: can random half-memory prior fit batches reduce per-update prior cost
+while preserving the sustained-convergence heldout source result?
+
+Run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fit160_every2_stop1pat100_src5000/2026-05-31_140446_144494_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-61979115ea/model-c-2digit-seed9
+```
+
+Key args:
+
+```text
+--result-boundary-target-amortized-prior-fit-batch-size 160
+--result-boundary-target-amortized-prior-fit-every 2
+--result-boundary-target-amortized-prior-stop-train-accuracy 1.0
+--result-boundary-target-amortized-prior-stop-patience 100
+```
+
+Results:
+
+- Overall exact/calc `387/400 = 0.9675`.
+- Train exact/calc `319/320 = 0.996875`.
+- Heldout exact/calc `65/80 = 0.8125`.
+- Heldout controls: injection-zero `0.0500`, forced-zero `0.0000`,
+  forced-random `0.0125`.
+- Prior updates `2501`; stop rule never activated.
+- Prior train/heldout accuracy `0.909375` / `0.7750`.
+- Forced-result evals stayed `86,016`.
+
+Interpretation:
+
+- Random half-memory prior fits reduce per-update examples but fail the source
+  gate because the prior underfits both memory and heldout prompts.
+- This matches the earlier batch64 underfit directionally (`0.7125` heldout);
+  batch160 improves but is still far below the full-memory/every-2/sustained
+  gate heldout `0.9125`.
+- No trusted handoff was run because the source gate missed.
+- Do not run random fit-batch-size ladders as novelty. The next useful coreset
+  test needs structured/coverage-aware sampling or a validation-aware stopping
+  signal.

@@ -124,7 +124,7 @@ Active directions:
   (`0.9875`) with half the prior updates; every `10` steps underfits and drops
   heldout to `0.7625`. Sustained convergence (`1.0` train accuracy for `100`
   fits) preserves source/handoff and cuts updates to `1889`; first-`1.0`
-  stopping drops heldout to `0.875`. Next: validation-aware or coreset fitting.
+  stopping and random half-memory fits underfit (`0.875`/`0.8125` heldout).
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
@@ -163,8 +163,8 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Try validation-aware or coreset prior fitting that preserves quality with
-   fewer than `1889` updates.
+1. Try validation-aware or structured coreset fitting below `1889` updates;
+   random half-memory fit failed.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark
