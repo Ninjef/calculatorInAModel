@@ -62,6 +62,7 @@ class TrainConfig:
     operand_max: int | None
     exhaustive_grid_batch: bool
     exhaustive_grid_size: int | None
+    streaming_train_batch_size: int
     calculator_operand_vocab_size: int
     oracle_train: bool
     oracle_warmup_steps: int
@@ -128,6 +129,7 @@ class TrainConfig:
     result_boundary_target_cache: bool
     result_boundary_target_cache_mode: str
     result_boundary_target_online_hard_memory: bool
+    result_boundary_target_online_memory_key_mode: str
     result_boundary_target_online_memory_freeze_when_full: bool
     result_policy_entropy_weight: float
     result_policy_batch_diversity_weight: float
@@ -268,6 +270,15 @@ class ResultBoundaryOnlineHardMemory:
     zero_losses: torch.Tensor | None
     target_mode: str
     scoring_bottleneck_mode: str
+    forced_eval_count: int = 0
+
+
+@dataclass
+class ResultBoundaryPromptHardMemory:
+    entries: dict[tuple[int, ...], dict[str, float | int]]
+    target_mode: str
+    scoring_bottleneck_mode: str
+    expected_prompt_count: int | None = None
     forced_eval_count: int = 0
 
 
@@ -3350,6 +3361,38 @@ def init_result_boundary_online_hard_memory(
     )
 
 
+def init_result_boundary_prompt_hard_memory(
+    model: TinyGPT,
+    *,
+    target_mode: str,
+    expected_prompt_count: int | None = None,
+) -> ResultBoundaryPromptHardMemory:
+    if target_mode not in {
+        "hard_best_result",
+        "zero_improvement",
+        "additive_zero_improvement",
+    }:
+        raise ValueError(
+            "online hard result-boundary memory supports only "
+            "'hard_best_result', 'zero_improvement', or 'additive_zero_improvement'"
+        )
+    scoring_bottleneck_mode = (
+        "none"
+        if target_mode == "additive_zero_improvement"
+        else model.cfg.calculator_bottleneck_mode
+    )
+    return ResultBoundaryPromptHardMemory(
+        entries={},
+        target_mode=target_mode,
+        scoring_bottleneck_mode=scoring_bottleneck_mode,
+        expected_prompt_count=expected_prompt_count,
+    )
+
+
+def prompt_memory_keys(batch: ArithmeticBatch) -> list[tuple[int, ...]]:
+    return [tuple(int(token) for token in row.tolist()) for row in batch.x.detach().cpu()]
+
+
 def result_boundary_online_hard_memory_loss(
     model: TinyGPT,
     batch: ArithmeticBatch,
@@ -3534,6 +3577,266 @@ def result_boundary_online_hard_memory_loss(
         "result_boundary_target_best_nll": finite_seen_mean(
             memory.best_losses.to(result_logits.device)
         ),
+        "result_boundary_target_true_nll": float("nan"),
+        "result_boundary_target_learned_nll": finite_seen_mean(learned_losses),
+        "result_boundary_target_learned_minus_best_gap": float("nan"),
+        "result_boundary_target_learned_minus_true_gap": float("nan"),
+        "result_boundary_target_hard_best_equals_true_sum": (
+            float(hard_best_equals_true[seen].mean().item())
+            if bool(seen.any().item())
+            else float("nan")
+        ),
+        "result_boundary_target_tie_aware_true_result_best_fraction": float("nan"),
+        "result_boundary_target_true_result_probability": (
+            float(hard_best_equals_true[seen].mean().item())
+            if bool(seen.any().item())
+            else float("nan")
+        ),
+        "result_boundary_target_entropy": float(target_entropy[seen].mean().item())
+        if bool(seen.any().item())
+        else float("nan"),
+        "result_boundary_target_effective_results": 1.0
+        if bool(seen.any().item())
+        else float("nan"),
+        "result_boundary_target_regret_set_fraction": float("nan"),
+        "result_boundary_target_regret_set_true_fraction": float("nan"),
+        "result_boundary_target_learned_best_fraction": (
+            float(learned_best[seen].mean().item())
+            if bool(seen.any().item())
+            else float("nan")
+        ),
+        "result_boundary_target_hard_learned_calc_accuracy": float(
+            (learned_result == true_sum).float().mean().item()
+        ),
+    }
+
+
+def result_boundary_prompt_hard_memory_loss(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    memory: ResultBoundaryPromptHardMemory,
+    *,
+    num_digits: int,
+    chunk_size: int,
+    sample_count: int,
+    unique_sampling: bool,
+    policy_topk_count: int,
+    freeze_when_full: bool,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    if sample_count < 1:
+        raise ValueError(
+            "online hard result-boundary memory requires sampled candidates"
+        )
+    if policy_topk_count < 0:
+        raise ValueError("result-boundary target policy top-k count must be non-negative")
+    if policy_topk_count > sample_count:
+        raise ValueError(
+            "result-boundary target policy top-k count cannot exceed sample count"
+        )
+    keys = prompt_memory_keys(batch)
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    result_vocab_size = result_logits.shape[-1]
+    learned_result = result_logits.argmax(dim=-1)
+    true_a, true_b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = (true_a + true_b).to(result_logits.device)
+    seen_before = torch.tensor(
+        [key in memory.entries for key in keys],
+        device=result_logits.device,
+        dtype=torch.bool,
+    )
+    best_result = torch.zeros(batch.x.shape[0], device=result_logits.device, dtype=torch.long)
+    best_losses = torch.full(
+        (batch.x.shape[0],), float("inf"), device=result_logits.device
+    )
+    for idx, key in enumerate(keys):
+        entry = memory.entries.get(key)
+        if entry is None:
+            continue
+        best_result[idx] = int(entry["best_result"])
+        best_losses[idx] = float(entry["best_loss"])
+    expected = memory.expected_prompt_count
+    global_full = expected is not None and len(memory.entries) >= expected
+    frozen_this_step = bool(freeze_when_full and global_full)
+    forced_mode = "none" if memory.target_mode == "additive_zero_improvement" else None
+    score_mask = torch.zeros_like(seen_before) if frozen_this_step else torch.ones_like(seen_before)
+    update_mask = torch.zeros_like(seen_before)
+    true_candidate = torch.zeros_like(seen_before)
+    unique_counts = torch.zeros(batch.x.shape[0], device=result_logits.device)
+    zero_losses = None
+    positive_fraction = float("nan")
+    scored_results = 0
+    forced_eval_count = 0
+    if bool(score_mask.any().item()):
+        score_indices = torch.nonzero(score_mask, as_tuple=False).squeeze(-1)
+        score_batch = ArithmeticBatch(
+            x=batch.x.index_select(0, score_indices),
+            y=batch.y.index_select(0, score_indices),
+            loss_mask=batch.loss_mask.index_select(0, score_indices),
+        )
+        score_logits = result_logits.index_select(0, score_indices)
+        score_learned = learned_result.index_select(0, score_indices)
+        score_true = true_sum.index_select(0, score_indices)
+        priority_candidates = None
+        if policy_topk_count > 0:
+            priority_candidates = score_logits.detach().topk(
+                k=min(policy_topk_count, result_vocab_size), dim=-1
+            ).indices
+        candidates = sample_improvement_assignment_candidates(
+            score_learned.detach(),
+            result_count=result_vocab_size,
+            sample_count=sample_count,
+            unique=unique_sampling,
+            priority_candidates=priority_candidates,
+        )
+        candidate_losses = score_forced_result_candidate_classes(
+            model,
+            score_batch,
+            candidates,
+            chunk_size=chunk_size,
+            calculator_bottleneck_mode=forced_mode,
+        )
+        candidate_best_losses, candidate_best_indices = candidate_losses.min(dim=-1)
+        candidate_best_results = candidates.gather(
+            1, candidate_best_indices.unsqueeze(-1)
+        ).squeeze(-1)
+        if memory.target_mode in {"zero_improvement", "additive_zero_improvement"}:
+            score_zero_losses = score_injection_zero_answer_losses(
+                model,
+                score_batch,
+                calculator_bottleneck_mode=forced_mode,
+            )
+            positive_candidates = candidate_best_losses < score_zero_losses
+            positive_fraction = float(positive_candidates.float().mean().item())
+        else:
+            score_zero_losses = None
+            positive_candidates = torch.ones_like(candidate_best_losses, dtype=torch.bool)
+        existing_losses = best_losses.index_select(0, score_indices)
+        score_update = positive_candidates & (candidate_best_losses < existing_losses)
+        update_mask[score_indices] = score_update
+        true_candidate[score_indices] = (candidates == score_true.unsqueeze(-1)).any(dim=-1)
+        score_unique_counts = torch.tensor(
+            [row.unique().numel() for row in candidates],
+            device=result_logits.device,
+            dtype=result_logits.dtype,
+        )
+        unique_counts[score_indices] = score_unique_counts
+        scored_results = int(sample_count)
+        forced_eval_count = int(score_indices.numel() * sample_count)
+        with torch.no_grad():
+            for local_idx, should_update in enumerate(score_update.tolist()):
+                if not should_update:
+                    continue
+                batch_idx = int(score_indices[local_idx].item())
+                entry: dict[str, float | int] = {
+                    "best_result": int(candidate_best_results[local_idx].item()),
+                    "best_loss": float(candidate_best_losses[local_idx].item()),
+                }
+                if score_zero_losses is not None:
+                    entry["zero_loss"] = float(score_zero_losses[local_idx].item())
+                memory.entries[keys[batch_idx]] = entry
+                best_result[batch_idx] = int(entry["best_result"])
+                best_losses[batch_idx] = float(entry["best_loss"])
+            memory.forced_eval_count += forced_eval_count
+        if score_zero_losses is not None:
+            zero_losses = torch.full_like(best_losses, float("nan"))
+            zero_losses[score_indices] = score_zero_losses
+
+    seen = torch.tensor(
+        [key in memory.entries for key in keys],
+        device=result_logits.device,
+        dtype=torch.bool,
+    )
+    for idx, key in enumerate(keys):
+        entry = memory.entries.get(key)
+        if entry is None:
+            continue
+        best_result[idx] = int(entry["best_result"])
+        best_losses[idx] = float(entry["best_loss"])
+    if bool(seen.any().item()):
+        per_example_loss = torch.nn.functional.cross_entropy(
+            result_logits, best_result, reduction="none"
+        )
+        target_loss = per_example_loss[seen].mean()
+    else:
+        target_loss = result_logits.sum() * 0.0
+
+    def finite_seen_mean(values: torch.Tensor) -> float:
+        selected = values[seen]
+        finite = torch.isfinite(selected)
+        if not bool(finite.any().item()):
+            return float("nan")
+        return float(selected[finite].mean().item())
+
+    seen_fraction = float(seen.float().mean().item())
+    update_fraction = float(update_mask.float().mean().item())
+    hard_best_equals_true = torch.zeros_like(seen, dtype=result_logits.dtype)
+    hard_best_equals_true[seen] = (
+        best_result[seen] == true_sum[seen]
+    ).to(result_logits.dtype)
+    learned_best = torch.zeros_like(seen, dtype=result_logits.dtype)
+    learned_best[seen] = (
+        learned_result[seen] == best_result[seen]
+    ).to(result_logits.dtype)
+    learned_losses = torch.full_like(best_losses, float("nan"))
+    learned_is_best = learned_result == best_result
+    learned_losses[seen & learned_is_best] = best_losses[seen & learned_is_best]
+    target_entropy = torch.zeros_like(best_losses, dtype=result_logits.dtype)
+    scored_mask = score_mask.to(dtype=torch.bool)
+    finite_zero = (
+        torch.isfinite(zero_losses) if zero_losses is not None else torch.zeros_like(seen)
+    )
+    return target_loss, {
+        "result_boundary_target_loss": float(target_loss.detach().item()),
+        "result_boundary_target_mode": memory.target_mode,
+        "result_boundary_target_scoring_bottleneck_mode": memory.scoring_bottleneck_mode,
+        "result_boundary_target_temperature": float("nan"),
+        "result_boundary_target_min_probability_floor": float("nan"),
+        "result_boundary_target_chunk_size": int(chunk_size),
+        "result_boundary_target_sample_count": int(sample_count),
+        "result_boundary_target_unique_sampling": int(unique_sampling),
+        "result_boundary_target_policy_topk_count": int(policy_topk_count),
+        "result_boundary_target_teacher": 0,
+        "result_boundary_target_cached": 0,
+        "result_boundary_target_cache_mode": "online_hard_memory_prompt",
+        "result_boundary_target_online_hard_memory": 1,
+        "result_boundary_target_online_memory_seen_fraction": seen_fraction,
+        "result_boundary_target_online_memory_update_fraction": update_fraction,
+        "result_boundary_target_online_memory_frozen": int(frozen_this_step),
+        "result_boundary_target_online_memory_forced_eval_count": int(
+            memory.forced_eval_count
+        ),
+        "result_boundary_target_online_memory_key_mode": "prompt",
+        "result_boundary_target_prompt_memory_entries": int(len(memory.entries)),
+        "result_boundary_target_prompt_memory_expected_entries": (
+            int(expected) if expected is not None else 0
+        ),
+        "result_boundary_target_prompt_memory_new_prompt_fraction": float(
+            (~seen_before).float().mean().item()
+        ),
+        "result_boundary_target_scored_results": scored_results,
+        "result_boundary_target_unique_scored_results": float(
+            unique_counts[scored_mask].mean().item()
+        ) if bool(scored_mask.any().item()) else 0.0,
+        "result_boundary_target_unique_candidate_fraction": float(
+            unique_counts[scored_mask].div(result_vocab_size).mean().item()
+        ) if bool(scored_mask.any().item()) else 0.0,
+        "result_boundary_target_true_candidate_coverage": float(
+            true_candidate.float().mean().item()
+        ),
+        "result_boundary_target_forced_eval_count": int(forced_eval_count),
+        "result_boundary_target_zero_loss": (
+            float(zero_losses[finite_zero].mean().item())
+            if zero_losses is not None and bool(finite_zero.any().item())
+            else float("nan")
+        ),
+        "result_boundary_target_zero_improvement_positive_fraction": positive_fraction,
+        "result_boundary_target_zero_improvement_true_fraction": (
+            float(hard_best_equals_true[seen].mean().item())
+            if bool(seen.any().item())
+            else float("nan")
+        ),
+        "result_boundary_target_zero_improvement_mean_positive_mass": float("nan"),
+        "result_boundary_target_best_nll": finite_seen_mean(best_losses),
         "result_boundary_target_true_nll": float("nan"),
         "result_boundary_target_learned_nll": finite_seen_mean(learned_losses),
         "result_boundary_target_learned_minus_best_gap": float("nan"),
@@ -8300,6 +8603,7 @@ def run_variant(
         exhaustive_grid_size = int(exhaustive_grid_batch.x.shape[0])
     cached_result_boundary_target = None
     result_boundary_online_hard_memory = None
+    result_boundary_prompt_hard_memory = None
     if args.result_boundary_target_cache:
         if exhaustive_grid_batch is None:
             raise ValueError(
@@ -8316,17 +8620,34 @@ def run_variant(
             chunk_size=args.result_boundary_target_chunk_size,
         )
     if args.result_boundary_target_online_hard_memory:
-        if exhaustive_grid_batch is None:
-            raise ValueError(
-                "--result-boundary-target-online-hard-memory requires "
-                "--exhaustive-grid-batch"
+        if args.result_boundary_target_online_memory_key_mode == "fixed_batch":
+            if exhaustive_grid_batch is None:
+                raise ValueError(
+                    "--result-boundary-target-online-hard-memory with "
+                    "--result-boundary-target-online-memory-key-mode fixed_batch "
+                    "requires --exhaustive-grid-batch"
+                )
+            result_boundary_online_hard_memory = (
+                init_result_boundary_online_hard_memory(
+                    model,
+                    exhaustive_grid_batch,
+                    num_digits=num_digits,
+                    target_mode=args.result_boundary_target_mode,
+                )
             )
-        result_boundary_online_hard_memory = init_result_boundary_online_hard_memory(
-            model,
-            exhaustive_grid_batch,
-            num_digits=num_digits,
-            target_mode=args.result_boundary_target_mode,
-        )
+        elif args.result_boundary_target_online_memory_key_mode == "prompt":
+            result_boundary_prompt_hard_memory = (
+                init_result_boundary_prompt_hard_memory(
+                    model,
+                    target_mode=args.result_boundary_target_mode,
+                    expected_prompt_count=exhaustive_grid_size,
+                )
+            )
+        else:
+            raise ValueError(
+                "unknown result-boundary online memory key mode: "
+                f"{args.result_boundary_target_online_memory_key_mode}"
+            )
     if (
         args.calculator_estimator
         in {
@@ -8383,6 +8704,7 @@ def run_variant(
         operand_max=args.operand_max,
         exhaustive_grid_batch=args.exhaustive_grid_batch,
         exhaustive_grid_size=exhaustive_grid_size,
+        streaming_train_batch_size=args.streaming_train_batch_size,
         calculator_operand_vocab_size=calculator_operand_vocab_size,
         oracle_train=args.oracle_train,
         oracle_warmup_steps=args.oracle_warmup_steps,
@@ -8478,6 +8800,9 @@ def run_variant(
         result_boundary_target_cache_mode=args.result_boundary_target_cache_mode,
         result_boundary_target_online_hard_memory=(
             args.result_boundary_target_online_hard_memory
+        ),
+        result_boundary_target_online_memory_key_mode=(
+            args.result_boundary_target_online_memory_key_mode
         ),
         result_boundary_target_online_memory_freeze_when_full=(
             args.result_boundary_target_online_memory_freeze_when_full
@@ -9169,7 +9494,17 @@ def run_variant(
             else args.late_source_recovery_start_step
         )
         set_optimizer_lr_multiplier(optim, current_late_source_recovery_lr_multiplier)
-        if args.operand_max is None:
+        if args.streaming_train_batch_size > 0:
+            batch = make_range_batch(
+                batch_size=args.streaming_train_batch_size,
+                num_digits=num_digits,
+                operand_max=operand_max,
+                rng=rng,
+                fixed_width=True,
+                device=device,
+                answer_format=args.answer_format,
+            )
+        elif args.operand_max is None:
             batch = make_batch(
                 batch_size=args.batch_size,
                 num_digits=num_digits,
@@ -9555,6 +9890,23 @@ def run_variant(
                     model,
                     batch,
                     result_boundary_online_hard_memory,
+                    chunk_size=args.result_boundary_target_chunk_size,
+                    sample_count=args.result_boundary_target_sample_count,
+                    unique_sampling=args.result_boundary_target_unique_sampling,
+                    policy_topk_count=args.result_boundary_target_policy_topk_count,
+                    freeze_when_full=(
+                        args.result_boundary_target_online_memory_freeze_when_full
+                    ),
+                )
+            elif result_boundary_prompt_hard_memory is not None:
+                (
+                    result_boundary_loss,
+                    result_boundary_target_metrics,
+                ) = result_boundary_prompt_hard_memory_loss(
+                    model,
+                    batch,
+                    result_boundary_prompt_hard_memory,
+                    num_digits=num_digits,
                     chunk_size=args.result_boundary_target_chunk_size,
                     sample_count=args.result_boundary_target_sample_count,
                     unique_sampling=args.result_boundary_target_unique_sampling,
@@ -10651,6 +11003,7 @@ def run_variant(
     metrics["exhaustive_grid_size"] = (
         int(exhaustive_grid_size) if exhaustive_grid_size is not None else None
     )
+    metrics["streaming_train_batch_size"] = args.streaming_train_batch_size
     metrics["calculator_operand_vocab_size"] = calculator_operand_vocab_size
     metrics["additive_handoff_probe_every"] = args.additive_handoff_probe_every
     metrics["additive_handoff_probe_steps"] = args.additive_handoff_probe_steps
@@ -10809,9 +11162,22 @@ def run_variant(
     metrics["result_boundary_target_online_hard_memory"] = (
         args.result_boundary_target_online_hard_memory
     )
+    metrics["result_boundary_target_online_memory_key_mode"] = (
+        args.result_boundary_target_online_memory_key_mode
+    )
     metrics["result_boundary_target_online_memory_freeze_when_full"] = (
         args.result_boundary_target_online_memory_freeze_when_full
     )
+    if result_boundary_prompt_hard_memory is not None:
+        metrics["result_boundary_target_prompt_memory_entries"] = len(
+            result_boundary_prompt_hard_memory.entries
+        )
+        metrics["result_boundary_target_prompt_memory_expected_entries"] = (
+            result_boundary_prompt_hard_memory.expected_prompt_count
+        )
+        metrics["result_boundary_target_online_memory_forced_eval_count"] = (
+            result_boundary_prompt_hard_memory.forced_eval_count
+        )
     metrics["additive_semantic_distill_weight"] = (
         args.additive_semantic_distill_weight
     )
@@ -11325,6 +11691,15 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--steps", type=int, default=DEFAULT_STEPS)
     parser.add_argument("--batch-size", type=int, default=DEFAULT_BATCH_SIZE)
+    parser.add_argument(
+        "--streaming-train-batch-size",
+        type=int,
+        default=0,
+        help=(
+            "When positive, draw a fresh ranged training minibatch of this size "
+            "each step even if --exhaustive-grid-batch is enabled for evals."
+        ),
+    )
     parser.add_argument("--eval-samples", type=int, default=DEFAULT_EVAL_SAMPLES)
     parser.add_argument(
         "--answer-loss-weight",
@@ -11860,6 +12235,15 @@ def parse_args() -> argparse.Namespace:
             "result-boundary candidate scoring. Intended to test whether "
             "online answer-derived discovery plus hard imitation can replace "
             "full-enum cached teacher tables."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-online-memory-key-mode",
+        choices=["fixed_batch", "prompt"],
+        default="fixed_batch",
+        help=(
+            "Key online hard result-boundary memory by the fixed training batch "
+            "or by prompt tokens so it can be used with streaming minibatches."
         ),
     )
     parser.add_argument(
@@ -13158,9 +13542,13 @@ def main() -> None:
                 "with --result-boundary-target-sample-count 0"
             )
     if args.result_boundary_target_online_hard_memory:
-        if not args.exhaustive_grid_batch:
+        if (
+            args.result_boundary_target_online_memory_key_mode == "fixed_batch"
+            and not args.exhaustive_grid_batch
+        ):
             raise ValueError(
-                "--result-boundary-target-online-hard-memory requires "
+                "--result-boundary-target-online-hard-memory with fixed_batch "
+                "key mode requires "
                 "--exhaustive-grid-batch"
             )
         if args.result_boundary_target_cache:
@@ -13182,6 +13570,22 @@ def main() -> None:
                 "--result-boundary-target-online-hard-memory supports only "
                 "hard_best_result, zero_improvement, or additive_zero_improvement"
             )
+    if args.streaming_train_batch_size < 0:
+        raise ValueError("--streaming-train-batch-size must be non-negative")
+    if args.streaming_train_batch_size > 0 and args.operand_max is None:
+        raise ValueError(
+            "--streaming-train-batch-size requires --operand-max so the "
+            "streaming prompt distribution is explicit"
+        )
+    if (
+        args.streaming_train_batch_size > 0
+        and args.result_boundary_target_online_hard_memory
+        and args.result_boundary_target_online_memory_key_mode != "prompt"
+    ):
+        raise ValueError(
+            "--streaming-train-batch-size with online hard memory requires "
+            "--result-boundary-target-online-memory-key-mode prompt"
+        )
     if (
         args.result_boundary_target_online_memory_freeze_when_full
         and not args.result_boundary_target_online_hard_memory
@@ -13636,6 +14040,8 @@ def main() -> None:
         suffix_parts.append(f"op0-{args.operand_max}")
     if args.exhaustive_grid_batch:
         suffix_parts.append("fullgrid")
+    if args.streaming_train_batch_size > 0:
+        suffix_parts.append(f"streamb{args.streaming_train_batch_size}")
     if args.calculator_estimator != "ste":
         suffix_parts.append(args.calculator_estimator)
     if args.calculator_estimator == "reinforce":
@@ -13838,6 +14244,13 @@ def main() -> None:
                 suffix_parts.append(f"rbtcache{args.result_boundary_target_cache_mode}")
             if args.result_boundary_target_online_hard_memory:
                 suffix_parts.append("rbtonlinehardmem")
+                if (
+                    args.result_boundary_target_online_memory_key_mode
+                    != "fixed_batch"
+                ):
+                    suffix_parts.append(
+                        f"rbtmem{args.result_boundary_target_online_memory_key_mode}"
+                    )
                 if args.result_boundary_target_online_memory_freeze_when_full:
                     suffix_parts.append("rbtmemfreeze")
         if args.result_boundary_target_min_probability_floor > 0:
@@ -14094,6 +14507,7 @@ def main() -> None:
     print(f"calculator output format: {args.calculator_output_format}")
     print(f"answer decoder interaction: {effective_answer_decoder_interaction}")
     print(f"exhaustive grid batch: {args.exhaustive_grid_batch}")
+    print(f"streaming train batch size: {args.streaming_train_batch_size}")
     print(f"calculator read span width: {args.calculator_read_span_width}")
     print(
         "aux operand loss: "
@@ -14177,6 +14591,8 @@ def main() -> None:
         f"cache={args.result_boundary_target_cache} "
         f"cache_mode={args.result_boundary_target_cache_mode} "
         f"online_hard_memory={args.result_boundary_target_online_hard_memory} "
+        "online_memory_key_mode="
+        f"{args.result_boundary_target_online_memory_key_mode} "
         "online_memory_freeze_when_full="
         f"{args.result_boundary_target_online_memory_freeze_when_full}"
     )

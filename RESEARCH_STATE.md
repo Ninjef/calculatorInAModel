@@ -61,17 +61,11 @@ That means the project is beyond "can the architecture work?" and is now at
 
 ## Current Best Recipe
 
-The best known non-bottleneck recipe is staged:
-
-1. Train a bottleneck source policy with hard improvement assignment and
-   stabilization.
-2. Select or verify source checkpoints with actual additive handoff behavior.
-   For fresh source families, prefer a standalone 600-step frozen-policy
-   handoff gate; 500-step and embedded probes are logging/triage only until
-   reconfirmed by the 600-step gate.
-3. Transfer into additive non-bottleneck mode.
-4. Freeze or protect the calculator policy.
-5. Train downstream/readout and, when needed, continuation/readout stages.
+The best known non-bottleneck recipe is staged: train a bottleneck source,
+verify with an actual standalone 600-step frozen-policy additive handoff for
+fresh families, transfer into additive mode, freeze/protect the calculator
+policy, and train downstream/readout stages. Shorter or embedded handoff probes
+are logging/triage until reconfirmed by the 600-step gate.
 
 This can work, but it is costly, checkpoint-sensitive, and still prescriptive.
 
@@ -117,11 +111,15 @@ Active directions:
   with capped forced evals (`76.8k-86.4k`). Handoff is source-geometry
   sensitive: one single-hook source cleared trusted handoff across two seeds; a
   fresh source missed (`0.647` / `0.632`) despite calc `1.000`. The same
-  mechanism now clears four-hook left-routed shared-output source/handoff on
-  the original and fresh op19 seeds and an op29 range stress (`1.000` final,
-  low controls), unlike prior shared-output hard-assignment misses. Next test
-  streaming/fresh-prompt memory; do not spend more mainline compute re-proving
-  fixed-grid routed/shared op19/op29.
+  mechanism clears four-hook left-routed shared-output source/handoff on the
+  original and fresh op19 seeds and an op29 range stress (`1.000` final, low
+  controls), unlike prior shared-output hard-assignment misses. Prompt-keyed
+  streaming minibatch memory now also clears op19 when the update budget is
+  exposure-matched: batch64 for 800 steps undertrained (`0.6325` final), but
+  batch64 for 5000 steps reached `1.000` source/calc and trusted handoff
+  `1.000` with low controls while freezing memory after `173,568` forced evals.
+  Next test fresh/heldout prompts or reduce the streaming update cost; do not
+  spend more mainline compute re-proving fixed-grid routed/shared op19/op29.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
@@ -129,9 +127,10 @@ Active directions:
   source and trusted handoff are causal, and routed execution is active-only.
   Shared output removes cloned-output parameter growth but hard-assignment
   handoff missed (`0.78`; matched `0.75`); semantic-distilled online hard
-  memory is the first shared-output routed handoff family to replicate and pass
-  op29. Next shared-output work needs streaming/fresh-prompt memory, not more
-  fixed-grid op19/op29 repeats.
+  memory is the first shared-output routed handoff family to replicate, pass
+  op29, and train under stochastic minibatches with matched exposure. Next
+  shared-output work needs fresh/heldout prompt generalization or cheaper
+  streaming updates, not more fixed-grid op19/op29 repeats.
 
 ## Paused Or Deprioritized Branches
 
@@ -160,8 +159,8 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Test online-hard-memory plus semantic distillation under streaming or fresh
-   prompts, where fixed-grid per-prompt memory cannot simply memorize targets.
+1. Test prompt-keyed online-hard-memory plus semantic distillation on
+   fresh/heldout prompts, or reduce the matched-exposure streaming cost.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark

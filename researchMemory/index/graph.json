@@ -871,6 +871,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/175-prompt-keyed-online-hard-memory-trains-routed-shared-output-calculators-under-streaming-mi",
+      "target": "researchMemory/hypotheses/phase7/175-prompt-keyed-online-hard-memory-trains-routed-shared-output-calculators-under-streaming-mi.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1047,12 +1052,27 @@
     },
     {
       "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output-op29.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-31-prompt-keyed-online-hard-memory-streaming.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
       "target": "researchReviews/2026-05-30-assignment-cost-reduction-review.md",
       "type": "supported_by"
     },
     {
       "source": "direction/hard-improvement-assignment",
       "target": "researchReviews/2026-05-30-many-calculator-scaling-accounting.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "researchReviews/2026-05-31-prompt-keyed-streaming-memory-review.md",
       "type": "supported_by"
     },
     {
@@ -2794,6 +2814,13 @@
       "source_path": "researchMemory/hypotheses/phase7/174-semantic-distilled-online-hard-memory-four-hook-shared-output-handoff-clears-the-op29-rang.md",
       "status": "POSITIVE",
       "title": "Semantic-distilled online-hard-memory four-hook shared-output handoff clears the op29 range stress."
+    },
+    {
+      "id": "doc/175-prompt-keyed-online-hard-memory-trains-routed-shared-output-calculators-under-streaming-mi",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/175-prompt-keyed-online-hard-memory-trains-routed-shared-output-calculators-under-streaming-mi.md",
+      "status": "POSITIVE",
+      "title": "Prompt-keyed online-hard-memory trains routed shared-output calculators under streaming minibatches when exposure is matched."
     },
     {
       "id": "doc/phase7-direction-memory",

@@ -10252,3 +10252,75 @@ Interpretation:
   per-prompt hard targets after sparse forced-result candidate scoring.
 - Next high-leverage test: streaming or fresh-prompt memory; do not repeat
   fixed-grid op19/op29 routed/shared seeds as novelty.
+
+## 2026-05-31 Prompt-Keyed Online Hard Memory Streaming Minibatch Gate
+
+Question: can the four-hook shared-output online-hard-memory plus additive
+semantic-distillation recipe train from stochastic minibatches instead of
+backpropagating every step through the fixed exhaustive grid?
+
+Implementation:
+
+- Added `--streaming-train-batch-size`, which samples a fresh ranged training
+  minibatch each step while preserving `--exhaustive-grid-batch` for evaluation
+  and coverage accounting.
+- Added `--result-boundary-target-online-memory-key-mode prompt`, which stores
+  online hard memory entries by prompt-token tuple instead of fixed batch row.
+- Regression coverage verifies that two disjoint minibatches can fill one
+  prompt-keyed memory and that `freeze_when_full` prevents rescoring after the
+  expected prompt count is reached.
+
+Short streaming source:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_src800/2026-05-30_213045_897295_model-c-op0-19-fullgrid-streamb64-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rbtonlinehard-5056870fb5/model-c-2digit-seed9
+```
+
+Matched-exposure streaming source:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_equalexposure_src5000/2026-05-30_213313_861629_model-c-op0-19-fullgrid-streamb64-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rbtonlinehard-5056870fb5/model-c-2digit-seed9
+```
+
+Trusted handoff:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_equalexposure_handoff600/2026-05-30_213727_469671_model-c-op0-19-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed9
+```
+
+Settings:
+
+- CLI seed `7`, effective seed `9`, op19 `400`-prompt grid.
+- Four `left_operand_mod` routed hooks with shared output projection.
+- `operand_spans` readout, span width `2`, product decoder, `n_embd=16`.
+- Sparse zero-improvement online hard memory, topk8+unique24, freeze when full.
+- Additive semantic distillation weight `1`, sample count `8`.
+- Streaming source used `--streaming-train-batch-size 64`; matched exposure
+  used `5000` steps to match the fixed-grid source's order of example
+  presentations (`800 * 400` vs `5000 * 64`).
+
+Results:
+
+- The 800-step streaming source filled/froze all `400` prompt entries with true
+  targets but undertrained: final `253/400 = 0.6325`, diagnostic
+  calculator-result accuracy `0.5781`, final counterfactuals
+  `0.0703/0.0078/0.0156` for injection-zero/forced-zero/forced-random.
+- The 5000-step matched-exposure source reached `400/400 = 1.0000`, diagnostic
+  calculator-result accuracy `1.0000`, all hooks at calculator-result accuracy
+  `1.0000`, and final counterfactuals `0.0703/0.0078/0.0156`.
+- Prompt memory reached `400/400` entries and stopped scoring after `173,568`
+  cumulative forced-result evals.
+- The trusted 600-step frozen-policy additive handoff reached `400/400 =
+  1.0000`, step-600 normal/calc `1.0000`, and final counterfactuals
+  `0.0781/0.0078/0.0156`. All four hooks reached calculator-result accuracy
+  `1.0000`.
+
+Interpretation:
+
+- The fixed-grid dependency is weaker than feared: the method can train from
+  stochastic minibatches if the policy receives enough update exposure.
+- The 800-step miss is an underexposure/optimization-budget result, not a
+  disproof of prompt-keyed streaming memory.
+- This still stores per-prompt targets and uses many more optimizer updates
+  than the full-grid source. The next gate should test fresh/heldout prompts or
+  reduce the streaming uptake cost, not repeat the same op19 streaming recipe.

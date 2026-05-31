@@ -253,6 +253,19 @@ Memory:
   Fixed-grid routed/shared op19 and op29 are now proven for this mechanism;
   the next bottleneck is streaming/fresh-prompt memory, not another
   fixed-grid range or seed repeat.
+- Prompt-keyed streaming minibatch memory is viable if the update budget is
+  exposure-matched. The first batch64 source for 800 steps filled/froze all
+  `400` prompt entries with true targets but undertrained the policy
+  (`0.6325` final, diagnostic calc `0.5781`). The matched-exposure batch64
+  source for 5000 steps used the same mechanism, filled/froze all entries after
+  `173,568` forced evals, and reached source final/calc `1.0000`. Its trusted
+  frozen-policy additive handoff also reached `1.0000` final / step-600 normal,
+  with low controls (`0.0781` final injection-zero, `0.0078` forced-zero,
+  `0.0156` forced-random) and all four hooks at calculator-result accuracy
+  `1.0000`. This proves stochastic minibatch training can learn the routed
+  shared-output calculator, but the cost shifts to more optimizer updates; the
+  next high-leverage gate is fresh/heldout prompts or cheaper streaming uptake,
+  not another fixed-grid or same-exposure repeat.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
@@ -280,8 +293,11 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-left-operand-routed-multi-hook-support.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output-fresh-seed.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output-op29.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-prompt-keyed-online-hard-memory-streaming.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-30-many-calculator-scaling-accounting.md`
+- `researchReviews/2026-05-31-prompt-keyed-streaming-memory-review.md`
 - `HYPOTHESIS_LEDGER.md`
 
 ## Direction: Non-Bottleneck Direct Training
