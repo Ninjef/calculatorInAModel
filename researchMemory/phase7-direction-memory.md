@@ -615,15 +615,18 @@ Memory:
   handoff missed (`0.465` final / `0.485` normal) despite preserved frozen calc
   (`0.9575`), so source discovery is strong but handoff/readout geometry is not.
 - Adding arbitrary-result additive semantic distillation during that source
-  training repairs the handoff geometry on the op19 fixed-grid gate. The
-  combined source reached `1.0000` final/calc and semantic token agreement
-  `0.7459`; the trusted frozen-policy additive handoff reached `1.0000`
-  final / step-600 normal with low controls (`0.0525` injection-zero, `0.0050`
-  forced-zero, `0.0175` forced-random). The auxiliary teaches the additive
-  path what result classes mean without specifying which result each prompt
-  should request. Next work must test fresh seeds, streaming/fresh prompts,
-  larger ranges, or routed/many-calculator versions; do not tune the same op19
-  weight/sample/length as novelty.
+  training repairs handoff geometry on one op19 fixed-grid seed. The combined
+  source reached `1.0000` final/calc and semantic token agreement `0.7459`;
+  the trusted frozen-policy additive handoff reached `1.0000` final /
+  step-600 normal with low controls. Fresh-seed source acquisition replicated
+  (`1.0000` final/calc, memory frozen after `76,800` forced evals), but its
+  trusted handoff was seed-sensitive: `0.6475` final / `0.6625` step-600
+  normal, improving only to `0.823` final / `0.850` normal after continuation
+  despite calc `1.0000` and low controls. The auxiliary teaches arbitrary
+  result semantics without specifying prompt results, but robust handoff is not
+  solved. Next work must improve handoff robustness or test streaming/fresh
+  prompts and many-calculator scaling; do not tune the same op19 weight/sample
+  /length as novelty.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -694,6 +697,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-high-quality-cached-teacher-table.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-result-boundary.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-handoff.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-fresh-seed.md`
 - `researchReviews/2026-05-30-sampled-result-boundary-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`

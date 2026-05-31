@@ -28,6 +28,14 @@ and a perfect trusted frozen-policy additive handoff:
 This resolves the immediate failure mode of the prior online-hard-memory run,
 where source calc was high but handoff final was only `0.4650`.
 
+Fresh-seed replication changes the strength of that conclusion. On CLI seed
+`7` / effective seed `9`, the source again reached `1.0000` final/calc with
+low controls and memory frozen after `76,800` forced evals. The trusted
+600-step handoff preserved calculator accuracy `1.0000` and low controls, but
+missed the pass (`0.6475` final / `0.6625` step-600 normal). A 600-step
+continuation improved to `0.8225` final / `0.8500` normal, so the source is
+usable but not robustly handoff-friendly.
+
 ## What Should Stop
 
 - Do not tune semantic-distill weight, sample count, or source length on this
@@ -36,10 +44,13 @@ where source calc was high but handoff final was only `0.4650`.
   progress unless it changes the memory/generalization setting.
 - Do not return to plain additive semantic distillation without a policy-uptake
   mechanism; that branch already failed.
+- Do not describe the combined method as a solved trusted-handoff recipe until
+  seed-sensitive handoff/readout behavior is fixed or bounded.
 
 ## What Deserves Compute
 
-- Fresh-seed replication of online-hard-memory plus semantic distillation.
+- Handoff robustness diagnostics: downstream-seed variance, geometry/readout
+  objectives, or selection criteria that predict the 600-step gate.
 - Streaming/fresh-prompt memory: verify the method is not just fixed-grid
   prompt memorization.
 - Larger-range stress after the fresh-seed check.
@@ -51,9 +62,11 @@ where source calc was high but handoff final was only `0.4650`.
 This is a real method-combination positive, not a minor variant. Semantic
 distillation alone repaired target/readout quality but did not train the
 policy; online hard memory alone trained the policy but missed handoff. Their
-combination repaired both on the first gate.
+combination repaired both on the first seed and replicated source acquisition
+on a fresh seed.
 
 The result is still not the full thesis. It uses sparse forced-result scoring
-until memory fills and stores per-prompt targets on a fixed grid. The next
-research direction should therefore move away from local tuning and toward
+until memory fills, stores per-prompt targets on a fixed grid, and now shows
+trusted-handoff seed sensitivity. The next research direction should therefore
+move away from local tuning and toward handoff robustness plus
 generalization/scaling validation.

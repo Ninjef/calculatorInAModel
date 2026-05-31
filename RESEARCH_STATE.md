@@ -113,14 +113,13 @@ Active directions:
   required, but full enumeration and frozen transfer remain unsolved issues.
   Static approximations are paused: critics/proposals are costly or state-local,
   soft/regret/sampled hard-best targets are weak, and simple online calibration
-  is partial. Zero-injection plus online hard memory is the sparse source lead:
-  topk8+unique24 fills a true hard target memory and freezes after only
-  `86,400` forced evals. Source-only memory missed handoff (`0.465` final
-  despite `0.958` calc), but adding non-prescriptive additive semantic
-  distillation during source training fixed the handoff geometry on the same
-  gate: source and trusted frozen additive handoff both reached `1.000` final
-  with low zero/random controls. Next stress fresh seeds, streaming prompts, or
-  many-calculator scaling before treating it as a recipe.
+  is partial. Online hard memory plus additive semantic distillation is the
+  sparse source lead: two op19 seeds reached `1.000` source/calc with capped
+  forced evals (`76.8k-86.4k`). Handoff is seed-sensitive: one trusted
+  frozen-policy handoff reached `1.000`, but the fresh seed reached only
+  `0.647` final / `0.662` step-600 normal and `0.823` / `0.850` after
+  continuation despite calc `1.000` and low controls. Next fix robustness or
+  test streaming/many-calculator scaling; do not run source-only repeats.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
@@ -160,8 +159,8 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Validate online-hard-memory plus semantic distillation beyond fixed op19:
-   fresh seed, streaming/fresh prompts, or many-calculator scaling.
+1. Improve or validate online-hard-memory plus semantic distillation beyond
+   seed-sensitive fixed-grid handoff: fresh prompts or many-calculator scaling.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark

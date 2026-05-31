@@ -10005,3 +10005,69 @@ Interpretation:
 - This is still not the full thesis. It remains a fixed-grid memory result
   with sparse candidate scoring, so the next evidence must be fresh-seed,
   streaming/fresh-prompt, larger-range, or many-calculator validation.
+
+Fresh-seed replication:
+
+Source run:
+
+```text
+runs/ohm_semdist_fresh_src800/2026-05-30_194915_191676_model-c-op0-19-fullgrid-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rbtonlinehardmem-rbtmem-44b570a4cc/model-c-2digit-seed9
+```
+
+Handoff run:
+
+```text
+runs/ohm_semdist_fresh_handoff600/2026-05-30_195503_831954_model-c-op0-19-fullgrid-adec-product/model-c-2digit-seed9
+```
+
+Continuation diagnostic:
+
+```text
+runs/ohm_semdist_fresh_handoff_continue600/2026-05-30_195749_735842_model-c-op0-19-fullgrid-adec-product/model-c-2digit-seed9
+```
+
+Source results:
+
+- CLI seed `7`, effective model seed `9`.
+- Final eval: `400/400 = 1.0000`.
+- Step-800 normal/source calc: `1.0000`.
+- Step-800 injection-zero: `0.0575`.
+- Diagnostic calculator-result accuracy: `1.0000`.
+- Final 128-sample counterfactuals: injection-zero `0.0703`,
+  forced-zero `0.0078`, forced-random `0.0156`.
+- Online memory froze after `76,800` forced-result evaluations.
+- Additive semantic token agreement reached `0.7403`.
+
+Trusted handoff results:
+
+- Final eval: `259/400 = 0.6475`.
+- Step-600 normal: `0.6625`.
+- Step-600 injection-zero: `0.0250`.
+- Step-600 forced-zero: `0.0325`.
+- Step-600 forced-random: `0.0225`.
+- Step-600 calculator-result accuracy: `1.0000`.
+- Final 128-sample counterfactuals: injection-zero `0.0469`,
+  forced-zero `0.0156`, forced-random `0.0391`.
+
+Continuation results:
+
+- Continued the 600-step handoff checkpoint for another `600` steps with the
+  policy still frozen.
+- Final eval: `329/400 = 0.8225`.
+- Continuation step-600 normal: `0.8500`.
+- Continuation step-600 injection-zero: `0.0325`.
+- Continuation step-600 forced-zero: `0.0075`.
+- Continuation step-600 forced-random: `0.0225`.
+- Continuation step-600 calculator-result accuracy: `1.0000`.
+
+Fresh-seed interpretation:
+
+- Source acquisition replicated cleanly, including perfect calculator-result
+  accuracy and low no-calculator controls.
+- The 600-step trusted handoff did not replicate as a pass. The continuation
+  improved substantially but still missed the strong gate.
+- This means the combined method is a real source plus geometry improvement,
+  but robust non-bottleneck handoff/readout across seeds is not solved.
+  Further same-source accuracy runs are low value; the next work should target
+  handoff robustness, downstream seed variance, streaming memory, or
+  many-calculator scaling.

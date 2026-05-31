@@ -851,6 +851,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/171-semantic-distilled-online-hard-memory-source-replicates-on-a-fresh-seed-but-trusted-handof",
+      "target": "researchMemory/hypotheses/phase7/171-semantic-distilled-online-hard-memory-source-replicates-on-a-fresh-seed-but-trusted-handof.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1353,6 +1358,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-handoff.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-fresh-seed.md",
       "type": "supported_by"
     },
     {
@@ -2721,6 +2731,13 @@
       "source_path": "researchMemory/hypotheses/phase7/170-additive-semantic-distillation-repairs-online-hard-memory-handoff-geometry-on-the-op19-gat.md",
       "status": "POSITIVE",
       "title": "Additive semantic distillation repairs online-hard-memory handoff geometry on the op19 gate."
+    },
+    {
+      "id": "doc/171-semantic-distilled-online-hard-memory-source-replicates-on-a-fresh-seed-but-trusted-handof",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/171-semantic-distilled-online-hard-memory-source-replicates-on-a-fresh-seed-but-trusted-handof.md",
+      "status": "MIXED-POSITIVE",
+      "title": "Semantic-distilled online-hard-memory source replicates on a fresh seed, but trusted handoff is seed-sensitive."
     },
     {
       "id": "doc/phase7-direction-memory",
