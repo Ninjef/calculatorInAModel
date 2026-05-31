@@ -593,6 +593,14 @@ Memory:
   ongoing distill the table drifted non-arithmetic again (`best=true=0.1575`)
   while learned-best rose to `0.6950`. Next variants must address policy
   uptake or target drift, not just readout semantics.
+- Frozen-teacher additive target anchoring solves the drift diagnostic but not
+  the uptake problem. A separate teacher checkpoint keeps the additive target
+  table at `best=true=0.5225` while the live policy trains; 800 steps improved
+  learned-best only to `0.4125`, with source calc/final eval `0.1700`/`0.1750`.
+  Head-only anchoring stalled lower (`learned_best=0.188`), and freezing only
+  the post-calculator decoder still let pre-hook residual changes drift the
+  target (`best=true=0.1575`). Do not run same-checkpoint anchor sweeps as
+  novelty; policy uptake needs a different mechanism.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -658,6 +666,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-zero-improvement-boundary-handoff.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-additive-zero-improvement-source-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-semantic-distilled-additive-zero-improvement.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-frozen-teacher-additive-target-anchor.md`
 - `researchReviews/2026-05-30-sampled-result-boundary-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`

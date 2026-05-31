@@ -121,6 +121,8 @@ class TrainConfig:
     result_boundary_target_sample_count: int
     result_boundary_target_unique_sampling: bool
     result_boundary_target_policy_topk_count: int
+    result_boundary_target_teacher_checkpoint: str | None
+    result_boundary_target_teacher_load_scope: str
     result_policy_entropy_weight: float
     result_policy_batch_diversity_weight: float
     result_policy_improvement_assignment_weight: float
@@ -214,6 +216,7 @@ class TrainConfig:
     optimizer_step_acceptance_tolerance: float
     optimizer_step_line_search_scales: str
     freeze_semantic_decoder: bool
+    freeze_post_calculator_decoder: bool
     freeze_upstream_encoder: bool
     freeze_calculator_policy: bool
     freeze_calculator_policy_backbone: bool
@@ -2873,6 +2876,7 @@ def result_boundary_target_loss(
     sample_count: int = 0,
     unique_sampling: bool = False,
     policy_topk_count: int = 0,
+    target_model: TinyGPT | None = None,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     if target_mode not in {
         "hard_best_result",
@@ -2903,6 +2907,7 @@ def result_boundary_target_loss(
     result_logits, _, _, _ = calculator_read_result_logits(model, batch)
     result_vocab_size = result_logits.shape[-1]
     learned_result = result_logits.argmax(dim=-1)
+    scorer_model = model if target_model is None else target_model
     scoring_bottleneck_mode = (
         "none" if target_mode == "additive_zero_improvement" else None
     )
@@ -2921,11 +2926,11 @@ def result_boundary_target_loss(
         )
         if scoring_bottleneck_mode is None:
             candidate_losses = score_forced_result_candidate_classes(
-                model, batch, candidates, chunk_size=chunk_size
+                scorer_model, batch, candidates, chunk_size=chunk_size
             )
         else:
             candidate_losses = score_forced_result_candidate_classes(
-                model,
+                scorer_model,
                 batch,
                 candidates,
                 chunk_size=chunk_size,
@@ -2947,11 +2952,11 @@ def result_boundary_target_loss(
         candidates = None
         if scoring_bottleneck_mode is None:
             full_losses = score_forced_result_classes_chunked(
-                model, batch, chunk_size=chunk_size
+                scorer_model, batch, chunk_size=chunk_size
             )
         else:
             full_losses = score_forced_result_classes_chunked(
-                model,
+                scorer_model,
                 batch,
                 chunk_size=chunk_size,
                 calculator_bottleneck_mode=scoring_bottleneck_mode,
@@ -2987,10 +2992,10 @@ def result_boundary_target_loss(
         ).sum(dim=-1).mean()
     elif target_mode in {"zero_improvement", "additive_zero_improvement"}:
         if scoring_bottleneck_mode is None:
-            zero_losses = score_injection_zero_answer_losses(model, batch)
+            zero_losses = score_injection_zero_answer_losses(scorer_model, batch)
         else:
             zero_losses = score_injection_zero_answer_losses(
-                model,
+                scorer_model,
                 batch,
                 calculator_bottleneck_mode=scoring_bottleneck_mode,
             )
@@ -3077,6 +3082,7 @@ def result_boundary_target_loss(
         "result_boundary_target_sample_count": int(sample_count),
         "result_boundary_target_unique_sampling": int(unique_sampling),
         "result_boundary_target_policy_topk_count": int(policy_topk_count),
+        "result_boundary_target_teacher": int(target_model is not None),
         "result_boundary_target_scored_results": int(
             sample_count if sample_count > 0 else result_vocab_size
         ),
@@ -7099,6 +7105,15 @@ def freeze_semantic_decoder_parameters(model: TinyGPT) -> None:
                 param.requires_grad = False
 
 
+def freeze_post_calculator_decoder_parameters(model: TinyGPT) -> None:
+    for block in list(model.blocks)[model.cfg.calculator_hook_after_layer :]:
+        for param in block.parameters():
+            param.requires_grad = False
+    for module in [model.ln_f, model.lm_head]:
+        for param in module.parameters():
+            param.requires_grad = False
+
+
 def clone_primary_calculator_output_proj_to_extra_hooks(model: TinyGPT) -> None:
     if model.calculator_hook is None:
         return
@@ -7711,6 +7726,17 @@ def run_variant(
             args.semantic_decoder_checkpoint,
             load_scope=args.semantic_decoder_checkpoint_load_scope,
         )
+    result_boundary_target_teacher = None
+    if args.result_boundary_target_teacher_checkpoint is not None:
+        result_boundary_target_teacher = TinyGPT(cfg).to(device)
+        load_semantic_decoder_checkpoint(
+            result_boundary_target_teacher,
+            args.result_boundary_target_teacher_checkpoint,
+            load_scope=args.result_boundary_target_teacher_load_scope,
+        )
+        for param in result_boundary_target_teacher.parameters():
+            param.requires_grad = False
+        result_boundary_target_teacher.eval()
     if args.clone_primary_calculator_output_proj:
         clone_primary_calculator_output_proj_to_extra_hooks(model)
     if args.share_calculator_output_proj:
@@ -7722,6 +7748,8 @@ def run_variant(
         )
     if args.freeze_semantic_decoder:
         freeze_semantic_decoder_parameters(model)
+    if args.freeze_post_calculator_decoder:
+        freeze_post_calculator_decoder_parameters(model)
     if (
         args.freeze_upstream_encoder
         and (
@@ -7898,6 +7926,14 @@ def run_variant(
         result_boundary_target_policy_topk_count=(
             args.result_boundary_target_policy_topk_count
         ),
+        result_boundary_target_teacher_checkpoint=(
+            str(args.result_boundary_target_teacher_checkpoint)
+            if args.result_boundary_target_teacher_checkpoint is not None
+            else None
+        ),
+        result_boundary_target_teacher_load_scope=(
+            args.result_boundary_target_teacher_load_scope
+        ),
         result_policy_entropy_weight=args.result_policy_entropy_weight,
         result_policy_batch_diversity_weight=(
             args.result_policy_batch_diversity_weight
@@ -8071,6 +8107,7 @@ def run_variant(
         ),
         optimizer_step_line_search_scales=args.optimizer_step_line_search_scales,
         freeze_semantic_decoder=args.freeze_semantic_decoder,
+        freeze_post_calculator_decoder=args.freeze_post_calculator_decoder,
         freeze_upstream_encoder=args.freeze_upstream_encoder,
         freeze_calculator_policy=args.freeze_calculator_policy,
         freeze_calculator_policy_backbone=args.freeze_calculator_policy_backbone,
@@ -8968,6 +9005,7 @@ def run_variant(
                 sample_count=args.result_boundary_target_sample_count,
                 unique_sampling=args.result_boundary_target_unique_sampling,
                 policy_topk_count=args.result_boundary_target_policy_topk_count,
+                target_model=result_boundary_target_teacher,
             )
             result_boundary_target_loss_value = result_boundary_target_metrics[
                 "result_boundary_target_loss"
@@ -10181,6 +10219,14 @@ def run_variant(
     metrics["result_boundary_target_policy_topk_count"] = (
         args.result_boundary_target_policy_topk_count
     )
+    metrics["result_boundary_target_teacher_checkpoint"] = (
+        str(args.result_boundary_target_teacher_checkpoint)
+        if args.result_boundary_target_teacher_checkpoint is not None
+        else None
+    )
+    metrics["result_boundary_target_teacher_load_scope"] = (
+        args.result_boundary_target_teacher_load_scope
+    )
     metrics["additive_semantic_distill_weight"] = (
         args.additive_semantic_distill_weight
     )
@@ -10517,6 +10563,7 @@ def run_variant(
     if last_optimizer_step_metrics:
         metrics["final_optimizer_step"] = last_optimizer_step_metrics
     metrics["freeze_semantic_decoder"] = args.freeze_semantic_decoder
+    metrics["freeze_post_calculator_decoder"] = args.freeze_post_calculator_decoder
     metrics["freeze_upstream_encoder"] = args.freeze_upstream_encoder
     metrics["freeze_calculator_policy"] = args.freeze_calculator_policy
     metrics["freeze_calculator_policy_backbone"] = (
@@ -11185,6 +11232,22 @@ def parse_args() -> argparse.Namespace:
             "Reserve this many sampled result-boundary candidate slots for "
             "the current result-policy top-k classes."
         ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-teacher-checkpoint",
+        type=Path,
+        default=None,
+        help=(
+            "Optional frozen model checkpoint used only to construct "
+            "result-boundary targets. The live model still supplies the "
+            "trained result-policy logits."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-teacher-load-scope",
+        choices=["full_model", "semantic_decoder_only", "compatible_model"],
+        default="full_model",
+        help="Checkpoint load scope for --result-boundary-target-teacher-checkpoint.",
     )
     parser.add_argument(
         "--result-policy-entropy-weight",
@@ -11939,6 +12002,16 @@ def parse_args() -> argparse.Namespace:
         help="Freeze calculator output projection and strict answer decoder.",
     )
     parser.add_argument(
+        "--freeze-post-calculator-decoder",
+        action="store_true",
+        help=(
+            "Freeze transformer blocks at/after the calculator hook plus final "
+            "LM readout, leaving pre-hook policy features and the calculator "
+            "action head trainable. This keeps additive forced-result scoring "
+            "fixed while testing policy uptake."
+        ),
+    )
+    parser.add_argument(
         "--freeze-upstream-encoder",
         action="store_true",
         help="Diagnostic: freeze transformer encoder and train only the interface.",
@@ -12444,6 +12517,14 @@ def main() -> None:
         raise ValueError(
             "--result-boundary-target-policy-topk-count cannot exceed "
             "--result-boundary-target-sample-count"
+        )
+    if (
+        args.result_boundary_target_teacher_checkpoint is not None
+        and not args.result_boundary_target_teacher_checkpoint.exists()
+    ):
+        raise ValueError(
+            "--result-boundary-target-teacher-checkpoint does not exist: "
+            f"{args.result_boundary_target_teacher_checkpoint}"
         )
     if args.result_policy_entropy_weight < 0:
         raise ValueError("--result-policy-entropy-weight must be non-negative")
@@ -13087,6 +13168,8 @@ def main() -> None:
                     suffix_parts.append(
                         f"rbttopk{args.result_boundary_target_policy_topk_count}"
                     )
+            if args.result_boundary_target_teacher_checkpoint is not None:
+                suffix_parts.append("rbtteacher")
         if args.result_boundary_target_min_probability_floor > 0:
             suffix_parts.append(
                 "rbtfloor"
@@ -13260,6 +13343,8 @@ def main() -> None:
             suffix_parts.append("freezepolicybackbone")
         if args.freeze_calculator_action_head:
             suffix_parts.append("freezeactionhead")
+        if args.freeze_post_calculator_decoder:
+            suffix_parts.append("freezepostcalc")
         if args.calculator_estimator == "gumbel_concrete_interface":
             suffix_parts.append(
                 f"rtemp{args.relaxed_calculator_temperature:g}"
@@ -13417,7 +13502,8 @@ def main() -> None:
         f"chunk_size={args.result_boundary_target_chunk_size} "
         f"sample_count={args.result_boundary_target_sample_count} "
         f"unique_sampling={args.result_boundary_target_unique_sampling} "
-        f"policy_topk_count={args.result_boundary_target_policy_topk_count}"
+        f"policy_topk_count={args.result_boundary_target_policy_topk_count} "
+        f"teacher_checkpoint={args.result_boundary_target_teacher_checkpoint}"
     )
     print(
         "additive semantic distillation: "

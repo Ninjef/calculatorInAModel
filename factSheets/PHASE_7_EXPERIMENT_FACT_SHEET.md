@@ -1,5 +1,54 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-30 Frozen-Teacher Additive Target Anchor
+
+Task/work log:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-frozen-teacher-additive-target-anchor.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-30_phase7_additive_zero_improvement_boundary/frozen_table_policy_only_source200_cpu
+runs/2026-05-30_phase7_additive_zero_improvement_boundary/frozen_additive_scorer_policy_source200_cpu
+runs/2026-05-30_phase7_additive_zero_improvement_boundary/frozen_teacher_anchor_source200_cpu
+runs/2026-05-30_phase7_additive_zero_improvement_boundary/frozen_teacher_anchor_source800_cpu
+```
+
+Result:
+
+```text
+frozen_teacher_additive_anchor_mixed_negative
+```
+
+Added `--result-boundary-target-teacher-checkpoint`, which builds the
+result-boundary target from a separate frozen teacher model while training the
+live model's result policy logits. This directly tests whether a repaired
+additive forced-result table can be held fixed long enough for source-policy
+uptake.
+
+Evidence:
+
+| Gate | Target quality | Source uptake | Calc/final |
+| --- | ---: | ---: | ---: |
+| freeze whole encoder/readout, 200 | best=true `0.5225` | learned-best `0.1880` | `0.0275` / `0.0225` |
+| freeze post-calculator decoder, 200 | best=true `0.1575` | learned-best `0.6575` | `0.0850` / `0.0900` |
+| frozen teacher anchor, 200 | best=true `0.5225` | learned-best `0.3325` | `0.1025` / `0.0975` |
+| frozen teacher anchor, 800 | best=true `0.5225` | learned-best `0.4125` | `0.1700` / `0.1750` |
+
+Interpretation:
+
+- Head-only policy training preserves the repaired table but is too weak.
+- Freezing only the downstream additive scorer is not enough; pre-hook residual
+  updates still drift the additive forced-loss table.
+- A separate frozen teacher solves the target-drift diagnostic but not policy
+  uptake. It is a useful anchoring tool, not a solved training method.
+- Do not run same-checkpoint frozen-teacher anchor length/LR/freezing sweeps as
+  novelty; the next method needs a different way to make the policy represent
+  or explore the teacher's useful target entries.
+
 ## 2026-05-30 Semantic-Distilled Additive Zero-Improvement
 
 Task/work log:

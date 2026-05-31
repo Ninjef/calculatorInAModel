@@ -2523,6 +2523,80 @@ def test_additive_zero_improvement_scores_additive_path(monkeypatch) -> None:
     assert metrics[
         "result_boundary_target_zero_improvement_true_fraction"
     ] == pytest.approx(1.0)
+    assert metrics["result_boundary_target_teacher"] == 0
+
+
+def test_result_boundary_target_teacher_scores_frozen_model(monkeypatch) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_result_boundary_teacher", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=1,
+        n_head=1,
+        block_size=4,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=4,
+        calculator_result_vocab_size=7,
+        calculator_estimator="gumbel_concrete_interface",
+        calculator_action_head="result_space",
+        calculator_bottleneck_mode="answer_decoder",
+    )
+    student = TinyGPT(cfg)
+    teacher = TinyGPT(cfg)
+    batch = ArithmeticBatch(
+        x=torch.tensor([[1, PLUS_ID, 2, EQ_ID]]),
+        y=torch.zeros((1, 4), dtype=torch.long),
+        loss_mask=torch.zeros((1, 4), dtype=torch.bool),
+    )
+    result_logits = torch.zeros((1, 7), requires_grad=True)
+    scorer_models: list[TinyGPT] = []
+
+    monkeypatch.setattr(
+        overfit_script,
+        "calculator_read_result_logits",
+        lambda model_arg, batch_arg: (result_logits, None, None, None),
+    )
+
+    def fake_forced_losses(
+        model_arg,
+        batch_arg,
+        *,
+        chunk_size,
+        calculator_bottleneck_mode=None,
+    ):
+        scorer_models.append(model_arg)
+        return torch.tensor([[5.0, 4.0, 3.0, 0.5, 2.5, 4.5, 5.5]])
+
+    monkeypatch.setattr(
+        overfit_script,
+        "score_forced_result_classes_chunked",
+        fake_forced_losses,
+    )
+
+    loss, metrics = overfit_script.result_boundary_target_loss(
+        student,
+        batch,
+        num_digits=1,
+        target_mode="hard_best_result",
+        temperature=1.0,
+        min_probability_floor=0.0,
+        chunk_size=4,
+        target_model=teacher,
+    )
+
+    assert loss.item() == pytest.approx(torch.log(torch.tensor(7.0)).item())
+    assert scorer_models == [teacher]
+    assert metrics["result_boundary_target_teacher"] == 1
 
 
 def test_additive_semantic_distillation_uses_answer_decoder_teacher(
@@ -5335,6 +5409,48 @@ def test_freeze_calculator_policy_backbone_preserves_action_head() -> None:
     assert not model.pos_emb.weight.requires_grad
     assert not model.blocks[0].attn.qkv.weight.requires_grad
     assert model.blocks[1].attn.qkv.weight.requires_grad
+    assert model.calculator_hook.result_proj.weight.requires_grad
+    assert model.calculator_hook.result_proj.bias.requires_grad
+    assert model.calculator_hook.output_proj.weight.requires_grad
+
+
+def test_freeze_post_calculator_decoder_preserves_policy_path() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_script_post_calculator_freeze", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = GPTConfig(
+        n_embd=8,
+        n_layer=3,
+        n_head=1,
+        block_size=6,
+        mlp_expansion=1,
+        calculator_enabled=True,
+        calculator_mode="add",
+        calculator_hook_after_layer=1,
+        calculator_operand_vocab_size=3,
+        calculator_result_vocab_size=5,
+        calculator_estimator="ste",
+        calculator_action_head="result_space",
+        calculator_bottleneck_mode="none",
+    )
+    model = TinyGPT(cfg)
+    assert model.calculator_hook is not None
+
+    overfit_script.freeze_post_calculator_decoder_parameters(model)
+
+    assert model.tok_emb.weight.requires_grad
+    assert model.pos_emb.weight.requires_grad
+    assert model.blocks[0].attn.qkv.weight.requires_grad
+    assert not model.blocks[1].attn.qkv.weight.requires_grad
+    assert not model.blocks[2].attn.qkv.weight.requires_grad
+    assert not model.ln_f.weight.requires_grad
+    assert not model.lm_head.weight.requires_grad
     assert model.calculator_hook.result_proj.weight.requires_grad
     assert model.calculator_hook.result_proj.bias.requires_grad
     assert model.calculator_hook.output_proj.weight.requires_grad
