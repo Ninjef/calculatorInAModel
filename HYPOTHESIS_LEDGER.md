@@ -1035,3 +1035,9 @@ Conclusion: Added `--result-boundary-target-cache` with `target_weights` and `ha
 Do not repeat: Do not run more same-teacher cached soft/hard length/LR sweeps as novelty. Cached hard-best is a diagnostic/ceiling tool, not a scalable or sufficiently correct training method by itself.
 Next allowed test: Improve the teacher target quality or change the answer-derived target source before optimizing imitation further; alternatively use cached tables only as a cheap diagnostic for new target constructions.
 Source: `aiAgentWorkHistory/phase7/2026-05-30-cached-teacher-target-table.md`
+
+PARTIAL-POSITIVE: Higher-quality additive teacher tables improve cached hard-best source learning but remain below source gates.
+Conclusion: Reused the semantic-distilled preconditioned+ongoing-distill additive checkpoint as the frozen cache teacher. Its additive hard-best table is much better (`best_true=0.8200`) than the preconditioner-only teacher (`0.5225`). Cached soft target weights from this teacher still learned poorly (`0.393` learned-best / `0.298` calc / `0.273` final at 800), but cached hard-best imitation reached `0.728` learned-best / `0.595` calc / `0.562` final at 800 and `0.765` learned-best / `0.618` calc / `0.583` final at 1600. Better target quality plus hardening materially helps, but this still trails the teacher ceiling and the mature bottleneck zero-improvement source.
+Do not repeat: Do not run more high-quality-teacher cached hard-best length/LR sweeps as novelty; the curve is useful as a ceiling diagnostic, not a recipe.
+Next allowed test: Improve the answer-derived target source itself or return to bottleneck zero-improvement/handoff-aware target construction. Cached hard-best can be used as a cheap diagnostic for candidate target tables before expensive source/handoff runs.
+Source: `aiAgentWorkHistory/phase7/2026-05-30-high-quality-cached-teacher-table.md`

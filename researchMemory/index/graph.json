@@ -836,6 +836,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/168-higher-quality-additive-teacher-tables-improve-cached-hard-best-source-learning-but-remain",
+      "target": "researchMemory/hypotheses/phase7/168-higher-quality-additive-teacher-tables-improve-cached-hard-best-source-learning-but-remain.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1323,6 +1328,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-cached-teacher-target-table.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-30-high-quality-cached-teacher-table.md",
       "type": "supported_by"
     },
     {
@@ -2670,6 +2680,13 @@
       "source_path": "researchMemory/hypotheses/phase7/167-cached-teacher-tables-separate-policy-imitation-from-teacher-target-quality.md",
       "status": "MIXED",
       "title": "Cached teacher tables separate policy imitation from teacher-target quality."
+    },
+    {
+      "id": "doc/168-higher-quality-additive-teacher-tables-improve-cached-hard-best-source-learning-but-remain",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/168-higher-quality-additive-teacher-tables-improve-cached-hard-best-source-learning-but-remain.md",
+      "status": "PARTIAL-POSITIVE",
+      "title": "Higher-quality additive teacher tables improve cached hard-best source learning but remain below source gates."
     },
     {
       "id": "doc/phase7-direction-memory",

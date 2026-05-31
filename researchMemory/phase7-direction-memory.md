@@ -602,12 +602,12 @@ Memory:
   target (`best=true=0.1575`). Do not run same-checkpoint anchor sweeps as
   novelty; policy uptake needs a different mechanism.
 - Cached teacher target tables separate uptake from target quality. Cached
-  soft zero-improvement weights reproduced the online anchor (`0.4000`
-  learned-best / `0.1650` final), so repeated rescoring was not the bottleneck.
-  Cached hard-best was much easier to imitate (`0.7100` learned-best after
-  1600 steps), but final eval reached only `0.3725` because the teacher-best
-  table is true for only `0.5225` of prompts. Use cache as a diagnostic for
-  better target construction, not as the next recipe.
+  soft weights reproduce weak uptake even with the higher-quality teacher
+  (`0.393` learned-best / `0.2725` final), while cached hard-best from that
+  teacher lifts source training to `0.765` learned-best / `0.5825` final at
+  1600. Teacher quality matters, but this remains cached/full-enum and below
+  the teacher's `0.8200` best-true ceiling. Use cache as a diagnostic for
+  better target construction, not as the recipe.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -675,6 +675,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-semantic-distilled-additive-zero-improvement.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-frozen-teacher-additive-target-anchor.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-cached-teacher-target-table.md`
+- `aiAgentWorkHistory/phase7/2026-05-30-high-quality-cached-teacher-table.md`
 - `researchReviews/2026-05-30-sampled-result-boundary-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`

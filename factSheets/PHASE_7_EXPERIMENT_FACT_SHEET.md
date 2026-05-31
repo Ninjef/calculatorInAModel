@@ -1,5 +1,51 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-30 High-Quality Cached Teacher Table
+
+Task/work log:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-30-high-quality-cached-teacher-table.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-30_phase7_additive_zero_improvement_boundary/cached_high_quality_teacher_target_weights_source800_cpu
+runs/2026-05-30_phase7_additive_zero_improvement_boundary/cached_high_quality_teacher_hard_best_source800_cpu
+runs/2026-05-30_phase7_additive_zero_improvement_boundary/cached_high_quality_teacher_hard_best_source1600_cpu
+```
+
+Result:
+
+```text
+high_quality_cached_teacher_partial_positive
+```
+
+Used the preconditioned + ongoing semantic-distill additive source checkpoint
+as the frozen cache teacher. This teacher has a much better additive table than
+the preconditioner-only teacher: cached hard-best `best=true=0.8200` instead of
+`0.5225`.
+
+Evidence:
+
+| Gate | Teacher quality | Source uptake | Calc/final |
+| --- | ---: | ---: | ---: |
+| lower-quality cached hard best, 1600 | best=true `0.5225` | learned-best `0.7100` | `0.3575` / `0.3725` |
+| high-quality cached weights, 800 | best=true `0.8200` | learned-best `0.3925` | `0.2975` / `0.2725` |
+| high-quality cached hard best, 800 | best=true `0.8200` | learned-best `0.7275` | `0.5950` / `0.5625` |
+| high-quality cached hard best, 1600 | best=true `0.8200` | learned-best `0.7650` | `0.6175` / `0.5825` |
+
+Interpretation:
+
+- Teacher target quality matters: upgrading the cached teacher table roughly
+  doubles final accuracy versus the lower-quality hard-best cache.
+- Hardening the target matters too: soft weights from the same teacher are much
+  weaker than hard-best imitation.
+- This does not solve the goal. The result is still below the teacher ceiling
+  and far below mature bottleneck zero-improvement source quality; cached
+  hard-best is a target-table diagnostic, not a scalable recipe.
+
 ## 2026-05-30 Cached Teacher Target Table
 
 Task/work log:

@@ -115,10 +115,10 @@ Active directions:
   and frozen transfer remain unsolved scalability/prescriptiveness issues.
   Static approximations are paused: critics/proposals are costly or state-local,
   soft/regret/sampled hard-best targets are weak, and simple online calibration
-  is partial. Zero-injection improvement is still the best less-prescriptive
-  bridge, but additive-path scoring remains weak: readout repair plus frozen
-  target/cached-table anchoring improves diagnosis, yet soft uptake plateaus
-  low and hard cached teacher-best tops out at `0.3725` final.
+  is partial. Zero-injection improvement remains the best less-prescriptive
+  bridge; additive-path scoring is diagnostic only. A better repaired table
+  plus cached hard-best imitation lifts final to `0.583`, but still trails the
+  teacher target (`best=true=0.82`) and bottleneck zero-improvement sources.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
