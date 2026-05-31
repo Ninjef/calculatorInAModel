@@ -10032,6 +10032,12 @@ Alternate downstream-seed handoff:
 runs/ohm_semdist_fresh_handoff_altseed600/2026-05-30_200445_067695_model-c-op0-19-fullgrid-adec-product/model-c-2digit-seed6
 ```
 
+Cross-source handoff control:
+
+```text
+runs/ohm_semdist_goodsrc_handoff_seed9/2026-05-30_200954_448288_model-c-op0-19-fullgrid-adec-product/model-c-2digit-seed9
+```
+
 Source results:
 
 - CLI seed `7`, effective model seed `9`.
@@ -10079,6 +10085,19 @@ Alternate downstream-seed handoff results:
 - Final 128-sample counterfactuals: injection-zero `0.0391`,
   forced-zero `0.0000`, forced-random `0.0312`.
 
+Cross-source handoff control results:
+
+- Used the original clean source checkpoint with the failed fresh handoff's CLI
+  seed `7` / effective seed `9`.
+- Final eval: `400/400 = 1.0000`.
+- Step-600 normal: `1.0000`.
+- Step-600 injection-zero: `0.0550`.
+- Step-600 forced-zero: `0.0075`.
+- Step-600 forced-random: `0.0175`.
+- Step-600 calculator-result accuracy: `1.0000`.
+- Final 128-sample counterfactuals: injection-zero `0.0703`,
+  forced-zero `0.0078`, forced-random `0.0156`.
+
 Fresh-seed interpretation:
 
 - Source acquisition replicated cleanly, including perfect calculator-result
@@ -10087,6 +10106,8 @@ Fresh-seed interpretation:
   improved substantially but still missed the strong gate.
 - The alternate downstream handoff seed also missed, so this is more likely a
   source/readout geometry issue than downstream seed luck.
+- The cross-source control confirms that: the failed fresh handoff seed passes
+  perfectly when paired with the original good source.
 - This means the combined method is a real source plus geometry improvement,
   but robust non-bottleneck handoff/readout across seeds is not solved.
   Further same-source accuracy runs are low value; the next work should target

@@ -125,6 +125,29 @@ Final alternate-handoff metrics:
   forced-zero `0.0000`, forced-random `0.0312`.
 - Diagnostic calculator-result accuracy: `1.0000`.
 
+## Cross-Source Handoff Control
+
+```text
+runs/ohm_semdist_goodsrc_handoff_seed9/2026-05-30_200954_448288_model-c-op0-19-fullgrid-adec-product/model-c-2digit-seed9
+```
+
+The original clean source checkpoint was handed off with CLI seed `7` /
+effective seed `9`, matching the failed fresh-source handoff seed.
+
+| Step | Normal | Zero-inj | Forced zero | Forced random | Calc |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 0.1275 | 0.0050 | 0.0000 | 0.0075 | 1.0000 |
+| 200 | 0.4025 | 0.0575 | 0.0025 | 0.0175 | 1.0000 |
+| 400 | 0.7475 | 0.0225 | 0.0025 | 0.0225 | 1.0000 |
+| 600 | 1.0000 | 0.0550 | 0.0075 | 0.0175 | 1.0000 |
+
+Final cross-source metrics:
+
+- Final eval: `400/400 = 1.0000`.
+- Final 128-sample counterfactuals: injection-zero `0.0703`,
+  forced-zero `0.0078`, forced-random `0.0156`.
+- Diagnostic calculator-result accuracy: `1.0000`.
+
 ## Interpretation
 
 The source mechanism replicated. The fresh source reached perfect
@@ -138,6 +161,11 @@ geometry is less handoff-friendly than the first seed.
 The alternate handoff seed also missed, so the likely failure is source/readout
 geometry rather than downstream seed luck. Further downstream-seed repeats from
 this source are low value unless they are part of a designed variance audit.
+
+The cross-source control confirms that interpretation: the previously failed
+handoff seed passes perfectly when paired with the original good source. The
+next useful work should therefore change source/readout geometry or test
+generalization/scaling, not chase downstream random seeds.
 
 This updates the method status from clean positive to mixed-positive:
 online-hard-memory plus semantic distillation is a strong answer-derived source

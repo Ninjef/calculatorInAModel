@@ -620,9 +620,10 @@ Memory:
   the trusted frozen-policy additive handoff reached `1.0000` final /
   step-600 normal with low controls. Fresh-seed source acquisition replicated
   (`1.0000` final/calc, memory frozen after `76,800` forced evals), but its
-  trusted handoff was source/geometry sensitive: `0.6475` final / `0.6625`
-  step-600 normal, and an alternate downstream handoff seed also missed
-  (`0.6325`) despite calc `1.0000` and low controls. Continuation improved to
+  trusted handoff was source/geometry sensitive: the fresh source got `0.6475`
+  final / `0.6625` step-600 normal, and an alternate downstream seed also
+  missed (`0.6325`), while the original good source passed with that failed
+  handoff seed (`1.0000`). Continuation from the fresh-source miss improved to
   `0.823` final / `0.850` normal. The auxiliary teaches arbitrary result
   semantics without specifying prompt results, but robust handoff is not
   solved. Next work must improve source/readout geometry or test streaming

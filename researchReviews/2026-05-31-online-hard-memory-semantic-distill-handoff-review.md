@@ -39,6 +39,8 @@ usable but not robustly handoff-friendly.
 An alternate downstream handoff seed from the same fresh source also missed
 (`0.6325` final / step-600 normal, calculator accuracy `1.0000`, low controls).
 This points away from downstream seed luck and toward source/readout geometry.
+The cross-source control confirmed this: the original good source paired with
+the failed fresh handoff seed reached `1.0000` final / step-600 normal.
 
 ## What Should Stop
 

@@ -116,9 +116,9 @@ Active directions:
   is partial. Online hard memory plus additive semantic distillation is the
   sparse source lead: two op19 seeds reached `1.000` source/calc with capped
   forced evals (`76.8k-86.4k`). Handoff is seed-sensitive: one trusted
-  frozen-policy handoff reached `1.000`, but the fresh seed reached only
-  `0.647` final / `0.662` normal (`0.632` with alternate handoff seed) and
-  `0.823` / `0.850` after continuation despite calc `1.000` and low controls.
+  frozen-policy handoff reached `1.000`, and the same source also passed with
+  the fresh failed handoff seed. The fresh source reached only `0.647` final
+  (`0.632` alternate handoff seed) despite calc `1.000` and low controls.
   Next fix source/readout geometry or test streaming/many-calculator scaling.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
