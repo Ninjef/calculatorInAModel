@@ -1,5 +1,54 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-31 Online Hard Memory Result-Boundary
+
+Task/work log:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-result-boundary.md
+```
+
+Run roots:
+
+```text
+runs/2026-05-31_phase7_online_hard_memory_result_boundary/online_hard_memory_zero_improvement_topk8_unique24_source200_cpu
+runs/2026-05-31_phase7_online_hard_memory_result_boundary/online_hard_memory_zero_improvement_topk8_unique24_source800_cpu
+runs/2026-05-31_phase7_online_hard_memory_result_boundary/online_hard_memory_freeze_full_zero_improvement_topk8_unique24_source800_cpu
+```
+
+Result:
+
+```text
+online_hard_memory_result_boundary_partial_positive
+```
+
+Added an online hard-memory variant for result-boundary targets. It scores
+sparse candidates, stores the best discovered answer-improving result per
+prompt as a hard target, and optionally freezes candidate rescoring after every
+fixed-grid prompt has a target.
+
+Evidence:
+
+| Branch | Scoring | Step-800 memory | Calc/final |
+| --- | ---: | ---: | ---: |
+| old sparse zero-improvement 200 | topk8+unique24 every step | soft target, true mass `0.9356` | `0.4275` / `0.4300` |
+| online hard memory 200 | topk8+unique24 every step | best=true `1.0000` by step 200 | `0.4550` / `0.4350` |
+| online hard memory 800 | topk8+unique24 every step | best=true `1.0000` | `0.9675` / `0.9725` |
+| online hard memory freeze-full 800 | stops after memory full | `86,400` cumulative forced evals | `0.9675` / `0.9725` |
+
+Interpretation:
+
+- Sparse answer-derived discovery can find a clean hard target table quickly:
+  the freeze-full run had full memory and `best_true=1.0000` by step 50.
+- Hard imitation needs longer than 200 steps but then matches mature
+  bottleneck-source quality at op19.
+- Freezing rescoring after memory fill preserves the result and cuts cumulative
+  forced-result scoring from about `7.69M` to `86.4k` evaluations for this
+  fixed-grid source gate.
+- This is not solved yet: it is fixed-grid prompt memory and still needs
+  fresh-seed, streaming/fresh-prompt, additive handoff, and many-calculator
+  validation.
+
 ## 2026-05-30 High-Quality Cached Teacher Table
 
 Task/work log:

@@ -105,20 +105,20 @@ Active directions:
   survives retention, but full enumeration is not scalable. Simple
   approximation is paused after sparse/adaptive, replay-memory, corrected,
   online learned, pretrained learned, and sparse pairwise-preference variants
-  failed scalability or Stage 1 stress. Continue only with a materially
-  different estimator/target construction or explicit streaming validation.
+  failed scalability or Stage 1 stress. Continue only with new target
+  construction or streaming validation.
 - Less-prescriptive answer-derived target construction. The old full-grid
   result-boundary target source transfers causally into the trusted additive
   frozen-policy gate (`0.8825` final, `0.8425` step-600 normal, zero-injection
-  `0.0000`, learned calc `0.9922`). This shows true-result forced-margin is
-  not strictly required for staged transfer, but full forced-result enumeration
-  and frozen transfer remain unsolved scalability/prescriptiveness issues.
+  `0.0000`, learned calc `0.9922`). True-result forced-margin is not strictly
+  required, but full enumeration and frozen transfer remain unsolved issues.
   Static approximations are paused: critics/proposals are costly or state-local,
   soft/regret/sampled hard-best targets are weak, and simple online calibration
-  is partial. Zero-injection improvement remains the best less-prescriptive
-  bridge; additive-path scoring is diagnostic only. A better repaired table
-  plus cached hard-best imitation lifts final to `0.583`, but still trails the
-  teacher target (`best=true=0.82`) and bottleneck zero-improvement sources.
+  is partial. Zero-injection plus online hard memory is the new lead: sparse
+  topk8+unique24 scoring fills a true hard target memory, freezes after only
+  `86,400` forced evals, and reaches `0.973` final / `0.967` calc at 800.
+  This still needs fresh-seed, streaming/fresh-prompt, handoff, and
+  many-calculator validation; additive-path scoring remains diagnostic only.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29

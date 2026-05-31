@@ -608,6 +608,13 @@ Memory:
   1600. Teacher quality matters, but this remains cached/full-enum and below
   the teacher's `0.8200` best-true ceiling. Use cache as a diagnostic for
   better target construction, not as the recipe.
+- Online hard result-boundary memory is the new sparse answer-derived lead.
+  Topk8+unique24 zero-improvement scoring fills a hard per-prompt memory, and
+  the freeze-full branch stops rescoring after `86,400` forced evals while
+  reaching `0.9675` calc / `0.9725` final at 800. This converts sparse
+  answer-derived discovery into mature source quality, but it is still
+  fixed-grid prompt memory; validate fresh seed, streaming/fresh prompts,
+  trusted additive handoff, and many-calculator cost before calling it scalable.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -676,6 +683,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-frozen-teacher-additive-target-anchor.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-cached-teacher-target-table.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-high-quality-cached-teacher-table.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-result-boundary.md`
 - `researchReviews/2026-05-30-sampled-result-boundary-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`

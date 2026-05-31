@@ -841,6 +841,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/169-online-hard-result-boundary-memory-turns-sparse-zero-improvement-discovery-into-a-strong-s",
+      "target": "researchMemory/hypotheses/phase7/169-online-hard-result-boundary-memory-turns-sparse-zero-improvement-discovery-into-a-strong-s.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1333,6 +1338,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-high-quality-cached-teacher-table.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-result-boundary.md",
       "type": "supported_by"
     },
     {
@@ -2687,6 +2697,13 @@
       "source_path": "researchMemory/hypotheses/phase7/168-higher-quality-additive-teacher-tables-improve-cached-hard-best-source-learning-but-remain.md",
       "status": "PARTIAL-POSITIVE",
       "title": "Higher-quality additive teacher tables improve cached hard-best source learning but remain below source gates."
+    },
+    {
+      "id": "doc/169-online-hard-result-boundary-memory-turns-sparse-zero-improvement-discovery-into-a-strong-s",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/169-online-hard-result-boundary-memory-turns-sparse-zero-improvement-discovery-into-a-strong-s.md",
+      "status": "PARTIAL-POSITIVE",
+      "title": "Online hard result-boundary memory turns sparse zero-improvement discovery into a strong source."
     },
     {
       "id": "doc/phase7-direction-memory",
