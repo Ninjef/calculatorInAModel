@@ -281,7 +281,9 @@ Memory:
   prompts. Post-hoc result-head replay with numeric pseudo-targets lifted
   heldout exact/calc from `0.0875` to `0.9125` while keeping train at `0.9906`;
   the embedding replay control reached only `0.0125` heldout. Next gate:
-  integrate numeric-prior replay during source training itself.
+  run the integrated numeric-prior replay source-training gate. Trainer support
+  now includes mixed train/heldout prior replay, with a smoke proving both
+  replay branches execute.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
@@ -313,6 +315,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-31-prompt-keyed-online-hard-memory-streaming.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-prompt-keyed-online-hard-memory-heldout.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-amortized-prior-heldout-diagnostic.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-integrated-amortized-prior-source-replay.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-30-many-calculator-scaling-accounting.md`
 - `researchReviews/2026-05-31-prompt-keyed-streaming-memory-review.md`

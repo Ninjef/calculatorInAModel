@@ -1082,6 +1082,11 @@
     },
     {
       "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-31-integrated-amortized-prior-source-replay.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
       "target": "researchReviews/2026-05-30-assignment-cost-reduction-review.md",
       "type": "supported_by"
     },

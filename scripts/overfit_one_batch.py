@@ -139,6 +139,7 @@ class TrainConfig:
     result_boundary_target_amortized_prior_lr: float
     result_boundary_target_amortized_prior_min_entries: int
     result_boundary_target_amortized_prior_replay_batch_size: int
+    result_boundary_target_amortized_prior_train_replay_weight: float
     result_policy_entropy_weight: float
     result_policy_batch_diversity_weight: float
     result_policy_improvement_assignment_weight: float
@@ -3654,6 +3655,19 @@ def result_boundary_amortized_prior_model_loss(
         "result_boundary_target_amortized_prior_pseudo_confidence": float(
             prior_confidence.mean().item()
         ),
+    }
+
+
+def prefixed_result_boundary_amortized_prior_replay_metrics(
+    metrics: dict[str, float],
+    *,
+    split: str,
+) -> dict[str, float]:
+    prefix = f"result_boundary_target_amortized_prior_{split}_replay_"
+    old_prefix = "result_boundary_target_amortized_prior_"
+    return {
+        key.replace(old_prefix, prefix, 1): value
+        for key, value in metrics.items()
     }
 
 
@@ -9169,6 +9183,9 @@ def run_variant(
         result_boundary_target_amortized_prior_replay_batch_size=(
             args.result_boundary_target_amortized_prior_replay_batch_size
         ),
+        result_boundary_target_amortized_prior_train_replay_weight=(
+            args.result_boundary_target_amortized_prior_train_replay_weight
+        ),
         result_policy_entropy_weight=args.result_policy_entropy_weight,
         result_policy_batch_diversity_weight=(
             args.result_policy_batch_diversity_weight
@@ -10331,35 +10348,81 @@ def run_variant(
                 if (
                     prior_entries
                     >= args.result_boundary_target_amortized_prior_min_entries
-                    and streaming_heldout_pool_batch is not None
                     and args.result_boundary_target_amortized_prior_replay_batch_size
                     > 0
                 ):
-                    prior_batch = sample_arithmetic_batch_from_pool(
-                        streaming_heldout_pool_batch,
-                        batch_size=(
-                            args.result_boundary_target_amortized_prior_replay_batch_size
-                        ),
-                        rng=rng,
+                    replay_batch_size = (
+                        args.result_boundary_target_amortized_prior_replay_batch_size
                     )
-                    (
-                        prior_model_loss,
-                        prior_model_metrics,
-                    ) = result_boundary_amortized_prior_model_loss(
-                        model,
-                        result_boundary_amortized_prior,
-                        prior_batch,
-                        num_digits=num_digits,
-                    )
-                    prior_objective = (
-                        args.result_boundary_target_amortized_prior_weight
-                        * prior_model_loss
-                    )
-                    loss = loss + prior_objective
-                    result_boundary_target_metrics.update(prior_model_metrics)
-                    result_boundary_target_metrics[
-                        "result_boundary_target_amortized_prior_objective"
-                    ] = float(prior_objective.detach().item())
+                    if (
+                        args.result_boundary_target_amortized_prior_train_replay_weight
+                        > 0
+                        and streaming_train_pool_batch is not None
+                    ):
+                        train_prior_batch = sample_arithmetic_batch_from_pool(
+                            streaming_train_pool_batch,
+                            batch_size=replay_batch_size,
+                            rng=rng,
+                        )
+                        (
+                            train_prior_model_loss,
+                            train_prior_model_metrics,
+                        ) = result_boundary_amortized_prior_model_loss(
+                            model,
+                            result_boundary_amortized_prior,
+                            train_prior_batch,
+                            num_digits=num_digits,
+                        )
+                        train_prior_objective = (
+                            args.result_boundary_target_amortized_prior_weight
+                            * args.result_boundary_target_amortized_prior_train_replay_weight
+                            * train_prior_model_loss
+                        )
+                        loss = loss + train_prior_objective
+                        result_boundary_target_metrics.update(
+                            prefixed_result_boundary_amortized_prior_replay_metrics(
+                                train_prior_model_metrics,
+                                split="train",
+                            )
+                        )
+                        result_boundary_target_metrics[
+                            "result_boundary_target_amortized_prior_train_replay_objective"
+                        ] = float(train_prior_objective.detach().item())
+                    if streaming_heldout_pool_batch is not None:
+                        heldout_prior_batch = sample_arithmetic_batch_from_pool(
+                            streaming_heldout_pool_batch,
+                            batch_size=replay_batch_size,
+                            rng=rng,
+                        )
+                        (
+                            heldout_prior_model_loss,
+                            heldout_prior_model_metrics,
+                        ) = result_boundary_amortized_prior_model_loss(
+                            model,
+                            result_boundary_amortized_prior,
+                            heldout_prior_batch,
+                            num_digits=num_digits,
+                        )
+                        heldout_prior_objective = (
+                            args.result_boundary_target_amortized_prior_weight
+                            * heldout_prior_model_loss
+                        )
+                        loss = loss + heldout_prior_objective
+                        result_boundary_target_metrics.update(
+                            heldout_prior_model_metrics
+                        )
+                        result_boundary_target_metrics.update(
+                            prefixed_result_boundary_amortized_prior_replay_metrics(
+                                heldout_prior_model_metrics,
+                                split="heldout",
+                            )
+                        )
+                        result_boundary_target_metrics[
+                            "result_boundary_target_amortized_prior_objective"
+                        ] = float(heldout_prior_objective.detach().item())
+                        result_boundary_target_metrics[
+                            "result_boundary_target_amortized_prior_heldout_replay_objective"
+                        ] = float(heldout_prior_objective.detach().item())
         if use_result_policy_stabilization:
             current_result_policy_entropy_weight = (
                 result_policy_stabilization_weight(
@@ -11607,6 +11670,9 @@ def run_variant(
     )
     metrics["result_boundary_target_amortized_prior_replay_batch_size"] = (
         args.result_boundary_target_amortized_prior_replay_batch_size
+    )
+    metrics["result_boundary_target_amortized_prior_train_replay_weight"] = (
+        args.result_boundary_target_amortized_prior_train_replay_weight
     )
     if result_boundary_prompt_hard_memory is not None:
         metrics["result_boundary_target_prompt_memory_entries"] = len(
@@ -12864,6 +12930,17 @@ def parse_args() -> argparse.Namespace:
         help=(
             "When positive with a heldout split, sample this many heldout prompts "
             "per step and train result logits to detached prior pseudo-targets."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-train-replay-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Additional multiplier for replaying prior pseudo-targets on the "
+            "streaming train pool. Heldout replay uses the base amortized-prior "
+            "weight; train replay is useful when heldout-only replay would damage "
+            "seen-prompt behavior."
         ),
     )
     parser.add_argument(
@@ -14201,6 +14278,11 @@ def main() -> None:
             "--result-boundary-target-amortized-prior-replay-batch-size "
             "must be non-negative"
         )
+    if args.result_boundary_target_amortized_prior_train_replay_weight < 0:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-train-replay-weight "
+            "must be non-negative"
+        )
     if args.result_boundary_target_amortized_prior_weight > 0:
         if not args.result_boundary_target_online_hard_memory:
             raise ValueError(
@@ -14217,6 +14299,14 @@ def main() -> None:
                 "--result-boundary-target-amortized-prior-weight currently "
                 "requires --streaming-train-heldout-fraction > 0"
             )
+    if (
+        args.result_boundary_target_amortized_prior_train_replay_weight > 0
+        and args.result_boundary_target_amortized_prior_weight <= 0
+    ):
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-train-replay-weight "
+            "requires --result-boundary-target-amortized-prior-weight > 0"
+        )
     if args.streaming_train_batch_size < 0:
         raise ValueError("--streaming-train-batch-size must be non-negative")
     if not 0.0 <= args.streaming_train_heldout_fraction < 1.0:
@@ -14932,6 +15022,14 @@ def main() -> None:
                     "rbtpriorreplay"
                     f"{args.result_boundary_target_amortized_prior_replay_batch_size}"
                 )
+                if (
+                    args.result_boundary_target_amortized_prior_train_replay_weight
+                    > 0
+                ):
+                    suffix_parts.append(
+                        "rbtpriortrain"
+                        f"{args.result_boundary_target_amortized_prior_train_replay_weight:g}"
+                    )
         if args.result_boundary_target_min_probability_floor > 0:
             suffix_parts.append(
                 "rbtfloor"
@@ -15284,7 +15382,9 @@ def main() -> None:
         "amortized_prior_feature_mode="
         f"{args.result_boundary_target_amortized_prior_feature_mode} "
         "amortized_prior_replay="
-        f"{args.result_boundary_target_amortized_prior_replay_batch_size}"
+        f"{args.result_boundary_target_amortized_prior_replay_batch_size} "
+        "amortized_prior_train_replay_weight="
+        f"{args.result_boundary_target_amortized_prior_train_replay_weight}"
     )
     print(
         "additive semantic distillation: "

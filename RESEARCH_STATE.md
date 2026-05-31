@@ -161,7 +161,7 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Integrate numeric-prior replay into the streaming source; post-hoc replay works, prompt-keyed memory alone fails heldout prompts.
+1. Run the integrated numeric-prior replay streaming-source gate; post-hoc replay works, prompt-keyed memory alone fails heldout prompts.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark

@@ -10448,3 +10448,45 @@ Interpretation:
 - This is not yet an end-to-end source-training success. The next gate should
   integrate numeric-prior replay during streaming source training, then test
   heldout and train prompts before any trusted handoff.
+
+## 2026-05-31 Integrated Amortized-Prior Source-Replay Support
+
+Question: can the post-hoc numeric prior replay positive be wired into the
+source trainer so future runs can train seen prompts and heldout prompts in one
+optimization loop?
+
+Implementation:
+
+- Added `--result-boundary-target-amortized-prior-train-replay-weight`.
+- Heldout prior replay still uses
+  `--result-boundary-target-amortized-prior-weight`.
+- Train replay samples from the streaming train pool and uses the additional
+  train replay multiplier. This mirrors the post-hoc replay gate where mixing
+  train replay preserved seen-prompt accuracy.
+- Training curves now separately log train and heldout prior replay metrics,
+  including model loss, objective, pseudo-target accuracy, and confidence.
+- The final metrics/config record the train replay weight.
+
+Smoke:
+
+```text
+runs/smoke_amortized_numeric_prior_train_replay_path/2026-05-31_082345_132651_model-c-op0-19-fullgrid-streamb8-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk16-rbts4-rbtuniq-rbttopk2-rbto-008f34452a/model-c-2digit-seed9
+```
+
+Result:
+
+- Two-step smoke completed on CPU with numeric prior, heldout split, prompt
+  hard memory, heldout replay, and train replay weight `1`.
+- The training curve includes both
+  `result_boundary_target_amortized_prior_train_replay_*` and
+  `result_boundary_target_amortized_prior_heldout_replay_*` fields.
+- This is a wiring/optimization-path result only; the prior has too few entries
+  in the smoke to establish learning quality.
+
+Interpretation:
+
+- The source trainer can now exercise the actual integrated mechanism needed
+  for the next high-leverage gate.
+- This does not change the hypothesis status yet. The next experiment must run
+  a real streaming heldout source gate and evaluate train/heldout calculator
+  accuracy before any trusted handoff.
