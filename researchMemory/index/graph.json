@@ -876,6 +876,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/176-prompt-keyed-online-hard-memory-does-not-generalize-to-heldout-prompts",
+      "target": "researchMemory/hypotheses/phase7/176-prompt-keyed-online-hard-memory-does-not-generalize-to-heldout-prompts.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1062,6 +1067,11 @@
     },
     {
       "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-31-prompt-keyed-online-hard-memory-heldout.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
       "target": "researchReviews/2026-05-30-assignment-cost-reduction-review.md",
       "type": "supported_by"
     },
@@ -1073,6 +1083,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "researchReviews/2026-05-31-prompt-keyed-streaming-memory-review.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "researchReviews/2026-05-31-prompt-keyed-heldout-memory-review.md",
       "type": "supported_by"
     },
     {
@@ -2821,6 +2836,13 @@
       "source_path": "researchMemory/hypotheses/phase7/175-prompt-keyed-online-hard-memory-trains-routed-shared-output-calculators-under-streaming-mi.md",
       "status": "POSITIVE",
       "title": "Prompt-keyed online-hard-memory trains routed shared-output calculators under streaming minibatches when exposure is matched."
+    },
+    {
+      "id": "doc/176-prompt-keyed-online-hard-memory-does-not-generalize-to-heldout-prompts",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/176-prompt-keyed-online-hard-memory-does-not-generalize-to-heldout-prompts.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Prompt-keyed online-hard-memory does not generalize to heldout prompts."
     },
     {
       "id": "doc/phase7-direction-memory",

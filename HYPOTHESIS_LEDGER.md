@@ -25,6 +25,7 @@ future agents to infer it from chronology.
 | Bottleneck-to-additive staged handoff | Active but constrained | Proves non-bottleneck viability, but source quality and policy protection remain bottlenecks. |
 | Cheap source-checkpoint selectors | Paused | Frozen-state, geometry, short-slope, ridge, and embedded 500-step probes are not reliable replacements for actual handoff gates. |
 | Source acquisition for transfer geometry | Active | Current best strategic direction if it directly targets handoff/readout behavior. |
+| Online hard result-boundary memory | Active but bounded | Strong fixed-grid and matched-exposure streaming source/handoff method, including routed/shared calculators; prompt-keyed memory is transductive and fails heldout prompts, so continue only with fresh-prompt credit or amortized target discovery. |
 | Target propagation / local targets | Active candidate, constrained | Exact/full-enum local-target gates are positive, but simple proposal approximations are paused after sparse/adaptive, replay, corrected, online learned, and pretrained learned variants failed scalability stress; continue only with a different estimator, different target construction, or explicitly streaming/generalizing learned proposal. |
 
 Rule: if a proposed experiment belongs to a paused family, it needs a new
@@ -1083,3 +1084,9 @@ Conclusion: Added `--streaming-train-batch-size` and `--result-boundary-target-o
 Do not repeat: Do not treat the 800-step batch64 miss as a mechanism failure or rerun same-exposure op19 streaming source/handoff as novelty. Do not return to fixed-grid routed/shared op19/op29 repeats.
 Next allowed test: Fresh/heldout prompt generalization for prompt-keyed memory, or a cheaper streaming uptake mechanism that preserves the matched-exposure source/handoff result with fewer optimizer updates and forced evaluations.
 Source: `aiAgentWorkHistory/phase7/2026-05-31-prompt-keyed-online-hard-memory-streaming.md`
+
+MIXED-NEGATIVE: Prompt-keyed online-hard-memory does not generalize to heldout prompts.
+Conclusion: Added a deterministic streaming heldout split and split-specific train/heldout evaluations. On the four-hook shared-output op19 gate, the model trained only on `320` prompts for 5000 batch64 steps, filled/froze exactly those `320` memory entries after `87,552` forced evals, and reached train prompt exact/calc `0.996875` (`319/320`). The `80` heldout prompts, absent from both minibatches and prompt memory, reached only `0.0875` exact/calc (`7/80`), with low controls (`0.0500` injection-zero, `0.0000` forced-zero, `0.0125` forced-random). This is a crisp transductive-memory boundary rather than an optimization failure on seen prompts.
+Do not repeat: Do not launch a trusted handoff or same-exposure repeat from this heldout-failed source as novelty, and do not claim prompt-keyed memory is a fresh-prompt generalization method.
+Next allowed test: Add a genuinely non-transductive mechanism: amortized target discovery, fresh-prompt candidate scoring/proposal, a learned memory initializer, or another answer-derived credit signal that can produce calculator targets for prompts not already stored.
+Source: `aiAgentWorkHistory/phase7/2026-05-31-prompt-keyed-online-hard-memory-heldout.md`

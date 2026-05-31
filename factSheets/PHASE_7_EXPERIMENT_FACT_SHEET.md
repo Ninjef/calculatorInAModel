@@ -10324,3 +10324,64 @@ Interpretation:
 - This still stores per-prompt targets and uses many more optimizer updates
   than the full-grid source. The next gate should test fresh/heldout prompts or
   reduce the streaming uptake cost, not repeat the same op19 streaming recipe.
+
+## 2026-05-31 Prompt-Keyed Online Hard Memory Heldout Prompt Gate
+
+Question: does prompt-keyed online hard memory generalize beyond prompts that
+were seen in the streaming minibatches and stored in memory?
+
+Implementation:
+
+- Added `--streaming-train-heldout-fraction` and
+  `--streaming-train-heldout-seed`.
+- The heldout mode requires `--streaming-train-batch-size` and
+  `--exhaustive-grid-batch`, then builds a deterministic train/heldout prompt
+  split from the exhaustive grid.
+- Streaming training samples only from the train pool.
+- Final diagnostics now include deterministic train-prompt and heldout-prompt
+  exact/calc/control metrics plus `train_prompt_trace_rows.csv` and
+  `heldout_prompt_trace_rows.csv`.
+
+Run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_src5000/2026-05-30_214753_463974_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-7006aed4f3/model-c-2digit-seed9
+```
+
+Settings:
+
+- CLI seed `7`, effective seed `9`, op19 `400`-prompt grid.
+- Four `left_operand_mod` routed hooks with shared output projection.
+- `operand_spans` readout, span width `2`, product decoder, `n_embd=16`.
+- Sparse zero-improvement online hard memory, topk8+unique24, freeze when full.
+- Additive semantic distillation weight `1`, sample count `8`.
+- Streaming source used batch64 for `5000` steps with heldout fraction `0.2`.
+
+Results:
+
+- Split size: `320` train prompts, `80` heldout prompts.
+- Prompt memory filled/froze exactly the train pool: `320/320` entries after
+  `87,552` cumulative forced-result evals.
+- Overall final random eval: `325/400 = 0.8125`.
+- Train prompts: exact match `0.996875` (`319/320`) and calculator-result
+  accuracy `0.996875`.
+- Train controls: injection-zero `0.046875`, forced-zero `0.003125`,
+  forced-random `0.01875`.
+- Heldout prompts: exact match `0.0875` (`7/80`) and calculator-result
+  accuracy `0.0875`.
+- Heldout controls: injection-zero `0.0500`, forced-zero `0.0000`,
+  forced-random `0.0125`.
+- Heldout routed calc accuracy was weak for every route: hook0 `0/23`, hook1
+  `5/23`, hook2 `2/21`, hook3 `0/13`.
+
+Interpretation:
+
+- Prompt-keyed memory is a strong transductive mechanism, not a fresh-prompt
+  generalization mechanism.
+- The failure is not a seen-prompt optimization failure: the train split nearly
+  solved, while absent prompts stayed near chance.
+- Do not run a trusted handoff from this source as a thesis gate. The source
+  itself fails the fresh-prompt requirement.
+- Next work needs amortized target discovery, learned target initialization, or
+  another answer-derived credit signal that can supply calculator targets for
+  prompts not already stored in memory.

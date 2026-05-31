@@ -266,6 +266,14 @@ Memory:
   shared-output calculator, but the cost shifts to more optimizer updates; the
   next high-leverage gate is fresh/heldout prompts or cheaper streaming uptake,
   not another fixed-grid or same-exposure repeat.
+- Prompt-keyed memory does not generalize to heldout prompts. A deterministic
+  80/20 op19 split trained only on `320` prompts for 5000 batch64 steps, filled
+  and froze exactly those `320` entries after `87,552` forced evals, and reached
+  train exact/calc `0.9969`. The `80` heldout prompts, absent from both
+  training minibatches and prompt memory, reached only `0.0875` exact/calc
+  with low forced controls. This is a clear transductive-memory boundary: the
+  next mechanism must amortize target discovery or otherwise supply
+  fresh-prompt credit, not merely store prompt-keyed hard targets.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
@@ -295,9 +303,11 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output-fresh-seed.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output-op29.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-prompt-keyed-online-hard-memory-streaming.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-prompt-keyed-online-hard-memory-heldout.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-30-many-calculator-scaling-accounting.md`
 - `researchReviews/2026-05-31-prompt-keyed-streaming-memory-review.md`
+- `researchReviews/2026-05-31-prompt-keyed-heldout-memory-review.md`
 - `HYPOTHESIS_LEDGER.md`
 
 ## Direction: Non-Bottleneck Direct Training

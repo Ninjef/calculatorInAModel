@@ -63,6 +63,8 @@ class TrainConfig:
     exhaustive_grid_batch: bool
     exhaustive_grid_size: int | None
     streaming_train_batch_size: int
+    streaming_train_heldout_fraction: float
+    streaming_train_heldout_seed: int
     calculator_operand_vocab_size: int
     oracle_train: bool
     oracle_warmup_steps: int
@@ -386,18 +388,25 @@ def evaluate(
     oracle_train: bool,
     calculator_result_override: str = "add",
     injection_scale: float | None = None,
+    pairs: list[tuple[int, int]] | None = None,
 ) -> dict[str, object]:
     rng = random.Random(seed)
     answer_tokens = max_answer_tokens(num_digits, answer_format=answer_format)
     exact = 0
     examples: list[dict[str, str | bool]] = []
+    eval_pairs = (
+        pairs
+        if pairs is not None
+        else [
+            (rng.randint(0, operand_max), rng.randint(0, operand_max))
+            for _ in range(samples)
+        ]
+    )
 
     was_training = model.training
     model.eval()
     with temporary_calculator_injection_scale(model, injection_scale):
-        for i in range(samples):
-            a = rng.randint(0, operand_max)
-            b = rng.randint(0, operand_max)
+        for i, (a, b) in enumerate(eval_pairs):
             prompt_ids, target = make_problem(
                 a,
                 b,
@@ -433,8 +442,8 @@ def evaluate(
 
     return {
         "num_digits": num_digits,
-        "samples": samples,
-        "exact_match": exact / samples,
+        "samples": len(eval_pairs),
+        "exact_match": exact / max(len(eval_pairs), 1),
         "correct": exact,
         "examples": examples,
     }
@@ -453,17 +462,24 @@ def calculator_trace_rows(
     answer_format: AnswerFormat,
     calculator_result_override: str = "add",
     injection_scale: float | None = None,
+    pairs: list[tuple[int, int]] | None = None,
 ) -> list[dict[str, object]]:
     rng = random.Random(seed)
     torch.manual_seed(seed)
     rows: list[dict[str, object]] = []
     answer_tokens = max_answer_tokens(num_digits, answer_format=answer_format)
+    trace_pairs = (
+        pairs
+        if pairs is not None
+        else [
+            (rng.randint(0, operand_max), rng.randint(0, operand_max))
+            for _ in range(samples)
+        ]
+    )
     was_training = model.training
     model.eval()
     with temporary_calculator_injection_scale(model, injection_scale):
-        for i in range(samples):
-            a = rng.randint(0, operand_max)
-            b = rng.randint(0, operand_max)
+        for i, (a, b) in enumerate(trace_pairs):
             prompt_ids, target = make_problem(
                 a,
                 b,
@@ -2800,6 +2816,56 @@ def subset_arithmetic_batch(batch: ArithmeticBatch, indices: torch.Tensor) -> Ar
         y=batch.y.index_select(0, indices),
         loss_mask=batch.loss_mask.index_select(0, indices),
     )
+
+
+def sample_arithmetic_batch_from_pool(
+    batch: ArithmeticBatch,
+    *,
+    batch_size: int,
+    rng: random.Random,
+) -> ArithmeticBatch:
+    if batch.x.shape[0] < 1:
+        raise ValueError("cannot sample from an empty arithmetic batch")
+    indices = torch.tensor(
+        [rng.randrange(batch.x.shape[0]) for _ in range(batch_size)],
+        dtype=torch.long,
+        device=batch.x.device,
+    )
+    return subset_arithmetic_batch(batch, indices)
+
+
+def split_exhaustive_prompt_indices(
+    *,
+    prompt_count: int,
+    heldout_fraction: float,
+    seed: int,
+    device: str | torch.device,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    if not 0.0 < heldout_fraction < 1.0:
+        raise ValueError("heldout fraction must be between 0 and 1")
+    if prompt_count < 2:
+        raise ValueError("heldout split requires at least two prompts")
+    heldout_count = max(1, min(prompt_count - 1, round(prompt_count * heldout_fraction)))
+    indices = list(range(prompt_count))
+    random.Random(seed).shuffle(indices)
+    heldout_indices = sorted(indices[:heldout_count])
+    train_indices = sorted(indices[heldout_count:])
+    return (
+        torch.tensor(train_indices, dtype=torch.long, device=device),
+        torch.tensor(heldout_indices, dtype=torch.long, device=device),
+    )
+
+
+def exhaustive_indices_to_pairs(
+    indices: torch.Tensor,
+    *,
+    operand_max: int,
+) -> list[tuple[int, int]]:
+    width = operand_max + 1
+    return [
+        (int(index.item()) // width, int(index.item()) % width)
+        for index in indices.detach().cpu()
+    ]
 
 
 def action_loss_soft_targets(
@@ -8592,6 +8658,11 @@ def run_variant(
     trainable_groups = trainable_parameter_summary(model)
     exhaustive_grid_batch = None
     exhaustive_grid_size = None
+    streaming_train_pool_batch = None
+    streaming_train_indices = None
+    streaming_heldout_indices = None
+    streaming_train_pairs: list[tuple[int, int]] = []
+    streaming_heldout_pairs: list[tuple[int, int]] = []
     if args.exhaustive_grid_batch:
         exhaustive_grid_batch = make_exhaustive_range_batch(
             num_digits=num_digits,
@@ -8601,6 +8672,28 @@ def run_variant(
             answer_format=args.answer_format,
         )
         exhaustive_grid_size = int(exhaustive_grid_batch.x.shape[0])
+    if args.streaming_train_heldout_fraction > 0:
+        if exhaustive_grid_batch is None or exhaustive_grid_size is None:
+            raise ValueError(
+                "--streaming-train-heldout-fraction requires --exhaustive-grid-batch"
+            )
+        streaming_train_indices, streaming_heldout_indices = (
+            split_exhaustive_prompt_indices(
+                prompt_count=exhaustive_grid_size,
+                heldout_fraction=args.streaming_train_heldout_fraction,
+                seed=args.streaming_train_heldout_seed + seed,
+                device=device,
+            )
+        )
+        streaming_train_pool_batch = subset_arithmetic_batch(
+            exhaustive_grid_batch, streaming_train_indices
+        )
+        streaming_train_pairs = exhaustive_indices_to_pairs(
+            streaming_train_indices, operand_max=operand_max
+        )
+        streaming_heldout_pairs = exhaustive_indices_to_pairs(
+            streaming_heldout_indices, operand_max=operand_max
+        )
     cached_result_boundary_target = None
     result_boundary_online_hard_memory = None
     result_boundary_prompt_hard_memory = None
@@ -8640,7 +8733,11 @@ def run_variant(
                 init_result_boundary_prompt_hard_memory(
                     model,
                     target_mode=args.result_boundary_target_mode,
-                    expected_prompt_count=exhaustive_grid_size,
+                    expected_prompt_count=(
+                        int(streaming_train_pool_batch.x.shape[0])
+                        if streaming_train_pool_batch is not None
+                        else exhaustive_grid_size
+                    ),
                 )
             )
         else:
@@ -8705,6 +8802,8 @@ def run_variant(
         exhaustive_grid_batch=args.exhaustive_grid_batch,
         exhaustive_grid_size=exhaustive_grid_size,
         streaming_train_batch_size=args.streaming_train_batch_size,
+        streaming_train_heldout_fraction=args.streaming_train_heldout_fraction,
+        streaming_train_heldout_seed=args.streaming_train_heldout_seed,
         calculator_operand_vocab_size=calculator_operand_vocab_size,
         oracle_train=args.oracle_train,
         oracle_warmup_steps=args.oracle_warmup_steps,
@@ -9495,15 +9594,22 @@ def run_variant(
         )
         set_optimizer_lr_multiplier(optim, current_late_source_recovery_lr_multiplier)
         if args.streaming_train_batch_size > 0:
-            batch = make_range_batch(
-                batch_size=args.streaming_train_batch_size,
-                num_digits=num_digits,
-                operand_max=operand_max,
-                rng=rng,
-                fixed_width=True,
-                device=device,
-                answer_format=args.answer_format,
-            )
+            if streaming_train_pool_batch is not None:
+                batch = sample_arithmetic_batch_from_pool(
+                    streaming_train_pool_batch,
+                    batch_size=args.streaming_train_batch_size,
+                    rng=rng,
+                )
+            else:
+                batch = make_range_batch(
+                    batch_size=args.streaming_train_batch_size,
+                    num_digits=num_digits,
+                    operand_max=operand_max,
+                    rng=rng,
+                    fixed_width=True,
+                    device=device,
+                    answer_format=args.answer_format,
+                )
         elif args.operand_max is None:
             batch = make_batch(
                 batch_size=args.batch_size,
@@ -11004,6 +11110,12 @@ def run_variant(
         int(exhaustive_grid_size) if exhaustive_grid_size is not None else None
     )
     metrics["streaming_train_batch_size"] = args.streaming_train_batch_size
+    metrics["streaming_train_heldout_fraction"] = (
+        args.streaming_train_heldout_fraction
+    )
+    metrics["streaming_train_heldout_seed"] = args.streaming_train_heldout_seed
+    metrics["streaming_train_prompt_count"] = len(streaming_train_pairs)
+    metrics["streaming_heldout_prompt_count"] = len(streaming_heldout_pairs)
     metrics["calculator_operand_vocab_size"] = calculator_operand_vocab_size
     metrics["additive_handoff_probe_every"] = args.additive_handoff_probe_every
     metrics["additive_handoff_probe_steps"] = args.additive_handoff_probe_steps
@@ -11625,6 +11737,87 @@ def run_variant(
                 calculator_result_override="random",
             )["exact_match"],
         }
+        if streaming_heldout_pairs:
+            split_seed = seed + 22_000
+
+            def split_eval(prefix: str, pairs: list[tuple[int, int]]) -> None:
+                pair_count = len(pairs)
+                normal = evaluate(
+                    model,
+                    num_digits=num_digits,
+                    operand_max=operand_max,
+                    samples=pair_count,
+                    seed=split_seed,
+                    fixed_width=True,
+                    answer_format=args.answer_format,
+                    device=device,
+                    oracle_train=False,
+                    pairs=pairs,
+                )
+                traces = calculator_trace_rows(
+                    model,
+                    num_digits=num_digits,
+                    operand_max=operand_max,
+                    samples=pair_count,
+                    seed=split_seed,
+                    device=device,
+                    oracle_train=False,
+                    answer_format=args.answer_format,
+                    pairs=pairs,
+                )
+                trace_metrics = summarize_trace_rows(traces)
+                routed_metrics = summarize_routed_trace_rows(traces)
+                metrics[f"{prefix}_prompt_exact_match"] = normal["exact_match"]
+                metrics[f"{prefix}_prompt_correct"] = normal["correct"]
+                metrics[f"{prefix}_prompt_count"] = pair_count
+                metrics[f"{prefix}_prompt_calculator_result_accuracy"] = (
+                    trace_metrics["calculator_result_accuracy"]
+                )
+                metrics[f"{prefix}_prompt_injection_zero_exact_match"] = evaluate(
+                    model,
+                    num_digits=num_digits,
+                    operand_max=operand_max,
+                    samples=pair_count,
+                    seed=split_seed,
+                    fixed_width=True,
+                    answer_format=args.answer_format,
+                    device=device,
+                    oracle_train=False,
+                    injection_scale=0.0,
+                    pairs=pairs,
+                )["exact_match"]
+                metrics[f"{prefix}_prompt_forced_zero_exact_match"] = evaluate(
+                    model,
+                    num_digits=num_digits,
+                    operand_max=operand_max,
+                    samples=pair_count,
+                    seed=split_seed,
+                    fixed_width=True,
+                    answer_format=args.answer_format,
+                    device=device,
+                    oracle_train=False,
+                    calculator_result_override="zero",
+                    pairs=pairs,
+                )["exact_match"]
+                metrics[f"{prefix}_prompt_forced_random_exact_match"] = evaluate(
+                    model,
+                    num_digits=num_digits,
+                    operand_max=operand_max,
+                    samples=pair_count,
+                    seed=split_seed,
+                    fixed_width=True,
+                    answer_format=args.answer_format,
+                    device=device,
+                    oracle_train=False,
+                    calculator_result_override="random",
+                    pairs=pairs,
+                )["exact_match"]
+                if routed_metrics:
+                    metrics[f"{prefix}_prompt_routed_summary"] = routed_metrics
+                write_rows(run_dir / f"{prefix}_prompt_trace_rows.csv", traces)
+
+            split_eval("train", streaming_train_pairs)
+            split_eval("heldout", streaming_heldout_pairs)
         write_rows(run_dir / "calculator_trace_rows.csv", trace_rows)
         (run_dir / "diagnostic_summary.json").write_text(
             json.dumps(trace_summary, indent=2) + "\n"
@@ -11699,6 +11892,21 @@ def parse_args() -> argparse.Namespace:
             "When positive, draw a fresh ranged training minibatch of this size "
             "each step even if --exhaustive-grid-batch is enabled for evals."
         ),
+    )
+    parser.add_argument(
+        "--streaming-train-heldout-fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "When positive, split the exhaustive prompt grid and sample streaming "
+            "training minibatches only from the train split."
+        ),
+    )
+    parser.add_argument(
+        "--streaming-train-heldout-seed",
+        type=int,
+        default=91000,
+        help="Seed offset for deterministic streaming train/heldout prompt splits.",
     )
     parser.add_argument("--eval-samples", type=int, default=DEFAULT_EVAL_SAMPLES)
     parser.add_argument(
@@ -13572,6 +13780,19 @@ def main() -> None:
             )
     if args.streaming_train_batch_size < 0:
         raise ValueError("--streaming-train-batch-size must be non-negative")
+    if not 0.0 <= args.streaming_train_heldout_fraction < 1.0:
+        raise ValueError(
+            "--streaming-train-heldout-fraction must be in [0, 1)"
+        )
+    if args.streaming_train_heldout_fraction > 0 and args.streaming_train_batch_size <= 0:
+        raise ValueError(
+            "--streaming-train-heldout-fraction requires "
+            "--streaming-train-batch-size > 0"
+        )
+    if args.streaming_train_heldout_fraction > 0 and not args.exhaustive_grid_batch:
+        raise ValueError(
+            "--streaming-train-heldout-fraction requires --exhaustive-grid-batch"
+        )
     if args.streaming_train_batch_size > 0 and args.operand_max is None:
         raise ValueError(
             "--streaming-train-batch-size requires --operand-max so the "
@@ -14042,6 +14263,8 @@ def main() -> None:
         suffix_parts.append("fullgrid")
     if args.streaming_train_batch_size > 0:
         suffix_parts.append(f"streamb{args.streaming_train_batch_size}")
+        if args.streaming_train_heldout_fraction > 0:
+            suffix_parts.append(f"heldout{args.streaming_train_heldout_fraction:g}")
     if args.calculator_estimator != "ste":
         suffix_parts.append(args.calculator_estimator)
     if args.calculator_estimator == "reinforce":
@@ -14508,6 +14731,11 @@ def main() -> None:
     print(f"answer decoder interaction: {effective_answer_decoder_interaction}")
     print(f"exhaustive grid batch: {args.exhaustive_grid_batch}")
     print(f"streaming train batch size: {args.streaming_train_batch_size}")
+    print(
+        "streaming train heldout: "
+        f"fraction={args.streaming_train_heldout_fraction} "
+        f"seed={args.streaming_train_heldout_seed}"
+    )
     print(f"calculator read span width: {args.calculator_read_span_width}")
     print(
         "aux operand loss: "

@@ -2563,6 +2563,53 @@ def test_prompt_keyed_online_hard_memory_accepts_streaming_batches(
     assert frozen_metrics["result_boundary_target_online_memory_key_mode"] == "prompt"
 
 
+def test_streaming_heldout_split_samples_only_train_prompts() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_streaming_heldout_split", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    exhaustive = overfit_script.make_exhaustive_range_batch(
+        num_digits=1,
+        operand_max=2,
+        fixed_width=True,
+        device="cpu",
+        answer_format="sum",
+    )
+    train_idx, heldout_idx = overfit_script.split_exhaustive_prompt_indices(
+        prompt_count=exhaustive.x.shape[0],
+        heldout_fraction=1 / 3,
+        seed=123,
+        device="cpu",
+    )
+    assert train_idx.numel() == 6
+    assert heldout_idx.numel() == 3
+    assert set(train_idx.tolist()).isdisjoint(set(heldout_idx.tolist()))
+
+    train_pool = overfit_script.subset_arithmetic_batch(exhaustive, train_idx)
+    sampled = overfit_script.sample_arithmetic_batch_from_pool(
+        train_pool,
+        batch_size=20,
+        rng=random.Random(7),
+    )
+    sampled_keys = set(overfit_script.prompt_memory_keys(sampled))
+    train_keys = set(overfit_script.prompt_memory_keys(train_pool))
+    heldout_keys = set(
+        overfit_script.prompt_memory_keys(
+            overfit_script.subset_arithmetic_batch(exhaustive, heldout_idx)
+        )
+    )
+    assert sampled_keys <= train_keys
+    assert sampled_keys.isdisjoint(heldout_keys)
+    assert overfit_script.exhaustive_indices_to_pairs(
+        torch.tensor([0, 4, 8]), operand_max=2
+    ) == [(0, 0), (1, 1), (2, 2)]
+
+
 def test_result_boundary_regret_set_targets_near_best_results(monkeypatch) -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location(

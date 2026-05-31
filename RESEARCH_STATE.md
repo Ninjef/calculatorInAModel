@@ -118,8 +118,9 @@ Active directions:
   exposure-matched: batch64 for 800 steps undertrained (`0.6325` final), but
   batch64 for 5000 steps reached `1.000` source/calc and trusted handoff
   `1.000` with low controls while freezing memory after `173,568` forced evals.
-  Next test fresh/heldout prompts or reduce the streaming update cost; do not
-  spend more mainline compute re-proving fixed-grid routed/shared op19/op29.
+  A 20% heldout-prompt split exposed the limit: train prompts reached `0.997`
+  calc/exact, but heldout prompts only `0.0875`. Next work needs a mechanism
+  for fresh-prompt generalization, not more same-memory exposure.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
@@ -128,9 +129,9 @@ Active directions:
   Shared output removes cloned-output parameter growth but hard-assignment
   handoff missed (`0.78`; matched `0.75`); semantic-distilled online hard
   memory is the first shared-output routed handoff family to replicate, pass
-  op29, and train under stochastic minibatches with matched exposure. Next
-  shared-output work needs fresh/heldout prompt generalization or cheaper
-  streaming updates, not more fixed-grid op19/op29 repeats.
+  op29, and train under stochastic minibatches with matched exposure. Heldout
+  prompt failure means shared-output work now needs non-transductive memory or
+  amortized/fresh-prompt credit, not more fixed-grid repeats.
 
 ## Paused Or Deprioritized Branches
 
@@ -159,8 +160,8 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Test prompt-keyed online-hard-memory plus semantic distillation on
-   fresh/heldout prompts, or reduce the matched-exposure streaming cost.
+1. Build a fresh-prompt/generalizing credit-assignment mechanism; prompt-keyed
+   memory alone now fails heldout prompts despite fitting train prompts.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark
