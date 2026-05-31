@@ -37,6 +37,24 @@ All four routed hooks reached calculator-result accuracy `1.0000` in source
 and handoff diagnostics. The source memory froze after `96,000` forced-result
 evaluations.
 
+Fresh-seed replication:
+
+```text
+runs/ohm_semdist_hooks4_shareout_fresh_src800/2026-05-30_203344_153653_model-c-op0-19-fullgrid-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rbtonlinehardmem-rbtmem-c00fadadaf/model-c-2digit-seed9
+runs/ohm_semdist_hooks4_shareout_fresh_handoff600/2026-05-30_203641_075497_model-c-op0-19-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed9
+```
+
+| Fresh gate | Normal/final | Calc | Controls |
+| --- | ---: | ---: | --- |
+| source step 800 | `1.0000` | `1.0000` | zero-inj `0.0575`, forced-random `0.0275` |
+| handoff step 600 | `1.0000` | `1.0000` | zero-inj `0.0525`, forced-zero `0.0075`, forced-random `0.0125` |
+| final 128-sample handoff | `1.0000` | `1.0000` | zero-inj `0.1094`, forced-zero `0.0078`, forced-random `0.0156` |
+
+The fresh source memory froze after `86,400` forced-result evaluations and all
+four routed hooks reached calculator-result accuracy `1.0000`. This seed is
+notable because the matching single-hook semantic-distilled source previously
+missed trusted handoff.
+
 Interpretation:
 
 - This is the first shared-output routed handoff pass. The earlier
@@ -45,8 +63,8 @@ Interpretation:
 - The result supports the idea that arbitrary-result semantic distillation
   supplies a transfer-geometry mechanism, not just a source-policy target.
 - This does not solve the thesis: it remains fixed-grid, prompt-memory based,
-  and on the handoff-friendly seed lineage. Next evidence should be fresh
-  routed/shared seeds, streaming/fresh-prompt memory, or larger-range stress.
+  and candidate-scoring based before memory fill. Next evidence should be
+  streaming/fresh-prompt memory or larger-range routed/shared stress.
 
 ## 2026-05-31 Online Hard Memory Result-Boundary
 

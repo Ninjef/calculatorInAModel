@@ -29,6 +29,9 @@ The many-calculator branch now has a sharper boundary:
 - Follow-up with a new source mechanism changed the boundary: online hard
   memory plus additive semantic distillation cleared four-hook shared-output
   source and trusted handoff (`1.0000` final / step-600 normal, low controls).
+- That pass replicated on CLI seed `7` / effective seed `9`, the fresh
+  handoff-sensitive lineage where the single-hook semantic-distilled source had
+  missed trusted handoff.
 
 The last audit also found a config mismatch in the first A/B
 (`additive_forced_margin_start_step=50` for cloned, default `0` for shared),
@@ -55,6 +58,8 @@ Do not treat these as novel:
 - Delayed-margin or start-step reruns of the same tied-output recipe.
 - Repeating the same semantic-distilled four-hook shared-output seed as
   novelty.
+- More op19 semantic-distilled four-hook shared-output seed repeats as
+  mainline work; two seeds now clear.
 - More op19/op29 topk8+unique24 replications.
 - More forced-margin recovery knob changes.
 - Cheap source selectors or short handoff proxies that do not replace the
@@ -73,11 +78,10 @@ Mainline compute should move toward less-prescriptive credit assignment:
 - a concrete Stage 0/Stage 1 gate showing from-scratch calculator-result lift
   above known failed baselines.
 
-Shared-output work deserves compute only when it tests generalization or a new
-mechanism: fresh routed/shared seeds, streaming/fresh-prompt memory, larger
-ranges, handoff-aware source shaping, route-aware downstream readout, or a
-predeclared tied-output transfer-geometry objective validated by the trusted
-handoff gate.
+Shared-output work deserves compute only when it tests a new generalization
+axis or mechanism: streaming/fresh-prompt memory, larger ranges, handoff-aware
+source shaping, route-aware downstream readout, or a predeclared tied-output
+transfer-geometry objective validated by the trusted handoff gate.
 
 ## Are We Closer?
 
@@ -101,7 +105,7 @@ start from:
 
 ```text
 less-prescriptive credit assignment first;
-shared-output only with fresh-seed/generalization stress or a new transfer-geometry mechanism.
+shared-output only with streaming/range stress or a new transfer-geometry mechanism.
 ```
 
 If the next proposed experiment cannot say how it reduces prescriptiveness,

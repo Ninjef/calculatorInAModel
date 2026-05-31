@@ -52,11 +52,24 @@ forced-random `0.0175`; final 128-sample controls were `0.0391`, `0.0000`,
 and `0.0391`. This is the first shared-output routed handoff pass and directly
 improves on the prior hard-assignment shared-output handoff misses.
 
+The routed/shared result then replicated on the handoff-sensitive fresh seed.
+CLI seed `7` / effective seed `9` reached source final/calc `1.0000`, froze
+memory after `86,400` forced evals, and trained all four hooks to calculator
+accuracy `1.0000`. Its trusted handoff also reached `1.0000` final /
+step-600 normal. Step-600 controls were low (`0.0525` injection-zero, `0.0075`
+forced-zero, `0.0125` forced-random); the final 128-sample controls were
+`0.1094`, `0.0078`, and `0.0156`. This matters because the matching
+single-hook fresh semantic-distilled source had missed trusted handoff, so
+routing/shared-output geometry may be making the readout problem easier rather
+than merely preserving the original lucky source.
+
 ## What Should Stop
 
 - Do not tune semantic-distill weight, sample count, or source length on this
   same op19 seed as novelty.
 - Do not repeat the same four-hook shared-output routed seed as novelty.
+- Do not spend more mainline compute on same op19 four-hook routed/shared seed
+  repeats; two seeds now clear.
 - Do not run another source-only online-hard-memory job as evidence of
   progress unless it changes the memory/generalization setting.
 - Do not return to plain additive semantic distillation without a policy-uptake
@@ -71,8 +84,9 @@ improves on the prior hard-assignment shared-output handoff misses.
 - Streaming/fresh-prompt memory: verify the method is not just fixed-grid
   prompt memorization.
 - Larger-range stress after the fresh-seed check.
-- Fresh routed/shared-output replication or larger-range routed/shared stress,
-  because the first routed result used the handoff-friendly seed lineage.
+- Streaming/fresh-prompt memory, where per-prompt hard memory cannot simply
+  memorize the fixed grid.
+- Larger-range routed/shared stress.
 
 ## Strategic Update
 
@@ -83,8 +97,6 @@ combination repaired both on the first seed and replicated source acquisition
 on a fresh seed.
 
 The result is still not the full thesis. It uses sparse forced-result scoring
-until memory fills, stores per-prompt targets on a fixed grid, and still shows
-source-geometry-sensitive trusted handoff across seeds. The next research
-direction should therefore move away from local tuning and toward fresh
-routed/shared validation, streaming/fresh-prompt memory, and larger-range
-stress.
+until memory fills and stores per-prompt targets on a fixed grid. The next
+research direction should therefore move away from op19 seed replication and
+toward streaming/fresh-prompt memory or larger-range routed/shared stress.

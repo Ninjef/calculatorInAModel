@@ -1065,3 +1065,9 @@ Conclusion: With four `left_operand_mod` routed hooks and `--share-calculator-ou
 Do not repeat: The same four-hook shared-output op19 seed/source/handoff as novelty, or same-seed semantic-distill weight/sample/length tuning.
 Next allowed test: Fresh routed/shared seed replication, streaming/fresh-prompt online memory, or larger-range routed/shared stress.
 Source: `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output.md`
+
+POSITIVE: Semantic-distilled online-hard-memory four-hook shared-output handoff replicates on the fresh handoff-sensitive seed.
+Conclusion: Repeated the four-hook `left_operand_mod` routed shared-output online-hard-memory plus additive-semantic-distillation source on CLI seed `7` / effective seed `9`, the seed lineage where the single-hook semantic-distilled source previously missed trusted handoff. The fresh routed/shared source reached final/calc `1.0000`, froze memory after `86,400` forced evals, and all four hooks reached calculator-result accuracy `1.0000`. The trusted 600-step frozen-policy additive handoff reached `1.0000` final / step-600 normal with calculator-result accuracy `1.0000`; step-600 controls were low (`0.0525` injection-zero, `0.0075` forced-zero, `0.0125` forced-random), while final 128-sample controls were `0.1094/0.0078/0.0156`. This means routed/shared semantic-distilled transfer is not just the original handoff-friendly seed.
+Do not repeat: More same-op19 four-hook shared-output source/handoff seed repeats as novelty; two seeds now clear. Also do not tune same-seed semantic-distill weight/sample/length.
+Next allowed test: Streaming/fresh-prompt online memory or larger-range routed/shared stress.
+Source: `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output-fresh-seed.md`

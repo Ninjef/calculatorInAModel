@@ -861,6 +861,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/173-semantic-distilled-online-hard-memory-four-hook-shared-output-handoff-replicates-on-the-fr",
+      "target": "researchMemory/hypotheses/phase7/173-semantic-distilled-online-hard-memory-four-hook-shared-output-handoff-replicates-on-the-fr.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1028,6 +1033,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output-fresh-seed.md",
       "type": "supported_by"
     },
     {
@@ -1378,6 +1388,11 @@
     {
       "source": "direction/source-acquisition-for-transfer-geometry",
       "target": "aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/source-acquisition-for-transfer-geometry",
+      "target": "aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output-fresh-seed.md",
       "type": "supported_by"
     },
     {
@@ -2760,6 +2775,13 @@
       "source_path": "researchMemory/hypotheses/phase7/172-semantic-distilled-online-hard-memory-clears-a-four-hook-shared-output-routed-handoff-on-t.md",
       "status": "POSITIVE",
       "title": "Semantic-distilled online-hard-memory clears a four-hook shared-output routed handoff on the original seed."
+    },
+    {
+      "id": "doc/173-semantic-distilled-online-hard-memory-four-hook-shared-output-handoff-replicates-on-the-fr",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/173-semantic-distilled-online-hard-memory-four-hook-shared-output-handoff-replicates-on-the-fr.md",
+      "status": "POSITIVE",
+      "title": "Semantic-distilled online-hard-memory four-hook shared-output handoff replicates on the fresh handoff-sensitive seed."
     },
     {
       "id": "doc/phase7-direction-memory",

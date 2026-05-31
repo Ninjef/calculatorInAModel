@@ -118,10 +118,10 @@ Active directions:
   with capped forced evals (`76.8k-86.4k`). Handoff is source-geometry
   sensitive: one single-hook source cleared trusted handoff across two seeds; a
   fresh source missed (`0.647` / `0.632`) despite calc `1.000`. The same
-  mechanism now clears a four-hook left-routed shared-output source and
-  trusted handoff (`1.000` final, low controls), unlike prior shared-output
-  hard-assignment handoff misses. Next test fresh routed/shared seeds,
-  streaming/fresh-prompt memory, or larger-range routed/shared stress.
+  mechanism now clears four-hook left-routed shared-output source/handoff on
+  the original and fresh seeds (`1.000` final, low controls), unlike prior
+  shared-output hard-assignment misses. Next test streaming/fresh-prompt memory
+  or larger-range routed/shared stress.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
@@ -129,8 +129,8 @@ Active directions:
   source and trusted handoff are causal, and routed execution is active-only.
   Shared output removes cloned-output parameter growth but hard-assignment
   handoff missed (`0.78`; matched `0.75`); semantic-distilled online hard
-  memory is the first shared-output routed handoff pass. Next shared-output
-  work needs fresh-seed/generalization stress, not same-recipe source repeats.
+  memory is the first shared-output routed handoff family to replicate. Next
+  shared-output work needs streaming or range stress, not op19 seed repeats.
 
 ## Paused Or Deprioritized Branches
 

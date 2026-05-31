@@ -236,6 +236,13 @@ Memory:
   with low controls. This is the first shared-output routed handoff pass, but
   it uses the handoff-friendly seed lineage and still relies on fixed-grid
   per-prompt memory before fill.
+- Fresh routed/shared replication cleared the same gate on CLI seed `7` /
+  effective seed `9`, the seed lineage where single-hook semantic-distilled
+  handoff had missed. The fresh source and trusted handoff both reached
+  `1.0000`, all hooks had calculator-result accuracy `1.0000`, and step-600
+  controls were low (`0.0525` injection-zero, `0.0075` forced-zero, `0.0125`
+  forced-random). This reduces the concern that the routed/shared pass was only
+  the original handoff-friendly source geometry.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
@@ -262,6 +269,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-left-operand-routed-multi-hook-support.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output-fresh-seed.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-30-many-calculator-scaling-accounting.md`
 - `HYPOTHESIS_LEDGER.md`
@@ -636,10 +644,11 @@ Memory:
   `0.823` final / `0.850` normal. The auxiliary teaches arbitrary result
   semantics without specifying prompt results, but robust handoff is not
   solved. A many-calculator/shared-output stress on the handoff-friendly seed
-  is positive: four routed hooks with shared output reached source/handoff
-  `1.0000` and low controls. Next work must test fresh routed/shared seeds,
-  streaming/fresh prompts, or larger range; do not tune the same op19
-  weight/sample/length or repeat the same routed seed as novelty.
+  is positive and replicates on the handoff-sensitive fresh seed: four routed
+  hooks with shared output reached source/handoff `1.0000` and low controls on
+  both seeds. Next work must test streaming/fresh prompts or larger range; do
+  not tune the same op19 weight/sample/length or repeat routed op19 seeds as
+  novelty.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -712,6 +721,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-handoff.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-fresh-seed.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output-fresh-seed.md`
 - `researchReviews/2026-05-30-sampled-result-boundary-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`
