@@ -26,6 +26,9 @@ The many-calculator branch now has a sharper boundary:
   normal; matched delayed-margin rerun `0.7475` final / `0.7225` step-600
   normal.
 - A state-dict/tying audit ruled out a loading/forward-equivalence bug.
+- Follow-up with a new source mechanism changed the boundary: online hard
+  memory plus additive semantic distillation cleared four-hook shared-output
+  source and trusted handoff (`1.0000` final / step-600 normal, low controls).
 
 The last audit also found a config mismatch in the first A/B
 (`additive_forced_margin_start_step=50` for cloned, default `0` for shared),
@@ -36,10 +39,12 @@ then showed that matching the delay does not rescue tied-output handoff.
 Routed calculators are no longer the main unknown. They can train, can be
 active-only, and can use a shared semantic output projection at source time.
 
-The remaining shared-output failure is a transfer/readout-geometry failure, not
-a calculator-policy failure. But solving that geometry with more same-recipe
-runs is not the thesis bottleneck. The thesis bottleneck remains scalable,
-less-prescriptive credit assignment into the calculator-query policy.
+The shared-output failure was not architectural inevitability; it was a
+transfer/readout-geometry failure for the hard-assignment source. The remaining
+question is whether a source objective can create a handoff-friendly shared
+semantic interface across seeds, ranges, and prompt regimes. The thesis
+bottleneck remains scalable, less-prescriptive credit assignment into the
+calculator-query policy.
 
 ## What Should Stop
 
@@ -48,6 +53,8 @@ Do not treat these as novel:
 - More same-recipe shared-output source630 plus handoff600 runs.
 - Shared-output continuation runs without a new readout/source mechanism.
 - Delayed-margin or start-step reruns of the same tied-output recipe.
+- Repeating the same semantic-distilled four-hook shared-output seed as
+  novelty.
 - More op19/op29 topk8+unique24 replications.
 - More forced-margin recovery knob changes.
 - Cheap source selectors or short handoff proxies that do not replace the
@@ -66,8 +73,9 @@ Mainline compute should move toward less-prescriptive credit assignment:
 - a concrete Stage 0/Stage 1 gate showing from-scratch calculator-result lift
   above known failed baselines.
 
-Shared-output work deserves compute only if it introduces a new mechanism, for
-example handoff-aware source shaping, route-aware downstream readout, or a
+Shared-output work deserves compute only when it tests generalization or a new
+mechanism: fresh routed/shared seeds, streaming/fresh-prompt memory, larger
+ranges, handoff-aware source shaping, route-aware downstream readout, or a
 predeclared tied-output transfer-geometry objective validated by the trusted
 handoff gate.
 
@@ -77,8 +85,9 @@ Yes, but mostly by eliminating confusion.
 
 The architecture and staged transfer story are stronger: many routed
 calculators can be trained and active-only routing makes the implementation
-more scalable. But shared output shows that parameter scaling is not enough;
-the source representation must also be handoff-friendly.
+more scalable. The semantic-distilled routed result shows that shared output
+can transfer when the source objective teaches a more handoff-friendly result
+interface.
 
 The full goal is still not met because the best methods are prescriptive and
 depend on hard assignment, candidate scoring, pretrained decoders, and frozen
@@ -92,7 +101,7 @@ start from:
 
 ```text
 less-prescriptive credit assignment first;
-shared-output only with a new transfer-geometry mechanism.
+shared-output only with fresh-seed/generalization stress or a new transfer-geometry mechanism.
 ```
 
 If the next proposed experiment cannot say how it reduces prescriptiveness,

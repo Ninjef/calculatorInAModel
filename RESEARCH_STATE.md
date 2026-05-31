@@ -114,23 +114,23 @@ Active directions:
   Static approximations are paused: critics/proposals are costly or state-local,
   soft/regret/sampled hard-best targets are weak, and simple online calibration
   is partial. Online hard memory plus additive semantic distillation is the
-  sparse source lead: two op19 seeds reached `1.000` source/calc with capped
-  forced evals (`76.8k-86.4k`). Handoff is seed-sensitive: one trusted
-  frozen-policy handoff reached `1.000`, and the same source also passed with
-  the fresh failed handoff seed. The fresh source reached only `0.647` final
-  (`0.632` alternate handoff seed) despite calc `1.000` and low controls.
-  Next fix source/readout geometry or test streaming/many-calculator scaling.
+  sparse source lead: two single-hook op19 seeds reached `1.000` source/calc
+  with capped forced evals (`76.8k-86.4k`). Handoff is source-geometry
+  sensitive: one single-hook source cleared trusted handoff across two seeds; a
+  fresh source missed (`0.647` / `0.632`) despite calc `1.000`. The same
+  mechanism now clears a four-hook left-routed shared-output source and
+  trusted handoff (`1.000` final, low controls), unlike prior shared-output
+  hard-assignment handoff misses. Next test fresh routed/shared seeds,
+  streaming/fresh-prompt memory, or larger-range routed/shared stress.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
-  staged gates. A fair two-hook routed source needs cloned/shared output
-  projection. Corrected all-hook injection-zero controls show routed source and
-  trusted handoff are causal; four routed hooks also clear source/handoff
-  (`1.000` handoff, `0.040` zero, `0.020` forced-random). Routed execution is now
-  active-only. Shared output projections remove cloned-output parameter growth
-  and train the 4-hook source, but miss trusted handoff (`0.78`; matched
-  delayed-margin rerun `0.75`) despite near-perfect calculator accuracy.
-  Next: less-prescriptive credit; shared-output only with a new mechanism.
+  staged gates. Corrected routed controls show two/four-hook cloned-output
+  source and trusted handoff are causal, and routed execution is active-only.
+  Shared output removes cloned-output parameter growth but hard-assignment
+  handoff missed (`0.78`; matched `0.75`); semantic-distilled online hard
+  memory is the first shared-output routed handoff pass. Next shared-output
+  work needs fresh-seed/generalization stress, not same-recipe source repeats.
 
 ## Paused Or Deprioritized Branches
 

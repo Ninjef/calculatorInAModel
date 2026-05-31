@@ -1,5 +1,53 @@
 # Phase 7 Experiment Fact Sheet
 
+## 2026-05-31 Online Hard Memory Semantic-Distill Routed Shared Output
+
+Task/work log:
+
+```text
+aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output.md
+```
+
+Run roots:
+
+```text
+runs/ohm_semdist_hooks4_shareout_src800/2026-05-30_201930_719833_model-c-op0-19-fullgrid-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rbtonlinehardmem-rbtmem-c00fadadaf/model-c-2digit-seed6
+runs/ohm_semdist_hooks4_shareout_handoff600/2026-05-30_202214_356789_model-c-op0-19-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed6
+```
+
+Result:
+
+```text
+online_hard_memory_semantic_distill_shared_output_routed_positive
+```
+
+Stress-tested the sparse answer-derived online-hard-memory plus additive
+semantic-distillation source under four `left_operand_mod` routed calculator
+hooks with `--share-calculator-output-proj`.
+
+Evidence:
+
+| Gate | Normal/final | Calc | Controls |
+| --- | ---: | ---: | --- |
+| source step 800 | `1.0000` | `1.0000` | zero-inj `0.0450`, forced-random `0.0200` |
+| handoff step 600 | `1.0000` | `1.0000` | zero-inj `0.0325`, forced-zero `0.0050`, forced-random `0.0175` |
+| final 128-sample handoff | `1.0000` | `1.0000` | zero-inj `0.0391`, forced-zero `0.0000`, forced-random `0.0391` |
+
+All four routed hooks reached calculator-result accuracy `1.0000` in source
+and handoff diagnostics. The source memory froze after `96,000` forced-result
+evaluations.
+
+Interpretation:
+
+- This is the first shared-output routed handoff pass. The earlier
+  hard-assignment shared-output handoffs missed around `0.75-0.78` despite
+  near-perfect calculator accuracy.
+- The result supports the idea that arbitrary-result semantic distillation
+  supplies a transfer-geometry mechanism, not just a source-policy target.
+- This does not solve the thesis: it remains fixed-grid, prompt-memory based,
+  and on the handoff-friendly seed lineage. Next evidence should be fresh
+  routed/shared seeds, streaming/fresh-prompt memory, or larger-range stress.
+
 ## 2026-05-31 Online Hard Memory Result-Boundary
 
 Task/work log:

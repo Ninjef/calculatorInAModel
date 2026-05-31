@@ -228,6 +228,14 @@ Memory:
   less-prescriptive answer-derived credit assignment unless shared-output work
   introduces a real new transfer-geometry mechanism validated by trusted
   handoff.
+- A less-prescriptive transfer-geometry mechanism now exists for shared output:
+  four-hook `left_operand_mod` routed online hard memory plus additive semantic
+  distillation, with `--share-calculator-output-proj`, reached `1.0000` source
+  final/calc, trained all four hooks to calculator-result accuracy `1.0000`,
+  and cleared trusted 600-step handoff at `1.0000` final / step-600 normal
+  with low controls. This is the first shared-output routed handoff pass, but
+  it uses the handoff-friendly seed lineage and still relies on fixed-grid
+  per-prompt memory before fill.
 - The open question is scalability: can this be approximated or replaced
   without losing the source-policy result? Uniform random result sampling is
   ruled out as the simple answer, and fixed stale exact targets are not enough;
@@ -253,6 +261,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-left-operand-routed-multi-hook-support.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-30-many-calculator-scaling-accounting.md`
 - `HYPOTHESIS_LEDGER.md`
@@ -626,9 +635,11 @@ Memory:
   handoff seed (`1.0000`). Continuation from the fresh-source miss improved to
   `0.823` final / `0.850` normal. The auxiliary teaches arbitrary result
   semantics without specifying prompt results, but robust handoff is not
-  solved. Next work must improve source/readout geometry or test streaming
-  /fresh prompts and many-calculator scaling; do not tune the same op19
-  weight/sample/length as novelty.
+  solved. A many-calculator/shared-output stress on the handoff-friendly seed
+  is positive: four routed hooks with shared output reached source/handoff
+  `1.0000` and low controls. Next work must test fresh routed/shared seeds,
+  streaming/fresh prompts, or larger range; do not tune the same op19
+  weight/sample/length or repeat the same routed seed as novelty.
 - Uniform sampled hard assignment does not fix the exact full-grid cost:
   sample16 and sample32 destroyed the op19 `rhead64` source signal relative to
   exact assignment while saving only modest wall time. Future cost reduction
@@ -700,6 +711,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-result-boundary.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-handoff.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-fresh-seed.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output.md`
 - `researchReviews/2026-05-30-sampled-result-boundary-steering-review.md`
 - `researchReviews/2026-05-30-result-boundary-approximation-review.md`
 - `researchReviews/2026-05-30-result-boundary-static-approximation-steering-review.md`

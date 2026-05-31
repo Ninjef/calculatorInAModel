@@ -42,10 +42,21 @@ This points away from downstream seed luck and toward source/readout geometry.
 The cross-source control confirmed this: the original good source paired with
 the failed fresh handoff seed reached `1.0000` final / step-600 normal.
 
+A routed shared-output stress adds an important scaling result. The same
+combined mechanism, run with four `left_operand_mod` routed hooks and
+`--share-calculator-output-proj`, reached source final/calc `1.0000`, trained
+all four hooks to calculator-result accuracy `1.0000`, and cleared the trusted
+600-step frozen-policy additive handoff at `1.0000` final / step-600 normal.
+Controls stayed low: step-600 injection-zero `0.0325`, forced-zero `0.0050`,
+forced-random `0.0175`; final 128-sample controls were `0.0391`, `0.0000`,
+and `0.0391`. This is the first shared-output routed handoff pass and directly
+improves on the prior hard-assignment shared-output handoff misses.
+
 ## What Should Stop
 
 - Do not tune semantic-distill weight, sample count, or source length on this
   same op19 seed as novelty.
+- Do not repeat the same four-hook shared-output routed seed as novelty.
 - Do not run another source-only online-hard-memory job as evidence of
   progress unless it changes the memory/generalization setting.
 - Do not return to plain additive semantic distillation without a policy-uptake
@@ -60,8 +71,8 @@ the failed fresh handoff seed reached `1.0000` final / step-600 normal.
 - Streaming/fresh-prompt memory: verify the method is not just fixed-grid
   prompt memorization.
 - Larger-range stress after the fresh-seed check.
-- Routed/many-calculator validation if the method survives fresh prompts,
-  because the final thesis requires scalable many-calculator deployment.
+- Fresh routed/shared-output replication or larger-range routed/shared stress,
+  because the first routed result used the handoff-friendly seed lineage.
 
 ## Strategic Update
 
@@ -72,7 +83,8 @@ combination repaired both on the first seed and replicated source acquisition
 on a fresh seed.
 
 The result is still not the full thesis. It uses sparse forced-result scoring
-until memory fills, stores per-prompt targets on a fixed grid, and now shows
-source-geometry-sensitive trusted handoff. The next research direction should
-therefore move away from local tuning and toward handoff robustness plus
-generalization/scaling validation.
+until memory fills, stores per-prompt targets on a fixed grid, and still shows
+source-geometry-sensitive trusted handoff across seeds. The next research
+direction should therefore move away from local tuning and toward fresh
+routed/shared validation, streaming/fresh-prompt memory, and larger-range
+stress.
