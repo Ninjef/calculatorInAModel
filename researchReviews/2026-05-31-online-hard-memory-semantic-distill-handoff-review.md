@@ -36,6 +36,10 @@ missed the pass (`0.6475` final / `0.6625` step-600 normal). A 600-step
 continuation improved to `0.8225` final / `0.8500` normal, so the source is
 usable but not robustly handoff-friendly.
 
+An alternate downstream handoff seed from the same fresh source also missed
+(`0.6325` final / step-600 normal, calculator accuracy `1.0000`, low controls).
+This points away from downstream seed luck and toward source/readout geometry.
+
 ## What Should Stop
 
 - Do not tune semantic-distill weight, sample count, or source length on this
@@ -49,8 +53,8 @@ usable but not robustly handoff-friendly.
 
 ## What Deserves Compute
 
-- Handoff robustness diagnostics: downstream-seed variance, geometry/readout
-  objectives, or selection criteria that predict the 600-step gate.
+- Handoff robustness diagnostics: geometry/readout objectives or selection
+  criteria that predict the 600-step gate.
 - Streaming/fresh-prompt memory: verify the method is not just fixed-grid
   prompt memorization.
 - Larger-range stress after the fresh-seed check.
@@ -67,6 +71,6 @@ on a fresh seed.
 
 The result is still not the full thesis. It uses sparse forced-result scoring
 until memory fills, stores per-prompt targets on a fixed grid, and now shows
-trusted-handoff seed sensitivity. The next research direction should therefore
-move away from local tuning and toward handoff robustness plus
+source-geometry-sensitive trusted handoff. The next research direction should
+therefore move away from local tuning and toward handoff robustness plus
 generalization/scaling validation.

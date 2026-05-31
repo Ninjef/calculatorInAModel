@@ -10026,6 +10026,12 @@ Continuation diagnostic:
 runs/ohm_semdist_fresh_handoff_continue600/2026-05-30_195749_735842_model-c-op0-19-fullgrid-adec-product/model-c-2digit-seed9
 ```
 
+Alternate downstream-seed handoff:
+
+```text
+runs/ohm_semdist_fresh_handoff_altseed600/2026-05-30_200445_067695_model-c-op0-19-fullgrid-adec-product/model-c-2digit-seed6
+```
+
 Source results:
 
 - CLI seed `7`, effective model seed `9`.
@@ -10060,12 +10066,27 @@ Continuation results:
 - Continuation step-600 forced-random: `0.0225`.
 - Continuation step-600 calculator-result accuracy: `1.0000`.
 
+Alternate downstream-seed handoff results:
+
+- Used the same fresh source checkpoint with CLI handoff seed `4` / effective
+  seed `6`.
+- Final eval: `253/400 = 0.6325`.
+- Step-600 normal: `0.6325`.
+- Step-600 injection-zero: `0.0300`.
+- Step-600 forced-zero: `0.0125`.
+- Step-600 forced-random: `0.0100`.
+- Step-600 calculator-result accuracy: `1.0000`.
+- Final 128-sample counterfactuals: injection-zero `0.0391`,
+  forced-zero `0.0000`, forced-random `0.0312`.
+
 Fresh-seed interpretation:
 
 - Source acquisition replicated cleanly, including perfect calculator-result
   accuracy and low no-calculator controls.
 - The 600-step trusted handoff did not replicate as a pass. The continuation
   improved substantially but still missed the strong gate.
+- The alternate downstream handoff seed also missed, so this is more likely a
+  source/readout geometry issue than downstream seed luck.
 - This means the combined method is a real source plus geometry improvement,
   but robust non-bottleneck handoff/readout across seeds is not solved.
   Further same-source accuracy runs are low value; the next work should target

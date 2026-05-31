@@ -101,6 +101,30 @@ Final continuation metrics:
   forced-zero `0.0078`, forced-random `0.0156`.
 - Diagnostic calculator-result accuracy: `1.0000`.
 
+## Alternate Handoff Seed
+
+```text
+runs/ohm_semdist_fresh_handoff_altseed600/2026-05-30_200445_067695_model-c-op0-19-fullgrid-adec-product/model-c-2digit-seed6
+```
+
+The same fresh source checkpoint was handed off with CLI seed `4` / effective
+seed `6`, matching the first clean positive's downstream seed while preserving
+the fresh source checkpoint.
+
+| Step | Normal | Zero-inj | Forced zero | Forced random | Calc |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 | 0.1300 | 0.0050 | 0.0000 | 0.0050 | 1.0000 |
+| 200 | 0.3625 | 0.0250 | 0.0050 | 0.0175 | 1.0000 |
+| 400 | 0.4725 | 0.0175 | 0.0225 | 0.0325 | 1.0000 |
+| 600 | 0.6325 | 0.0300 | 0.0125 | 0.0100 | 1.0000 |
+
+Final alternate-handoff metrics:
+
+- Final eval: `253/400 = 0.6325`.
+- Final 128-sample counterfactuals: injection-zero `0.0391`,
+  forced-zero `0.0000`, forced-random `0.0312`.
+- Diagnostic calculator-result accuracy: `1.0000`.
+
 ## Interpretation
 
 The source mechanism replicated. The fresh source reached perfect
@@ -110,6 +134,10 @@ The trusted handoff did not replicate as a pass. Calculator accuracy remained
 perfect and causal controls were low, so the miss is not policy collapse. The
 continuation shows the source is usable by the additive path, but the readout
 geometry is less handoff-friendly than the first seed.
+
+The alternate handoff seed also missed, so the likely failure is source/readout
+geometry rather than downstream seed luck. Further downstream-seed repeats from
+this source are low value unless they are part of a designed variance audit.
 
 This updates the method status from clean positive to mixed-positive:
 online-hard-memory plus semantic distillation is a strong answer-derived source
