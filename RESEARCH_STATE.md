@@ -11,7 +11,6 @@ calculator queries rather than telling it which query/result to request for
 each problem.
 
 ## Current Bottom Line
-
 The architecture is viable, but the central learning problem is not solved.
 
 We have shown that calculator-use policies can be scaffolded, retained, and
@@ -119,9 +118,11 @@ Active directions:
   batch64 for 5000 steps reached `1.000` source/calc and trusted handoff
   `1.000` with low controls while freezing memory after `173,568` forced evals.
   A 20% heldout-prompt split exposed the limit: train prompts reached `0.997`
-  calc/exact, but heldout prompts only `0.0875`. Next work needs a mechanism
-  for fresh-prompt generalization; numeric-prior post-hoc replay lifted heldout
-  to `0.9125` while preserving train at `0.9906`, but end-to-end source training is open.
+  calc/exact, but heldout prompts only `0.0875`. Integrated numeric-prior replay
+  with full-memory prior fitting fixes that heldout gate: source train
+  `1.000`, heldout `0.9125`, overall `0.995`, and trusted handoff `1.000` with
+  low controls. The open issue is scalability: full-memory prior fitting works
+  but must be made cheaper for many calculators/larger memories.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
@@ -130,9 +131,9 @@ Active directions:
   Shared output removes cloned-output parameter growth but hard-assignment
   handoff missed (`0.78`; matched `0.75`); semantic-distilled online hard
   memory is the first shared-output routed handoff family to replicate, pass
-  op29, and train under stochastic minibatches with matched exposure. Heldout
-  prompt failure means shared-output work now needs non-transductive memory or
-  amortized/fresh-prompt credit, not more fixed-grid repeats.
+  op29, train under stochastic minibatches with matched exposure, and now pass
+  a heldout-prompt source/handoff gate with numeric-prior replay. Next work
+  should reduce the prior-fit cost, not repeat fixed-grid or same-seed passes.
 
 ## Paused Or Deprioritized Branches
 
@@ -161,14 +162,14 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Run the integrated numeric-prior replay streaming-source gate; post-hoc replay works, prompt-keyed memory alone fails heldout prompts.
+1. Reduce numeric-prior fit cost while preserving the heldout source/handoff
+   result; full-memory prior fit works but is not yet the scalable recipe.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark
    to beat; further forced-margin work must stress a new thesis-relevant axis
    such as many-calculator cost, cheaper assignment, or removal of hard
-   assignment / true-result forcing. Do not rerun op19, shallow op29, op29
-   low-LR recovery, completed op29 `rhead64` seeds, or the same op39 path.
+   assignment / true-result forcing; do not rerun completed op19/op29/op39 paths.
 4. If reducing hard-assignment cost, state the scalability hypothesis, compare
    against exact-grid, avoid more uniform count/fixed-refresh ladders, and use
    routing validation, op39 compute stress, or a changed estimator.
@@ -195,6 +196,5 @@ These branches should not continue without a new mechanism:
 
 Write or update a `researchReviews/` memo after 5-10 new experiments, a clear
 family-level negative, a strategic-bet change, or when the next task feels like
-another local variant of a paused family. The review must answer what changed,
-what should stop, what deserves compute, and whether the project is closer to
-the overarching goal.
+another local variant. Reviews answer what changed, what should stop, what
+deserves compute, and whether the project is closer to the goal.

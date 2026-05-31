@@ -280,16 +280,19 @@ Memory:
   features reached `0.9125` heldout target accuracy on the `80` unscored
   prompts. Post-hoc result-head replay with numeric pseudo-targets lifted
   heldout exact/calc from `0.0875` to `0.9125` while keeping train at `0.9906`;
-  the embedding replay control reached only `0.0125` heldout. Next gate:
-  run the integrated numeric-prior replay source-training gate. Trainer support
-  now includes mixed train/heldout prior replay, with a smoke proving both
-  replay branches execute.
-- The open question is scalability: can this be approximated or replaced
-  without losing the source-policy result? Uniform random result sampling is
-  ruled out as the simple answer, and fixed stale exact targets are not enough;
-  next work should reduce prescriptiveness, pursue non-enumerative credit
-  assignment, or change shared-output transfer geometry with a predeclared
-  mechanism.
+  the embedding replay control reached only `0.0125` heldout.
+- Integrated numeric-prior replay is now positive when the prior is fit on full
+  prompt memory during source training. The first integrated run reused the
+  model replay batch as the prior fit batch and improved heldout to `0.7125`;
+  offline full-batch prior fit from that trace recovered `0.9125`, identifying
+  prior fit quality as the blocker. Adding full-memory prior fit
+  (`--result-boundary-target-amortized-prior-fit-batch-size 0`) reached source
+  train `1.0000`, heldout `0.9125`, overall `0.9950`, with heldout controls low
+  and online prior heldout accuracy `0.9250`. The trusted frozen-policy
+  additive handoff from this source reached `1.0000` final with low controls.
+- The open question is scalability: full-memory prior fitting fixes fresh
+  prompts but is a costly stabilizer. Next work should reduce prior-fit cost
+  while preserving the heldout source and trusted handoff result.
 
 Representative evidence:
 
@@ -316,10 +319,12 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-31-prompt-keyed-online-hard-memory-heldout.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-amortized-prior-heldout-diagnostic.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-integrated-amortized-prior-source-replay.md`
+- `aiAgentWorkHistory/phase7/2026-05-31-integrated-amortized-prior-source-gate.md`
 - `researchReviews/2026-05-30-assignment-cost-reduction-review.md`
 - `researchReviews/2026-05-30-many-calculator-scaling-accounting.md`
 - `researchReviews/2026-05-31-prompt-keyed-streaming-memory-review.md`
 - `researchReviews/2026-05-31-prompt-keyed-heldout-memory-review.md`
+- `researchReviews/2026-05-31-integrated-amortized-prior-replay-review.md`
 - `HYPOTHESIS_LEDGER.md`
 
 ## Direction: Non-Bottleneck Direct Training

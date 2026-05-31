@@ -139,6 +139,7 @@ class TrainConfig:
     result_boundary_target_amortized_prior_lr: float
     result_boundary_target_amortized_prior_min_entries: int
     result_boundary_target_amortized_prior_replay_batch_size: int
+    result_boundary_target_amortized_prior_fit_batch_size: int
     result_boundary_target_amortized_prior_train_replay_weight: float
     result_policy_entropy_weight: float
     result_policy_batch_diversity_weight: float
@@ -347,6 +348,7 @@ class ResultBoundaryAmortizedPrior:
     optimizer: torch.optim.Optimizer
     min_entries: int
     replay_batch_size: int
+    fit_batch_size: int
     train_steps: int = 1
     train_updates: int = 0
 
@@ -3536,6 +3538,7 @@ def init_result_boundary_amortized_prior(
     min_entries: int,
     replay_batch_size: int,
     device: str | torch.device,
+    fit_batch_size: int | None = None,
 ) -> ResultBoundaryAmortizedPrior:
     prior_model = OperandResultPrior(
         operand_vocab_size=operand_vocab_size,
@@ -3548,6 +3551,7 @@ def init_result_boundary_amortized_prior(
         optimizer=torch.optim.AdamW(prior_model.parameters(), lr=lr),
         min_entries=min_entries,
         replay_batch_size=replay_batch_size,
+        fit_batch_size=replay_batch_size if fit_batch_size is None else fit_batch_size,
     )
 
 
@@ -3599,9 +3603,9 @@ def train_result_boundary_amortized_prior(
         }
     loss_value = float("nan")
     for _ in range(prior.train_steps):
-        if prior.replay_batch_size > 0 and entry_count > prior.replay_batch_size:
+        if prior.fit_batch_size > 0 and entry_count > prior.fit_batch_size:
             indices = torch.tensor(
-                [rng.randrange(entry_count) for _ in range(prior.replay_batch_size)],
+                [rng.randrange(entry_count) for _ in range(prior.fit_batch_size)],
                 dtype=torch.long,
                 device=a_all.device,
             )
@@ -9002,6 +9006,11 @@ def run_variant(
             lr=args.result_boundary_target_amortized_prior_lr,
             min_entries=args.result_boundary_target_amortized_prior_min_entries,
             replay_batch_size=args.result_boundary_target_amortized_prior_replay_batch_size,
+            fit_batch_size=(
+                args.result_boundary_target_amortized_prior_fit_batch_size
+                if args.result_boundary_target_amortized_prior_fit_batch_size >= 0
+                else None
+            ),
             device=device,
         )
     if (
@@ -9182,6 +9191,9 @@ def run_variant(
         ),
         result_boundary_target_amortized_prior_replay_batch_size=(
             args.result_boundary_target_amortized_prior_replay_batch_size
+        ),
+        result_boundary_target_amortized_prior_fit_batch_size=(
+            args.result_boundary_target_amortized_prior_fit_batch_size
         ),
         result_boundary_target_amortized_prior_train_replay_weight=(
             args.result_boundary_target_amortized_prior_train_replay_weight
@@ -11671,6 +11683,9 @@ def run_variant(
     metrics["result_boundary_target_amortized_prior_replay_batch_size"] = (
         args.result_boundary_target_amortized_prior_replay_batch_size
     )
+    metrics["result_boundary_target_amortized_prior_fit_batch_size"] = (
+        args.result_boundary_target_amortized_prior_fit_batch_size
+    )
     metrics["result_boundary_target_amortized_prior_train_replay_weight"] = (
         args.result_boundary_target_amortized_prior_train_replay_weight
     )
@@ -12930,6 +12945,16 @@ def parse_args() -> argparse.Namespace:
         help=(
             "When positive with a heldout split, sample this many heldout prompts "
             "per step and train result logits to detached prior pseudo-targets."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-fit-batch-size",
+        type=int,
+        default=-1,
+        help=(
+            "Batch size for fitting the operand-conditioned prior from prompt "
+            "memory entries. The default -1 reuses the replay batch size for "
+            "backward compatibility; 0 fits on all current memory entries."
         ),
     )
     parser.add_argument(
@@ -14278,6 +14303,11 @@ def main() -> None:
             "--result-boundary-target-amortized-prior-replay-batch-size "
             "must be non-negative"
         )
+    if args.result_boundary_target_amortized_prior_fit_batch_size < -1:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-fit-batch-size "
+            "must be -1, 0, or positive"
+        )
     if args.result_boundary_target_amortized_prior_train_replay_weight < 0:
         raise ValueError(
             "--result-boundary-target-amortized-prior-train-replay-weight "
@@ -15022,6 +15052,11 @@ def main() -> None:
                     "rbtpriorreplay"
                     f"{args.result_boundary_target_amortized_prior_replay_batch_size}"
                 )
+                if args.result_boundary_target_amortized_prior_fit_batch_size != -1:
+                    suffix_parts.append(
+                        "rbtpriorfit"
+                        f"{args.result_boundary_target_amortized_prior_fit_batch_size}"
+                    )
                 if (
                     args.result_boundary_target_amortized_prior_train_replay_weight
                     > 0
@@ -15383,6 +15418,8 @@ def main() -> None:
         f"{args.result_boundary_target_amortized_prior_feature_mode} "
         "amortized_prior_replay="
         f"{args.result_boundary_target_amortized_prior_replay_batch_size} "
+        "amortized_prior_fit_batch="
+        f"{args.result_boundary_target_amortized_prior_fit_batch_size} "
         "amortized_prior_train_replay_weight="
         f"{args.result_boundary_target_amortized_prior_train_replay_weight}"
     )

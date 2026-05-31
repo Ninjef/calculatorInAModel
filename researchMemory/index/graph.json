@@ -886,6 +886,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/178-integrated-numeric-prior-replay-fixes-the-heldout-prompt-source-gate-when-the-prior-is-fit",
+      "target": "researchMemory/hypotheses/phase7/178-integrated-numeric-prior-replay-fixes-the-heldout-prompt-source-gate-when-the-prior-is-fit.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1087,6 +1092,11 @@
     },
     {
       "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-05-31-integrated-amortized-prior-source-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
       "target": "researchReviews/2026-05-30-assignment-cost-reduction-review.md",
       "type": "supported_by"
     },
@@ -1103,6 +1113,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "researchReviews/2026-05-31-prompt-keyed-heldout-memory-review.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "researchReviews/2026-05-31-integrated-amortized-prior-replay-review.md",
       "type": "supported_by"
     },
     {
@@ -2865,6 +2880,13 @@
       "source_path": "researchMemory/hypotheses/phase7/177-a-numeric-amortized-prior-can-generalize-discovered-prompt-memory-targets.md",
       "status": "PARTIAL-POSITIVE",
       "title": "A numeric amortized prior can generalize discovered prompt-memory targets."
+    },
+    {
+      "id": "doc/178-integrated-numeric-prior-replay-fixes-the-heldout-prompt-source-gate-when-the-prior-is-fit",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/178-integrated-numeric-prior-replay-fixes-the-heldout-prompt-source-gate-when-the-prior-is-fit.md",
+      "status": "POSITIVE-WITH-CAVEAT",
+      "title": "Integrated numeric-prior replay fixes the heldout prompt source gate when the prior is fit on full memory."
     },
     {
       "id": "doc/phase7-direction-memory",

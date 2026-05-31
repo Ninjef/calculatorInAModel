@@ -10490,3 +10490,90 @@ Interpretation:
 - This does not change the hypothesis status yet. The next experiment must run
   a real streaming heldout source gate and evaluate train/heldout calculator
   accuracy before any trusted handoff.
+
+## 2026-05-31 Integrated Amortized-Prior Source Gate
+
+Question: can numeric amortized-prior replay fix the prompt-keyed heldout
+failure during source training, and can the resulting source transfer into the
+trusted non-bottleneck handoff?
+
+Baseline:
+
+- Prompt-keyed heldout source without prior replay: train exact/calc `0.996875`,
+  heldout exact/calc `0.0875`, forced evals `87,552`.
+- Post-hoc numeric replay from that source: heldout exact/calc `0.9125`, train
+  `0.990625`, but not end-to-end source training.
+
+Integrated minibatch-prior run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_replay_src5000/2026-05-31_083401_114954_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-c03208a82b/model-c-2digit-seed9
+```
+
+Results:
+
+- Overall exact/calc `376/400 = 0.9400`.
+- Train exact/calc `317/320 = 0.990625`.
+- Heldout exact/calc `57/80 = 0.7125`.
+- Heldout controls: injection-zero `0.0500`, forced-zero `0.0000`,
+  forced-random `0.0125`.
+- Online prior accuracy: train `0.8531`, heldout `0.7000`.
+
+Diagnostic:
+
+```text
+runs/amortized_prior_trace_diagnostics/integrated_src5000_numeric_prior_fit.json
+```
+
+- Offline full-batch numeric prior fit from the final train trace reached train
+  `0.990625`, heldout `0.9125`, and memory fit `1.0000`.
+- This showed the integrated minibatch run was limited by online prior fitting,
+  not by target quality.
+
+Implementation follow-up:
+
+- Added `--result-boundary-target-amortized-prior-fit-batch-size`.
+- Default `-1` preserves the old behavior of using the model replay batch for
+  prior fitting.
+- Setting `0` fits the prior on all current memory entries while keeping model
+  replay at `64`.
+
+Full-memory-prior source:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fitfull_src5000/2026-05-31_122456_419991_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-f0e1656264/model-c-2digit-seed9
+```
+
+Results:
+
+- Overall exact/calc `398/400 = 0.9950`.
+- Train exact/calc `320/320 = 1.0000`.
+- Heldout exact/calc `73/80 = 0.9125`.
+- Heldout controls: injection-zero `0.0500`, forced-zero `0.0000`,
+  forced-random `0.0125`.
+- Prompt memory entries `320/320`; forced-result evals `86,016`.
+- Online prior accuracy: train `1.0000`, heldout `0.9250`.
+
+Trusted additive handoff:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fitfull_handoff600/2026-05-31_124025_113211_model-c-op0-19-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed9
+```
+
+Results:
+
+- Final eval `400/400 = 1.0000`.
+- Final 128-sample controls: injection-zero `0.0234`, forced-zero `0.0078`,
+  forced-random `0.0156`.
+- Diagnostic calculator-result accuracy `0.984375`.
+
+Interpretation:
+
+- Integrated numeric-prior replay with full-memory prior fitting fixes the
+  deterministic heldout prompt failure and produces a source that passes the
+  trusted frozen-policy non-bottleneck handoff.
+- This is not the final scalable recipe: full-memory prior fitting is a costly
+  stabilizer, and sparse forced-result scoring is still used for train prompts
+  before memory fill.
+- Next work should preserve this heldout/handoff result while reducing prior
+  fit cost.
