@@ -926,6 +926,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/186-increasing-op29-numeric-prior-capacity-to-h128-does-not-fix-online-constant-batch-fitting",
+      "target": "researchMemory/hypotheses/phase7/186-increasing-op29-numeric-prior-capacity-to-h128-does-not-fix-online-constant-batch-fitting.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1088,6 +1093,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-02-op29-h128-prior-capacity-stress.md",
       "type": "supported_by"
     },
     {
@@ -2991,6 +3001,13 @@
       "source_path": "researchMemory/hypotheses/phase7/185-constant-size-target-stratified-eval-only-prior-fitting-does-not-scale-cleanly-to-op29.md",
       "status": "MIXED-NEGATIVE",
       "title": "Constant-size target-stratified eval-only prior fitting does not scale cleanly to op29."
+    },
+    {
+      "id": "doc/186-increasing-op29-numeric-prior-capacity-to-h128-does-not-fix-online-constant-batch-fitting",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/186-increasing-op29-numeric-prior-capacity-to-h128-does-not-fix-online-constant-batch-fitting.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Increasing op29 numeric prior capacity to h128 does not fix online constant-batch fitting."
     },
     {
       "id": "doc/phase7-direction-memory",

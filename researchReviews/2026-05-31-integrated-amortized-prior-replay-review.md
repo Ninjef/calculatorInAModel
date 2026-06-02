@@ -246,3 +246,26 @@ capacity/features or fit dynamics, with explicit many-calculator cost
 accounting. A proportional-batch source run is only useful if it is framed as a
 costed diagnostic against richer/longer prior fitting, not as a batch-size
 ladder.
+
+## Op29 H128 Prior-Capacity Follow-Up
+
+Increasing capacity alone does not fix online op29 fitting.
+
+The h128 source kept the same op29 recipe and constant fit batch `160`, only
+changing `--result-boundary-target-amortized-prior-hidden-size` from `64` to
+`128`. It improved overall exact/calc to `879/900 = 0.9767` and train
+exact/calc to `719/720 = 0.9986`, but heldout exact/calc reached only
+`155/180 = 0.8611`. The online prior remained the clear bottleneck:
+train/heldout prior accuracy was only `0.8097`/`0.7111`, the validation stop
+never fired, and prior updates stayed at `2501`; forced-result evals were
+`294,912`.
+
+A post-hoc h128 full-memory fit on the same trace reached `0.9944` train /
+`0.9278` heldout with target match `0.9986`, so the target table and model
+capacity are not the main blockers. The problem is that constant-batch online
+target-stratified fitting does not train the prior well enough at op29.
+
+Steering update: do not run hidden-size bumps as novelty. The next experiment
+must alter the online fit dynamics themselves, such as a post-memory-fill
+full-memory refresh followed by cheaper replay, or a coverage-aware/proportional
+fit with explicit cost accounting.

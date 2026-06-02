@@ -325,6 +325,12 @@ Memory:
   heldout `0.9000` with h64/2500 steps and `0.9278` with h128/2500. Treat op29
   as a prior capacity/fit-dynamics bottleneck, not as a reason to rerun
   batch160 or validation ladders.
+- Increasing online op29 prior capacity to h128 with the same constant
+  target-stratified batch does not fix the fit dynamics. It improved overall to
+  `0.9767` and train to `0.9986`, but heldout was only `0.8611`; online prior
+  train/heldout were `0.8097`/`0.7111`, while post-hoc h128 full-memory fit on
+  the same trace reached `0.9944`/`0.9278`. Next work should change online fit
+  dynamics directly, not run hidden-size bumps.
 
 Representative evidence:
 
@@ -344,6 +350,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`
+- `aiAgentWorkHistory/phase7/2026-06-02-op29-h128-prior-capacity-stress.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-left-operand-routed-multi-hook-support.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output-fresh-seed.md`

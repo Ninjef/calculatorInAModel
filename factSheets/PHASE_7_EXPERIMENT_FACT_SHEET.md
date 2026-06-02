@@ -11085,3 +11085,56 @@ Interpretation:
 - Do not run op29 `fit_batch_size=160` repeats or validation threshold ladders
   as novelty. Next work should change the prior mechanism, features/capacity,
   or fit schedule with explicit cost accounting.
+
+## 2026-06-02 Op29 H128 Prior Capacity Stress
+
+Question: can a modest prior-capacity increase fix the op29 constant-batch
+online prior fit miss without increasing examples per fit update?
+
+Source run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_h128_fit160_targetstrat_val20_evalonly_stopval90pat100_src5000/2026-06-02_113036_130205_model-c-op0-29-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-c46e34c022/model-c-2digit-seed9
+```
+
+Key changed arg:
+
+```text
+--result-boundary-target-amortized-prior-hidden-size 128
+```
+
+Source results:
+
+- Overall exact/calc `879/900 = 0.9767`.
+- Train exact/calc `719/720 = 0.9986`.
+- Heldout exact/calc `155/180 = 0.8611`.
+- Online prior train/heldout accuracy `0.8097` / `0.7111`.
+- Prior updates `2501`; validation stop never fired.
+- Forced-result evals `294,912`.
+- Prompt memory filled with `720/720` entries.
+- Heldout controls: injection-zero `0.0278`, forced-zero `0.0000`,
+  forced-random `0.0111`.
+
+Post-hoc prior diagnostic:
+
+```text
+posthoc_full_memory_numeric_h128_steps2500_prior_diag.json
+```
+
+Results:
+
+- Train targets matching true sums: `0.9986`.
+- h128 full-memory prior fit, `2500` steps: train `0.9944`, heldout `0.9278`,
+  memory fit `0.9958`.
+
+Interpretation:
+
+- H128 capacity improves source overall and train accuracy, but it still misses
+  heldout and does not clear the source gate. No trusted handoff was run.
+- The offline h128 diagnostic recovers strong heldout accuracy from the same
+  trace, so the failure is online fit dynamics, not target quality or raw prior
+  capacity.
+- Do not continue with hidden-size bumps. The next useful mechanism should
+  directly change how the online prior is fit, such as a post-memory-fill
+  full-memory refresh, staged full-fit then cheaper replay, or
+  coverage-aware/proportional fitting with explicit cost accounting.

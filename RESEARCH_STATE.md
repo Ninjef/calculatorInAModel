@@ -134,8 +134,10 @@ Active directions:
   `2501`, and forced evals `290,304`; no handoff was run. Post-hoc full-memory
   prior diagnostics from that trace reached heldout `0.9000` with h64 after
   `2500` fit steps and `0.9278` with h128, so the next bottleneck is prior
-  capacity/optimization and scalable fit dynamics at larger range, not memory
-  fill or calculator wiring.
+  optimization and scalable fit dynamics at larger range, not memory fill or
+  calculator wiring. H128 with the same constant fit batch improved overall to
+  `0.9767` but still missed heldout (`0.8611`), while post-hoc h128 full-memory
+  fit reached `0.9278`; capacity alone is not enough.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 clears op19/op29 staged gates but still scores candidates.
@@ -173,9 +175,9 @@ These branches should not continue without a new mechanism:
 ## Next 1-3 Experiments
 
 1. Replace the op29 constant-batch prior bottleneck with a materially changed
-   prior fit mechanism: richer/capacity-aware numeric prior, longer/full-memory
-   post-fill refresh, or coverage-aware fitting whose cost model scales. Do not
-   run another op29 batch160 repeat, random fit-batch ladder, or validation
+   prior fit mechanism: post-memory-fill full refresh, coverage-aware fitting,
+   or another fit dynamic whose cost model scales. Do not run another op29
+   batch160 repeat, hidden-size bump, random fit-batch ladder, or validation
    threshold/patience ladder.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
