@@ -147,6 +147,7 @@ class TrainConfig:
     result_boundary_target_amortized_prior_fit_every: int
     result_boundary_target_amortized_prior_full_refresh_after_memory_full_updates: int
     result_boundary_target_amortized_prior_full_refresh_allow_stop: bool
+    result_boundary_target_amortized_prior_quality_gate_update_cap: int
     result_boundary_target_amortized_prior_stop_metric: str
     result_boundary_target_amortized_prior_stop_train_accuracy: float
     result_boundary_target_amortized_prior_stop_require_train_accuracy: float
@@ -372,6 +373,8 @@ class ResultBoundaryAmortizedPrior:
     train_full_fit_examples: int = 0
     fit_converged_steps: int = 0
     fit_stopped: bool = False
+    quality_gate_update_cap_reached: bool = False
+    quality_gate_update_cap_quality_met: bool = False
     full_refresh_started: bool = False
     full_refresh_remaining_updates: int = 0
     last_train_accuracy: float = float("nan")
@@ -3730,6 +3733,12 @@ def train_result_boundary_amortized_prior(
             "result_boundary_target_amortized_prior_fit_error_selected_fraction": float(
                 "nan"
             ),
+            "result_boundary_target_amortized_prior_quality_gate_update_cap_reached": float(
+                prior.quality_gate_update_cap_reached
+            ),
+            "result_boundary_target_amortized_prior_quality_gate_update_cap_quality_met": float(
+                prior.quality_gate_update_cap_quality_met
+            ),
         }
     a_all, b_all, y_all = entry_batch
     entry_count = int(y_all.shape[0])
@@ -3768,6 +3777,12 @@ def train_result_boundary_amortized_prior(
             ),
             "result_boundary_target_amortized_prior_fit_error_selected_fraction": float(
                 "nan"
+            ),
+            "result_boundary_target_amortized_prior_quality_gate_update_cap_reached": float(
+                prior.quality_gate_update_cap_reached
+            ),
+            "result_boundary_target_amortized_prior_quality_gate_update_cap_quality_met": float(
+                prior.quality_gate_update_cap_quality_met
             ),
         }
     loss_value = float("nan")
@@ -3943,6 +3958,12 @@ def train_result_boundary_amortized_prior(
         "result_boundary_target_amortized_prior_fit_error_selected_fraction": (
             fit_error_selected_fraction if update else float("nan")
         ),
+        "result_boundary_target_amortized_prior_quality_gate_update_cap_reached": float(
+            prior.quality_gate_update_cap_reached
+        ),
+        "result_boundary_target_amortized_prior_quality_gate_update_cap_quality_met": float(
+            prior.quality_gate_update_cap_quality_met
+        ),
     }
 
 
@@ -3982,6 +4003,12 @@ def skipped_result_boundary_amortized_prior_metrics(
         "result_boundary_target_amortized_prior_fit_error_fraction": float("nan"),
         "result_boundary_target_amortized_prior_fit_error_selected_fraction": float(
             "nan"
+        ),
+        "result_boundary_target_amortized_prior_quality_gate_update_cap_reached": float(
+            prior.quality_gate_update_cap_reached
+        ),
+        "result_boundary_target_amortized_prior_quality_gate_update_cap_quality_met": float(
+            prior.quality_gate_update_cap_quality_met
         ),
     }
 
@@ -9584,6 +9611,9 @@ def run_variant(
         result_boundary_target_amortized_prior_full_refresh_allow_stop=(
             args.result_boundary_target_amortized_prior_full_refresh_allow_stop
         ),
+        result_boundary_target_amortized_prior_quality_gate_update_cap=(
+            args.result_boundary_target_amortized_prior_quality_gate_update_cap
+        ),
         result_boundary_target_amortized_prior_stop_metric=(
             args.result_boundary_target_amortized_prior_stop_metric
         ),
@@ -10866,6 +10896,56 @@ def run_variant(
                         prior_train_metrics[
                             "result_boundary_target_amortized_prior_fit_stopped"
                         ] = float(result_boundary_amortized_prior.fit_stopped)
+                    quality_gate_cap = (
+                        args.result_boundary_target_amortized_prior_quality_gate_update_cap
+                    )
+                    required_train_accuracy = (
+                        args.result_boundary_target_amortized_prior_stop_require_train_accuracy
+                    )
+                    train_requirement_met_for_cap = (
+                        required_train_accuracy <= 0
+                        or prior_train_accuracy >= required_train_accuracy
+                    )
+                    stop_metric_met_for_cap = (
+                        stop_accuracy <= 0 or prior_stop_value >= stop_accuracy
+                    )
+                    cap_quality_gate_met = (
+                        train_requirement_met_for_cap and stop_metric_met_for_cap
+                    )
+                    cap_reached = (
+                        quality_gate_cap > 0
+                        and result_boundary_amortized_prior.train_updates
+                        >= quality_gate_cap
+                    )
+                    if cap_reached:
+                        result_boundary_amortized_prior.quality_gate_update_cap_reached = True
+                    if cap_quality_gate_met:
+                        result_boundary_amortized_prior.quality_gate_update_cap_quality_met = True
+                    prior_train_metrics[
+                        "result_boundary_target_amortized_prior_quality_gate_update_cap_reached"
+                    ] = float(
+                        result_boundary_amortized_prior.quality_gate_update_cap_reached
+                    )
+                    prior_train_metrics[
+                        "result_boundary_target_amortized_prior_quality_gate_update_cap_quality_met"
+                    ] = float(
+                        result_boundary_amortized_prior.quality_gate_update_cap_quality_met
+                    )
+                    if (
+                        prompt_memory_full
+                        and prior_fit_step
+                        and cap_reached
+                        and cap_quality_gate_met
+                    ):
+                        result_boundary_amortized_prior.fit_stopped = True
+                        if prior_full_refresh_active:
+                            result_boundary_amortized_prior.full_refresh_remaining_updates = 0
+                            prior_train_metrics[
+                                "result_boundary_target_amortized_prior_full_refresh_remaining_updates"
+                            ] = 0.0
+                        prior_train_metrics[
+                            "result_boundary_target_amortized_prior_fit_stopped"
+                        ] = 1.0
                 prior_train_metrics[
                     "result_boundary_target_amortized_prior_memory_full"
                 ] = float(prompt_memory_full)
@@ -12225,6 +12305,9 @@ def run_variant(
     metrics["result_boundary_target_amortized_prior_full_refresh_allow_stop"] = (
         args.result_boundary_target_amortized_prior_full_refresh_allow_stop
     )
+    metrics["result_boundary_target_amortized_prior_quality_gate_update_cap"] = (
+        args.result_boundary_target_amortized_prior_quality_gate_update_cap
+    )
     metrics["result_boundary_target_amortized_prior_stop_metric"] = (
         args.result_boundary_target_amortized_prior_stop_metric
     )
@@ -13577,6 +13660,18 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Allow the configured amortized-prior stop rule to end the "
             "post-memory-fill full-refresh window early."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-quality-gate-update-cap",
+        type=int,
+        default=0,
+        help=(
+            "When positive, stop fitting the amortized prior after prompt "
+            "memory is full once this total prior-update count has been reached "
+            "and the configured stop metric plus train-accuracy requirement "
+            "are both satisfied. This is an explicit freeze cap, not a "
+            "patience rule."
         ),
     )
     parser.add_argument(
@@ -15008,6 +15103,11 @@ def main() -> None:
             "--result-boundary-target-amortized-prior-full-refresh-after-memory-full-updates "
             "must be non-negative"
         )
+    if args.result_boundary_target_amortized_prior_quality_gate_update_cap < 0:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-quality-gate-update-cap "
+            "must be non-negative"
+        )
     if not (
         0.0
         <= args.result_boundary_target_amortized_prior_stop_train_accuracy
@@ -15845,6 +15945,14 @@ def main() -> None:
                         f"{args.result_boundary_target_amortized_prior_stop_metric}"
                     )
                 if (
+                    args.result_boundary_target_amortized_prior_quality_gate_update_cap
+                    > 0
+                ):
+                    suffix_parts.append(
+                        "rbtpriorqcap"
+                        f"{args.result_boundary_target_amortized_prior_quality_gate_update_cap}"
+                    )
+                if (
                     args.result_boundary_target_amortized_prior_stop_train_accuracy
                     > 0
                 ):
@@ -16242,6 +16350,8 @@ def main() -> None:
         f"{args.result_boundary_target_amortized_prior_full_refresh_after_memory_full_updates} "
         "amortized_prior_full_refresh_allow_stop="
         f"{args.result_boundary_target_amortized_prior_full_refresh_allow_stop} "
+        "amortized_prior_quality_gate_update_cap="
+        f"{args.result_boundary_target_amortized_prior_quality_gate_update_cap} "
         "amortized_prior_stop_metric="
         f"{args.result_boundary_target_amortized_prior_stop_metric} "
         "amortized_prior_stop_train_accuracy="

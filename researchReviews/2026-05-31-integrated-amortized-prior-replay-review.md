@@ -395,3 +395,33 @@ a solved scalable recipe. Do not run proportional-fraction or refresh-window
 ladders as novelty. The next attempt should enforce an update cap/freeze after
 validated proportional replay, distill a stable coreset into the prior, or
 move to explicit many-calculator cost accounting/new credit assignment.
+
+## Op29 Quality-Gated Cap Follow-Up
+
+A single quality-gated cap is now the op29 prior-fit cost lead.
+
+The new cap rule stops amortized-prior fitting after prompt memory is full
+once total prior updates are at or above the configured cap and the existing
+quality gate is satisfied. This uses the same validation metric and train
+requirement as the dual-stop recipe, but without waiting for `100` consecutive
+fits.
+
+With cap `2000`, the proportional op29 h128 source froze the prior at exactly
+`2000` updates, `1,254,817` fit examples, and `1,080,000` full-fit examples.
+Source quality stayed high: overall `0.9956`, train `1.0000`, heldout
+`0.9611`, prior train/validation `0.9861`/`0.9927`, and low heldout controls
+(`0.0222` injection-zero, `0.0000` forced-zero, `0.0056` forced-random).
+The trusted 600-step frozen-policy additive handoff reached `900/900 =
+1.0000`, diagnostic exact/calc `1.0000`/`0.9922`, and final snapshot controls
+`0.0000` injection-zero, `0.0000` forced-zero, `0.0078` forced-random.
+
+This materially improves the previous proportional run: updates fell
+`3251 -> 2000`, fit examples fell `1.705M -> 1.255M`, and handoff remained
+perfect. It also improves on the dual-guard full-refresh source's `2570`
+updates while keeping higher heldout source accuracy.
+
+Steering update: treat quality-gated cap/freeze as the cost-reduction lead,
+but do not run cap-value, proportional-fraction, or refresh-window ladders as
+novelty. The next question is robustness and scaling: fresh seed, explicit
+many-calculator cost accounting, or a less-prescriptive/non-enumerative credit
+mechanism.

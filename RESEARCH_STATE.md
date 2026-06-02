@@ -134,9 +134,9 @@ Active directions:
   validation stop end that refresh early cut prior updates to `1140` but missed
   heldout (`0.8167`). A dual train+validation guard preserved a fresh op29
   source/handoff gate with `2570` updates. Hard-error coreset and proportional
-  half-memory replay both transferred but still used `3251` updates; the
-  proportional run measured `1.705M` fit examples, a modest reduction versus
-  the `1.8M` lower bound for a 2500 full-memory refresh. Bigger gains need an update cap/freeze, stable distillation, or many-calculator accounting.
+  half-memory replay both transferred but still used `3251` updates. A
+  quality-gated `2000`-update cap preserved source/handoff: heldout `0.9611`,
+  handoff `1.0000`, `1.255M` fit examples. This is the current cost lead; next work should test robustness/explicit many-calculator cost or replace answer-derived candidate scoring.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 clears op19/op29 staged gates but still scores candidates.

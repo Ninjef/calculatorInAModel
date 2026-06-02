@@ -358,7 +358,12 @@ Memory:
   accounting and a modest example-cost reduction versus a 2500 full-memory
   refresh lower bound, not a solved cost mechanism. Do not run proportional
   fraction/window ladders as novelty; add an explicit update cap/freeze, stable
-  coreset distillation, or many-calculator cost accounting.
+  coreset distillation, or many-calculator cost accounting. A single
+  quality-gated update cap is now the cost lead: cap `2000` froze the
+  proportional op29 source at `2000` updates and `1,254,817` fit examples,
+  while preserving source heldout `0.9611` and trusted handoff `1.0000` with
+  low controls. Do not run cap-value ladders; validate robustness on a fresh
+  seed/many-calculator axis or replace answer-derived scoring.
 
 Representative evidence:
 
@@ -379,6 +384,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-dual-stop-refresh-cost-gate.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-error-stratified-coreset-refresh-gate.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-proportional-half-memory-refresh-gate.md`
+- `aiAgentWorkHistory/phase7/2026-06-02-op29-quality-gated-prior-cap.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`

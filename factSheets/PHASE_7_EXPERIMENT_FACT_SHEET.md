@@ -11533,3 +11533,91 @@ Interpretation:
   next cost attempt should add an explicit update cap/freeze after validated
   proportional replay, stable coreset distillation, or many-calculator cost
   accounting.
+
+## 2026-06-02 Op29 Quality-Gated Prior Cap
+
+Question: can an explicit quality-gated update cap freeze the proportional
+prior early enough to materially cut op29 cost while preserving source and
+trusted handoff?
+
+Implementation:
+
+- Added `--result-boundary-target-amortized-prior-quality-gate-update-cap`.
+- When positive, prior fitting stops after prompt memory is full once total
+  prior updates are at or above the cap and the existing stop metric plus train
+  requirement are met.
+- Added persistent cap-state bookkeeping so skipped rows after freeze preserve
+  whether the cap was reached and whether the quality gate had been met.
+
+Source run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_h128_fitfrac50_targetstrat_val20_evalonly_fullrefresh1500_qcap2000_dualstop_val90_train98_pat100_src5000/2026-06-02_143237_450578_model-c-op0-29-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-b3b0395c67/model-c-2digit-seed11
+```
+
+Setup:
+
+- Same proportional op29 h128 recipe as the previous run.
+- Full-refresh budget `1500`.
+- Target-stratified proportional replay fraction `0.5`.
+- Eval-only validation `0.2`.
+- Dual quality gate: validation `>=0.9`, train prior `>=0.98`.
+- Quality-gated update cap `2000`.
+
+Source results:
+
+- Overall exact/calc `896/900 = 0.9956`.
+- Train exact/calc `1.0000`.
+- Heldout exact/calc `173/180 = 0.9611`.
+- Prior train/validation at final curve row `0.9861`/`0.9927`.
+- Heldout controls: injection-zero `0.0222`, forced-zero `0.0000`,
+  forced-random `0.0056`.
+- Diagnostic exact/calc `0.9922`/`0.9922`.
+- Routed diagnostic hook calculator-result accuracies: hook0 `0.9730`,
+  hook1 `1.0000`, hook2 `1.0000`, hook3 `1.0000`.
+- Prior updates `2000`.
+- Total prior fit examples `1,254,817`.
+- Full-memory fit examples `1,080,000`.
+- Prompt memory entries `720/720`.
+
+Selected cap curve:
+
+- Step `1900`: `1701` updates, `1,147,177` fit examples, train/validation
+  prior `0.9625`/`0.9562`.
+- Step `2000`: `1751` updates, `1,165,177` fit examples, train/validation
+  prior `0.9792`/`0.9927`; train requirement narrowly not met.
+- Step `2200`: `1851` updates, `1,201,177` fit examples, train/validation
+  prior `0.9806`/`0.9854`; quality gate met but cap not reached.
+- Step `2500`: prior frozen at `2000` updates and `1,254,817` fit examples,
+  with train/validation prior `0.9861`/`0.9927`.
+- Step `5000`: prior cost and accuracy unchanged; source still passed.
+
+Trusted additive handoff:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_h128_fitfrac50_targetstrat_val20_evalonly_fullrefresh1500_qcap2000_dualstop_val90_train98_pat100_handoff600/2026-06-02_143648_261428_model-c-op0-29-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed11
+```
+
+Handoff results:
+
+- Final eval `900/900 = 1.0000`.
+- Diagnostic exact/calc `1.0000`/`0.9922`.
+- Final snapshot controls: injection-zero `0.0000`, forced-zero `0.0000`,
+  forced-random `0.0078`, oracle-at-eval `1.0000`.
+- Final snapshot learned calc `0.9844`.
+- Routed diagnostic hook calculator-result accuracies: hook0 `0.9730`,
+  hook1 `1.0000`, hook2 `1.0000`, hook3 `1.0000`.
+
+Interpretation:
+
+- Positive-with-caveat. The cap preserves the op29 source and handoff gates
+  while materially cutting prior-fit cost.
+- Compared to uncapped proportional replay: updates `3251 -> 2000`, fit
+  examples `1.705M -> 1.255M`, heldout `0.9556 -> 0.9611`, handoff remains
+  `1.0000`.
+- This is the current op29 numeric-prior cost lead, but it remains one
+  effective seed and still uses answer-derived sparse scoring plus staged
+  frozen-policy handoff.
+- Do not run cap-value/proportional-fraction/refresh-window ladders as novelty.
+  Next work should validate robustness on a fresh seed or many-calculator cost
+  axis, or move to a less-prescriptive/non-enumerative credit mechanism.
