@@ -936,6 +936,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/188-simple-validation-stop-during-op29-full-refresh-cuts-prior-updates-but-misses-the-heldout",
+      "target": "researchMemory/hypotheses/phase7/188-simple-validation-stop-during-op29-full-refresh-cuts-prior-updates-but-misses-the-heldout-.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1083,6 +1088,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-fresh-seed-validation.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-02-op29-full-refresh-stop-during-refresh-gate.md",
       "type": "supported_by"
     },
     {
@@ -3025,6 +3035,13 @@
       "source_path": "researchMemory/hypotheses/phase7/187-post-memory-fill-full-refresh-prior-fitting-clears-the-op29-source-and-trusted-handoff-gat.md",
       "status": "POSITIVE-WITH-CAVEAT",
       "title": "Post-memory-fill full-refresh prior fitting clears the op29 source and trusted handoff gates."
+    },
+    {
+      "id": "doc/188-simple-validation-stop-during-op29-full-refresh-cuts-prior-updates-but-misses-the-heldout",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/188-simple-validation-stop-during-op29-full-refresh-cuts-prior-updates-but-misses-the-heldout-.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Simple validation-stop during op29 full refresh cuts prior updates but misses the heldout source gate."
     },
     {
       "id": "doc/phase7-direction-memory",

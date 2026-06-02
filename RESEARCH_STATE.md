@@ -133,7 +133,9 @@ Active directions:
   with diagnostic calc `0.9922`, injection-zero `0.0000`, forced-zero
   `0.0000`, and forced-random `0.0078`. This is a real range-scaling positive
   for fit dynamics, but not yet the scalable recipe: it adds `2500`
-  full-memory refresh updates after memory fill.
+  full-memory refresh updates after memory fill. Letting the existing
+  validation stop end that refresh early cut prior updates to `1140` but missed
+  heldout (`0.8167`), so simple early-stop ladders are not enough.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 clears op19/op29 staged gates but still scores candidates.
@@ -172,8 +174,8 @@ Active directions:
    source and trusted handoff gates: staged full refresh then coreset replay,
    coverage-aware/proportional fitting, or a smarter stop/freeze transition.
    Do not rerun op29 batch160, hidden-size bumps, random fit-batch ladders,
-   validation threshold/patience ladders, or the same full-refresh pass as
-   novelty.
+   validation threshold/patience ladders, simple early full-refresh stopping,
+   or the same full-refresh pass as novelty.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Any further forced-margin, assignment-cost, or result-boundary transfer work

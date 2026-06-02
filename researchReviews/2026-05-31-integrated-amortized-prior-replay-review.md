@@ -306,3 +306,20 @@ structure the refresh cost while preserving the same source/handoff gate:
 staged full refresh then coreset replay, coverage-aware/proportional fitting,
 or a better refresh-stop/freeze transition with explicit many-calculator cost
 accounting.
+
+## Op29 Full-Refresh Early-Stop Follow-Up
+
+Simple early stopping during the full-refresh window is not sufficient.
+
+Allowing the existing validation stop rule to end post-memory-fill full refresh
+cut prior updates from the positive run's `2755` to `1140`, but source heldout
+exact/calc fell from `0.9167` to `0.8167`. The source still trained the seen
+prompts well (`0.9889` train exact/calc) and controls stayed low, so this was a
+prior generalization miss rather than a wiring failure. No trusted handoff was
+run because the source missed the heldout gate.
+
+Steering update: avoid validation threshold/patience ladders or "stop earlier"
+variants. The next cost-reduction attempt needs a stronger transition that
+keeps coverage: for example staged refresh followed by coreset replay, dual
+train+validation/high-confidence stopping, or coverage-aware/proportional
+refresh with explicit source/handoff and cost gates.

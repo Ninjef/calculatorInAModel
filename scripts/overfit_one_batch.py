@@ -145,6 +145,7 @@ class TrainConfig:
     result_boundary_target_amortized_prior_fit_validation_mode: str
     result_boundary_target_amortized_prior_fit_every: int
     result_boundary_target_amortized_prior_full_refresh_after_memory_full_updates: int
+    result_boundary_target_amortized_prior_full_refresh_allow_stop: bool
     result_boundary_target_amortized_prior_stop_metric: str
     result_boundary_target_amortized_prior_stop_train_accuracy: float
     result_boundary_target_amortized_prior_stop_patience: int
@@ -9436,6 +9437,9 @@ def run_variant(
         result_boundary_target_amortized_prior_full_refresh_after_memory_full_updates=(
             args.result_boundary_target_amortized_prior_full_refresh_after_memory_full_updates
         ),
+        result_boundary_target_amortized_prior_full_refresh_allow_stop=(
+            args.result_boundary_target_amortized_prior_full_refresh_allow_stop
+        ),
         result_boundary_target_amortized_prior_stop_metric=(
             args.result_boundary_target_amortized_prior_stop_metric
         ),
@@ -10678,7 +10682,10 @@ def run_variant(
                         stop_accuracy > 0
                         and prompt_memory_full
                         and prior_fit_step
-                        and not prior_full_refresh_active
+                        and (
+                            not prior_full_refresh_active
+                            or args.result_boundary_target_amortized_prior_full_refresh_allow_stop
+                        )
                     ):
                         if prior_stop_value >= stop_accuracy:
                             result_boundary_amortized_prior.fit_converged_steps += 1
@@ -10689,6 +10696,11 @@ def run_variant(
                             >= args.result_boundary_target_amortized_prior_stop_patience
                         ):
                             result_boundary_amortized_prior.fit_stopped = True
+                            if prior_full_refresh_active:
+                                result_boundary_amortized_prior.full_refresh_remaining_updates = 0
+                                prior_train_metrics[
+                                    "result_boundary_target_amortized_prior_full_refresh_remaining_updates"
+                                ] = 0.0
                         prior_train_metrics[
                             "result_boundary_target_amortized_prior_fit_converged_steps"
                         ] = float(
@@ -12050,6 +12062,9 @@ def run_variant(
     ] = (
         args.result_boundary_target_amortized_prior_full_refresh_after_memory_full_updates
     )
+    metrics["result_boundary_target_amortized_prior_full_refresh_allow_stop"] = (
+        args.result_boundary_target_amortized_prior_full_refresh_allow_stop
+    )
     metrics["result_boundary_target_amortized_prior_stop_metric"] = (
         args.result_boundary_target_amortized_prior_stop_metric
     )
@@ -13380,6 +13395,14 @@ def parse_args() -> argparse.Namespace:
         help=(
             "After prompt memory first becomes full, force this many full-memory "
             "prior fit updates before returning to the configured fit batch."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-full-refresh-allow-stop",
+        action="store_true",
+        help=(
+            "Allow the configured amortized-prior stop rule to end the "
+            "post-memory-fill full-refresh window early."
         ),
     )
     parser.add_argument(
@@ -15601,6 +15624,8 @@ def main() -> None:
                         "rbtpriorfullrefresh"
                         f"{args.result_boundary_target_amortized_prior_full_refresh_after_memory_full_updates}"
                     )
+                    if args.result_boundary_target_amortized_prior_full_refresh_allow_stop:
+                        suffix_parts.append("rbtpriorfullrefreshstop")
                 if (
                     args.result_boundary_target_amortized_prior_stop_metric
                     != "train_accuracy"
@@ -15995,6 +16020,8 @@ def main() -> None:
         f"{args.result_boundary_target_amortized_prior_fit_every} "
         "amortized_prior_full_refresh_after_memory_full_updates="
         f"{args.result_boundary_target_amortized_prior_full_refresh_after_memory_full_updates} "
+        "amortized_prior_full_refresh_allow_stop="
+        f"{args.result_boundary_target_amortized_prior_full_refresh_allow_stop} "
         "amortized_prior_stop_metric="
         f"{args.result_boundary_target_amortized_prior_stop_metric} "
         "amortized_prior_stop_train_accuracy="

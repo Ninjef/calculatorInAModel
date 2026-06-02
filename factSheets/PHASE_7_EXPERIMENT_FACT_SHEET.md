@@ -11213,3 +11213,70 @@ Interpretation:
   continuation (`2755` prior updates total). The next step is to preserve this
   result with a cheaper or more structured fit dynamic, not to rerun the same
   refresh, hidden-size bumps, batch160 repeats, or validation ladders.
+
+## 2026-06-02 Op29 Full-Refresh Stop-During-Refresh Gate
+
+Question: can the existing eval-only validation stop end the post-memory-fill
+full-refresh window early without losing the op29 heldout source gate?
+
+Implementation:
+
+- Added `--result-boundary-target-amortized-prior-full-refresh-allow-stop`.
+- When set, the configured amortized-prior stop rule can fire while the
+  post-memory-fill full-refresh window is active.
+- If the rule fires during refresh, the remaining refresh count is set to zero
+  and fitting stays stopped.
+- Defaults preserve the previous full-refresh behavior.
+
+Exact-matched source run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_h128_fit160_targetstrat_val20_evalonly_fullrefresh2500_stopduringrefresh_stopval90pat100_exactmatch_src5000/2026-06-02_132231_313409_model-c-op0-29-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-44df8b2ce8/model-c-2digit-seed9
+```
+
+Matched setup:
+
+- Same op29 four-hook shared-output h128 source recipe as the positive
+  full-refresh run.
+- `answer_loss_weight=1.0`, prior LR `0.01`, no additive semantic distillation.
+- `2500` post-memory-fill full-refresh budget.
+- Eval-only validation stop: validation accuracy `>=0.9`, patience `100`.
+
+Source results:
+
+- Overall exact `858/900 = 0.9533`.
+- Train exact/calc `0.9889`.
+- Heldout exact/calc `147/180 = 0.8167`.
+- Prior train/heldout `0.9514`/`0.8167`.
+- Heldout controls: injection-zero `0.0278`, forced-zero `0.0000`,
+  forced-random `0.0111`.
+- Prior updates `1140` versus `2755` in the positive full-refresh run.
+- Forced-result evals `342,528`.
+- Prompt memory entries `720/720`.
+
+Refresh/stop curve:
+
+- Step `900`: refresh active, `790` updates, validation `0.9097`,
+  converged steps `1`.
+- Step `1100`: `990` updates, validation `0.9375`, converged steps `24`.
+- Step `1200`: `1090` updates, validation `0.9514`, converged steps `50`.
+- Step `1300`: stopped during refresh, `1140` updates, remaining refresh `0`,
+  converged steps `100`.
+
+Routed diagnostic:
+
+- hook0 calc `0.9756`
+- hook1 calc `1.0000`
+- hook2 calc `0.9412`
+- hook3 calc `0.9130`
+
+Interpretation:
+
+- Mixed-negative. The mechanism saved about `59%` of prior updates relative to
+  the positive full-refresh run, but it missed the heldout source gate.
+- The high train result and low controls point to underfit/overconfident prior
+  generalization, not calculator wiring failure.
+- No trusted handoff was run.
+- Do not run validation threshold/patience ladders or same early-stop-only
+  variants as novelty. Future cost-reduction needs stronger coverage-aware or
+  staged refresh/replay dynamics.

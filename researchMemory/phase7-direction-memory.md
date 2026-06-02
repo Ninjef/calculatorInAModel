@@ -339,9 +339,12 @@ Memory:
   handoff then reached `900/900 = 1.0000`, diagnostic calc `0.9922`, and low
   controls (`0.0000` injection-zero, `0.0000` forced-zero, `0.0078`
   forced-random). This confirms online prior fit dynamics were the op29
-  blocker, but the recipe is still costly; next work should reduce or structure
-  the refresh cost rather than rerun full refresh, batch160, capacity, random
-  batch, or validation ladders.
+  blocker, but the recipe is still costly. Simple validation-stop during full
+  refresh is too aggressive: it cut prior updates to `1140`, but heldout
+  source exact/calc fell to `0.8167`, so no handoff was run. Next work should
+  reduce or structure the refresh cost rather than rerun full refresh,
+  batch160, capacity, random batch, validation ladders, or early-stop-only
+  variants.
 
 Representative evidence:
 
@@ -358,6 +361,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-fresh-seed-validation.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-range-validation.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-fresh-seed-validation.md`
+- `aiAgentWorkHistory/phase7/2026-06-02-op29-full-refresh-stop-during-refresh-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`
