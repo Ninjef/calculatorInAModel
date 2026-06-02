@@ -269,3 +269,40 @@ Steering update: do not run hidden-size bumps as novelty. The next experiment
 must alter the online fit dynamics themselves, such as a post-memory-fill
 full-memory refresh followed by cheaper replay, or a coverage-aware/proportional
 fit with explicit cost accounting.
+
+## Op29 Post-Fill Full-Refresh Follow-Up
+
+Changing the online fit dynamics repairs the op29 heldout and handoff gate, but
+the repair is expensive.
+
+The new
+`--result-boundary-target-amortized-prior-full-refresh-after-memory-full-updates`
+mechanism forces full-memory prior updates after prompt memory first fills,
+then returns to the configured target-stratified fit batch. With h128,
+target-stratified batch `160`, eval-only validation, and `2500` full-refresh
+updates after memory full, the op29 source reached:
+
+- overall exact/calc `884/900 = 0.9822`;
+- train exact/calc `0.9972`;
+- heldout exact/calc `155/180 = 0.9167`;
+- prior train/heldout `0.9958`/`0.9167`;
+- heldout controls `0.0278` injection-zero, `0.0000` forced-zero,
+  `0.0111` forced-random;
+- `2755` total prior updates and `294,912` forced-result evals.
+
+The trusted 600-step frozen-policy additive handoff then reached final
+`900/900 = 1.0000`, diagnostic exact/calc `1.0000`/`0.9922`, and low controls:
+`0.0000` injection-zero, `0.0000` forced-zero, `0.0078` forced-random.
+
+This changes the interpretation of the op29 stress. Constant-batch h64/h128
+online fitting was the wrong dynamic, not a sign that the target table or
+handoff geometry was fundamentally failing at op29. Post-fill full refresh is
+therefore the new positive range-scaling benchmark for this branch.
+
+Steering update: do not rerun op29 batch160, hidden-size bumps, random
+fit-batch ladders, validation threshold/patience ladders, or the same
+full-refresh pass as novelty. The next useful experiment must reduce or
+structure the refresh cost while preserving the same source/handoff gate:
+staged full refresh then coreset replay, coverage-aware/proportional fitting,
+or a better refresh-stop/freeze transition with explicit many-calculator cost
+accounting.

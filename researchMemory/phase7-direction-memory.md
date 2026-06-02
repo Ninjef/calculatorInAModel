@@ -331,6 +331,17 @@ Memory:
   train/heldout were `0.8097`/`0.7111`, while post-hoc h128 full-memory fit on
   the same trace reached `0.9944`/`0.9278`. Next work should change online fit
   dynamics directly, not run hidden-size bumps.
+- Post-memory-fill full-refresh prior fitting is the new op29 positive
+  fit-dynamics benchmark. Forcing `2500` full-memory prior updates after memory
+  first became full repaired the h128 source: overall `0.9822`, train `0.9972`,
+  heldout `0.9167`, prior train/heldout `0.9958`/`0.9167`, low heldout
+  controls, and `2755` total prior updates. The trusted frozen-policy additive
+  handoff then reached `900/900 = 1.0000`, diagnostic calc `0.9922`, and low
+  controls (`0.0000` injection-zero, `0.0000` forced-zero, `0.0078`
+  forced-random). This confirms online prior fit dynamics were the op29
+  blocker, but the recipe is still costly; next work should reduce or structure
+  the refresh cost rather than rerun full refresh, batch160, capacity, random
+  batch, or validation ladders.
 
 Representative evidence:
 
@@ -351,6 +362,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-h128-prior-capacity-stress.md`
+- `aiAgentWorkHistory/phase7/2026-06-02-op29-post-fill-full-refresh-prior-stress.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-left-operand-routed-multi-hook-support.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output-fresh-seed.md`

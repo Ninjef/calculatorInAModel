@@ -121,23 +121,19 @@ Active directions:
   but still uses `2501` prior updates. A validation-heldout stop that removed
   20% of memory from fitting reduced updates only slightly (`2359`) and missed
   heldout (`0.8625`), so do not run validation threshold/patience ladders.
-  Eval-only validation stopping, which fits all memory entries while using the
-  split only for stopping, is the new prior-update reduction lead but is
-  seed-sensitive. On seed13 it reached source overall `0.9825`, heldout
-  `0.9500`, prior updates `1613`, and trusted handoff `1.0000`. The same
-  effective seed11 as the target-stratified benchmark reached source overall
-  `0.9725`, heldout `0.9125`, prior updates `1784`, and trusted handoff
-  `1.0000`. Caveat: forced-result evals rose to `89,088`/`124,416`, because
-  prompt memory filled at step `100` instead of step `50`. The op29 range
-  stress of the same constant fit-batch recipe missed the heldout gate:
-  source overall `0.9622`, train `0.9931`, heldout `0.8444`, prior updates
-  `2501`, and forced evals `290,304`; no handoff was run. Post-hoc full-memory
-  prior diagnostics from that trace reached heldout `0.9000` with h64 after
-  `2500` fit steps and `0.9278` with h128, so the next bottleneck is prior
-  optimization and scalable fit dynamics at larger range, not memory fill or
-  calculator wiring. H128 with the same constant fit batch improved overall to
-  `0.9767` but still missed heldout (`0.8611`), while post-hoc h128 full-memory
-  fit reached `0.9278`; capacity alone is not enough.
+  Eval-only validation stopping fits all memory entries while using a split
+  only for stopping; on op19 it cut prior updates to `1613-1784` and cleared
+  trusted handoff, but forced-result evals rose when prompt memory filled late.
+  At op29, constant target-stratified batch `160` failed even with h128:
+  heldout was only `0.8444`/`0.8611`, while post-hoc full-memory h128 recovered
+  `0.9278`. The new post-memory-fill full-refresh mechanism changes the fit
+  dynamics and clears the op29 source/handoff gate: source overall `0.9822`,
+  train `0.9972`, heldout `0.9167`, prior updates `2755`, forced evals
+  `294,912`, and trusted frozen-policy additive handoff `900/900 = 1.0000`
+  with diagnostic calc `0.9922`, injection-zero `0.0000`, forced-zero
+  `0.0000`, and forced-random `0.0078`. This is a real range-scaling positive
+  for fit dynamics, but not yet the scalable recipe: it adds `2500`
+  full-memory refresh updates after memory fill.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 clears op19/op29 staged gates but still scores candidates.
@@ -148,8 +144,6 @@ Active directions:
   source/handoff gate with numeric-prior replay.
 
 ## Paused Or Deprioritized Branches
-
-These branches should not continue without a new mechanism:
 
 - Oracle-only calculator success.
 - Generic target-off retention after scaffolding.
@@ -174,11 +168,12 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Replace the op29 constant-batch prior bottleneck with a materially changed
-   prior fit mechanism: post-memory-fill full refresh, coverage-aware fitting,
-   or another fit dynamic whose cost model scales. Do not run another op29
-   batch160 repeat, hidden-size bump, random fit-batch ladder, or validation
-   threshold/patience ladder.
+1. Reduce the cost of the op29 full-refresh positive without losing the heldout
+   source and trusted handoff gates: staged full refresh then coreset replay,
+   coverage-aware/proportional fitting, or a smarter stop/freeze transition.
+   Do not rerun op29 batch160, hidden-size bumps, random fit-batch ladders,
+   validation threshold/patience ladders, or the same full-refresh pass as
+   novelty.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Any further forced-margin, assignment-cost, or result-boundary transfer work
@@ -198,11 +193,5 @@ These branches should not continue without a new mechanism:
   bottleneck source result while avoiding full result-class enumeration.
 - A new credit-assignment method that passes a local feasibility gate and then
   produces early Stage 1 lift above known failed baselines.
-- A source-training objective that predicts or improves downstream handoff
-  behavior across fresh seeds, not just within already studied lineages.
-
-## Review Cadence
-
-Write/update a `researchReviews/` memo after 5-10 new experiments, a clear
-family-level negative, a strategic-bet change, or when the next task feels
-local. Reviews say what changed, what should stop, and what deserves compute.
+- A source-training objective that improves downstream handoff behavior across
+  fresh seeds, not just within already studied lineages.

@@ -11138,3 +11138,78 @@ Interpretation:
   directly change how the online prior is fit, such as a post-memory-fill
   full-memory refresh, staged full-fit then cheaper replay, or
   coverage-aware/proportional fitting with explicit cost accounting.
+
+## 2026-06-02 Op29 Post-Fill Full-Refresh Prior Stress
+
+Question: can a materially changed online prior fit dynamic repair the op29
+heldout miss and preserve trusted additive handoff?
+
+Implementation:
+
+- Added
+  `--result-boundary-target-amortized-prior-full-refresh-after-memory-full-updates`.
+- After prompt memory first becomes full, the prior can force N full-memory fit
+  updates before returning to the configured fit batch.
+- Active refresh suppresses convergence stopping and logs active/remaining
+  refresh metrics.
+
+Validation:
+
+- `python3 -m py_compile scripts/overfit_one_batch.py scripts/diagnose_amortized_prior_from_trace.py`
+- Direct function smoke: `[(1.0, 2, 1), (1.0, 1, 2), (1.0, 0, 3)]`.
+
+Source run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_h128_fit160_targetstrat_val20_evalonly_fullrefresh2500_stopval90pat100_src5000/2026-06-02_121235_381742_model-c-op0-29-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-16aa3b10c8/model-c-2digit-seed9
+```
+
+Source setup:
+
+- `operand_max=29`, `900` prompts, deterministic `20%` heldout.
+- Four `left_operand_mod` routed hooks, product decoder, `operand_spans`
+  readout.
+- Prompt-keyed online hard memory, topk8+unique24 sparse result-boundary
+  scoring, freeze memory when full.
+- Numeric amortized prior h128, target-stratified fit batch `160`, eval-only
+  validation fraction `0.2`, validation stop threshold `0.9`, patience `100`.
+- Full-refresh updates after memory full: `2500`.
+
+Source results:
+
+- Overall exact/calc `884/900 = 0.9822`.
+- Train exact/calc `0.9972`.
+- Heldout exact/calc `155/180 = 0.9167`.
+- Prior train/heldout accuracy `0.9958` / `0.9167`.
+- Prior updates `2755`.
+- Forced-result evals `294,912`.
+- Prompt memory entries `720/720`.
+- Heldout controls: injection-zero `0.0278`, forced-zero `0.0000`,
+  forced-random `0.0111`.
+
+Trusted additive handoff:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_h128_fit160_targetstrat_val20_evalonly_fullrefresh2500_stopval90pat100_handoff600/2026-06-02_124110_461471_model-c-op0-29-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed9
+```
+
+Handoff results:
+
+- Final eval `900/900 = 1.0000`.
+- Diagnostic exact/calc `1.0000` / `0.9921875`.
+- Final 128-sample controls: injection-zero `0.0000`, forced-zero `0.0000`,
+  forced-random `0.0078125`, oracle-at-eval `1.0000`.
+- Routed diagnostic hook calculator-result accuracies: hook0 `1.0000`,
+  hook1 `1.0000`, hook2 `1.0000`, hook3 `0.9565`.
+
+Interpretation:
+
+- Post-memory-fill full refresh is the first online op29 prior-fit dynamic in
+  this branch to clear both heldout source and trusted additive handoff after
+  the constant-batch h64/h128 misses.
+- The result supports the prior diagnosis: target quality and wiring were not
+  the blockers; online prior optimization was.
+- Caveat: the pass costs `2500` full-memory refresh updates plus sampled
+  continuation (`2755` prior updates total). The next step is to preserve this
+  result with a cheaper or more structured fit dynamic, not to rerun the same
+  refresh, hidden-size bumps, batch160 repeats, or validation ladders.

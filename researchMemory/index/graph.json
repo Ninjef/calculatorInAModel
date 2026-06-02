@@ -931,6 +931,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/187-post-memory-fill-full-refresh-prior-fitting-clears-the-op29-source-and-trusted-handoff-gat",
+      "target": "researchMemory/hypotheses/phase7/187-post-memory-fill-full-refresh-prior-fitting-clears-the-op29-source-and-trusted-handoff-gat.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1098,6 +1103,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-02-op29-h128-prior-capacity-stress.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-02-op29-post-fill-full-refresh-prior-stress.md",
       "type": "supported_by"
     },
     {
@@ -3008,6 +3018,13 @@
       "source_path": "researchMemory/hypotheses/phase7/186-increasing-op29-numeric-prior-capacity-to-h128-does-not-fix-online-constant-batch-fitting.md",
       "status": "MIXED-NEGATIVE",
       "title": "Increasing op29 numeric prior capacity to h128 does not fix online constant-batch fitting."
+    },
+    {
+      "id": "doc/187-post-memory-fill-full-refresh-prior-fitting-clears-the-op29-source-and-trusted-handoff-gat",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/187-post-memory-fill-full-refresh-prior-fitting-clears-the-op29-source-and-trusted-handoff-gat.md",
+      "status": "POSITIVE-WITH-CAVEAT",
+      "title": "Post-memory-fill full-refresh prior fitting clears the op29 source and trusted handoff gates."
     },
     {
       "id": "doc/phase7-direction-memory",
