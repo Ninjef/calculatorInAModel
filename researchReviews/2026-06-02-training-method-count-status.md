@@ -40,14 +40,18 @@ The strongest current branch is family 14 combined with sparse online hard
 memory, additive semantic distillation, routed shared-output hooks, and
 post-memory-fill prior refresh. It trains calculator-result policies from
 scratch in bottleneck source runs, transfers to frozen-policy additive
-non-bottleneck handoff, and now clears op29 heldout prompts. It is still not
-the final scalable/non-prescriptive solution because it uses answer-derived
-sparse forced-result scoring and a costly prior-fit stabilizer.
+non-bottleneck handoff, and now clears op29 heldout prompts. A quality-gated
+`2000`-update cap has fresh-seed trusted handoff replication, though source
+heldout dropped from `0.9611` to `0.9111`. It is still not the final
+scalable/non-prescriptive solution because it uses answer-derived sparse
+forced-result scoring and a costly prior-fit stabilizer.
 
 The latest error-stratified coreset replay run is not a fifteenth algorithm.
 It is a cost-reduction variant inside family 14. It preserved op29 source and
 handoff, but worsened prior-update cost, so future work should change the
 refresh/replay structure rather than tune the same error-focused coreset.
+Likewise, the fresh-seed capped-prior handoff replication is robustness
+evidence, not a new algorithm.
 
 ## Steering
 
@@ -58,3 +62,5 @@ refresh/replay structure rather than tune the same error-focused coreset.
 - The next high-leverage question is whether family 14 can be made cheaper and
   less prescriptive, or whether a new credit-assignment signal can bypass
   answer-derived candidate scoring entirely.
+- After the fresh-seed cap replication, prioritize explicit many-calculator
+  cost accounting or removal of candidate scoring over another cap/seed ladder.

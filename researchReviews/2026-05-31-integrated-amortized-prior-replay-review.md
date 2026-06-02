@@ -425,3 +425,27 @@ but do not run cap-value, proportional-fraction, or refresh-window ladders as
 novelty. The next question is robustness and scaling: fresh seed, explicit
 many-calculator cost accounting, or a less-prescriptive/non-enumerative credit
 mechanism.
+
+## Fresh-Seed Quality-Gated Cap Follow-Up
+
+The quality-gated cap replicated the trusted handoff on a fresh op29 seed, but
+source heldout accuracy has real seed variance.
+
+Using the same capped op29 h128 proportional recipe on CLI seed `31` /
+effective seed `33`, the source reached overall `0.9833`, train exact/calc
+`1.0000`, and heldout exact/calc `0.9111`. Heldout controls stayed low:
+injection-zero `0.0333`, forced-zero `0.0000`, forced-random `0.0167`.
+The quality gate froze/held prior fitting at `2017` updates, `1,260,852` fit
+examples, and `1,080,000` full-fit examples.
+
+The trusted 600-step frozen-policy additive handoff passed cleanly: final
+`900/900 = 1.0000`, diagnostic exact/calc `1.0000`/`0.9844`, and final
+snapshot controls `0.0000` injection-zero, `0.0000` forced-zero, `0.0078`
+forced-random, with learned calculator-result accuracy `1.0000`.
+
+Steering update: the capped recipe now has fresh-seed handoff robustness, so
+do not spend mainline compute on another same-recipe seed or cap ladder. The
+source-heldout drop (`0.9611 -> 0.9111`) says robustness is not perfect, but the
+handoff replication is enough to move the next high-leverage question to
+explicit many-calculator cost accounting or removal of answer-derived sparse
+candidate scoring.

@@ -961,6 +961,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/193-the-op29-quality-gated-prior-cap-replicates-trusted-handoff-on-a-fresh-seed-with-source-he",
+      "target": "researchMemory/hypotheses/phase7/193-the-op29-quality-gated-prior-cap-replicates-trusted-handoff-on-a-fresh-seed-with-source-he.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1133,6 +1138,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-02-op29-quality-gated-prior-cap.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-02-op29-quality-gated-prior-cap-fresh-seed.md",
       "type": "supported_by"
     },
     {
@@ -3110,6 +3120,13 @@
       "source_path": "researchMemory/hypotheses/phase7/192-a-quality-gated-update-cap-preserves-op29-source-handoff-while-cutting-proportional-prior-.md",
       "status": "POSITIVE-WITH-CAVEAT",
       "title": "A quality-gated update cap preserves op29 source/handoff while cutting proportional prior-fit cost."
+    },
+    {
+      "id": "doc/193-the-op29-quality-gated-prior-cap-replicates-trusted-handoff-on-a-fresh-seed-with-source-he",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/193-the-op29-quality-gated-prior-cap-replicates-trusted-handoff-on-a-fresh-seed-with-source-he.md",
+      "status": "POSITIVE-WITH-CAVEAT",
+      "title": "The op29 quality-gated prior cap replicates trusted handoff on a fresh seed, with source-heldout variance."
     },
     {
       "id": "doc/phase7-direction-memory",

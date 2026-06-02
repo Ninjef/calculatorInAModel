@@ -16,10 +16,8 @@ transferred into a non-bottleneck model. We have not shown scalable,
 non-prescriptive, answer-loss-only discovery of the calculator-query policy.
 
 The current bottleneck is credit assignment into the calculator-query policy,
-not downstream answer decoding and not calculator wiring. Within the staged
-transfer branch, the current bottleneck is source acquisition for additive
-handoff/readout geometry, not source calculator accuracy or another cheap
-checkpoint selector.
+not downstream answer decoding or calculator wiring. Within staged transfer,
+the bottleneck is source acquisition for additive handoff/readout geometry.
 
 ## What Is Proven
 
@@ -51,9 +49,8 @@ Plain answer loss, score-function estimators, expected answer-loss gradients,
 decoder calibration, simple direct feedback, and simple learned shadow-gradient
 variants have not produced reliable discovery.
 
-The strongest current positives depend on scaffolding or candidate scoring.
-That means the project is beyond "can the architecture work?" and is now at
-"can we find a scalable credit-assignment mechanism?"
+The strongest positives depend on scaffolding or candidate scoring, so the
+project is now about scalable credit assignment, not architecture viability.
 
 ## Current Best Recipe
 
@@ -135,8 +132,11 @@ Active directions:
   heldout (`0.8167`). A dual train+validation guard preserved a fresh op29
   source/handoff gate with `2570` updates. Hard-error coreset and proportional
   half-memory replay both transferred but still used `3251` updates. A
-  quality-gated `2000`-update cap preserved source/handoff: heldout `0.9611`,
-  handoff `1.0000`, `1.255M` fit examples. This is the current cost lead; next work should test robustness/explicit many-calculator cost or replace answer-derived candidate scoring.
+  quality-gated `2000`-update cap is the op29 cost lead: original/fresh source
+  heldout `0.9611`/`0.9111`, both trusted handoffs `1.0000`, and `1.255M-1.261M`
+  fit examples. Handoff replication is strong but heldout variance remains;
+  stress explicit many-calculator cost or replace answer-derived candidate
+  scoring, not cap/fraction/window ladders.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 clears op19/op29 staged gates but still scores candidates.

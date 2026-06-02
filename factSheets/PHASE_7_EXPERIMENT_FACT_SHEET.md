@@ -11621,3 +11621,67 @@ Interpretation:
 - Do not run cap-value/proportional-fraction/refresh-window ladders as novelty.
   Next work should validate robustness on a fresh seed or many-calculator cost
   axis, or move to a less-prescriptive/non-enumerative credit mechanism.
+
+## 2026-06-02 Op29 Quality-Gated Prior Cap Fresh Seed
+
+Question: does the same capped op29 recipe preserve trusted handoff on a fresh
+source seed?
+
+Source run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_h128_fitfrac50_targetstrat_val20_evalonly_fullrefresh1500_qcap2000_dualstop_val90_train98_pat100_seed31_src5000/2026-06-02_144248_012237_model-c-op0-29-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-b3b0395c67/model-c-2digit-seed33
+```
+
+Setup:
+
+- Same op29 h128 proportional recipe as the prior quality-gated cap result.
+- CLI seed `31`, effective model seed `33`.
+- Full-refresh budget `1500`, proportional replay fraction `0.5`.
+- Eval-only validation `0.2`.
+- Dual quality gate: validation `>=0.9`, train prior `>=0.98`.
+- Quality-gated update cap `2000`.
+
+Source results:
+
+- Overall exact/calc `885/900 = 0.9833`.
+- Train exact/calc `1.0000`.
+- Heldout exact/calc `164/180 = 0.9111`.
+- Train controls: injection-zero `0.0222`, forced-zero `0.0014`,
+  forced-random `0.0153`.
+- Heldout controls: injection-zero `0.0333`, forced-zero `0.0000`,
+  forced-random `0.0167`.
+- Diagnostic exact/calc `0.9844`/`0.9844`.
+- Routed diagnostic hook calculator-result accuracies: hook0 `0.9767`,
+  hook1 `1.0000`, hook2 `1.0000`, hook3 `0.9565`.
+- Prior updates `2017`.
+- Total prior fit examples `1,260,852`.
+- Full-memory fit examples `1,080,000`.
+- Cap reached and quality gate met.
+
+Trusted additive handoff:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_h128_fitfrac50_targetstrat_val20_evalonly_fullrefresh1500_qcap2000_dualstop_val90_train98_pat100_seed31_handoff600/2026-06-02_144743_273571_model-c-op0-29-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed33
+```
+
+Handoff results:
+
+- Final eval `900/900 = 1.0000`.
+- Diagnostic exact/calc `1.0000`/`0.9844`.
+- Final snapshot controls: injection-zero `0.0000`, forced-zero `0.0000`,
+  forced-random `0.0078`, oracle-at-eval `1.0000`.
+- Final snapshot learned calc `1.0000`.
+- Routed diagnostic hook calculator-result accuracies: hook0 `0.9767`,
+  hook1 `1.0000`, hook2 `1.0000`, hook3 `0.9565`.
+
+Interpretation:
+
+- Positive-with-caveat. The quality-gated cap replicated the trusted op29
+  non-bottleneck handoff on a fresh source seed.
+- Source heldout accuracy has variance: original capped source heldout was
+  `0.9611`; this fresh source was `0.9111`.
+- This strengthens the capped recipe as the current cost lead, but it remains
+  answer-derived, candidate-scoring based, and staged/frozen-policy. Do not run
+  more same-recipe seed or cap ladders as novelty; move to explicit
+  many-calculator cost accounting or a less-prescriptive credit mechanism.
