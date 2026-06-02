@@ -21,8 +21,7 @@ the bottleneck is source acquisition for additive handoff/readout geometry.
 
 ## What Is Proven
 
-- Correct calculator outputs or oracle calculator queries let downstream
-  components solve the arithmetic task. This proves wiring, not the thesis.
+- Oracle calculator queries let downstream solve arithmetic; wiring, not thesis.
 - Identifiable/scaffolded calculator protocols can be taught and often retained
   after direct supervision or local targets are removed.
 - Natural result-level bottleneck calculator policies can be trained with hard
@@ -137,8 +136,10 @@ Active directions:
   fit examples. Many-calculator accounting shows candidate scoring is much
   cheaper than repeated top-k assignment, but per-calculator prompt memory and
   prior fitting still scale linearly (`24.8M` candidate+prior examples at 16
-  op29 calculators). Break per-calculator target/prior scaling or replace
-  answer-derived candidate scoring, not cap/fraction/window ladders.
+  op29 calculators). Route-heldout diagnostics are the first shared-prior
+  positive: numeric prior predicts an unscored fourth route at `0.933-0.979`,
+  while embedding memorization gets `0.000`. Next: train with shared
+  route/global targets or replace answer-derived candidate scoring.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 clears op19/op29 staged gates but still scores candidates.

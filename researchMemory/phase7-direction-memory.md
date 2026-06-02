@@ -369,8 +369,14 @@ Memory:
   assignment, but prompt memory and prior fitting remain linear per independent
   calculator: at 16 op29 calculators, `4.72M` candidate evals plus `20.08M`
   prior fit examples; at 64, `99.18M` candidate+prior examples. Do not run
-  cap-value or same-recipe seed ladders; break per-calculator target/prior
-  scaling or replace answer-derived scoring.
+  cap-value or same-recipe seed ladders. A route-heldout diagnostic is the
+  first shared-target-prior positive: on the op29 capped source trace, h128
+  numeric priors trained on three `left_operand_mod` routes predicted the
+  unscored fourth route at `0.9333/0.9683/0.9793/0.9583`; an embedding prior fit
+  train routes perfectly but got `0.0000` on heldout route 0. This supports a
+  shared/global numeric prior mechanism for homogeneous calculators, but needs
+  an actual source run that skips or reduces target discovery on some routes and
+  then passes trusted handoff.
 
 Representative evidence:
 
@@ -394,6 +400,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-quality-gated-prior-cap.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-quality-gated-prior-cap-fresh-seed.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-capped-prior-many-calculator-accounting.md`
+- `aiAgentWorkHistory/phase7/2026-06-02-route-heldout-shared-prior-diagnostic.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`

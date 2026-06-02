@@ -11734,3 +11734,40 @@ Interpretation:
   `4.72M` candidate evals).
 - Next work should break per-calculator target/prior scaling or replace
   answer-derived candidate scoring, not tune cap values.
+
+## 2026-06-02 Route-Heldout Shared Prior Diagnostic
+
+Question: can a structured numeric prior fit targets from some routed
+calculators and generalize to an unscored heldout route?
+
+Implementation:
+
+- Extended `scripts/diagnose_amortized_prior_from_trace.py` with
+  `--split-mode route_heldout`.
+- Added `--heldout-routes`.
+- Added route-split tests in `tests/test_amortized_prior_trace_diagnostic.py`.
+
+Trace:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_h128_fitfrac50_targetstrat_val20_evalonly_fullrefresh1500_qcap2000_dualstop_val90_train98_pat100_src5000/2026-06-02_143237_450578_model-c-op0-29-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-b3b0395c67/model-c-2digit-seed11
+```
+
+Results:
+
+| Heldout route | Fit rows | Heldout rows | Prior | Train acc | Heldout-route acc |
+| ---: | ---: | ---: | --- | ---: | ---: |
+| `0` | `510` | `210` | numeric h128 | `0.9784` | `0.9333` |
+| `1` | `499` | `221` | numeric h128 | `0.9960` | `0.9683` |
+| `2` | `575` | `145` | numeric h128 | `0.9983` | `0.9793` |
+| `3` | `576` | `144` | numeric h128 | `0.9931` | `0.9583` |
+| `0` | `510` | `210` | embedding h128 | `1.0000` | `0.0000` |
+
+Interpretation:
+
+- Partial-positive. A structured numeric prior can share target learning across
+  `left_operand_mod` routed calculators in a post-hoc route-heldout diagnostic.
+- The embedding control memorized seen routes and failed completely on the
+  heldout route, so numeric features are doing the cross-route generalization.
+- This is not yet a source-training result. Next work should train with target
+  discovery disabled or reduced on some routes and require trusted handoff.
