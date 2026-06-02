@@ -140,6 +140,7 @@ class TrainConfig:
     result_boundary_target_amortized_prior_min_entries: int
     result_boundary_target_amortized_prior_replay_batch_size: int
     result_boundary_target_amortized_prior_fit_batch_size: int
+    result_boundary_target_amortized_prior_fit_batch_fraction: float
     result_boundary_target_amortized_prior_fit_sampling_mode: str
     result_boundary_target_amortized_prior_fit_validation_fraction: float
     result_boundary_target_amortized_prior_fit_validation_mode: str
@@ -363,9 +364,12 @@ class ResultBoundaryAmortizedPrior:
     fit_validation_fraction: float
     fit_validation_mode: str
     fit_every: int
+    fit_batch_fraction: float = 0.0
     full_refresh_after_memory_full_updates: int = 0
     train_steps: int = 1
     train_updates: int = 0
+    train_fit_examples: int = 0
+    train_full_fit_examples: int = 0
     fit_converged_steps: int = 0
     fit_stopped: bool = False
     full_refresh_started: bool = False
@@ -3560,6 +3564,7 @@ def init_result_boundary_amortized_prior(
     replay_batch_size: int,
     device: str | torch.device,
     fit_batch_size: int | None = None,
+    fit_batch_fraction: float = 0.0,
     fit_sampling_mode: str = "random",
     fit_validation_fraction: float = 0.0,
     fit_validation_mode: str = "holdout",
@@ -3568,6 +3573,8 @@ def init_result_boundary_amortized_prior(
 ) -> ResultBoundaryAmortizedPrior:
     if fit_sampling_mode not in {"random", "target_stratified", "error_stratified"}:
         raise ValueError("unknown amortized-prior fit sampling mode")
+    if fit_batch_fraction < 0.0 or fit_batch_fraction > 1.0:
+        raise ValueError("amortized-prior fit batch fraction must be in [0, 1]")
     if not 0.0 <= fit_validation_fraction < 1.0:
         raise ValueError("amortized-prior fit validation fraction must be in [0, 1)")
     if fit_validation_mode not in {"holdout", "eval_only"}:
@@ -3584,6 +3591,7 @@ def init_result_boundary_amortized_prior(
         min_entries=min_entries,
         replay_batch_size=replay_batch_size,
         fit_batch_size=replay_batch_size if fit_batch_size is None else fit_batch_size,
+        fit_batch_fraction=fit_batch_fraction,
         fit_sampling_mode=fit_sampling_mode,
         fit_validation_fraction=fit_validation_fraction,
         fit_validation_mode=fit_validation_mode,
@@ -3697,6 +3705,13 @@ def train_result_boundary_amortized_prior(
             "result_boundary_target_amortized_prior_updates": float(
                 prior.train_updates
             ),
+            "result_boundary_target_amortized_prior_fit_examples": float(
+                prior.train_fit_examples
+            ),
+            "result_boundary_target_amortized_prior_full_fit_examples": float(
+                prior.train_full_fit_examples
+            ),
+            "result_boundary_target_amortized_prior_fit_effective_batch_size": 0.0,
             "result_boundary_target_amortized_prior_fit_step": 0.0,
             "result_boundary_target_amortized_prior_fit_converged_steps": float(
                 prior.fit_converged_steps
@@ -3729,6 +3744,13 @@ def train_result_boundary_amortized_prior(
             "result_boundary_target_amortized_prior_updates": float(
                 prior.train_updates
             ),
+            "result_boundary_target_amortized_prior_fit_examples": float(
+                prior.train_fit_examples
+            ),
+            "result_boundary_target_amortized_prior_full_fit_examples": float(
+                prior.train_full_fit_examples
+            ),
+            "result_boundary_target_amortized_prior_fit_effective_batch_size": 0.0,
             "result_boundary_target_amortized_prior_fit_step": 0.0,
             "result_boundary_target_amortized_prior_fit_converged_steps": float(
                 prior.fit_converged_steps
@@ -3778,6 +3800,15 @@ def train_result_boundary_amortized_prior(
         else:
             a_validation = b_validation = y_validation = None
     fit_entry_count = int(y_fit_all.shape[0])
+    effective_fit_batch_size = prior.fit_batch_size
+    if prior.fit_batch_fraction > 0:
+        effective_fit_batch_size = max(
+            1,
+            min(
+                fit_entry_count,
+                int(math.ceil(fit_entry_count * prior.fit_batch_fraction)),
+            ),
+        )
     if update:
         fit_step = 1.0
         for _ in range(prior.train_steps):
@@ -3786,13 +3817,13 @@ def train_result_boundary_amortized_prior(
             fit_error_selected_fraction = float("nan")
             if (
                 not force_full_fit
-                and prior.fit_batch_size > 0
-                and fit_entry_count > prior.fit_batch_size
+                and effective_fit_batch_size > 0
+                and fit_entry_count > effective_fit_batch_size
             ):
                 if prior.fit_sampling_mode == "target_stratified":
                     indices = target_stratified_prior_fit_indices(
                         y_fit_all,
-                        count=prior.fit_batch_size,
+                        count=effective_fit_batch_size,
                         rng=rng,
                     )
                 elif prior.fit_sampling_mode == "error_stratified":
@@ -3809,17 +3840,20 @@ def train_result_boundary_amortized_prior(
                     )
                     error_selected = target_stratified_prior_fit_indices(
                         y_fit_all,
-                        count=min(prior.fit_batch_size, int(error_indices.numel())),
+                        count=min(effective_fit_batch_size, int(error_indices.numel())),
                         rng=rng,
                         candidate_indices=error_indices,
                     )
                     selected_set = {
                         int(index) for index in error_selected.detach().cpu().tolist()
                     }
-                    if int(error_selected.numel()) < prior.fit_batch_size:
+                    if int(error_selected.numel()) < effective_fit_batch_size:
                         fill_indices = target_stratified_prior_fit_indices(
                             y_fit_all,
-                            count=prior.fit_batch_size - int(error_selected.numel()),
+                            count=(
+                                effective_fit_batch_size
+                                - int(error_selected.numel())
+                            ),
                             rng=rng,
                             excluded_indices=selected_set,
                         )
@@ -3833,7 +3867,7 @@ def train_result_boundary_amortized_prior(
                     indices = torch.tensor(
                         [
                             rng.randrange(fit_entry_count)
-                            for _ in range(prior.fit_batch_size)
+                            for _ in range(effective_fit_batch_size)
                         ],
                         dtype=torch.long,
                         device=a_fit_all.device,
@@ -3850,6 +3884,9 @@ def train_result_boundary_amortized_prior(
             prior_loss.backward()
             prior.optimizer.step()
             prior.train_updates += 1
+            prior.train_fit_examples += int(y.shape[0])
+            if force_full_fit:
+                prior.train_full_fit_examples += int(y.shape[0])
             loss_value = float(prior_loss.detach().item())
     with torch.no_grad():
         train_logits = prior.model(a_all, b_all)
@@ -3873,6 +3910,17 @@ def train_result_boundary_amortized_prior(
             prior.last_validation_accuracy
         ),
         "result_boundary_target_amortized_prior_updates": float(prior.train_updates),
+        "result_boundary_target_amortized_prior_fit_examples": float(
+            prior.train_fit_examples
+        ),
+        "result_boundary_target_amortized_prior_full_fit_examples": float(
+            prior.train_full_fit_examples
+        ),
+        "result_boundary_target_amortized_prior_fit_effective_batch_size": float(
+            fit_entry_count if force_full_fit else effective_fit_batch_size
+        )
+        if update
+        else 0.0,
         "result_boundary_target_amortized_prior_fit_step": fit_step,
         "result_boundary_target_amortized_prior_fit_converged_steps": float(
             prior.fit_converged_steps
@@ -3912,6 +3960,13 @@ def skipped_result_boundary_amortized_prior_metrics(
             prior.last_validation_accuracy
         ),
         "result_boundary_target_amortized_prior_updates": float(prior.train_updates),
+        "result_boundary_target_amortized_prior_fit_examples": float(
+            prior.train_fit_examples
+        ),
+        "result_boundary_target_amortized_prior_full_fit_examples": float(
+            prior.train_full_fit_examples
+        ),
+        "result_boundary_target_amortized_prior_fit_effective_batch_size": 0.0,
         "result_boundary_target_amortized_prior_fit_step": 0.0,
         "result_boundary_target_amortized_prior_fit_converged_steps": float(
             prior.fit_converged_steps
@@ -9308,6 +9363,9 @@ def run_variant(
                 if args.result_boundary_target_amortized_prior_fit_batch_size >= 0
                 else None
             ),
+            fit_batch_fraction=(
+                args.result_boundary_target_amortized_prior_fit_batch_fraction
+            ),
             fit_sampling_mode=(
                 args.result_boundary_target_amortized_prior_fit_sampling_mode
             ),
@@ -9504,6 +9562,9 @@ def run_variant(
         ),
         result_boundary_target_amortized_prior_fit_batch_size=(
             args.result_boundary_target_amortized_prior_fit_batch_size
+        ),
+        result_boundary_target_amortized_prior_fit_batch_fraction=(
+            args.result_boundary_target_amortized_prior_fit_batch_fraction
         ),
         result_boundary_target_amortized_prior_fit_sampling_mode=(
             args.result_boundary_target_amortized_prior_fit_sampling_mode
@@ -12141,6 +12202,9 @@ def run_variant(
     metrics["result_boundary_target_amortized_prior_fit_batch_size"] = (
         args.result_boundary_target_amortized_prior_fit_batch_size
     )
+    metrics["result_boundary_target_amortized_prior_fit_batch_fraction"] = (
+        args.result_boundary_target_amortized_prior_fit_batch_fraction
+    )
     metrics["result_boundary_target_amortized_prior_fit_sampling_mode"] = (
         args.result_boundary_target_amortized_prior_fit_sampling_mode
     )
@@ -13442,6 +13506,16 @@ def parse_args() -> argparse.Namespace:
             "Batch size for fitting the operand-conditioned prior from prompt "
             "memory entries. The default -1 reuses the replay batch size for "
             "backward compatibility; 0 fits on all current memory entries."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-fit-batch-fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "When positive, override the fixed amortized-prior fit batch size "
+            "with ceil(fraction * current fit-memory entries). 1.0 is "
+            "equivalent to full-memory fitting outside forced refresh."
         ),
     )
     parser.add_argument(
@@ -14898,6 +14972,15 @@ def main() -> None:
         )
     if not (
         0.0
+        <= args.result_boundary_target_amortized_prior_fit_batch_fraction
+        <= 1.0
+    ):
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-fit-batch-fraction "
+            "must be in [0, 1]"
+        )
+    if not (
+        0.0
         <= args.result_boundary_target_amortized_prior_fit_validation_fraction
         < 1.0
     ):
@@ -15707,6 +15790,14 @@ def main() -> None:
                         f"{args.result_boundary_target_amortized_prior_fit_batch_size}"
                     )
                 if (
+                    args.result_boundary_target_amortized_prior_fit_batch_fraction
+                    > 0
+                ):
+                    suffix_parts.append(
+                        "rbtpriorfitfrac"
+                        f"{args.result_boundary_target_amortized_prior_fit_batch_fraction:g}"
+                    )
+                if (
                     args.result_boundary_target_amortized_prior_fit_sampling_mode
                     != "random"
                 ):
@@ -16137,6 +16228,8 @@ def main() -> None:
         f"{args.result_boundary_target_amortized_prior_replay_batch_size} "
         "amortized_prior_fit_batch="
         f"{args.result_boundary_target_amortized_prior_fit_batch_size} "
+        "amortized_prior_fit_batch_fraction="
+        f"{args.result_boundary_target_amortized_prior_fit_batch_fraction} "
         "amortized_prior_fit_sampling_mode="
         f"{args.result_boundary_target_amortized_prior_fit_sampling_mode} "
         "amortized_prior_fit_validation_fraction="

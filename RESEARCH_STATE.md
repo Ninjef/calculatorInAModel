@@ -39,8 +39,7 @@ checkpoint selector.
 - From-scratch answer-loss-only discovery of calculator use.
 - A scalable method that avoids enumerating/scoring many calculator candidates
   during training.
-- A non-prescriptive method that lets the model decide how to use calculator
-  results without a teacher specifying the useful result/query.
+- A non-prescriptive method without teacher-specified useful results/queries.
 - Robust non-bottleneck discovery when the model can bypass the calculator.
 - A cheap proxy that reliably replaces actual 500/600-step additive handoff
   checks for source checkpoint selection.
@@ -134,9 +133,10 @@ Active directions:
   full-memory refresh updates after memory fill. Letting the existing
   validation stop end that refresh early cut prior updates to `1140` but missed
   heldout (`0.8167`). A dual train+validation guard preserved a fresh op29
-  source/handoff gate with `2570` updates; error-stratified coreset replay also
-  transferred but worsened update cost (`3251`), so bigger gains need a
-  different structured refresh/replay mechanism.
+  source/handoff gate with `2570` updates. Hard-error coreset and proportional
+  half-memory replay both transferred but still used `3251` updates; the
+  proportional run measured `1.705M` fit examples, a modest reduction versus
+  the `1.8M` lower bound for a 2500 full-memory refresh. Bigger gains need an update cap/freeze, stable distillation, or many-calculator accounting.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 clears op19/op29 staged gates but still scores candidates.

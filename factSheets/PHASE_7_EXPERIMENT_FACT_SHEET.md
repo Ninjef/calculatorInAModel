@@ -11438,3 +11438,98 @@ Interpretation:
 - Error-focused coreset replay appears to chase local mistakes without
   preserving global prior accuracy. Do not run error-stratified batch-size,
   refresh-window, or threshold ladders as novelty.
+
+## 2026-06-02 Op29 Proportional Half-Memory Refresh Gate
+
+Question: can explicit fit-example accounting plus proportional half-memory
+prior replay reduce op29 refresh cost while preserving source and trusted
+handoff?
+
+Implementation:
+
+- Added `--result-boundary-target-amortized-prior-fit-batch-fraction`.
+- When positive and not in forced full-refresh mode, the prior fit batch uses
+  `ceil(fraction * current fit-memory entries)`, sampled according to the
+  configured fit sampler.
+- Added cumulative prior cost metrics:
+  `result_boundary_target_amortized_prior_fit_examples`,
+  `result_boundary_target_amortized_prior_full_fit_examples`, and
+  `result_boundary_target_amortized_prior_fit_effective_batch_size`.
+
+Source run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_h128_fitfrac50_targetstrat_val20_evalonly_fullrefresh1500_dualstop_val90_train98_pat100_src5000/2026-06-02_141801_001856_model-c-op0-29-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-33b054986c/model-c-2digit-seed11
+```
+
+Setup:
+
+- Same op29 h128, four-hook shared-output, prompt-keyed online hard memory
+  recipe as the dual-stop source.
+- Full-refresh budget reduced from `2500` to `1500`.
+- Non-refresh fit mode `target_stratified`.
+- Proportional fit fraction `0.5`, effective full-memory batch `360`.
+- Eval-only validation `0.2`.
+- Dual stop guard: validation `>=0.9`, train prior `>=0.98`, patience `100`.
+
+Source results:
+
+- Overall exact/calc `894/900 = 0.9933`.
+- Train exact/calc `1.0000`.
+- Heldout exact/calc `172/180 = 0.9556`.
+- Prior train/validation at final curve row `0.9583`/`0.9635`.
+- Heldout controls: injection-zero `0.0222`, forced-zero `0.0000`,
+  forced-random `0.0056`.
+- Diagnostic exact/calc `0.9922`/`0.9922`.
+- Routed diagnostic hook calculator-result accuracies: hook0 `0.9730`,
+  hook1 `1.0000`, hook2 `1.0000`, hook3 `1.0000`.
+- Prior updates `3251`; the stop gate never fired.
+- Total prior fit examples `1,705,177`.
+- Full-memory fit examples `1,080,000`.
+- Effective non-refresh fit batch at full memory `360`.
+- Prompt memory entries `720/720`.
+
+Selected prior-fit curve:
+
+- Step `1500`: `1399` updates, `965,377` fit examples, `933,840` full-fit
+  examples, train/validation prior `0.9611`/`0.9562`, effective batch `720`.
+- Step `1700`: `1599` updates, `1,109,377` fit examples, `1,077,840`
+  full-fit examples, train/validation prior `0.9542`/`0.9562`, effective
+  batch `720`.
+- Step `2000`: `1751` updates, `1,165,177` fit examples, `1,080,000`
+  full-fit examples, train/validation prior `0.9792`/`0.9927`, effective
+  batch `360`.
+- Step `3000`: `2251` updates, `1,345,177` fit examples, train/validation
+  prior `0.9875`/`1.0000`, effective batch `360`.
+- Step `4000`: `2751` updates, `1,525,177` fit examples, train/validation
+  prior `0.9722`/`0.9781`, effective batch `360`.
+- Step `5000`: `3251` updates, `1,705,177` fit examples, train/validation
+  prior `0.9583`/`0.9635`, effective batch `360`, no stop.
+
+Trusted additive handoff:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_h128_fitfrac50_targetstrat_val20_evalonly_fullrefresh1500_dualstop_val90_train98_pat100_handoff600/2026-06-02_142244_295322_model-c-op0-29-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed11
+```
+
+Handoff results:
+
+- Final eval `900/900 = 1.0000`.
+- Diagnostic exact/calc `1.0000`/`0.9922`.
+- Final snapshot controls: injection-zero `0.0000`, forced-zero `0.0000`,
+  forced-random `0.0156`, oracle-at-eval `1.0000`.
+- Routed diagnostic hook calculator-result accuracies: hook0 `0.9730`,
+  hook1 `1.0000`, hook2 `1.0000`, hook3 `1.0000`.
+
+Interpretation:
+
+- Mixed-positive for the intended cost question.
+- The source and handoff gates survived, and explicit fit-example accounting
+  now makes prior-fit compute visible.
+- Example cost is below the `1,800,000` examples implied by `2500` full-memory
+  refresh updates alone, but only modestly; update count remained high
+  (`3251`), and the stop rule never fired.
+- Do not run proportional-fraction or refresh-window ladders as novelty. The
+  next cost attempt should add an explicit update cap/freeze after validated
+  proportional replay, stable coreset distillation, or many-calculator cost
+  accounting.

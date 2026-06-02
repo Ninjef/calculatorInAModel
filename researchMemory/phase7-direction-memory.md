@@ -350,7 +350,15 @@ Memory:
   prior convergence and raised updates to `3251`. Next work should reduce or
   structure the refresh cost rather than rerun full refresh, batch160, capacity,
   random batch, validation/train-requirement ladders, or error-focused coreset
-  ladders.
+  ladders. Proportional target-stratified half-memory replay after a shorter
+  `1500` refresh also preserved the op29 source/handoff gate (`0.9556`
+  heldout, handoff `1.0000`) and added explicit prior fit-example accounting:
+  `3251` updates, `1,705,177` fit examples, `1,080,000` full-fit examples,
+  final prior train/validation `0.9583`/`0.9635`, no stop. This is useful
+  accounting and a modest example-cost reduction versus a 2500 full-memory
+  refresh lower bound, not a solved cost mechanism. Do not run proportional
+  fraction/window ladders as novelty; add an explicit update cap/freeze, stable
+  coreset distillation, or many-calculator cost accounting.
 
 Representative evidence:
 
@@ -370,6 +378,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-full-refresh-stop-during-refresh-gate.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-dual-stop-refresh-cost-gate.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-error-stratified-coreset-refresh-gate.md`
+- `aiAgentWorkHistory/phase7/2026-06-02-op29-proportional-half-memory-refresh-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`

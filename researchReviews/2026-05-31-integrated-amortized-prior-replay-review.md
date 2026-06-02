@@ -360,3 +360,38 @@ Steering update: do not pursue error-focused coreset batch/window/threshold
 ladders. The next cost work should change the refresh structure itself:
 coverage-aware/proportional refresh with explicit caps, staged refresh plus
 stable coreset distillation, or many-calculator cost accounting.
+
+## Op29 Proportional Half-Memory Follow-Up
+
+Proportional half-memory replay is a source/handoff positive and a useful
+accounting patch, but not a large cost win.
+
+The implementation added two pieces:
+
+- `--result-boundary-target-amortized-prior-fit-batch-fraction`, which makes
+  non-refresh prior fits use `ceil(fraction * current fit-memory entries)`;
+- cumulative fit-example metrics, separating total prior fit examples from
+  full-memory fit examples.
+
+With a shorter `1500` full-memory refresh and then target-stratified
+half-memory fits (`0.5`, effective batch `360` on the full op29 memory), the
+source cleared the gate: overall `0.9933`, train `1.0000`, heldout `0.9556`,
+with low heldout controls (`0.0222` injection-zero, `0.0000` forced-zero,
+`0.0056` forced-random). The trusted 600-step frozen-policy additive handoff
+also cleared: final `900/900 = 1.0000`, diagnostic exact/calc
+`1.0000`/`0.9922`, final snapshot controls `0.0000` injection-zero,
+`0.0000` forced-zero, and `0.0156` forced-random.
+
+The cost story is mixed. The run used `3251` prior updates, exactly the same
+bad update count as the error-stratified run, and the stop rule never fired.
+The new accounting shows `1,705,177` total fit examples and `1,080,000`
+full-fit examples. That is below the `1,800,000` examples implied by `2500`
+full-memory refresh updates alone, but only modestly, and the final prior
+train/validation accuracies (`0.9583`/`0.9635`) are weaker than the dual-guard
+full-refresh source (`0.9972`/`1.0000`).
+
+Steering update: proportional replay is a cost-accounted mixed-positive, not
+a solved scalable recipe. Do not run proportional-fraction or refresh-window
+ladders as novelty. The next attempt should enforce an update cap/freeze after
+validated proportional replay, distill a stable coreset into the prior, or
+move to explicit many-calculator cost accounting/new credit assignment.

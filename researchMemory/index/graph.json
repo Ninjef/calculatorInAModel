@@ -951,6 +951,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/191-proportional-half-memory-replay-preserves-op29-source-handoff-and-exposes-example-cost-acc",
+      "target": "researchMemory/hypotheses/phase7/191-proportional-half-memory-replay-preserves-op29-source-handoff-and-exposes-example-cost-acc.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1113,6 +1118,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-02-op29-error-stratified-coreset-refresh-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-02-op29-proportional-half-memory-refresh-gate.md",
       "type": "supported_by"
     },
     {
@@ -3076,6 +3086,13 @@
       "source_path": "researchMemory/hypotheses/phase7/190-error-stratified-coreset-replay-preserves-op29-source-handoff-but-worsens-prior-update-cos.md",
       "status": "MIXED-NEGATIVE",
       "title": "Error-stratified coreset replay preserves op29 source/handoff but worsens prior-update cost."
+    },
+    {
+      "id": "doc/191-proportional-half-memory-replay-preserves-op29-source-handoff-and-exposes-example-cost-acc",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/191-proportional-half-memory-replay-preserves-op29-source-handoff-and-exposes-example-cost-acc.md",
+      "status": "MIXED-POSITIVE",
+      "title": "Proportional half-memory replay preserves op29 source/handoff and exposes example-cost accounting, but not update convergence."
     },
     {
       "id": "doc/phase7-direction-memory",
