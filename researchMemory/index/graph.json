@@ -966,6 +966,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/194-capped-numeric-prior-replay-improves-candidate-scoring-cost-but-still-scales-linearly-with",
+      "target": "researchMemory/hypotheses/phase7/194-capped-numeric-prior-replay-improves-candidate-scoring-cost-but-still-scales-linearly-with.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1143,6 +1148,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-02-op29-quality-gated-prior-cap-fresh-seed.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-02-capped-prior-many-calculator-accounting.md",
       "type": "supported_by"
     },
     {
@@ -3127,6 +3137,13 @@
       "source_path": "researchMemory/hypotheses/phase7/193-the-op29-quality-gated-prior-cap-replicates-trusted-handoff-on-a-fresh-seed-with-source-he.md",
       "status": "POSITIVE-WITH-CAVEAT",
       "title": "The op29 quality-gated prior cap replicates trusted handoff on a fresh seed, with source-heldout variance."
+    },
+    {
+      "id": "doc/194-capped-numeric-prior-replay-improves-candidate-scoring-cost-but-still-scales-linearly-with",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/194-capped-numeric-prior-replay-improves-candidate-scoring-cost-but-still-scales-linearly-with.md",
+      "status": "REVIEW",
+      "title": "Capped numeric-prior replay improves candidate-scoring cost but still scales linearly with independent calculators."
     },
     {
       "id": "doc/phase7-direction-memory",

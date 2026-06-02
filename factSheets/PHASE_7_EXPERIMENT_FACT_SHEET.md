@@ -11685,3 +11685,52 @@ Interpretation:
   answer-derived, candidate-scoring based, and staged/frozen-policy. Do not run
   more same-recipe seed or cap ladders as novelty; move to explicit
   many-calculator cost accounting or a less-prescriptive credit mechanism.
+
+## 2026-06-02 Capped Prior Many-Calculator Accounting
+
+Question: does the current capped-prior recipe satisfy the many-calculator
+scalability requirement?
+
+Code:
+
+- Added `scripts/analyze_prior_replay_scaling.py`.
+- Added `tests/test_prior_replay_scaling.py`.
+
+Command:
+
+```text
+python3 scripts/analyze_prior_replay_scaling.py --calculator-counts 1,4,16,64
+```
+
+Accounting assumptions:
+
+- Uses the original capped op29 source costs.
+- Operand range `0..29`, 20% heldout split, `720` prompt-memory entries per
+  calculator.
+- About `192` sparse candidate-scoring steps before prompt memory fills.
+- Batch size `64`, candidate count `24`.
+- Prior fit examples `1,254,817`.
+- Full-memory fit examples `1,080,000`.
+- Numeric h128 prior, `7,995` parameters per calculator.
+
+Results:
+
+| Calculators | Candidate evals | Prior fit examples | Full-fit examples | Prior params | Candidate + prior examples |
+| ---: | ---: | ---: | ---: | ---: | ---: |
+| `1` | `294,912` | `1,254,817` | `1,080,000` | `7,995` | `1,549,729` |
+| `4` | `1,179,648` | `5,019,268` | `4,320,000` | `31,980` | `6,198,916` |
+| `16` | `4,718,592` | `20,077,072` | `17,280,000` | `127,920` | `24,795,664` |
+| `64` | `18,874,368` | `80,308,288` | `69,120,000` | `511,680` | `99,182,656` |
+
+Interpretation:
+
+- Review result: `capped_numeric_prior_replay_improves_candidate_cost_but_still_scales_linearly`.
+- Compared with old op29 topk8+unique24 hard-assignment accounting
+  (`217,728,000` forced evals at 16 calculators), the capped-prior recipe is a
+  major candidate-scoring improvement.
+- It still fails the many-calculator scalability requirement because prompt
+  memory and prior fitting remain per-calculator and linear. At 16 calculators,
+  prior fitting dominates the accounting (`20.08M` prior examples versus
+  `4.72M` candidate evals).
+- Next work should break per-calculator target/prior scaling or replace
+  answer-derived candidate scoring, not tune cap values.

@@ -53,6 +53,12 @@ refresh/replay structure rather than tune the same error-focused coreset.
 Likewise, the fresh-seed capped-prior handoff replication is robustness
 evidence, not a new algorithm.
 
+The capped-prior many-calculator accounting is also not a fifteenth algorithm.
+It shows the current family is a stronger benchmark than repeated top-k
+assignment, but still not scalable enough: candidate scoring is bounded by
+memory fill, while per-calculator prompt memory and prior fitting remain linear
+and dominate the accounting.
+
 ## Steering
 
 - Treat future work as a new algorithm only if it changes how calculator
@@ -62,5 +68,6 @@ evidence, not a new algorithm.
 - The next high-leverage question is whether family 14 can be made cheaper and
   less prescriptive, or whether a new credit-assignment signal can bypass
   answer-derived candidate scoring entirely.
-- After the fresh-seed cap replication, prioritize explicit many-calculator
-  cost accounting or removal of candidate scoring over another cap/seed ladder.
+- After the fresh-seed cap replication and many-calculator accounting,
+  prioritize shared/global target-prior learning or removal of candidate
+  scoring over another cap/seed ladder.

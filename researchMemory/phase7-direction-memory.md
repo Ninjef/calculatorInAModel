@@ -364,8 +364,13 @@ Memory:
   while preserving source heldout `0.9611` and trusted handoff `1.0000` with
   low controls. A fresh-seed replication kept trusted handoff at `1.0000` with
   low controls and `1,260,852` fit examples, but source heldout dropped to
-  `0.9111`. Do not run cap-value or same-recipe seed ladders; shift to explicit
-  many-calculator cost accounting or replace answer-derived scoring.
+  `0.9111`. Many-calculator accounting for the capped recipe shows candidate
+  scoring is bounded by memory fill and far cheaper than repeated top-k
+  assignment, but prompt memory and prior fitting remain linear per independent
+  calculator: at 16 op29 calculators, `4.72M` candidate evals plus `20.08M`
+  prior fit examples; at 64, `99.18M` candidate+prior examples. Do not run
+  cap-value or same-recipe seed ladders; break per-calculator target/prior
+  scaling or replace answer-derived scoring.
 
 Representative evidence:
 
@@ -388,6 +393,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-proportional-half-memory-refresh-gate.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-quality-gated-prior-cap.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-quality-gated-prior-cap-fresh-seed.md`
+- `aiAgentWorkHistory/phase7/2026-06-02-capped-prior-many-calculator-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`

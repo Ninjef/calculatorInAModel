@@ -134,9 +134,11 @@ Active directions:
   half-memory replay both transferred but still used `3251` updates. A
   quality-gated `2000`-update cap is the op29 cost lead: original/fresh source
   heldout `0.9611`/`0.9111`, both trusted handoffs `1.0000`, and `1.255M-1.261M`
-  fit examples. Handoff replication is strong but heldout variance remains;
-  stress explicit many-calculator cost or replace answer-derived candidate
-  scoring, not cap/fraction/window ladders.
+  fit examples. Many-calculator accounting shows candidate scoring is much
+  cheaper than repeated top-k assignment, but per-calculator prompt memory and
+  prior fitting still scale linearly (`24.8M` candidate+prior examples at 16
+  op29 calculators). Break per-calculator target/prior scaling or replace
+  answer-derived candidate scoring, not cap/fraction/window ladders.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 clears op19/op29 staged gates but still scores candidates.
@@ -171,12 +173,9 @@ Active directions:
 
 ## Next 1-3 Experiments
 
-1. Reduce the cost of the op29 full-refresh positive without losing the heldout
-   source and trusted handoff gates: staged full refresh then coreset replay,
-   coverage-aware/proportional fitting, or a smarter stop/freeze transition.
-   Do not rerun op29 batch160, hidden-size bumps, random fit-batch ladders,
-   validation threshold/patience ladders, simple early full-refresh stopping,
-   or the same full-refresh pass as novelty.
+1. Break family 14's per-calculator target/prior scaling: shared/global prior,
+   shared target discovery, or a credit mechanism that removes prompt-memory
+   target tables and answer-derived candidate scoring.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Any further forced-margin, assignment-cost, or result-boundary transfer work
