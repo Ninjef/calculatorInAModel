@@ -11364,3 +11364,77 @@ Interpretation:
   mechanism should target larger cost reductions through staged refresh plus
   coreset replay, coverage-aware/proportional refresh, or explicit
   many-calculator cost accounting.
+
+## 2026-06-02 Op29 Error-Stratified Coreset Refresh Gate
+
+Question: can a shorter full-refresh window plus hard-error coreset replay
+preserve the op29 source/handoff gate while materially reducing prior updates?
+
+Implementation:
+
+- Added `error_stratified` as an amortized-prior fit sampling mode.
+- On non-full-fit prior updates, it computes current prior predictions over
+  prompt memory, selects currently misclassified entries target-stratified,
+  then fills the remaining fit batch target-stratified.
+- The goal was to replace part of the full-memory refresh with a focused
+  coreset replay, not to tune stop thresholds.
+
+Source run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_h128_errorstrat_fit160_val20_evalonly_fullrefresh1500_dualstop_val90_train98_pat100_src5000/2026-06-02_135902_100006_model-c-op0-29-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-8bc45ae128/model-c-2digit-seed11
+```
+
+Setup:
+
+- Same op29 h128, four-hook shared-output, prompt-keyed online hard memory
+  recipe as the dual-stop source.
+- Full-refresh budget reduced from `2500` to `1500`.
+- Fit mode `error_stratified`, fit batch `160`, eval-only validation `0.2`.
+- Dual stop guard: validation `>=0.9`, train prior `>=0.98`, patience `100`.
+
+Source results:
+
+- Overall exact/calc `893/900 = 0.9922`.
+- Train exact/calc `1.0000`.
+- Heldout exact/calc `172/180 = 0.9556`.
+- Prior train/heldout only `0.8806`/`0.8778`.
+- Heldout controls: injection-zero `0.0222`, forced-zero `0.0000`,
+  forced-random `0.0056`.
+- Prior updates `3251`; the stop gate never fired.
+- Forced-result evals `302,592`.
+- Prompt memory entries `720/720`.
+
+Curve notes:
+
+- Step `1500`: still in refresh, `1403` updates, train/validation prior
+  `0.9444`/`0.9781`.
+- Step `1700`: after refresh, prior dipped to `0.6153` train /
+  `0.6350` validation under error-focused coreset updates.
+- Step `2500`: prior recovered only to `0.8792` train / `0.8832` validation.
+- Step `5000`: final prior `0.8806` train / `0.8978` validation, no stop,
+  `3251` updates.
+
+Trusted additive handoff:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_h128_errorstrat_fit160_val20_evalonly_fullrefresh1500_dualstop_val90_train98_pat100_handoff600/2026-06-02_140337_366092_model-c-op0-29-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed11
+```
+
+Handoff results:
+
+- Final eval `900/900 = 1.0000`.
+- Diagnostic exact/calc `1.0000`/`0.9844`.
+- Final 128-sample controls: injection-zero `0.0078`, forced-zero `0.0000`,
+  forced-random `0.0391`, oracle-at-eval `1.0000`.
+- Routed diagnostic hook calculator-result accuracies: hook0 `0.9730`,
+  hook1 `0.9778`, hook2 `1.0000`, hook3 `1.0000`.
+
+Interpretation:
+
+- Mixed-negative for the intended cost question.
+- The source and handoff gates survived, but the prior fit did not converge and
+  update count increased beyond the full-refresh positives.
+- Error-focused coreset replay appears to chase local mistakes without
+  preserving global prior accuracy. Do not run error-stratified batch-size,
+  refresh-window, or threshold ladders as novelty.

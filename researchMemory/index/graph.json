@@ -946,6 +946,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/190-error-stratified-coreset-replay-preserves-op29-source-handoff-but-worsens-prior-update-cos",
+      "target": "researchMemory/hypotheses/phase7/190-error-stratified-coreset-replay-preserves-op29-source-handoff-but-worsens-prior-update-cos.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1103,6 +1108,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-02-op29-dual-stop-refresh-cost-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-02-op29-error-stratified-coreset-refresh-gate.md",
       "type": "supported_by"
     },
     {
@@ -3059,6 +3069,13 @@
       "source_path": "researchMemory/hypotheses/phase7/189-dual-train-validation-stopping-during-op29-full-refresh-preserves-source-and-handoff-with-.md",
       "status": "POSITIVE-WITH-CAVEAT",
       "title": "Dual train+validation stopping during op29 full refresh preserves source and handoff with a small update cut."
+    },
+    {
+      "id": "doc/190-error-stratified-coreset-replay-preserves-op29-source-handoff-but-worsens-prior-update-cos",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/190-error-stratified-coreset-replay-preserves-op29-source-handoff-but-worsens-prior-update-cos.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Error-stratified coreset replay preserves op29 source/handoff but worsens prior-update cost."
     },
     {
       "id": "doc/phase7-direction-memory",

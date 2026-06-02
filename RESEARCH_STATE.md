@@ -6,8 +6,7 @@ calculator inside its neural computation, in a scalable way that works both
 with a calculator bottleneck and when a pure-neuron path also exists.
 
 The ideal method is non-prescriptive: it lets the model discover useful
-calculator queries rather than telling it which query/result to request for
-each problem.
+calculator queries rather than giving per-prompt query/result targets.
 
 ## Current Bottom Line
 The architecture is viable, but the central learning problem is not solved.
@@ -92,8 +91,7 @@ Active directions:
   `0.0000`, learned calc `0.9922`). True-result forced-margin is not strictly
   required, but full enumeration and frozen transfer remain unsolved issues.
   Static approximations are paused: critics/proposals are costly or state-local,
-  soft/regret/sampled hard-best targets are weak, and simple online calibration
-  is partial. Online hard memory plus additive semantic distillation is the
+  soft/regret/sampled hard-best targets are weak, and simple online calibration is partial. Online hard memory plus additive semantic distillation is the
   sparse source lead: two single-hook op19 seeds reached `1.000` source/calc
   with capped forced evals (`76.8k-86.4k`). Handoff is source-geometry
   sensitive: one single-hook source cleared trusted handoff across two seeds; a
@@ -136,7 +134,9 @@ Active directions:
   full-memory refresh updates after memory fill. Letting the existing
   validation stop end that refresh early cut prior updates to `1140` but missed
   heldout (`0.8167`). A dual train+validation guard preserved a fresh op29
-  source/handoff gate (`0.9667` heldout, `1.0000` handoff) with `2570` updates; bigger gains need structured refresh/replay or coverage-aware fitting.
+  source/handoff gate with `2570` updates; error-stratified coreset replay also
+  transferred but worsened update cost (`3251`), so bigger gains need a
+  different structured refresh/replay mechanism.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 clears op19/op29 staged gates but still scores candidates.
@@ -194,7 +194,7 @@ Active directions:
   frozen from a prescriptive source.
 - A scalable approximation to hard improvement assignment that preserves the
   bottleneck source result while avoiding full result-class enumeration.
-- A new credit-assignment method that passes a local feasibility gate and then
+- A new credit-assignment method that passes a local feasibility gate and
   produces early Stage 1 lift above known failed baselines.
 - A source-training objective that improves downstream handoff behavior across
   fresh seeds, not just within already studied lineages.

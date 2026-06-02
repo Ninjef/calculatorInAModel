@@ -342,3 +342,21 @@ too optimistic, but it is not yet a major scalability win. Do not run
 train-requirement threshold/patience ladders. The next branch should target a
 larger cost change: staged refresh plus coreset replay, coverage-aware refresh,
 or explicit many-calculator cost accounting.
+
+## Op29 Error-Stratified Coreset Follow-Up
+
+Hard-error coreset replay is not the needed cost structure.
+
+The `error_stratified` fit mode prioritizes currently misclassified
+prompt-memory entries, then fills target-stratified. With a shorter `1500`
+full-refresh window, it preserved the high source and trusted handoff gates:
+source heldout exact/calc was `0.9556`, and the trusted 600-step additive
+handoff reached `900/900 = 1.0000` with low controls. But it failed the
+scalability purpose. The prior never met the dual stop gate, final prior
+train/heldout were only `0.8806`/`0.8778`, and prior updates rose to `3251`
+with `302,592` forced-result evals.
+
+Steering update: do not pursue error-focused coreset batch/window/threshold
+ladders. The next cost work should change the refresh structure itself:
+coverage-aware/proportional refresh with explicit caps, staged refresh plus
+stable coreset distillation, or many-calculator cost accounting.

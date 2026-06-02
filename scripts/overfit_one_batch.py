@@ -3566,7 +3566,7 @@ def init_result_boundary_amortized_prior(
     fit_every: int = 1,
     full_refresh_after_memory_full_updates: int = 0,
 ) -> ResultBoundaryAmortizedPrior:
-    if fit_sampling_mode not in {"random", "target_stratified"}:
+    if fit_sampling_mode not in {"random", "target_stratified", "error_stratified"}:
         raise ValueError("unknown amortized-prior fit sampling mode")
     if not 0.0 <= fit_validation_fraction < 1.0:
         raise ValueError("amortized-prior fit validation fraction must be in [0, 1)")
@@ -3618,10 +3618,26 @@ def target_stratified_prior_fit_indices(
     *,
     count: int,
     rng: random.Random,
+    candidate_indices: torch.Tensor | None = None,
+    excluded_indices: set[int] | None = None,
 ) -> torch.Tensor:
     groups: dict[int, list[int]] = {}
-    for index, target in enumerate(y.detach().cpu().tolist()):
+    if candidate_indices is None:
+        candidate_index_values = list(range(int(y.shape[0])))
+    else:
+        candidate_index_values = [
+            int(index) for index in candidate_indices.detach().cpu().tolist()
+        ]
+    if excluded_indices:
+        candidate_index_values = [
+            index for index in candidate_index_values if index not in excluded_indices
+        ]
+    y_values = y.detach().cpu().tolist()
+    for index in candidate_index_values:
+        target = y_values[index]
         groups.setdefault(int(target), []).append(index)
+    if not groups:
+        return torch.empty(0, dtype=torch.long, device=y.device)
     target_values = list(groups)
     rng.shuffle(target_values)
     selected: list[int] = []
@@ -3692,6 +3708,13 @@ def train_result_boundary_amortized_prior(
             "result_boundary_target_amortized_prior_full_refresh_remaining_updates": float(
                 prior.full_refresh_remaining_updates
             ),
+            "result_boundary_target_amortized_prior_fit_selected_count": 0.0,
+            "result_boundary_target_amortized_prior_fit_error_fraction": float(
+                "nan"
+            ),
+            "result_boundary_target_amortized_prior_fit_error_selected_fraction": float(
+                "nan"
+            ),
         }
     a_all, b_all, y_all = entry_batch
     entry_count = int(y_all.shape[0])
@@ -3716,6 +3739,13 @@ def train_result_boundary_amortized_prior(
             "result_boundary_target_amortized_prior_full_refresh_active": 0.0,
             "result_boundary_target_amortized_prior_full_refresh_remaining_updates": float(
                 prior.full_refresh_remaining_updates
+            ),
+            "result_boundary_target_amortized_prior_fit_selected_count": 0.0,
+            "result_boundary_target_amortized_prior_fit_error_fraction": float(
+                "nan"
+            ),
+            "result_boundary_target_amortized_prior_fit_error_selected_fraction": float(
+                "nan"
             ),
         }
     loss_value = float("nan")
@@ -3751,6 +3781,9 @@ def train_result_boundary_amortized_prior(
     if update:
         fit_step = 1.0
         for _ in range(prior.train_steps):
+            fit_selected_count = float(fit_entry_count)
+            fit_error_fraction = float("nan")
+            fit_error_selected_fraction = float("nan")
             if (
                 not force_full_fit
                 and prior.fit_batch_size > 0
@@ -3762,6 +3795,40 @@ def train_result_boundary_amortized_prior(
                         count=prior.fit_batch_size,
                         rng=rng,
                     )
+                elif prior.fit_sampling_mode == "error_stratified":
+                    with torch.no_grad():
+                        current_predictions = prior.model(
+                            a_fit_all, b_fit_all
+                        ).argmax(dim=-1)
+                    error_indices = torch.nonzero(
+                        current_predictions != y_fit_all,
+                        as_tuple=False,
+                    ).flatten()
+                    fit_error_fraction = float(
+                        error_indices.numel() / max(fit_entry_count, 1)
+                    )
+                    error_selected = target_stratified_prior_fit_indices(
+                        y_fit_all,
+                        count=min(prior.fit_batch_size, int(error_indices.numel())),
+                        rng=rng,
+                        candidate_indices=error_indices,
+                    )
+                    selected_set = {
+                        int(index) for index in error_selected.detach().cpu().tolist()
+                    }
+                    if int(error_selected.numel()) < prior.fit_batch_size:
+                        fill_indices = target_stratified_prior_fit_indices(
+                            y_fit_all,
+                            count=prior.fit_batch_size - int(error_selected.numel()),
+                            rng=rng,
+                            excluded_indices=selected_set,
+                        )
+                        indices = torch.cat([error_selected, fill_indices], dim=0)
+                    else:
+                        indices = error_selected
+                    fit_error_selected_fraction = float(
+                        error_selected.numel() / max(int(indices.numel()), 1)
+                    )
                 else:
                     indices = torch.tensor(
                         [
@@ -3771,6 +3838,7 @@ def train_result_boundary_amortized_prior(
                         dtype=torch.long,
                         device=a_fit_all.device,
                     )
+                fit_selected_count = float(indices.numel())
                 a = a_fit_all.index_select(0, indices)
                 b = b_fit_all.index_select(0, indices)
                 y = y_fit_all.index_select(0, indices)
@@ -3818,6 +3886,15 @@ def train_result_boundary_amortized_prior(
         "result_boundary_target_amortized_prior_full_refresh_remaining_updates": float(
             prior.full_refresh_remaining_updates
         ),
+        "result_boundary_target_amortized_prior_fit_selected_count": fit_selected_count
+        if update
+        else 0.0,
+        "result_boundary_target_amortized_prior_fit_error_fraction": fit_error_fraction
+        if update
+        else float("nan"),
+        "result_boundary_target_amortized_prior_fit_error_selected_fraction": (
+            fit_error_selected_fraction if update else float("nan")
+        ),
     }
 
 
@@ -3845,6 +3922,11 @@ def skipped_result_boundary_amortized_prior_metrics(
         "result_boundary_target_amortized_prior_full_refresh_active": 0.0,
         "result_boundary_target_amortized_prior_full_refresh_remaining_updates": float(
             prior.full_refresh_remaining_updates
+        ),
+        "result_boundary_target_amortized_prior_fit_selected_count": 0.0,
+        "result_boundary_target_amortized_prior_fit_error_fraction": float("nan"),
+        "result_boundary_target_amortized_prior_fit_error_selected_fraction": float(
+            "nan"
         ),
     }
 
@@ -13364,13 +13446,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--result-boundary-target-amortized-prior-fit-sampling-mode",
-        choices=["random", "target_stratified"],
+        choices=["random", "target_stratified", "error_stratified"],
         default="random",
         help=(
             "Sampling mode used when the amortized-prior fit batch is smaller "
             "than prompt memory. random preserves existing with-replacement "
             "sampling; target_stratified balances updates across discovered "
-            "target results."
+            "target results; error_stratified prioritizes currently "
+            "misclassified memory entries, then fills target-stratified."
         ),
     )
     parser.add_argument(

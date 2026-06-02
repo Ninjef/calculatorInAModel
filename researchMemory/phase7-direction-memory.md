@@ -345,9 +345,12 @@ Memory:
   train+validation stop guard preserved the op29 source/handoff gate on a fresh
   effective seed: source heldout `0.9667`, prior updates `2570`, forced evals
   `278,016`, and trusted handoff `1.0000`. The improvement over `2755` updates
-  is small, so next work should reduce or structure the refresh cost rather
-  than rerun full refresh, batch160, capacity, random batch, validation ladders,
-  train-requirement ladders, or early-stop-only variants.
+  is small. Error-stratified coreset replay with a shorter `1500` refresh
+  preserved source/handoff (`0.9556` heldout, handoff `1.0000`) but destabilized
+  prior convergence and raised updates to `3251`. Next work should reduce or
+  structure the refresh cost rather than rerun full refresh, batch160, capacity,
+  random batch, validation/train-requirement ladders, or error-focused coreset
+  ladders.
 
 Representative evidence:
 
@@ -366,6 +369,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-fresh-seed-validation.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-full-refresh-stop-during-refresh-gate.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-dual-stop-refresh-cost-gate.md`
+- `aiAgentWorkHistory/phase7/2026-06-02-op29-error-stratified-coreset-refresh-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`
