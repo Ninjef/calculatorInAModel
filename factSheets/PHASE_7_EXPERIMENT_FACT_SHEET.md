@@ -11280,3 +11280,87 @@ Interpretation:
 - Do not run validation threshold/patience ladders or same early-stop-only
   variants as novelty. Future cost-reduction needs stronger coverage-aware or
   staged refresh/replay dynamics.
+
+## 2026-06-02 Op29 Dual-Guard Refresh Stop Cost Gate
+
+Question: can full-refresh stopping require both validation quality and
+train-memory prior coverage, preserving the op29 source/handoff gate while
+cutting some refresh updates?
+
+Implementation:
+
+- Added
+  `--result-boundary-target-amortized-prior-stop-require-train-accuracy`.
+- When positive, a prior stop update counts only if the configured stop metric
+  passes and train-memory prior accuracy also passes the new requirement.
+- This is intended for eval-only validation stopping during refresh, where
+  validation alone proved over-optimistic.
+
+Source run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_h128_fit160_targetstrat_val20_evalonly_fullrefresh2500_dualstop_val90_train98_pat100_src5000/2026-06-02_134640_075802_model-c-op0-29-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-d4e7f05a3b/model-c-2digit-seed11
+```
+
+Setup:
+
+- Op29, four `left_operand_mod` routed hooks, shared output projection,
+  product decoder, `operand_spans` readout.
+- Prompt-keyed online hard memory, topk8+unique24 zero-improvement scoring,
+  memory freezes when full.
+- Numeric amortized prior h128, target-stratified fit batch `160`, eval-only
+  validation `0.2`, full-refresh budget `2500`.
+- Stop rule: validation accuracy `>=0.9`, train-memory prior accuracy
+  `>=0.98`, patience `100`.
+
+Source results:
+
+- Overall exact/calc `896/900 = 0.9956`.
+- Train exact/calc `1.0000`.
+- Heldout exact/calc `174/180 = 0.9667`.
+- Prior train/heldout `0.9972`/`0.9667`.
+- Heldout controls: injection-zero `0.0222`, forced-zero `0.0000`,
+  forced-random `0.0056`.
+- Prior updates `2570` versus `2755` in the previous full-refresh positive.
+- Forced-result evals `278,016`.
+- Prompt memory entries `720/720`.
+
+Refresh/stop curve:
+
+- Step `1500`: `1411` updates, train/validation prior `0.9583`/`0.9708`,
+  train requirement not met.
+- Step `1900`: `1811` updates, train/validation prior `0.9764`/`0.9854`,
+  train requirement not met.
+- Step `2100`: `2011` updates, train/validation prior `0.9958`/`1.0000`,
+  train requirement met, converged steps `14`.
+- Step `2500`: `2411` updates, train/validation prior `0.9861`/`1.0000`,
+  converged steps `28`.
+- Step `2700`: stopped, `2570` updates, train/validation prior
+  `0.9972`/`1.0000`, converged steps `100`.
+
+Trusted additive handoff:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_h128_fit160_targetstrat_val20_evalonly_fullrefresh2500_dualstop_val90_train98_pat100_handoff600/2026-06-02_135116_516188_model-c-op0-29-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed11
+```
+
+Handoff results:
+
+- Final eval `900/900 = 1.0000`.
+- Diagnostic exact/calc `1.0000`/`0.9844`.
+- Final 128-sample controls: injection-zero `0.0000`, forced-zero `0.0078`,
+  forced-random `0.0234`, oracle-at-eval `1.0000`.
+- Routed diagnostic hook calculator-result accuracies: hook0 `0.9730`,
+  hook1 `1.0000`, hook2 `1.0000`, hook3 `0.9412`.
+
+Interpretation:
+
+- Positive-with-caveat. The dual guard avoids the validation-only early-stop
+  failure and preserves source plus trusted non-bottleneck handoff.
+- Cost improvement is small: `2570` prior updates versus `2755` in the prior
+  positive. This is a better stop/freeze transition, not a complete
+  scalability answer.
+- Do not run train-requirement threshold/patience ladders. The next useful
+  mechanism should target larger cost reductions through staged refresh plus
+  coreset replay, coverage-aware/proportional refresh, or explicit
+  many-calculator cost accounting.

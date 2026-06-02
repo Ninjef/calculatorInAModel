@@ -941,6 +941,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/189-dual-train-validation-stopping-during-op29-full-refresh-preserves-source-and-handoff-with",
+      "target": "researchMemory/hypotheses/phase7/189-dual-train-validation-stopping-during-op29-full-refresh-preserves-source-and-handoff-with-.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1093,6 +1098,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-02-op29-full-refresh-stop-during-refresh-gate.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-02-op29-dual-stop-refresh-cost-gate.md",
       "type": "supported_by"
     },
     {
@@ -3042,6 +3052,13 @@
       "source_path": "researchMemory/hypotheses/phase7/188-simple-validation-stop-during-op29-full-refresh-cuts-prior-updates-but-misses-the-heldout-.md",
       "status": "MIXED-NEGATIVE",
       "title": "Simple validation-stop during op29 full refresh cuts prior updates but misses the heldout source gate."
+    },
+    {
+      "id": "doc/189-dual-train-validation-stopping-during-op29-full-refresh-preserves-source-and-handoff-with",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/189-dual-train-validation-stopping-during-op29-full-refresh-preserves-source-and-handoff-with-.md",
+      "status": "POSITIVE-WITH-CAVEAT",
+      "title": "Dual train+validation stopping during op29 full refresh preserves source and handoff with a small update cut."
     },
     {
       "id": "doc/phase7-direction-memory",

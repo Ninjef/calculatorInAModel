@@ -341,10 +341,13 @@ Memory:
   forced-random). This confirms online prior fit dynamics were the op29
   blocker, but the recipe is still costly. Simple validation-stop during full
   refresh is too aggressive: it cut prior updates to `1140`, but heldout
-  source exact/calc fell to `0.8167`, so no handoff was run. Next work should
-  reduce or structure the refresh cost rather than rerun full refresh,
-  batch160, capacity, random batch, validation ladders, or early-stop-only
-  variants.
+  source exact/calc fell to `0.8167`, so no handoff was run. A dual
+  train+validation stop guard preserved the op29 source/handoff gate on a fresh
+  effective seed: source heldout `0.9667`, prior updates `2570`, forced evals
+  `278,016`, and trusted handoff `1.0000`. The improvement over `2755` updates
+  is small, so next work should reduce or structure the refresh cost rather
+  than rerun full refresh, batch160, capacity, random batch, validation ladders,
+  train-requirement ladders, or early-stop-only variants.
 
 Representative evidence:
 
@@ -362,6 +365,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-range-validation.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-fresh-seed-validation.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-full-refresh-stop-during-refresh-gate.md`
+- `aiAgentWorkHistory/phase7/2026-06-02-op29-dual-stop-refresh-cost-gate.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`

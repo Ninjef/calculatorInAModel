@@ -135,7 +135,8 @@ Active directions:
   for fit dynamics, but not yet the scalable recipe: it adds `2500`
   full-memory refresh updates after memory fill. Letting the existing
   validation stop end that refresh early cut prior updates to `1140` but missed
-  heldout (`0.8167`), so simple early-stop ladders are not enough.
+  heldout (`0.8167`). A dual train+validation guard preserved a fresh op29
+  source/handoff gate (`0.9667` heldout, `1.0000` handoff) with `2570` updates; bigger gains need structured refresh/replay or coverage-aware fitting.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 clears op19/op29 staged gates but still scores candidates.

@@ -323,3 +323,22 @@ variants. The next cost-reduction attempt needs a stronger transition that
 keeps coverage: for example staged refresh followed by coreset replay, dual
 train+validation/high-confidence stopping, or coverage-aware/proportional
 refresh with explicit source/handoff and cost gates.
+
+## Op29 Dual-Guard Refresh Stop Follow-Up
+
+Requiring train-memory prior coverage in addition to validation avoids the
+simple early-stop failure, but the update saving is modest.
+
+The new stop guard requires train prior accuracy before validation-based
+stopping can end the full-refresh window. With validation `>=0.9`, train
+requirement `>=0.98`, and patience `100`, the op29 h128 source reached
+`0.9956` overall, `1.0000` train, `0.9667` heldout, and prior train/heldout
+`0.9972`/`0.9667`, with low heldout controls. It stopped at `2570` prior
+updates, compared with `2755` in the earlier full-refresh positive. The trusted
+600-step additive handoff reached `900/900 = 1.0000` with low controls.
+
+Steering update: this validates the diagnosis that validation-only stop was
+too optimistic, but it is not yet a major scalability win. Do not run
+train-requirement threshold/patience ladders. The next branch should target a
+larger cost change: staged refresh plus coreset replay, coverage-aware refresh,
+or explicit many-calculator cost accounting.
