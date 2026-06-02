@@ -376,13 +376,18 @@ Memory:
   train routes perfectly but got `0.0000` on heldout route 0. This supports a
   shared/global numeric prior mechanism for homogeneous calculators, but needs
   an actual source run that skips or reduces target discovery on some routes and
-  then passes trusted handoff. The route-exclusion training switch now exists:
+  then passes trusted handoff. The route-exclusion training switch is now wired
+  into the prompt-keyed branch after a bug fix:
   `--result-boundary-target-memory-update-exclude-routes` skips prompt-memory
   target discovery on selected routed hook ids, computes memory fullness only
   over score-eligible routes, and leaves global train/heldout prior replay
-  available to train the excluded routes. This is enabling tooling, not a
-  source-training result; the next gate should use it with shared numeric-prior
-  replay and trusted frozen-policy additive handoff.
+  available to train the excluded routes. The pre-fix op9 preflight is invalid
+  evidence. The corrected op9 800-step preflight missed badly (`0.510` final,
+  heldout `0.050`, excluded route 1 calc `0.0385`, prior heldout `0.050`), so
+  no handoff was run. This is enabling tooling plus a cheap negative preflight,
+  not a completed shared-prior source result; the next gate should either spend
+  the full op19 source budget with strong numeric-prior dynamics or change to a
+  more explicit shared/global prior objective.
 
 Representative evidence:
 
@@ -408,6 +413,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-06-02-capped-prior-many-calculator-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-route-heldout-shared-prior-diagnostic.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-route-excluded-target-discovery-tooling.md`
+- `aiAgentWorkHistory/phase7/2026-06-02-route-excluded-shared-prior-preflight.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`

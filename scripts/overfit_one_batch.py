@@ -10810,9 +10810,6 @@ def run_variant(
                     freeze_when_full=(
                         args.result_boundary_target_online_memory_freeze_when_full
                     ),
-                    memory_update_exclude_routes=(
-                        result_boundary_memory_update_exclude_routes
-                    ),
                 )
             elif result_boundary_prompt_hard_memory is not None:
                 (
@@ -10829,6 +10826,9 @@ def run_variant(
                     policy_topk_count=args.result_boundary_target_policy_topk_count,
                     freeze_when_full=(
                         args.result_boundary_target_online_memory_freeze_when_full
+                    ),
+                    memory_update_exclude_routes=(
+                        result_boundary_memory_update_exclude_routes
                     ),
                 )
             else:

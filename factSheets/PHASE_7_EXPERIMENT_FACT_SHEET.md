@@ -11807,3 +11807,67 @@ Interpretation:
   to run a routed source with one or more excluded routes and require the shared
   numeric prior to train those routes through replay, followed by trusted
   frozen-policy additive handoff.
+
+Correction:
+
+- A follow-up audit found that the initial route-exclusion commit passed
+  `memory_update_exclude_routes` to the fixed-batch online-memory branch rather
+  than the prompt-keyed branch used by the shared-prior source recipe.
+- The original smoke remains useful for config/expected-count plumbing, but not
+  as evidence that prompt-keyed training excluded routed updates.
+
+## 2026-06-02 Route-Excluded Shared-Prior Preflight
+
+Purpose: verify the corrected prompt-keyed route-exclusion training path and
+triage whether a cheap op9 source can stand in for the full shared-prior gate.
+
+Implementation/fix:
+
+- Moved `memory_update_exclude_routes` from
+  `result_boundary_online_hard_memory_loss(...)` to
+  `result_boundary_prompt_hard_memory_loss(...)` in the training loop.
+- Added a regression test that checks the training-loop call-site wiring.
+
+Verification:
+
+- Focused regression passed:
+  `python3 -m pytest tests/test_model.py -k "prompt_keyed_online_hard_memory or streaming_heldout_split or amortized_prior"`
+  -> `4 passed, 151 deselected`.
+- `python3 -m py_compile scripts/overfit_one_batch.py` passed.
+- A two-step CLI smoke showed the actual training loop reporting
+  score-eligible/update-excluded fractions as expected.
+
+Invalid preflight:
+
+- `runs/route_excluded_shared_prior_preflight_op9_steps800` reached final
+  exact `0.470`, train `0.55`, heldout `0.20`, with memory entries `58` versus
+  expected `55`, but it was run before the prompt-keyed plumbing fix and should
+  not be used as shared-prior evidence.
+
+Fixed preflight:
+
+```text
+runs/route_excluded_shared_prior_preflight_op9_steps800_fixed/2026-06-02_171114_412669_model-c-op0-9-fullgrid-streamb32-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts16-rbtuniq-rbttopk8-rbt-bac9a99900/model-c-2digit-seed9
+```
+
+Results:
+
+| Metric | Value |
+| --- | ---: |
+| Final exact / calculator-result accuracy | `0.510` |
+| Train prompt exact / calculator-result accuracy | `0.575` |
+| Heldout prompt exact / calculator-result accuracy | `0.050` |
+| Prompt-memory entries / expected | `55 / 55` |
+| Forced-result evals | `7,232` |
+| Prior updates | `400` |
+| Prior train accuracy | `0.2909` |
+| Prior heldout accuracy | `0.0500` |
+| Excluded route/hook 1 overall calc | `0.0385` |
+
+Interpretation:
+
+- Mixed-negative preflight. The route-exclusion training path is now wired, but
+  this cheap op9 source missed badly and no trusted handoff was run.
+- Do not count this as a full shared-prior algorithm failure. The next valid
+  gate is either the full op19 route-excluded source using stronger known
+  numeric-prior dynamics, or a more explicitly shared/global prior objective.

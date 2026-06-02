@@ -976,8 +976,8 @@
       "type": "defined_in"
     },
     {
-      "source": "doc/196-route-excluded-target-discovery-tooling-enables-the-shared-prior-source-gate",
-      "target": "researchMemory/hypotheses/phase7/196-route-excluded-target-discovery-tooling-enables-the-shared-prior-source-gate.md",
+      "source": "doc/196-route-excluded-prompt-memory-training-is-wired-but-the-op9-shared-prior-preflight-misses-t",
+      "target": "researchMemory/hypotheses/phase7/196-route-excluded-prompt-memory-training-is-wired-but-the-op9-shared-prior-preflight-misses-t.md",
       "type": "defined_in"
     },
     {
@@ -1173,6 +1173,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-02-route-excluded-target-discovery-tooling.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-02-route-excluded-shared-prior-preflight.md",
       "type": "supported_by"
     },
     {
@@ -3173,11 +3178,11 @@
       "title": "Numeric priors can share target structure across routed calculators in a route-heldout diagnostic."
     },
     {
-      "id": "doc/196-route-excluded-target-discovery-tooling-enables-the-shared-prior-source-gate",
+      "id": "doc/196-route-excluded-prompt-memory-training-is-wired-but-the-op9-shared-prior-preflight-misses-t",
       "kind": "hypothesis_memory",
-      "source_path": "researchMemory/hypotheses/phase7/196-route-excluded-target-discovery-tooling-enables-the-shared-prior-source-gate.md",
-      "status": "TOOLING",
-      "title": "Route-excluded target discovery tooling enables the shared-prior source gate."
+      "source_path": "researchMemory/hypotheses/phase7/196-route-excluded-prompt-memory-training-is-wired-but-the-op9-shared-prior-preflight-misses-t.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Route-excluded prompt-memory training is wired, but the op9 shared-prior preflight misses the source gate."
     },
     {
       "id": "doc/phase7-direction-memory",

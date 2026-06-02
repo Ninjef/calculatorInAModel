@@ -2703,6 +2703,22 @@ def test_prompt_keyed_online_hard_memory_can_exclude_routed_updates(
     assert frozen_metrics["result_boundary_target_forced_eval_count"] == 0
 
 
+def test_training_loop_threads_route_exclusion_to_prompt_memory_only() -> None:
+    source = Path("scripts/overfit_one_batch.py").read_text()
+    fixed_memory_branch = source.split(
+        "elif result_boundary_online_hard_memory is not None:", 1
+    )[1].split("elif result_boundary_prompt_hard_memory is not None:", 1)[0]
+    prompt_memory_branch = source.split(
+        "elif result_boundary_prompt_hard_memory is not None:", 1
+    )[1].split("else:", 1)[0]
+
+    assert "result_boundary_online_hard_memory_loss(" in fixed_memory_branch
+    assert "memory_update_exclude_routes" not in fixed_memory_branch
+    assert "result_boundary_prompt_hard_memory_loss(" in prompt_memory_branch
+    assert "memory_update_exclude_routes" in prompt_memory_branch
+    assert "result_boundary_memory_update_exclude_routes" in prompt_memory_branch
+
+
 def test_streaming_heldout_split_samples_only_train_prompts() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location(

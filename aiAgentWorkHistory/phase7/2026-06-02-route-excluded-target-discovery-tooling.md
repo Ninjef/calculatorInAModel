@@ -24,6 +24,15 @@ routed calculator hooks?
 
 ## Verification
 
+Correction from follow-up closeout: the initial commit wired
+`memory_update_exclude_routes` into the fixed-batch online-memory branch rather
+than the prompt-keyed online-memory branch used by the shared-prior source
+recipe. The prompt-keyed route-exclusion claim below should be read as tooling
+intent until the follow-up fix and smoke in
+`aiAgentWorkHistory/phase7/2026-06-02-route-excluded-shared-prior-preflight.md`.
+The original smoke only proved config/expected-count plumbing, not the
+training-loop branch used by the intended source gate.
+
 Focused regression:
 
 ```bash
