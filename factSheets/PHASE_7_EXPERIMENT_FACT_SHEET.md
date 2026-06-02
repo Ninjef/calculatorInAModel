@@ -10790,3 +10790,238 @@ Interpretation:
 - Do not run random fit-batch-size ladders as novelty. The next useful coreset
   test needs structured/coverage-aware sampling or a validation-aware stopping
   signal.
+
+## 2026-06-01 Target-Stratified Prior Fit Gate
+
+Question: can structured half-memory prior fit batches preserve the integrated
+numeric-prior heldout source and trusted handoff gates after random half-memory
+failed?
+
+Code:
+
+- Added `--result-boundary-target-amortized-prior-fit-sampling-mode`.
+- Modes are `random` and `target_stratified`.
+- `target_stratified` balances a small prior-fit batch across discovered target
+  result classes.
+
+Source run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fit160_targetstrat_every2_stop1pat100_src5000/2026-06-01_094407_472913_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-2e08204a5e/model-c-2digit-seed11
+```
+
+Key changed arg:
+
+```text
+--result-boundary-target-amortized-prior-fit-sampling-mode target_stratified
+```
+
+Results:
+
+- Overall exact/calc `396/400 = 0.9900`.
+- Train exact/calc `319/320 = 0.996875`.
+- Heldout exact/calc `75/80 = 0.9375`.
+- Heldout controls: injection-zero `0.0125`, forced-zero `0.0000`,
+  forced-random `0.0000`.
+- Prior train/heldout accuracy `0.965625` / `0.9000`.
+- Prior updates `2501`; stop rule did not activate.
+- Forced-result evals `67,584`.
+
+Trusted additive handoff:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fit160_targetstrat_every2_stop1pat100_handoff600/2026-06-01_131137_211268_model-c-op0-19-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed11
+```
+
+Results:
+
+- Final eval `399/400 = 0.9975`.
+- Final 128-sample counterfactuals from metrics: injection-zero `0.0000`,
+  forced-zero `0.0546875`, forced-random `0.0390625`.
+- Diagnostic exact/calc `127/128 = 0.9921875` / `1.0000`.
+- All four routed hooks had calculator-result accuracy `1.0000`.
+
+Interpretation:
+
+- Target-stratified half-memory fitting is a positive structured coreset result.
+  It reverses the random-half failure, improves heldout source accuracy over
+  the full-memory benchmark on this seed, and transfers causally in the trusted
+  non-bottleneck handoff.
+- It does not yet reduce prior updates below every-2 because convergence
+  stopping never fired. Next work should combine target-stratified fitting with
+  a convergence/validation stop or stress it on a fresh seed/range axis.
+
+## 2026-06-01 Target-Stratified Validation-Stop Gate
+
+Question: can validation-aware stopping reduce target-stratified amortized
+prior fitting below `2501` updates while preserving the heldout source gate?
+
+Code:
+
+- Added `--result-boundary-target-amortized-prior-fit-validation-fraction`.
+- Added `--result-boundary-target-amortized-prior-stop-metric` with
+  `train_accuracy` and `validation_accuracy`.
+- The validation split is a deterministic prompt-memory mask. With nonzero
+  validation fraction, the prior fits only the non-validation memory entries
+  and reports validation accuracy on the held-out memory entries.
+
+Smoke:
+
+```text
+runs/smoke_target_stratified_prior_fit_validation_stop/2026-06-01_132615_812985_model-c-op0-19-fullgrid-streamb8-heldout0.2-gumbel_concrete_interface-result_space-inlr0.003-uplr0.003-rbt1-zero_improvement-rbtt1-rbtchunk8-rbts4-rbtuniq-rbttopk2-rbton-e7b4dd34ff/model-c-2digit-seed11
+```
+
+Source run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fit160_targetstrat_val20_stopval90pat100_src5000/2026-06-01_132747_335760_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-91ccc48399/model-c-2digit-seed11
+```
+
+Key args:
+
+```text
+--result-boundary-target-amortized-prior-fit-sampling-mode target_stratified
+--result-boundary-target-amortized-prior-fit-batch-size 160
+--result-boundary-target-amortized-prior-fit-validation-fraction 0.2
+--result-boundary-target-amortized-prior-stop-metric validation_accuracy
+--result-boundary-target-amortized-prior-stop-train-accuracy 0.9
+--result-boundary-target-amortized-prior-stop-patience 100
+```
+
+Results:
+
+- Overall exact/calc `389/400 = 0.9725`.
+- Train exact/calc `317/320 = 0.990625`.
+- Heldout exact/calc `69/80 = 0.8625`.
+- Train prior accuracy `0.98125`.
+- Heldout prior accuracy `0.8625`.
+- Prior updates `2359`.
+- Forced-result evals `53,760`.
+- Heldout controls: injection-zero `0.0125`, forced-zero `0.0000`,
+  forced-random `0.0000`.
+- The stop fired by step `4750` after validation accuracy `0.9333333` had
+  remained above the threshold for `100` fit steps.
+
+Interpretation:
+
+- This is a negative/partial cost-reduction result. It saved only `142` prior
+  updates versus target-stratified every-2 (`2359` vs `2501`) and dropped
+  heldout from `0.9375` to `0.8625`.
+- Holding out `20%` of prompt-memory entries from prior fitting appears to
+  weaken the numeric prior/replay path enough that validation accuracy over
+  memory entries is not a reliable source gate.
+- No trusted additive handoff was run because the source missed the heldout
+  gate.
+- Do not run validation-heldout threshold/patience ladders as novelty. If a
+  validation stop is revisited, use eval-only validation while fitting all
+  entries, or a rolling/full-fit target-stratified stop.
+
+## 2026-06-01 Target-Stratified Eval-Only Validation-Stop Gate
+
+Question: can validation stopping work if validation entries are not removed
+from prior fitting?
+
+Code:
+
+- Added `--result-boundary-target-amortized-prior-fit-validation-mode`.
+- `holdout` preserves the prior validation behavior.
+- `eval_only` keeps all prompt-memory entries in the prior-fit pool and uses
+  the deterministic validation split only for metrics/stopping.
+
+Smoke:
+
+```text
+runs/smoke_target_stratified_prior_fit_eval_only_validation_stop/2026-06-01_163224_944795_model-c-op0-19-fullgrid-streamb8-heldout0.2-gumbel_concrete_interface-result_space-inlr0.003-uplr0.003-rbt1-zero_improvement-rbtt1-rbtchunk8-rbts4-rbtuniq-rbttopk2-rbton-169e29005b/model-c-2digit-seed13
+```
+
+Fresh-seed source run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fit160_targetstrat_val20_evalonly_stopval90pat100_src5000/2026-06-01_165015_552283_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-4d1509f598/model-c-2digit-seed13
+```
+
+Key changed arg:
+
+```text
+--result-boundary-target-amortized-prior-fit-validation-mode eval_only
+```
+
+Source results:
+
+- Overall exact/calc `393/400 = 0.9825`.
+- Train exact/calc `318/320 = 0.99375`.
+- Heldout exact/calc `76/80 = 0.9500`.
+- Train prior accuracy `0.978125`.
+- Heldout prior accuracy `0.9500`.
+- Prior updates `1613`.
+- Fit stopped at step `3250` with validation accuracy `0.9821429` and
+  `100` converged fit steps.
+- Forced-result evals `124,416`.
+- Heldout controls: injection-zero `0.0375`, forced-zero `0.0125`,
+  forced-random `0.0125`.
+- Prompt memory filled at step `100`.
+
+Fresh-seed trusted additive handoff:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fit160_targetstrat_val20_evalonly_stopval90pat100_handoff600/2026-06-01_210232_382220_model-c-op0-19-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed13
+```
+
+Handoff results:
+
+- Final eval `400/400 = 1.0000`.
+- Final 128-sample controls: injection-zero `0.0078125`, forced-zero
+  `0.0390625`, forced-random `0.015625`.
+- Diagnostic exact/calc `1.0000` / `0.953125`.
+- Routed hook calculator-result accuracies: hook0 `0.9756`, hook1 `0.8649`,
+  hook2 `1.0000`, hook3 `1.0000`.
+
+Same-seed isolation source:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fit160_targetstrat_val20_evalonly_stopval90pat100_seed11_src5000/2026-06-01_211825_903000_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-4d1509f598/model-c-2digit-seed11
+```
+
+Same-seed source results:
+
+- Overall exact/calc `389/400 = 0.9725`.
+- Train exact/calc `315/320 = 0.984375`.
+- Heldout exact/calc `73/80 = 0.9125`.
+- Train prior accuracy `0.9625`.
+- Heldout prior accuracy `0.9125`.
+- Prior updates `1784`.
+- Fit stopped at step `3600` with validation accuracy `0.9833333`.
+- Forced-result evals `89,088`.
+- Heldout controls: injection-zero `0.0125`, forced-zero `0.0000`,
+  forced-random `0.0000`.
+- Prompt memory filled at step `100`.
+
+Same-seed trusted additive handoff:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fit160_targetstrat_val20_evalonly_stopval90pat100_seed11_handoff600/2026-06-02_083125_007456_model-c-op0-19-fullgrid-hooks4-routeleft_operand_mod-adec-product/model-c-2digit-seed11
+```
+
+Same-seed handoff results:
+
+- Final eval `400/400 = 1.0000`.
+- Final 128-sample controls: injection-zero `0.0000`, forced-zero
+  `0.0703125`, forced-random `0.046875`.
+- Diagnostic exact/calc `1.0000` / `0.9453125`.
+- Routed hook calculator-result accuracies: hook0 `0.9143`, hook1 `0.9412`,
+  hook2 `0.9333`, hook3 `1.0000`.
+
+Interpretation:
+
+- Eval-only validation stopping is a positive cost-reduction result for prior
+  fitting. It cuts prior updates below the sustained full-memory benchmark on
+  both tested effective seeds (`1613`/`1784` vs `1889`) while clearing trusted
+  non-bottleneck handoff.
+- This distinguishes the failure mode of the prior validation-heldout run:
+  removing memory entries from the fit hurt the prior; validation itself can
+  be a useful stop signal.
+- Caveat: source quality and forced-result evals are seed-sensitive. Same-seed
+  heldout matched the sustained full-memory benchmark (`0.9125`) but did not
+  beat the target-stratified source (`0.9375`), and memory filled at step `100`
+  rather than step `50`, increasing forced evals. Next work should stress a
+  larger range and diagnose memory-fill behavior before promoting it.

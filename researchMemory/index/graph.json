@@ -906,6 +906,21 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/182-target-stratified-half-memory-prior-fitting-preserves-the-integrated-numeric-prior-source",
+      "target": "researchMemory/hypotheses/phase7/182-target-stratified-half-memory-prior-fitting-preserves-the-integrated-numeric-prior-source-.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/183-validation-heldout-target-stratified-prior-stopping-reduces-updates-but-misses-the-heldout",
+      "target": "researchMemory/hypotheses/phase7/183-validation-heldout-target-stratified-prior-stopping-reduces-updates-but-misses-the-heldout.md",
+      "type": "defined_in"
+    },
+    {
+      "source": "doc/184-eval-only-validation-stopping-preserves-target-stratified-handoff-quality-while-reducing-p",
+      "target": "researchMemory/hypotheses/phase7/184-eval-only-validation-stopping-preserves-target-stratified-handoff-quality-while-reducing-p.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -2938,6 +2953,27 @@
       "source_path": "researchMemory/hypotheses/phase7/181-random-half-memory-prior-fit-batches-do-not-preserve-the-integrated-numeric-prior-heldout-.md",
       "status": "MIXED-NEGATIVE",
       "title": "Random half-memory prior fit batches do not preserve the integrated numeric-prior heldout source gate."
+    },
+    {
+      "id": "doc/182-target-stratified-half-memory-prior-fitting-preserves-the-integrated-numeric-prior-source",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/182-target-stratified-half-memory-prior-fitting-preserves-the-integrated-numeric-prior-source-.md",
+      "status": "PARTIAL",
+      "title": "Target-stratified half-memory prior fitting preserves the integrated numeric-prior source and handoff gates."
+    },
+    {
+      "id": "doc/183-validation-heldout-target-stratified-prior-stopping-reduces-updates-but-misses-the-heldout",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/183-validation-heldout-target-stratified-prior-stopping-reduces-updates-but-misses-the-heldout.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Validation-heldout target-stratified prior stopping reduces updates but misses the heldout source gate."
+    },
+    {
+      "id": "doc/184-eval-only-validation-stopping-preserves-target-stratified-handoff-quality-while-reducing-p",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/184-eval-only-validation-stopping-preserves-target-stratified-handoff-quality-while-reducing-p.md",
+      "status": "POSITIVE-WITH-CAVEAT",
+      "title": "Eval-only validation stopping preserves target-stratified handoff quality while reducing prior updates."
     },
     {
       "id": "doc/phase7-direction-memory",

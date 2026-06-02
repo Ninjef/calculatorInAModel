@@ -140,7 +140,11 @@ class TrainConfig:
     result_boundary_target_amortized_prior_min_entries: int
     result_boundary_target_amortized_prior_replay_batch_size: int
     result_boundary_target_amortized_prior_fit_batch_size: int
+    result_boundary_target_amortized_prior_fit_sampling_mode: str
+    result_boundary_target_amortized_prior_fit_validation_fraction: float
+    result_boundary_target_amortized_prior_fit_validation_mode: str
     result_boundary_target_amortized_prior_fit_every: int
+    result_boundary_target_amortized_prior_stop_metric: str
     result_boundary_target_amortized_prior_stop_train_accuracy: float
     result_boundary_target_amortized_prior_stop_patience: int
     result_boundary_target_amortized_prior_train_replay_weight: float
@@ -352,12 +356,16 @@ class ResultBoundaryAmortizedPrior:
     min_entries: int
     replay_batch_size: int
     fit_batch_size: int
+    fit_sampling_mode: str
+    fit_validation_fraction: float
+    fit_validation_mode: str
     fit_every: int
     train_steps: int = 1
     train_updates: int = 0
     fit_converged_steps: int = 0
     fit_stopped: bool = False
     last_train_accuracy: float = float("nan")
+    last_validation_accuracy: float = float("nan")
 
 
 def pick_device(preference: str = "auto") -> str:
@@ -3546,8 +3554,17 @@ def init_result_boundary_amortized_prior(
     replay_batch_size: int,
     device: str | torch.device,
     fit_batch_size: int | None = None,
+    fit_sampling_mode: str = "random",
+    fit_validation_fraction: float = 0.0,
+    fit_validation_mode: str = "holdout",
     fit_every: int = 1,
 ) -> ResultBoundaryAmortizedPrior:
+    if fit_sampling_mode not in {"random", "target_stratified"}:
+        raise ValueError("unknown amortized-prior fit sampling mode")
+    if not 0.0 <= fit_validation_fraction < 1.0:
+        raise ValueError("amortized-prior fit validation fraction must be in [0, 1)")
+    if fit_validation_mode not in {"holdout", "eval_only"}:
+        raise ValueError("unknown amortized-prior fit validation mode")
     prior_model = OperandResultPrior(
         operand_vocab_size=operand_vocab_size,
         result_vocab_size=result_vocab_size,
@@ -3560,6 +3577,9 @@ def init_result_boundary_amortized_prior(
         min_entries=min_entries,
         replay_batch_size=replay_batch_size,
         fit_batch_size=replay_batch_size if fit_batch_size is None else fit_batch_size,
+        fit_sampling_mode=fit_sampling_mode,
+        fit_validation_fraction=fit_validation_fraction,
+        fit_validation_mode=fit_validation_mode,
         fit_every=fit_every,
     )
 
@@ -3583,6 +3603,48 @@ def prompt_memory_entry_batch(
     return a, b, y
 
 
+def target_stratified_prior_fit_indices(
+    y: torch.Tensor,
+    *,
+    count: int,
+    rng: random.Random,
+) -> torch.Tensor:
+    groups: dict[int, list[int]] = {}
+    for index, target in enumerate(y.detach().cpu().tolist()):
+        groups.setdefault(int(target), []).append(index)
+    target_values = list(groups)
+    rng.shuffle(target_values)
+    selected: list[int] = []
+    offsets = {target: rng.randrange(len(indices)) for target, indices in groups.items()}
+    while len(selected) < count and target_values:
+        for target in target_values:
+            indices = groups[target]
+            offset = offsets[target] % len(indices)
+            selected.append(indices[offset])
+            offsets[target] += 1
+            if len(selected) >= count:
+                break
+    return torch.tensor(selected, dtype=torch.long, device=y.device)
+
+
+def deterministic_prior_validation_mask(
+    a: torch.Tensor,
+    b: torch.Tensor,
+    *,
+    operand_vocab_size: int,
+    validation_fraction: float,
+) -> torch.Tensor:
+    if validation_fraction <= 0:
+        return torch.zeros_like(a, dtype=torch.bool)
+    # A deterministic hash split keeps validation membership stable as prompt
+    # memory fills, without depending on insertion order.
+    buckets = (a.long() * 9973 + b.long() * 7919 + 104729) % 10_000
+    mask = buckets < int(validation_fraction * 10_000)
+    if bool(mask.all()) or not bool(mask.any()):
+        return torch.zeros_like(a, dtype=torch.bool)
+    return mask
+
+
 def train_result_boundary_amortized_prior(
     prior: ResultBoundaryAmortizedPrior,
     memory: ResultBoundaryPromptHardMemory,
@@ -3602,6 +3664,9 @@ def train_result_boundary_amortized_prior(
             "result_boundary_target_amortized_prior_entries": 0.0,
             "result_boundary_target_amortized_prior_loss": float("nan"),
             "result_boundary_target_amortized_prior_train_accuracy": float("nan"),
+            "result_boundary_target_amortized_prior_validation_accuracy": float(
+                "nan"
+            ),
             "result_boundary_target_amortized_prior_updates": float(
                 prior.train_updates
             ),
@@ -3620,6 +3685,9 @@ def train_result_boundary_amortized_prior(
             "result_boundary_target_amortized_prior_entries": float(entry_count),
             "result_boundary_target_amortized_prior_loss": float("nan"),
             "result_boundary_target_amortized_prior_train_accuracy": float("nan"),
+            "result_boundary_target_amortized_prior_validation_accuracy": float(
+                "nan"
+            ),
             "result_boundary_target_amortized_prior_updates": float(
                 prior.train_updates
             ),
@@ -3633,20 +3701,58 @@ def train_result_boundary_amortized_prior(
         }
     loss_value = float("nan")
     fit_step = 0.0
+    validation_mask = deterministic_prior_validation_mask(
+        a_all,
+        b_all,
+        operand_vocab_size=prior.model.operand_vocab_size,
+        validation_fraction=prior.fit_validation_fraction,
+    )
+    holdout_validation = (
+        prior.fit_validation_mode == "holdout"
+        and bool(validation_mask.any())
+        and not bool(validation_mask.all())
+    )
+    if holdout_validation:
+        fit_mask = ~validation_mask
+        a_fit_all = a_all[fit_mask]
+        b_fit_all = b_all[fit_mask]
+        y_fit_all = y_all[fit_mask]
+        a_validation = a_all[validation_mask]
+        b_validation = b_all[validation_mask]
+        y_validation = y_all[validation_mask]
+    else:
+        a_fit_all, b_fit_all, y_fit_all = a_all, b_all, y_all
+        if bool(validation_mask.any()):
+            a_validation = a_all[validation_mask]
+            b_validation = b_all[validation_mask]
+            y_validation = y_all[validation_mask]
+        else:
+            a_validation = b_validation = y_validation = None
+    fit_entry_count = int(y_fit_all.shape[0])
     if update:
         fit_step = 1.0
         for _ in range(prior.train_steps):
-            if prior.fit_batch_size > 0 and entry_count > prior.fit_batch_size:
-                indices = torch.tensor(
-                    [rng.randrange(entry_count) for _ in range(prior.fit_batch_size)],
-                    dtype=torch.long,
-                    device=a_all.device,
-                )
-                a = a_all.index_select(0, indices)
-                b = b_all.index_select(0, indices)
-                y = y_all.index_select(0, indices)
+            if prior.fit_batch_size > 0 and fit_entry_count > prior.fit_batch_size:
+                if prior.fit_sampling_mode == "target_stratified":
+                    indices = target_stratified_prior_fit_indices(
+                        y_fit_all,
+                        count=prior.fit_batch_size,
+                        rng=rng,
+                    )
+                else:
+                    indices = torch.tensor(
+                        [
+                            rng.randrange(fit_entry_count)
+                            for _ in range(prior.fit_batch_size)
+                        ],
+                        dtype=torch.long,
+                        device=a_fit_all.device,
+                    )
+                a = a_fit_all.index_select(0, indices)
+                b = b_fit_all.index_select(0, indices)
+                y = y_fit_all.index_select(0, indices)
             else:
-                a, b, y = a_all, b_all, y_all
+                a, b, y = a_fit_all, b_fit_all, y_fit_all
             logits = prior.model(a, b)
             prior_loss = torch.nn.functional.cross_entropy(logits, y)
             prior.optimizer.zero_grad(set_to_none=True)
@@ -3657,12 +3763,23 @@ def train_result_boundary_amortized_prior(
     with torch.no_grad():
         train_logits = prior.model(a_all, b_all)
         train_accuracy = (train_logits.argmax(dim=-1) == y_all).float().mean()
+        if a_validation is not None and b_validation is not None:
+            validation_logits = prior.model(a_validation, b_validation)
+            validation_accuracy = (
+                validation_logits.argmax(dim=-1) == y_validation
+            ).float().mean()
+            prior.last_validation_accuracy = float(validation_accuracy.item())
+        else:
+            prior.last_validation_accuracy = float("nan")
     prior.last_train_accuracy = float(train_accuracy.item())
     return {
         "result_boundary_target_amortized_prior_entries": float(entry_count),
         "result_boundary_target_amortized_prior_loss": loss_value,
         "result_boundary_target_amortized_prior_train_accuracy": float(
             prior.last_train_accuracy
+        ),
+        "result_boundary_target_amortized_prior_validation_accuracy": float(
+            prior.last_validation_accuracy
         ),
         "result_boundary_target_amortized_prior_updates": float(prior.train_updates),
         "result_boundary_target_amortized_prior_fit_step": fit_step,
@@ -3684,6 +3801,9 @@ def skipped_result_boundary_amortized_prior_metrics(
         "result_boundary_target_amortized_prior_loss": float("nan"),
         "result_boundary_target_amortized_prior_train_accuracy": float(
             prior.last_train_accuracy
+        ),
+        "result_boundary_target_amortized_prior_validation_accuracy": float(
+            prior.last_validation_accuracy
         ),
         "result_boundary_target_amortized_prior_updates": float(prior.train_updates),
         "result_boundary_target_amortized_prior_fit_step": 0.0,
@@ -9073,6 +9193,15 @@ def run_variant(
                 if args.result_boundary_target_amortized_prior_fit_batch_size >= 0
                 else None
             ),
+            fit_sampling_mode=(
+                args.result_boundary_target_amortized_prior_fit_sampling_mode
+            ),
+            fit_validation_fraction=(
+                args.result_boundary_target_amortized_prior_fit_validation_fraction
+            ),
+            fit_validation_mode=(
+                args.result_boundary_target_amortized_prior_fit_validation_mode
+            ),
             fit_every=args.result_boundary_target_amortized_prior_fit_every,
             device=device,
         )
@@ -9258,8 +9387,20 @@ def run_variant(
         result_boundary_target_amortized_prior_fit_batch_size=(
             args.result_boundary_target_amortized_prior_fit_batch_size
         ),
+        result_boundary_target_amortized_prior_fit_sampling_mode=(
+            args.result_boundary_target_amortized_prior_fit_sampling_mode
+        ),
+        result_boundary_target_amortized_prior_fit_validation_fraction=(
+            args.result_boundary_target_amortized_prior_fit_validation_fraction
+        ),
+        result_boundary_target_amortized_prior_fit_validation_mode=(
+            args.result_boundary_target_amortized_prior_fit_validation_mode
+        ),
         result_boundary_target_amortized_prior_fit_every=(
             args.result_boundary_target_amortized_prior_fit_every
+        ),
+        result_boundary_target_amortized_prior_stop_metric=(
+            args.result_boundary_target_amortized_prior_stop_metric
         ),
         result_boundary_target_amortized_prior_stop_train_accuracy=(
             args.result_boundary_target_amortized_prior_stop_train_accuracy
@@ -10455,8 +10596,16 @@ def run_variant(
                     prior_train_accuracy = prior_train_metrics[
                         "result_boundary_target_amortized_prior_train_accuracy"
                     ]
+                    prior_stop_value = prior_train_accuracy
+                    if (
+                        args.result_boundary_target_amortized_prior_stop_metric
+                        == "validation_accuracy"
+                    ):
+                        prior_stop_value = prior_train_metrics[
+                            "result_boundary_target_amortized_prior_validation_accuracy"
+                        ]
                     if stop_accuracy > 0 and prompt_memory_full and prior_fit_step:
-                        if prior_train_accuracy >= stop_accuracy:
+                        if prior_stop_value >= stop_accuracy:
                             result_boundary_amortized_prior.fit_converged_steps += 1
                         else:
                             result_boundary_amortized_prior.fit_converged_steps = 0
@@ -11809,8 +11958,20 @@ def run_variant(
     metrics["result_boundary_target_amortized_prior_fit_batch_size"] = (
         args.result_boundary_target_amortized_prior_fit_batch_size
     )
+    metrics["result_boundary_target_amortized_prior_fit_sampling_mode"] = (
+        args.result_boundary_target_amortized_prior_fit_sampling_mode
+    )
+    metrics["result_boundary_target_amortized_prior_fit_validation_fraction"] = (
+        args.result_boundary_target_amortized_prior_fit_validation_fraction
+    )
+    metrics["result_boundary_target_amortized_prior_fit_validation_mode"] = (
+        args.result_boundary_target_amortized_prior_fit_validation_mode
+    )
     metrics["result_boundary_target_amortized_prior_fit_every"] = (
         args.result_boundary_target_amortized_prior_fit_every
+    )
+    metrics["result_boundary_target_amortized_prior_stop_metric"] = (
+        args.result_boundary_target_amortized_prior_stop_metric
     )
     metrics["result_boundary_target_amortized_prior_stop_train_accuracy"] = (
         args.result_boundary_target_amortized_prior_stop_train_accuracy
@@ -13090,6 +13251,39 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--result-boundary-target-amortized-prior-fit-sampling-mode",
+        choices=["random", "target_stratified"],
+        default="random",
+        help=(
+            "Sampling mode used when the amortized-prior fit batch is smaller "
+            "than prompt memory. random preserves existing with-replacement "
+            "sampling; target_stratified balances updates across discovered "
+            "target results."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-fit-validation-fraction",
+        type=float,
+        default=0.0,
+        help=(
+            "Deterministically hold out this fraction of prompt-memory entries "
+            "from amortized-prior fit updates and report their memory-target "
+            "accuracy. Use with --result-boundary-target-amortized-prior-stop-"
+            "metric validation_accuracy for validation-aware stopping."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-fit-validation-mode",
+        choices=["holdout", "eval_only"],
+        default="holdout",
+        help=(
+            "How the amortized-prior validation split is used. holdout "
+            "preserves current behavior by excluding validation entries from "
+            "fit updates; eval_only fits on all memory entries and only uses "
+            "the split for validation metrics/stopping."
+        ),
+    )
+    parser.add_argument(
         "--result-boundary-target-amortized-prior-fit-every",
         type=int,
         default=1,
@@ -13097,6 +13291,16 @@ def parse_args() -> argparse.Namespace:
             "Fit the operand-conditioned prior every N training steps after "
             "enough memory entries exist. The first eligible fit always runs; "
             "default 1 preserves prior behavior."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-stop-metric",
+        choices=["train_accuracy", "validation_accuracy"],
+        default="train_accuracy",
+        help=(
+            "Metric used by --result-boundary-target-amortized-prior-stop-"
+            "train-accuracy. train_accuracy preserves prior behavior; "
+            "validation_accuracy uses the held-out prompt-memory split."
         ),
     )
     parser.add_argument(
@@ -14470,6 +14674,23 @@ def main() -> None:
             "--result-boundary-target-amortized-prior-fit-batch-size "
             "must be -1, 0, or positive"
         )
+    if not (
+        0.0
+        <= args.result_boundary_target_amortized_prior_fit_validation_fraction
+        < 1.0
+    ):
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-fit-validation-fraction "
+            "must be in [0, 1)"
+        )
+    if args.result_boundary_target_amortized_prior_fit_validation_mode not in {
+        "holdout",
+        "eval_only",
+    }:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-fit-validation-mode "
+            "must be holdout or eval_only"
+        )
     if args.result_boundary_target_amortized_prior_fit_every < 1:
         raise ValueError(
             "--result-boundary-target-amortized-prior-fit-every must be positive"
@@ -14486,6 +14707,16 @@ def main() -> None:
     if args.result_boundary_target_amortized_prior_stop_patience < 1:
         raise ValueError(
             "--result-boundary-target-amortized-prior-stop-patience must be positive"
+        )
+    if (
+        args.result_boundary_target_amortized_prior_stop_metric
+        == "validation_accuracy"
+        and args.result_boundary_target_amortized_prior_fit_validation_fraction <= 0
+    ):
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-stop-metric "
+            "validation_accuracy requires a positive "
+            "--result-boundary-target-amortized-prior-fit-validation-fraction"
         )
     if args.result_boundary_target_amortized_prior_train_replay_weight < 0:
         raise ValueError(
@@ -15236,10 +15467,42 @@ def main() -> None:
                         "rbtpriorfit"
                         f"{args.result_boundary_target_amortized_prior_fit_batch_size}"
                     )
+                if (
+                    args.result_boundary_target_amortized_prior_fit_sampling_mode
+                    != "random"
+                ):
+                    suffix_parts.append(
+                        "rbtpriorfit"
+                        f"{args.result_boundary_target_amortized_prior_fit_sampling_mode}"
+                    )
+                if (
+                    args.result_boundary_target_amortized_prior_fit_validation_fraction
+                    > 0
+                ):
+                    suffix_parts.append(
+                        "rbtpriorval"
+                        f"{args.result_boundary_target_amortized_prior_fit_validation_fraction:g}"
+                    )
+                    if (
+                        args.result_boundary_target_amortized_prior_fit_validation_mode
+                        != "holdout"
+                    ):
+                        suffix_parts.append(
+                            "rbtpriorval"
+                            f"{args.result_boundary_target_amortized_prior_fit_validation_mode}"
+                        )
                 if args.result_boundary_target_amortized_prior_fit_every != 1:
                     suffix_parts.append(
                         "rbtpriorfit_every"
                         f"{args.result_boundary_target_amortized_prior_fit_every}"
+                    )
+                if (
+                    args.result_boundary_target_amortized_prior_stop_metric
+                    != "train_accuracy"
+                ):
+                    suffix_parts.append(
+                        "rbtpriorstop"
+                        f"{args.result_boundary_target_amortized_prior_stop_metric}"
                     )
                 if (
                     args.result_boundary_target_amortized_prior_stop_train_accuracy
@@ -15617,8 +15880,16 @@ def main() -> None:
         f"{args.result_boundary_target_amortized_prior_replay_batch_size} "
         "amortized_prior_fit_batch="
         f"{args.result_boundary_target_amortized_prior_fit_batch_size} "
+        "amortized_prior_fit_sampling_mode="
+        f"{args.result_boundary_target_amortized_prior_fit_sampling_mode} "
+        "amortized_prior_fit_validation_fraction="
+        f"{args.result_boundary_target_amortized_prior_fit_validation_fraction} "
+        "amortized_prior_fit_validation_mode="
+        f"{args.result_boundary_target_amortized_prior_fit_validation_mode} "
         "amortized_prior_fit_every="
         f"{args.result_boundary_target_amortized_prior_fit_every} "
+        "amortized_prior_stop_metric="
+        f"{args.result_boundary_target_amortized_prior_stop_metric} "
         "amortized_prior_stop_train_accuracy="
         f"{args.result_boundary_target_amortized_prior_stop_train_accuracy} "
         "amortized_prior_stop_patience="

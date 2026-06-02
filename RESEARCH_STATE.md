@@ -1,4 +1,4 @@
-# Research State (Last updated: 2026-05-31)
+# Research State (Last updated: 2026-06-01)
 Keep near `200` lines; move stale context to reviews, memories, fact sheets, or work logs.
 ## Overarching Goal
 Prove that a model can be trained from scratch to use a non-differentiable
@@ -125,6 +125,21 @@ Active directions:
   heldout to `0.7625`. Sustained convergence (`1.0` train accuracy for `100`
   fits) preserves source/handoff and cuts updates to `1889`; first-`1.0`
   stopping and random half-memory fits underfit (`0.875`/`0.8125` heldout).
+  Target-stratified half-memory prior fitting is the first structured coreset
+  positive: source overall `0.9900`, heldout `0.9375`, low heldout controls,
+  forced-result evals `67,584`, and trusted frozen-policy handoff `0.9975`
+  with diagnostic calc `1.0000` and low final controls. It preserves the gate
+  but still uses `2501` prior updates. A validation-heldout stop that removed
+  20% of memory from fitting reduced updates only slightly (`2359`) and missed
+  heldout (`0.8625`), so do not run validation threshold/patience ladders.
+  Eval-only validation stopping, which fits all memory entries while using the
+  split only for stopping, is the new prior-update reduction lead but is
+  seed-sensitive. On seed13 it reached source overall `0.9825`, heldout
+  `0.9500`, prior updates `1613`, and trusted handoff `1.0000`. The same
+  effective seed11 as the target-stratified benchmark reached source overall
+  `0.9725`, heldout `0.9125`, prior updates `1784`, and trusted handoff
+  `1.0000`. Caveat: forced-result evals rose to `89,088`/`124,416`, because
+  prompt memory filled at step `100` instead of step `50`.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
@@ -163,8 +178,10 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Try validation-aware or structured coreset fitting below `1889` updates;
-   random half-memory fit failed.
+1. Stress eval-only target-stratified validation stopping on a larger range and
+   diagnose memory-fill dynamics; it reduces prior updates below `1889` but
+   can raise forced-result evals. Do not rerun random fit-batch ladders or
+   validation-heldout threshold/patience ladders.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Do not tune forced-margin locally. Use automated recovery as the benchmark
