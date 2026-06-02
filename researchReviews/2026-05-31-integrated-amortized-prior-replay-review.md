@@ -218,3 +218,31 @@ step `100` instead of the target-stratified seed11 benchmark's step `50`
 (`89,088` same-seed, `124,416` seed13, versus `67,584`). Next work should
 stress this result on a larger range and diagnose memory-fill/forced-eval cost
 before treating it as the default scalable recipe.
+
+## Op29 Range Follow-Up
+
+The larger-range stress is a mixed negative for the constant-batch recipe, not
+a reason to rerun local stopping knobs.
+
+At `operand_max=29`, the four-hook shared-output eval-only target-stratified
+source used the same constant prior fit batch `160` over `720` train prompts
+and `180` heldout prompts. It filled prompt memory by step `200` after
+`290,304` forced-result evals, then continued to `5000` steps. Source train
+accuracy was high (`0.9931`), but heldout exact/calc was only `0.8444`,
+overall was `0.9622`, prior train/heldout were `0.8375`/`0.7667`, and the
+validation stop never fired (`2501` prior updates). No trusted handoff was run
+because the source missed the heldout gate.
+
+Post-hoc prior diagnostics split the failure: the discovered train-memory
+targets were mostly correct (`0.9931` matched true sums), and memory-fill cost
+was not the main blocker. But the h64 numeric prior needed much more full-memory
+optimization to fit op29: after `600` full-memory steps it reached only
+`0.8958` train / `0.6722` heldout, after `2500` steps it reached `0.9875` /
+`0.9000`, and h128 at `2500` reached `0.9889` / `0.9278`.
+
+Steering update: do not promote eval-only target-stratified batch160 as
+range-scalable. The next high-leverage experiment should change the prior
+capacity/features or fit dynamics, with explicit many-calculator cost
+accounting. A proportional-batch source run is only useful if it is framed as a
+costed diagnostic against richer/longer prior fitting, not as a batch-size
+ladder.

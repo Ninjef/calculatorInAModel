@@ -11025,3 +11025,63 @@ Interpretation:
   beat the target-stratified source (`0.9375`), and memory filled at step `100`
   rather than step `50`, increasing forced evals. Next work should stress a
   larger range and diagnose memory-fill behavior before promoting it.
+
+## 2026-06-02 Op29 Eval-Only Target-Stratified Prior Stress
+
+Question: does the op19 eval-only target-stratified numeric-prior recipe scale
+to a larger `operand_max=29` range with the same constant prior fit batch?
+
+Source run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_op29_prior_fit160_targetstrat_val20_evalonly_stopval90pat100_src5000/2026-06-02_095629_230652_model-c-op0-29-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-c46e34c022/model-c-2digit-seed9
+```
+
+Key setup:
+
+- `operand_max=29`, `900` total prompts with deterministic `20%` heldout.
+- Four `left_operand_mod` routed hooks with shared calculator output
+  projection and product answer decoder.
+- Prompt-keyed online hard memory, topk8+unique24 sparse result-boundary
+  scoring, freeze memory when full.
+- Numeric amortized prior h64, target-stratified fit batch `160`,
+  eval-only validation fraction `0.2`, validation stop threshold `0.9`,
+  patience `100`.
+
+Source results:
+
+- Overall exact/calc `866/900 = 0.9622`.
+- Train exact/calc `0.9931`.
+- Heldout exact/calc `0.8444`.
+- Prior train/heldout accuracy `0.8375` / `0.7667`.
+- Prior updates `2501`; validation stop never fired.
+- Prompt memory filled at step `200` with `720/720` train entries.
+- Forced-result evals `290,304`.
+- Heldout controls stayed low: injection-zero `0.0278`, forced-zero
+  `0.0000`, forced-random `0.0111`.
+
+Post-hoc prior diagnostics from the same train/heldout traces:
+
+| Prior diagnostic | Train vs true | Heldout vs true | Memory fit | Notes |
+| --- | ---: | ---: | ---: | --- |
+| h64 full-memory, `600` steps | `0.8958` | `0.6722` | `0.9000` | Same h64 prior is undertrained at op29. |
+| h64 full-memory, `2500` steps | `0.9875` | `0.9000` | `0.9889` | Longer full-memory fit mostly recovers. |
+| h128 full-memory, `2500` steps | `0.9889` | `0.9278` | `0.9931` | Extra capacity improves heldout. |
+
+The train-memory targets themselves were high quality:
+`0.9931` matched the true sum.
+
+Interpretation:
+
+- The constant-batch op29 source missed the heldout gate, so no trusted
+  additive handoff was run.
+- The failure is not calculator wiring and not primarily prompt-memory fill:
+  controls were low, train accuracy was high, and memory filled well before
+  the end of training.
+- The post-hoc diagnostics show the larger-range bottleneck is prior
+  capacity/optimization and scalable fit dynamics. A h64 numeric prior can
+  generalize op29 only after substantially more full-memory optimization, and
+  h128 improves heldout further.
+- Do not run op29 `fit_batch_size=160` repeats or validation threshold ladders
+  as novelty. Next work should change the prior mechanism, features/capacity,
+  or fit schedule with explicit cost accounting.

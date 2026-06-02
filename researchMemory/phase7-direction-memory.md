@@ -310,6 +310,21 @@ Memory:
   and dropped heldout source exact/calc to `0.8125`. Do not run random
   fit-batch ladders; use structured/coverage-aware coresets or validation-aware
   stopping.
+- Target-stratified half-memory prior fitting is the first structured coreset
+  positive. On op19 it restored heldout exact/calc to `0.9375` and cleared the
+  trusted additive handoff at `0.9975`, but prior updates stayed at `2501`.
+  Validation-heldout stopping, which excluded `20%` of memory entries from
+  fitting, reduced updates only to `2359` and missed heldout (`0.8625`), so do
+  not run validation-heldout threshold/patience ladders.
+- Eval-only validation stopping is positive on op19 but not range-scalable in
+  the constant-batch form. Fitting all memory entries while using the split
+  only for validation cut prior updates to `1613-1784` and preserved trusted
+  handoff (`1.0000`), though forced evals rose when memory filled at step
+  `100`. The op29 constant `fit_batch_size=160` stress missed heldout
+  (`0.8444`) despite train `0.9931`; post-hoc full-memory diagnostics recovered
+  heldout `0.9000` with h64/2500 steps and `0.9278` with h128/2500. Treat op29
+  as a prior capacity/fit-dynamics bottleneck, not as a reason to rerun
+  batch160 or validation ladders.
 
 Representative evidence:
 
@@ -328,6 +343,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-05-30-policy-topk-op29-fresh-seed-validation.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
+- `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-left-operand-routed-multi-hook-support.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output.md`
 - `aiAgentWorkHistory/phase7/2026-05-31-online-hard-memory-semantic-distill-routed-shared-output-fresh-seed.md`

@@ -1,4 +1,4 @@
-# Research State (Last updated: 2026-06-01)
+# Research State (Last updated: 2026-06-02)
 Keep near `200` lines; move stale context to reviews, memories, fact sheets, or work logs.
 ## Overarching Goal
 Prove that a model can be trained from scratch to use a non-differentiable
@@ -75,28 +75,17 @@ source policies directly for transfer/readout geometry.
 Active directions:
 
 - Source acquisition optimized against actual handoff/readout geometry, not
-  source accuracy or cheap selector scores. Delayed forced-true plus late
-  low-LR recovery is a strong staged recipe (`0.9320` continuation/readout,
-  `0.9600` fresh-seed handoff, `0.9400` automated handoff), but simple
-  source-accuracy/forced-loss triggers are not robust. One-negative
-  forced-margin with late recovery is the current benchmark: manual recovery
-  raised handoff to `0.8700`; automated recovery hit `0.9875` final /
-  `0.9800` step-600 normal on one fresh seed; a second fresh seed cleared at
-  `0.8975` / `0.9050`; and wider `n_embd=32`, `n_head=2` non-product and
-  product-decoder op19 stresses both reached `1.0000` final / step-600 normal.
-  A shallow-head op29 range stress missed (`0.8533`), low-LR recovery partly
-  rescued it (`0.9067`), and `rhead64` cleared op29 on two seeds (`1.0000`).
-  The first op39 `rhead64` stress was causal but costly and sub-perfect
-  (`0.9475` handoff after checkpoint continuation). Treat forced-margin as a
-  strong staged benchmark whose range scaling depends on source-head capacity,
-  but still not a scalable/non-prescriptive recipe.
+  source accuracy or cheap selector scores. Forced-true/forced-margin with
+  recovery is the staged benchmark: it clears multiple op19/op29 handoff gates
+  when source/readout capacity is sufficient, and op39 is causal but costly and
+  sub-perfect. Treat it as the benchmark to beat, not the scalable or
+  non-prescriptive recipe.
 - Target propagation/local targets are now a ceiling and diagnostic, not the
   current scalable mainline. Exact `policy_reweighted_t1` is positive and
   survives retention, but full enumeration is not scalable. Simple
-  approximation is paused after sparse/adaptive, replay-memory, corrected,
-  online learned, pretrained learned, and sparse pairwise-preference variants
-  failed scalability or Stage 1 stress. Continue only with new target
-  construction or streaming validation.
+  approximations are paused after repeated scalability or Stage 1 failures.
+  Continue only with a materially new target construction or streaming/
+  heldout-generalization gate.
 - Less-prescriptive answer-derived target construction. The old full-grid
   result-boundary target source transfers causally into the trusted additive
   frozen-policy gate (`0.8825` final, `0.8425` step-600 normal, zero-injection
@@ -139,17 +128,22 @@ Active directions:
   effective seed11 as the target-stratified benchmark reached source overall
   `0.9725`, heldout `0.9125`, prior updates `1784`, and trusted handoff
   `1.0000`. Caveat: forced-result evals rose to `89,088`/`124,416`, because
-  prompt memory filled at step `100` instead of step `50`.
+  prompt memory filled at step `100` instead of step `50`. The op29 range
+  stress of the same constant fit-batch recipe missed the heldout gate:
+  source overall `0.9622`, train `0.9931`, heldout `0.8444`, prior updates
+  `2501`, and forced evals `290,304`; no handoff was run. Post-hoc full-memory
+  prior diagnostics from that trace reached heldout `0.9000` with h64 after
+  `2500` fit steps and `0.9278` with h128, so the next bottleneck is prior
+  capacity/optimization and scalable fit dynamics at larger range, not memory
+  fill or calculator wiring.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
-  Topk8+unique24 changes scorer slope to `O(C * 24)` and clears op19/op29
-  staged gates. Corrected routed controls show two/four-hook cloned-output
-  source and trusted handoff are causal, and routed execution is active-only.
-  Shared output removes cloned-output parameter growth but hard-assignment
-  handoff missed (`0.78`; matched `0.75`); semantic-distilled online hard
-  memory is the first shared-output routed handoff family to replicate, pass
-  op29, train under stochastic minibatches with matched exposure, and pass a
-  heldout-prompt source/handoff gate with numeric-prior replay.
+  Topk8+unique24 clears op19/op29 staged gates but still scores candidates.
+  Routed execution is now active-only, shared output removes cloned-output
+  parameter growth, and semantic-distilled online hard memory is the first
+  shared-output routed handoff family to replicate, pass op29, train under
+  stochastic minibatches with matched exposure, and pass a heldout-prompt
+  source/handoff gate with numeric-prior replay.
 
 ## Paused Or Deprioritized Branches
 
@@ -178,23 +172,18 @@ These branches should not continue without a new mechanism:
 
 ## Next 1-3 Experiments
 
-1. Stress eval-only target-stratified validation stopping on a larger range and
-   diagnose memory-fill dynamics; it reduces prior updates below `1889` but
-   can raise forced-result evals. Do not rerun random fit-batch ladders or
-   validation-heldout threshold/patience ladders.
+1. Replace the op29 constant-batch prior bottleneck with a materially changed
+   prior fit mechanism: richer/capacity-aware numeric prior, longer/full-memory
+   post-fill refresh, or coverage-aware fitting whose cost model scales. Do not
+   run another op29 batch160 repeat, random fit-batch ladder, or validation
+   threshold/patience ladder.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
-3. Do not tune forced-margin locally. Use automated recovery as the benchmark
-   to beat; further forced-margin work must stress a new thesis-relevant axis
-   such as many-calculator cost, cheaper assignment, or removal of hard
-   assignment / true-result forcing; do not rerun completed op19/op29/op39 paths.
-4. If reducing hard-assignment cost, state the scalability hypothesis, compare
-   against exact-grid, avoid more uniform count/fixed-refresh ladders, and use
-   routing validation, op39 compute stress, or a changed estimator.
-5. Use answer-derived result-boundary transfer as a bridge, not a recipe. Do
-   not continue static critic/proposal/soft/regret-set target variants; use
-   online/state-calibrated proposals, materially different target construction,
-   or another credit-assignment family.
+3. Any further forced-margin, assignment-cost, or result-boundary transfer work
+   must stress a new thesis-relevant axis: many-calculator cost, cheaper
+   candidate scoring, removal of hard assignment/true-result forcing, or a
+   changed estimator. Do not rerun completed op19/op29/op39 paths or static
+   critic/proposal/soft/regret-set variants.
 
 ## What Would Change Our Mind
 

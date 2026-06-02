@@ -921,6 +921,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/185-constant-size-target-stratified-eval-only-prior-fitting-does-not-scale-cleanly-to-op29",
+      "target": "researchMemory/hypotheses/phase7/185-constant-size-target-stratified-eval-only-prior-fitting-does-not-scale-cleanly-to-op29.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1078,6 +1083,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md",
       "type": "supported_by"
     },
     {
@@ -2974,6 +2984,13 @@
       "source_path": "researchMemory/hypotheses/phase7/184-eval-only-validation-stopping-preserves-target-stratified-handoff-quality-while-reducing-p.md",
       "status": "POSITIVE-WITH-CAVEAT",
       "title": "Eval-only validation stopping preserves target-stratified handoff quality while reducing prior updates."
+    },
+    {
+      "id": "doc/185-constant-size-target-stratified-eval-only-prior-fitting-does-not-scale-cleanly-to-op29",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/185-constant-size-target-stratified-eval-only-prior-fitting-does-not-scale-cleanly-to-op29.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Constant-size target-stratified eval-only prior fitting does not scale cleanly to op29."
     },
     {
       "id": "doc/phase7-direction-memory",
