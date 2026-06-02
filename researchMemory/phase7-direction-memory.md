@@ -383,11 +383,14 @@ Memory:
   over score-eligible routes, and leaves global train/heldout prior replay
   available to train the excluded routes. The pre-fix op9 preflight is invalid
   evidence. The corrected op9 800-step preflight missed badly (`0.510` final,
-  heldout `0.050`, excluded route 1 calc `0.0385`, prior heldout `0.050`), so
-  no handoff was run. This is enabling tooling plus a cheap negative preflight,
-  not a completed shared-prior source result; the next gate should either spend
-  the full op19 source budget with strong numeric-prior dynamics or change to a
-  more explicit shared/global prior objective.
+  heldout `0.050`, excluded route 1 calc `0.0385`, prior heldout `0.050`). The
+  full op19 route-excluded source using the strongest known numeric-prior
+  dynamics learned causally but still missed the gate: final `0.7875`, best
+  snapshot `0.8075`, heldout `0.5625`, prior train/heldout `0.7781`/`0.5625`,
+  and excluded route 1 `0.7304-0.8000` with low zero/random controls. No handoff
+  was run. This is a partial shared-prior positive, not a trusted source; next
+  work should change the objective toward explicit shared/global targets or
+  remove per-route prompt-memory/candidate-scoring dependence.
 
 Representative evidence:
 
@@ -414,6 +417,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-06-02-route-heldout-shared-prior-diagnostic.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-route-excluded-target-discovery-tooling.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-route-excluded-shared-prior-preflight.md`
+- `aiAgentWorkHistory/phase7/2026-06-02-op19-route-excluded-shared-prior-source.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`

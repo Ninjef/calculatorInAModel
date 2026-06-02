@@ -11871,3 +11871,55 @@ Interpretation:
 - Do not count this as a full shared-prior algorithm failure. The next valid
   gate is either the full op19 route-excluded source using stronger known
   numeric-prior dynamics, or a more explicitly shared/global prior objective.
+
+## 2026-06-02 Op19 Route-Excluded Shared-Prior Source
+
+Purpose: test whether the strongest known integrated numeric-prior dynamics can
+train a routed calculator whose prompt-memory target discovery is disabled.
+
+Run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fitfull_every2_stop1pat100_exclroute1_src5000_fixed/2026-06-02_172119_098782_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-1d610d942a/model-c-2digit-seed9
+```
+
+Configuration:
+
+- Four routed shared-output hooks with `left_operand_mod` routing.
+- Prompt-keyed online hard memory with `--result-boundary-target-memory-update-exclude-routes 1`.
+- Numeric amortized-prior replay, full-memory prior fit every 2 steps, train
+  convergence stop at `1.0` with patience `100`.
+- Source only. No trusted handoff was run because the source gate missed.
+
+Results:
+
+| Metric | Value |
+| --- | ---: |
+| Final eval exact / calculator-result accuracy | `0.7875` |
+| Best snapshot normal / calculator-result accuracy | `0.8075` |
+| Snapshot injection-zero / forced-zero / forced-random | `0.0475 / 0.0025 / 0.0025` |
+| Train prompt exact / calculator-result accuracy | `0.840625` |
+| Heldout prompt exact / calculator-result accuracy | `0.5625` |
+| Prompt-memory entries / expected | `223 / 223` |
+| Last score-eligible / update-excluded fraction | `0.6875 / 0.3125` |
+| Forced-result evals | `37,896` |
+| Prior updates | `2,501` |
+| Prior train / heldout accuracy | `0.7781 / 0.5625` |
+| Snapshot excluded route 1 calc | `0.7304` |
+| 128-sample diagnostic excluded route 1 calc | `0.8000` |
+| Heldout excluded route 1 calc | `0.7391` |
+
+Interpretation:
+
+- Mixed-positive. Shared numeric prior pressure can train a route with no direct
+  prompt-memory updates better than the corrected op9 preflight, and the result
+  is causal under zero/random controls.
+- It is not a valid source for trusted handoff: heldout prompts and overall
+  source quality are below the gate.
+- Do not rerun this exact 5000-step op19 route-excluded recipe, short op9
+  preflights, route-heldout diagnostic ladders, or prior cadence/patience
+  variants as novelty.
+- Next work should change the mechanism: explicit shared/global prior targets,
+  route-balanced/global replay, shared target discovery across calculators, or a
+  less-prescriptive credit mechanism that removes per-route prompt-memory tables
+  and answer-derived candidate scoring.

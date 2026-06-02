@@ -981,6 +981,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/197-the-full-op19-route-excluded-shared-prior-source-learns-causally-but-misses-the-source-gat",
+      "target": "researchMemory/hypotheses/phase7/197-the-full-op19-route-excluded-shared-prior-source-learns-causally-but-misses-the-source-gat.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1178,6 +1183,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-02-route-excluded-shared-prior-preflight.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-02-op19-route-excluded-shared-prior-source.md",
       "type": "supported_by"
     },
     {
@@ -3183,6 +3193,13 @@
       "source_path": "researchMemory/hypotheses/phase7/196-route-excluded-prompt-memory-training-is-wired-but-the-op9-shared-prior-preflight-misses-t.md",
       "status": "MIXED-NEGATIVE",
       "title": "Route-excluded prompt-memory training is wired, but the op9 shared-prior preflight misses the source gate."
+    },
+    {
+      "id": "doc/197-the-full-op19-route-excluded-shared-prior-source-learns-causally-but-misses-the-source-gat",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/197-the-full-op19-route-excluded-shared-prior-source-learns-causally-but-misses-the-source-gat.md",
+      "status": "MIXED-POSITIVE",
+      "title": "The full op19 route-excluded shared-prior source learns causally but misses the source gate."
     },
     {
       "id": "doc/phase7-direction-memory",
