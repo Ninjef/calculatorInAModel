@@ -11771,3 +11771,39 @@ Interpretation:
   heldout route, so numeric features are doing the cross-route generalization.
 - This is not yet a source-training result. Next work should train with target
   discovery disabled or reduced on some routes and require trusted handoff.
+
+## 2026-06-02 Route-Excluded Target Discovery Tooling
+
+Purpose: enable the actual shared-prior source gate recommended by the
+route-heldout diagnostic.
+
+Implementation:
+
+- Added `--result-boundary-target-memory-update-exclude-routes`.
+- Prompt-keyed online hard memory now skips sparse candidate scoring on the
+  listed routed hook ids.
+- The prompt-memory expected-full count is computed from only score-eligible
+  routes, so `--result-boundary-target-online-memory-freeze-when-full` can fire
+  even when withheld routes never receive direct memory entries.
+- Prior replay remains global over train/heldout prompt pools, so excluded
+  routes can still receive pseudo-target pressure from a shared numeric prior.
+- Training curves now include score-eligible and update-excluded fractions.
+
+Verification:
+
+- `python3 -m py_compile scripts/overfit_one_batch.py` passed.
+- Focused regression passed:
+  `python3 -m pytest tests/test_model.py -k "prompt_keyed_online_hard_memory or streaming_heldout_split or amortized_prior"`
+  -> `4 passed, 151 deselected`.
+- CLI smoke wrote a completed run with
+  `result_boundary_target_memory_update_exclude_routes="1"`:
+  `runs/2026-06-02_route_exclusion_smoke/2026-06-02_154720_202336_model-c-op0-2-fullgrid-streamb4-gumbel_concrete_interface-result_space-rbt1-zero_improvement-rbtt1-rbtchunk2-rbts1-rbtuniq-rbttopk1-rbtonlinehardmem-rbtmemprompt-rbtmemf-97315c88e5/model-c-2digit-seed2`.
+  Its prompt-memory expected count was `6`, matching op0-2 with one active
+  `left_operand_mod` route withheld from direct discovery.
+
+Interpretation:
+
+- This is tooling, not a source-training pass. The next result-bearing gate is
+  to run a routed source with one or more excluded routes and require the shared
+  numeric prior to train those routes through replay, followed by trusted
+  frozen-policy additive handoff.

@@ -133,6 +133,7 @@ class TrainConfig:
     result_boundary_target_online_hard_memory: bool
     result_boundary_target_online_memory_key_mode: str
     result_boundary_target_online_memory_freeze_when_full: bool
+    result_boundary_target_memory_update_exclude_routes: str
     result_boundary_target_amortized_prior_weight: float
     result_boundary_target_amortized_prior_feature_mode: str
     result_boundary_target_amortized_prior_hidden_size: int
@@ -987,6 +988,8 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_boundary_target_online_memory_update_fraction",
         "result_boundary_target_online_memory_frozen",
         "result_boundary_target_online_memory_forced_eval_count",
+        "result_boundary_target_prompt_memory_score_eligible_fraction",
+        "result_boundary_target_prompt_memory_update_excluded_fraction",
         "result_boundary_target_scored_results",
         "result_boundary_target_unique_scored_results",
         "result_boundary_target_unique_candidate_fraction",
@@ -3556,6 +3559,64 @@ def prompt_memory_keys(batch: ArithmeticBatch) -> list[tuple[int, ...]]:
     return [tuple(int(token) for token in row.tolist()) for row in batch.x.detach().cpu()]
 
 
+def parse_route_id_set(raw: str) -> set[int]:
+    if raw.strip() == "":
+        return set()
+    route_ids: set[int] = set()
+    for part in raw.split(","):
+        value = part.strip()
+        if not value:
+            continue
+        route = int(value)
+        if route < 0:
+            raise ValueError("route ids must be non-negative")
+        route_ids.add(route)
+    return route_ids
+
+
+def routed_prompt_memory_score_eligible_mask(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    exclude_routes: set[int],
+) -> torch.Tensor:
+    eligible = torch.ones(batch.x.shape[0], device=batch.x.device, dtype=torch.bool)
+    if not exclude_routes:
+        return eligible
+    if not hasattr(model, "calculator_hook_modules") or not hasattr(
+        model, "_calculator_hook_routes"
+    ):
+        raise ValueError("route exclusion requires a routed calculator model")
+    hook_count = len(model.calculator_hook_modules())
+    if max(exclude_routes) >= hook_count:
+        raise ValueError(
+            "route exclusion references a route outside calculator_hook_count"
+        )
+    routes = model._calculator_hook_routes(batch.x, hook_count)
+    if routes is None:
+        raise ValueError("route exclusion requires non-trivial calculator routing")
+    excluded = torch.zeros_like(eligible)
+    for route in exclude_routes:
+        excluded = excluded | (routes == int(route))
+    return ~excluded
+
+
+def prompt_memory_expected_count_for_routes(
+    model: TinyGPT,
+    batch: ArithmeticBatch | None,
+    *,
+    exclude_routes: set[int],
+    fallback_count: int | None,
+) -> int | None:
+    if batch is None:
+        return fallback_count
+    if not exclude_routes:
+        return int(batch.x.shape[0])
+    eligible = routed_prompt_memory_score_eligible_mask(
+        model, batch, exclude_routes
+    )
+    return int(eligible.sum().item())
+
+
 def init_result_boundary_amortized_prior(
     *,
     operand_vocab_size: int,
@@ -4309,6 +4370,7 @@ def result_boundary_prompt_hard_memory_loss(
     unique_sampling: bool,
     policy_topk_count: int,
     freeze_when_full: bool,
+    memory_update_exclude_routes: set[int] | None = None,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     if sample_count < 1:
         raise ValueError(
@@ -4345,7 +4407,13 @@ def result_boundary_prompt_hard_memory_loss(
     global_full = expected is not None and len(memory.entries) >= expected
     frozen_this_step = bool(freeze_when_full and global_full)
     forced_mode = "none" if memory.target_mode == "additive_zero_improvement" else None
-    score_mask = torch.zeros_like(seen_before) if frozen_this_step else torch.ones_like(seen_before)
+    exclude_routes = memory_update_exclude_routes or set()
+    score_eligible_mask = routed_prompt_memory_score_eligible_mask(
+        model, batch, exclude_routes
+    )
+    score_mask = (
+        torch.zeros_like(seen_before) if frozen_this_step else score_eligible_mask
+    )
     update_mask = torch.zeros_like(seen_before)
     true_candidate = torch.zeros_like(seen_before)
     unique_counts = torch.zeros(batch.x.shape[0], device=result_logits.device)
@@ -4499,6 +4567,12 @@ def result_boundary_prompt_hard_memory_loss(
         ),
         "result_boundary_target_prompt_memory_new_prompt_fraction": float(
             (~seen_before).float().mean().item()
+        ),
+        "result_boundary_target_prompt_memory_score_eligible_fraction": float(
+            score_eligible_mask.float().mean().item()
+        ),
+        "result_boundary_target_prompt_memory_update_excluded_fraction": float(
+            (~score_eligible_mask).float().mean().item()
         ),
         "result_boundary_target_scored_results": scored_results,
         "result_boundary_target_unique_scored_results": float(
@@ -9323,6 +9397,9 @@ def run_variant(
     result_boundary_online_hard_memory = None
     result_boundary_prompt_hard_memory = None
     result_boundary_amortized_prior = None
+    result_boundary_memory_update_exclude_routes = parse_route_id_set(
+        args.result_boundary_target_memory_update_exclude_routes
+    )
     if args.result_boundary_target_cache:
         if exhaustive_grid_batch is None:
             raise ValueError(
@@ -9355,15 +9432,19 @@ def run_variant(
                 )
             )
         elif args.result_boundary_target_online_memory_key_mode == "prompt":
+            prompt_memory_expected_count = prompt_memory_expected_count_for_routes(
+                model,
+                streaming_train_pool_batch
+                if streaming_train_pool_batch is not None
+                else exhaustive_grid_batch,
+                exclude_routes=result_boundary_memory_update_exclude_routes,
+                fallback_count=exhaustive_grid_size,
+            )
             result_boundary_prompt_hard_memory = (
                 init_result_boundary_prompt_hard_memory(
                     model,
                     target_mode=args.result_boundary_target_mode,
-                    expected_prompt_count=(
-                        int(streaming_train_pool_batch.x.shape[0])
-                        if streaming_train_pool_batch is not None
-                        else exhaustive_grid_size
-                    ),
+                    expected_prompt_count=prompt_memory_expected_count,
                 )
             )
         else:
@@ -9568,6 +9649,9 @@ def run_variant(
         ),
         result_boundary_target_online_memory_freeze_when_full=(
             args.result_boundary_target_online_memory_freeze_when_full
+        ),
+        result_boundary_target_memory_update_exclude_routes=(
+            args.result_boundary_target_memory_update_exclude_routes
         ),
         result_boundary_target_amortized_prior_weight=(
             args.result_boundary_target_amortized_prior_weight
@@ -10725,6 +10809,9 @@ def run_variant(
                     policy_topk_count=args.result_boundary_target_policy_topk_count,
                     freeze_when_full=(
                         args.result_boundary_target_online_memory_freeze_when_full
+                    ),
+                    memory_update_exclude_routes=(
+                        result_boundary_memory_update_exclude_routes
                     ),
                 )
             elif result_boundary_prompt_hard_memory is not None:
@@ -13536,6 +13623,17 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--result-boundary-target-memory-update-exclude-routes",
+        type=str,
+        default="",
+        help=(
+            "Comma-separated routed hook ids whose prompt-memory target "
+            "discovery should be disabled. Prior replay may still train those "
+            "routes, making this a shared/global-prior gate rather than another "
+            "per-route target-discovery run."
+        ),
+    )
+    parser.add_argument(
         "--result-boundary-target-amortized-prior-weight",
         type=float,
         default=0.0,
@@ -15041,6 +15139,36 @@ def main() -> None:
                 "--result-boundary-target-online-hard-memory supports only "
                 "hard_best_result, zero_improvement, or additive_zero_improvement"
             )
+    try:
+        parsed_memory_update_exclude_routes = parse_route_id_set(
+            args.result_boundary_target_memory_update_exclude_routes
+        )
+    except ValueError as exc:
+        raise ValueError(
+            "--result-boundary-target-memory-update-exclude-routes must be a "
+            "comma-separated list of non-negative route ids"
+        ) from exc
+    if parsed_memory_update_exclude_routes:
+        if not args.result_boundary_target_online_hard_memory:
+            raise ValueError(
+                "--result-boundary-target-memory-update-exclude-routes requires "
+                "--result-boundary-target-online-hard-memory"
+            )
+        if args.result_boundary_target_online_memory_key_mode != "prompt":
+            raise ValueError(
+                "--result-boundary-target-memory-update-exclude-routes requires "
+                "--result-boundary-target-online-memory-key-mode prompt"
+            )
+        if args.calculator_hook_routing == "all":
+            raise ValueError(
+                "--result-boundary-target-memory-update-exclude-routes requires "
+                "non-trivial calculator hook routing"
+            )
+        if max(parsed_memory_update_exclude_routes) >= args.calculator_hook_count:
+            raise ValueError(
+                "--result-boundary-target-memory-update-exclude-routes includes "
+                "a route outside --calculator-hook-count"
+            )
     if args.result_boundary_target_amortized_prior_weight < 0:
         raise ValueError(
             "--result-boundary-target-amortized-prior-weight must be non-negative"
@@ -15867,6 +15995,11 @@ def main() -> None:
                 )
                 if args.result_boundary_target_online_memory_freeze_when_full:
                     suffix_parts.append("rbtmemfreeze")
+                if args.result_boundary_target_memory_update_exclude_routes:
+                    suffix_parts.append(
+                        "rbtmemexcl"
+                        f"{args.result_boundary_target_memory_update_exclude_routes}"
+                    )
             if args.result_boundary_target_amortized_prior_weight > 0:
                 suffix_parts.append(
                     "rbtprior"
@@ -16328,6 +16461,8 @@ def main() -> None:
         f"{args.result_boundary_target_online_memory_key_mode} "
         "online_memory_freeze_when_full="
         f"{args.result_boundary_target_online_memory_freeze_when_full} "
+        "memory_update_exclude_routes="
+        f"{args.result_boundary_target_memory_update_exclude_routes} "
         "amortized_prior_weight="
         f"{args.result_boundary_target_amortized_prior_weight} "
         "amortized_prior_feature_mode="

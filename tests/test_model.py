@@ -2563,6 +2563,146 @@ def test_prompt_keyed_online_hard_memory_accepts_streaming_batches(
     assert frozen_metrics["result_boundary_target_online_memory_key_mode"] == "prompt"
 
 
+def test_prompt_keyed_online_hard_memory_can_exclude_routed_updates(
+    monkeypatch,
+) -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_prompt_online_result_boundary_route_exclusion", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = _small_calculator_cfg(
+        estimator="gumbel_concrete_interface",
+        bottleneck_mode="answer_decoder",
+        hook_count=2,
+        hook_routing="left_operand_mod",
+    )
+    cfg.calculator_action_head = "result_space"
+    model = TinyGPT(cfg)
+    x = torch.tensor(
+        [
+            [0, PLUS_ID, 1, EQ_ID, 0, 0, 0, 0],
+            [1, PLUS_ID, 1, EQ_ID, 0, 0, 0, 0],
+        ]
+    )
+    batch = ArithmeticBatch(
+        x=x,
+        y=torch.zeros_like(x),
+        loss_mask=torch.zeros_like(x, dtype=torch.bool),
+    )
+
+    def prompt_true_sum(batch_arg):
+        left, right = overfit_script.fixed_width_operands_from_batch(
+            batch_arg.x, num_digits=1
+        )
+        return left + right
+
+    def fake_result_logits(model_arg, batch_arg):
+        true_sum = prompt_true_sum(batch_arg)
+        logits = torch.full(
+            (batch_arg.x.shape[0], cfg.calculator_result_vocab_size),
+            -5.0,
+            requires_grad=True,
+        )
+        logits = logits.clone()
+        logits[torch.arange(batch_arg.x.shape[0]), true_sum] = 5.0
+        return logits, None, None, None
+
+    scored_left_operands: list[int] = []
+
+    def fake_candidate_losses(
+        model_arg,
+        batch_arg,
+        candidate_classes,
+        *,
+        chunk_size,
+        calculator_bottleneck_mode=None,
+    ):
+        left, _ = overfit_script.fixed_width_operands_from_batch(
+            batch_arg.x, num_digits=1
+        )
+        scored_left_operands.extend(int(value) for value in left.tolist())
+        true_sum = prompt_true_sum(batch_arg).unsqueeze(-1)
+        return (candidate_classes - true_sum).abs().float()
+
+    monkeypatch.setattr(
+        overfit_script,
+        "calculator_read_result_logits",
+        fake_result_logits,
+    )
+    monkeypatch.setattr(
+        overfit_script,
+        "score_forced_result_candidate_classes",
+        fake_candidate_losses,
+    )
+    monkeypatch.setattr(
+        overfit_script,
+        "score_injection_zero_answer_losses",
+        lambda model_arg, batch_arg, *, calculator_bottleneck_mode=None: torch.full(
+            (batch_arg.x.shape[0],), 10.0
+        ),
+    )
+
+    expected_count = overfit_script.prompt_memory_expected_count_for_routes(
+        model,
+        batch,
+        exclude_routes={1},
+        fallback_count=None,
+    )
+    memory = overfit_script.init_result_boundary_prompt_hard_memory(
+        model,
+        target_mode="zero_improvement",
+        expected_prompt_count=expected_count,
+    )
+    _, metrics = overfit_script.result_boundary_prompt_hard_memory_loss(
+        model,
+        batch,
+        memory,
+        num_digits=1,
+        chunk_size=4,
+        sample_count=1,
+        unique_sampling=True,
+        policy_topk_count=1,
+        freeze_when_full=True,
+        memory_update_exclude_routes={1},
+    )
+
+    assert expected_count == 1
+    assert len(memory.entries) == 1
+    assert scored_left_operands == [0]
+    assert metrics[
+        "result_boundary_target_prompt_memory_score_eligible_fraction"
+    ] == pytest.approx(0.5)
+    assert metrics[
+        "result_boundary_target_prompt_memory_update_excluded_fraction"
+    ] == pytest.approx(0.5)
+    assert metrics["result_boundary_target_forced_eval_count"] == 1
+
+    monkeypatch.setattr(
+        overfit_script,
+        "score_forced_result_candidate_classes",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("rescored")),
+    )
+    _, frozen_metrics = overfit_script.result_boundary_prompt_hard_memory_loss(
+        model,
+        batch,
+        memory,
+        num_digits=1,
+        chunk_size=4,
+        sample_count=1,
+        unique_sampling=True,
+        policy_topk_count=1,
+        freeze_when_full=True,
+        memory_update_exclude_routes={1},
+    )
+    assert frozen_metrics["result_boundary_target_online_memory_frozen"] == 1
+    assert frozen_metrics["result_boundary_target_forced_eval_count"] == 0
+
+
 def test_streaming_heldout_split_samples_only_train_prompts() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location(

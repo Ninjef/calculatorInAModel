@@ -976,6 +976,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/196-route-excluded-target-discovery-tooling-enables-the-shared-prior-source-gate",
+      "target": "researchMemory/hypotheses/phase7/196-route-excluded-target-discovery-tooling-enables-the-shared-prior-source-gate.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1163,6 +1168,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-02-route-heldout-shared-prior-diagnostic.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-02-route-excluded-target-discovery-tooling.md",
       "type": "supported_by"
     },
     {
@@ -3161,6 +3171,13 @@
       "source_path": "researchMemory/hypotheses/phase7/195-numeric-priors-can-share-target-structure-across-routed-calculators-in-a-route-heldout-dia.md",
       "status": "PARTIAL-POSITIVE",
       "title": "Numeric priors can share target structure across routed calculators in a route-heldout diagnostic."
+    },
+    {
+      "id": "doc/196-route-excluded-target-discovery-tooling-enables-the-shared-prior-source-gate",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/196-route-excluded-target-discovery-tooling-enables-the-shared-prior-source-gate.md",
+      "status": "TOOLING",
+      "title": "Route-excluded target discovery tooling enables the shared-prior source gate."
     },
     {
       "id": "doc/phase7-direction-memory",

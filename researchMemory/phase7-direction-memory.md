@@ -1,7 +1,7 @@
 # Phase 7 Direction Memory
 
 Status: active synthesis
-Last updated: 2026-05-31
+Last updated: 2026-06-02
 
 This file consolidates Phase 7 lessons by research direction. It is meant to
 be easier to retrieve than the chronological fact sheet.
@@ -376,7 +376,13 @@ Memory:
   train routes perfectly but got `0.0000` on heldout route 0. This supports a
   shared/global numeric prior mechanism for homogeneous calculators, but needs
   an actual source run that skips or reduces target discovery on some routes and
-  then passes trusted handoff.
+  then passes trusted handoff. The route-exclusion training switch now exists:
+  `--result-boundary-target-memory-update-exclude-routes` skips prompt-memory
+  target discovery on selected routed hook ids, computes memory fullness only
+  over score-eligible routes, and leaves global train/heldout prior replay
+  available to train the excluded routes. This is enabling tooling, not a
+  source-training result; the next gate should use it with shared numeric-prior
+  replay and trusted frozen-policy additive handoff.
 
 Representative evidence:
 
@@ -401,6 +407,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-quality-gated-prior-cap-fresh-seed.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-capped-prior-many-calculator-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-route-heldout-shared-prior-diagnostic.md`
+- `aiAgentWorkHistory/phase7/2026-06-02-route-excluded-target-discovery-tooling.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`
