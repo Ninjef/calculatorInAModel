@@ -164,19 +164,19 @@ Active directions:
   replay memory, imputed sparse targets, simple learned proposals, and sparse
   pairwise preferences. Continue local targets only with a materially different
   estimator/target construction or predeclared streaming/generalization gate.
-- Cheap source selectors based on frozen-state readout, forced-result geometry,
-  25/50/100-step loss slope, simple ridge over early traces, or 500-step
-  embedded probe normal score alone. Use these only for logging, rejection
-  warnings, or hypothesis generation unless validated against fresh-family
-  600-step handoff outcomes.
-- Source accuracy as a source-checkpoint selector.
-- Slight weight/seed/length tweaks unless tied to a new transfer objective.
+- Cheap source selectors/proxies based on frozen-state readout, forced-result
+  geometry, short loss slopes, ridge probes, or embedded handoff scores unless
+  validated against fresh-family 600-step handoff outcomes.
+- Source accuracy selectors and slight weight/seed/length tweaks unless tied to
+  a new transfer objective.
+- Route-excluded shared-prior patch variants: route replay, bootstrap,
+  candidate-evidence, and background refresh are closed.
 
 ## Next 1-3 Experiments
 
 1. Break family 14's per-calculator target/prior scaling: shared/global prior,
-   shared target discovery, or a credit mechanism that removes prompt-memory
-   target tables and answer-derived candidate scoring.
+   shared target discovery, or credit that removes prompt-memory target tables
+   and answer-derived candidate scoring.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Any further forced-margin, assignment-cost, or result-boundary transfer work

@@ -463,6 +463,7 @@ Representative evidence:
 - `researchReviews/2026-05-31-prompt-keyed-streaming-memory-review.md`
 - `researchReviews/2026-05-31-prompt-keyed-heldout-memory-review.md`
 - `researchReviews/2026-05-31-integrated-amortized-prior-replay-review.md`
+- `researchReviews/2026-06-03-periodic-strategy-review.md`
 - `HYPOTHESIS_LEDGER.md`
 
 ## Direction: Non-Bottleneck Direct Training

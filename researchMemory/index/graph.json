@@ -1016,6 +1016,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/204-periodic-strategy-review-closes-local-proxy-polishing-as-the-next-step",
+      "target": "researchMemory/hypotheses/phase7/204-periodic-strategy-review-closes-local-proxy-polishing-as-the-next-step.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1353,6 +1358,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "researchReviews/2026-05-31-integrated-amortized-prior-replay-review.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "researchReviews/2026-06-03-periodic-strategy-review.md",
       "type": "supported_by"
     },
     {
@@ -3297,6 +3307,13 @@
       "source_path": "researchMemory/hypotheses/phase7/203-background-evidence-refresh-does-not-fix-the-op19-route-excluded-source-gate.md",
       "status": "MIXED-NEGATIVE",
       "title": "Background evidence refresh does not fix the op19 route-excluded source gate."
+    },
+    {
+      "id": "doc/204-periodic-strategy-review-closes-local-proxy-polishing-as-the-next-step",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/204-periodic-strategy-review-closes-local-proxy-polishing-as-the-next-step.md",
+      "status": "REVIEW",
+      "title": "Periodic strategy review closes local proxy polishing as the next step."
     },
     {
       "id": "doc/phase7-direction-memory",
