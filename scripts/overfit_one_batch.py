@@ -161,6 +161,9 @@ class TrainConfig:
     result_boundary_target_amortized_prior_evidence_refresh_exclude_routes: str
     result_boundary_target_amortized_prior_route_replay_routes: str
     result_boundary_target_amortized_prior_route_replay_weight: float
+    result_boundary_target_amortized_prior_current_batch_weight: float
+    result_boundary_target_amortized_prior_current_batch_routes: str
+    result_boundary_target_amortized_prior_current_batch_min_confidence: float
     result_boundary_target_amortized_prior_bootstrap_memory_routes: str
     result_boundary_target_amortized_prior_bootstrap_memory_min_confidence: float
     result_boundary_target_amortized_prior_bootstrap_memory_min_train_accuracy: float
@@ -1031,6 +1034,13 @@ def save_curve(path: Path, curve: list[dict[str, float | int]]) -> None:
         "result_boundary_target_effective_results",
         "result_boundary_target_learned_best_fraction",
         "result_boundary_target_hard_learned_calc_accuracy",
+        "result_boundary_target_amortized_prior_current_batch_objective",
+        "result_boundary_target_amortized_prior_current_batch_model_loss",
+        "result_boundary_target_amortized_prior_current_batch_count",
+        "result_boundary_target_amortized_prior_current_batch_fraction",
+        "result_boundary_target_amortized_prior_current_batch_route_fraction",
+        "result_boundary_target_amortized_prior_current_batch_pseudo_accuracy",
+        "result_boundary_target_amortized_prior_current_batch_pseudo_confidence",
         "result_policy_stabilization_objective",
         "result_policy_entropy_weight",
         "result_policy_batch_diversity_weight",
@@ -4522,6 +4532,95 @@ def result_boundary_amortized_prior_model_loss(
         ),
         "result_boundary_target_amortized_prior_pseudo_confidence": float(
             prior_confidence.mean().item()
+        ),
+    }
+
+
+def result_boundary_amortized_prior_current_batch_loss(
+    model: TinyGPT,
+    prior: ResultBoundaryAmortizedPrior,
+    batch: ArithmeticBatch,
+    *,
+    num_digits: int,
+    route_ids: set[int] | None = None,
+    min_confidence: float = 0.0,
+) -> tuple[torch.Tensor, dict[str, float]]:
+    if not 0.0 <= min_confidence <= 1.0:
+        raise ValueError("current-batch prior target confidence must be in [0, 1]")
+    result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+    a, b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    true_sum = (a + b).to(result_logits.device)
+    with torch.no_grad():
+        prior_logits = prior.model(
+            a.to(result_logits.device), b.to(result_logits.device)
+        )
+        prior_probabilities = prior_logits.softmax(dim=-1)
+        prior_confidence, prior_targets = prior_probabilities.max(dim=-1)
+    route_filter_count = batch.x.shape[0]
+    eligible = torch.ones(
+        batch.x.shape[0], device=result_logits.device, dtype=torch.bool
+    )
+    route_ids = route_ids or set()
+    if route_ids:
+        route_fn = getattr(model, "_calculator_hook_routes", None)
+        if route_fn is None:
+            raise ValueError(
+                "current-batch prior targets require a routed calculator model"
+            )
+        hook_count = int(getattr(model.cfg, "calculator_hook_count", 1))
+        if max(route_ids) >= hook_count:
+            raise ValueError(
+                "current-batch prior targets reference a route outside hook count"
+            )
+        routes = route_fn(batch.x, hook_count)
+        if routes is None:
+            raise ValueError("current-batch prior targets require non-trivial routing")
+        route_mask = torch.zeros_like(eligible)
+        for route_id in route_ids:
+            route_mask = route_mask | (routes.to(result_logits.device) == int(route_id))
+        eligible = eligible & route_mask
+        route_filter_count = int(route_mask.sum().item())
+    eligible = eligible & (prior_confidence >= min_confidence)
+    selected_count = int(eligible.sum().item())
+    if selected_count:
+        model_loss = torch.nn.functional.cross_entropy(
+            result_logits[eligible], prior_targets[eligible]
+        )
+        selected_confidence = prior_confidence[eligible]
+        selected_targets = prior_targets[eligible]
+        selected_true_sum = true_sum[eligible]
+        pseudo_accuracy = float(
+            (selected_targets == selected_true_sum).float().mean().item()
+        )
+        pseudo_confidence = float(selected_confidence.mean().item())
+    else:
+        model_loss = result_logits.sum() * 0.0
+        pseudo_accuracy = float("nan")
+        pseudo_confidence = float("nan")
+    return model_loss, {
+        "result_boundary_target_amortized_prior_current_batch_model_loss": float(
+            model_loss.detach().item()
+        ),
+        "result_boundary_target_amortized_prior_current_batch_count": float(
+            selected_count
+        ),
+        "result_boundary_target_amortized_prior_current_batch_fraction": float(
+            selected_count / max(1, batch.x.shape[0])
+        ),
+        "result_boundary_target_amortized_prior_current_batch_route_count": float(
+            route_filter_count
+        ),
+        "result_boundary_target_amortized_prior_current_batch_route_fraction": float(
+            route_filter_count / max(1, batch.x.shape[0])
+        ),
+        "result_boundary_target_amortized_prior_current_batch_pseudo_accuracy": (
+            pseudo_accuracy
+        ),
+        "result_boundary_target_amortized_prior_current_batch_pseudo_confidence": (
+            pseudo_confidence
+        ),
+        "result_boundary_target_amortized_prior_current_batch_min_confidence": float(
+            min_confidence
         ),
     }
 
@@ -9864,6 +9963,9 @@ def run_variant(
     result_boundary_amortized_prior_route_replay_routes = parse_route_id_set(
         args.result_boundary_target_amortized_prior_route_replay_routes
     )
+    result_boundary_amortized_prior_current_batch_routes = parse_route_id_set(
+        args.result_boundary_target_amortized_prior_current_batch_routes
+    )
     result_boundary_amortized_prior_bootstrap_memory_routes = parse_route_id_set(
         args.result_boundary_target_amortized_prior_bootstrap_memory_routes
     )
@@ -10222,6 +10324,15 @@ def run_variant(
         ),
         result_boundary_target_amortized_prior_route_replay_weight=(
             args.result_boundary_target_amortized_prior_route_replay_weight
+        ),
+        result_boundary_target_amortized_prior_current_batch_weight=(
+            args.result_boundary_target_amortized_prior_current_batch_weight
+        ),
+        result_boundary_target_amortized_prior_current_batch_routes=(
+            args.result_boundary_target_amortized_prior_current_batch_routes
+        ),
+        result_boundary_target_amortized_prior_current_batch_min_confidence=(
+            args.result_boundary_target_amortized_prior_current_batch_min_confidence
         ),
         result_boundary_target_amortized_prior_bootstrap_memory_routes=(
             args.result_boundary_target_amortized_prior_bootstrap_memory_routes
@@ -11649,6 +11760,38 @@ def run_variant(
                         )
                     )
                     result_boundary_target_metrics.update(evidence_refresh_metrics)
+                if (
+                    prior_entries
+                    >= args.result_boundary_target_amortized_prior_min_entries
+                    and result_boundary_amortized_prior.train_updates > 0
+                    and args.result_boundary_target_amortized_prior_current_batch_weight
+                    > 0
+                ):
+                    (
+                        current_batch_prior_loss,
+                        current_batch_prior_metrics,
+                    ) = result_boundary_amortized_prior_current_batch_loss(
+                        model,
+                        result_boundary_amortized_prior,
+                        batch,
+                        num_digits=num_digits,
+                        route_ids=(
+                            result_boundary_amortized_prior_current_batch_routes
+                        ),
+                        min_confidence=(
+                            args.result_boundary_target_amortized_prior_current_batch_min_confidence
+                        ),
+                    )
+                    current_batch_prior_objective = (
+                        args.result_boundary_target_amortized_prior_weight
+                        * args.result_boundary_target_amortized_prior_current_batch_weight
+                        * current_batch_prior_loss
+                    )
+                    loss = loss + current_batch_prior_objective
+                    result_boundary_target_metrics.update(current_batch_prior_metrics)
+                    result_boundary_target_metrics[
+                        "result_boundary_target_amortized_prior_current_batch_objective"
+                    ] = float(current_batch_prior_objective.detach().item())
                 if (
                     prior_entries
                     >= args.result_boundary_target_amortized_prior_min_entries
@@ -13082,6 +13225,15 @@ def run_variant(
         if amortized_prior_route_replay_pool_batch is not None
         else 0
     )
+    metrics["result_boundary_target_amortized_prior_current_batch_weight"] = (
+        args.result_boundary_target_amortized_prior_current_batch_weight
+    )
+    metrics["result_boundary_target_amortized_prior_current_batch_routes"] = (
+        args.result_boundary_target_amortized_prior_current_batch_routes
+    )
+    metrics[
+        "result_boundary_target_amortized_prior_current_batch_min_confidence"
+    ] = args.result_boundary_target_amortized_prior_current_batch_min_confidence
     metrics["result_boundary_target_amortized_prior_bootstrap_memory_routes"] = (
         args.result_boundary_target_amortized_prior_bootstrap_memory_routes
     )
@@ -14604,6 +14756,35 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--result-boundary-target-amortized-prior-current-batch-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Additional multiplier for applying detached amortized-prior "
+            "pseudo-targets directly to eligible examples in the current "
+            "training batch. This supplies shared prior targets without "
+            "writing prompt-memory entries or sampling a separate replay pool."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-current-batch-routes",
+        default="",
+        help=(
+            "Optional comma-separated routed hook ids eligible for the "
+            "current-batch amortized-prior target objective. Empty means all "
+            "current-batch examples are eligible subject to confidence."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-current-batch-min-confidence",
+        type=float,
+        default=0.0,
+        help=(
+            "Minimum amortized-prior softmax confidence required before a "
+            "current-batch example receives the direct prior-target loss."
+        ),
+    )
+    parser.add_argument(
         "--result-boundary-target-amortized-prior-bootstrap-memory-routes",
         default="",
         help=(
@@ -16009,6 +16190,29 @@ def main() -> None:
                 "includes a route outside --calculator-hook-count"
             )
     try:
+        parsed_amortized_prior_current_batch_routes = parse_route_id_set(
+            args.result_boundary_target_amortized_prior_current_batch_routes
+        )
+    except ValueError as exc:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-current-batch-routes must "
+            "be a comma-separated list of non-negative route ids"
+        ) from exc
+    if parsed_amortized_prior_current_batch_routes:
+        if args.calculator_hook_routing == "all":
+            raise ValueError(
+                "--result-boundary-target-amortized-prior-current-batch-routes "
+                "requires non-trivial calculator hook routing"
+            )
+        if (
+            max(parsed_amortized_prior_current_batch_routes)
+            >= args.calculator_hook_count
+        ):
+            raise ValueError(
+                "--result-boundary-target-amortized-prior-current-batch-routes "
+                "includes a route outside --calculator-hook-count"
+            )
+    try:
         parsed_amortized_prior_bootstrap_memory_routes = parse_route_id_set(
             args.result_boundary_target_amortized_prior_bootstrap_memory_routes
         )
@@ -16180,6 +16384,20 @@ def main() -> None:
             "--result-boundary-target-amortized-prior-route-replay-weight "
             "must be non-negative"
         )
+    if args.result_boundary_target_amortized_prior_current_batch_weight < 0:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-current-batch-weight "
+            "must be non-negative"
+        )
+    if not (
+        0.0
+        <= args.result_boundary_target_amortized_prior_current_batch_min_confidence
+        <= 1.0
+    ):
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-current-batch-min-confidence "
+            "must be in [0, 1]"
+        )
     if not (
         0.0
         <= args.result_boundary_target_amortized_prior_bootstrap_memory_min_confidence
@@ -16269,6 +16487,14 @@ def main() -> None:
         raise ValueError(
             "--result-boundary-target-amortized-prior-route-replay-weight "
             "requires --result-boundary-target-amortized-prior-route-replay-routes"
+        )
+    if (
+        args.result_boundary_target_amortized_prior_current_batch_weight > 0
+        and args.result_boundary_target_amortized_prior_weight <= 0
+    ):
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-current-batch-weight "
+            "requires --result-boundary-target-amortized-prior-weight > 0"
         )
     if (
         parsed_amortized_prior_bootstrap_memory_routes
@@ -17132,6 +17358,29 @@ def main() -> None:
                         "w"
                         f"{args.result_boundary_target_amortized_prior_route_replay_weight:g}"
                     )
+                if (
+                    args.result_boundary_target_amortized_prior_current_batch_weight
+                    > 0
+                ):
+                    suffix_parts.append(
+                        "rbtpriorcur"
+                        f"{args.result_boundary_target_amortized_prior_current_batch_weight:g}"
+                    )
+                    if (
+                        args.result_boundary_target_amortized_prior_current_batch_routes
+                    ):
+                        suffix_parts.append(
+                            "rbtpriorcurroute"
+                            f"{args.result_boundary_target_amortized_prior_current_batch_routes}"
+                        )
+                    if (
+                        args.result_boundary_target_amortized_prior_current_batch_min_confidence
+                        > 0
+                    ):
+                        suffix_parts.append(
+                            "rbtpriorcurc"
+                            f"{args.result_boundary_target_amortized_prior_current_batch_min_confidence:g}"
+                        )
                 if args.result_boundary_target_amortized_prior_bootstrap_memory_routes:
                     suffix_parts.append(
                         "rbtpriorboot"
@@ -17552,6 +17801,12 @@ def main() -> None:
         f"{args.result_boundary_target_amortized_prior_route_replay_routes} "
         "amortized_prior_route_replay_weight="
         f"{args.result_boundary_target_amortized_prior_route_replay_weight} "
+        "amortized_prior_current_batch_weight="
+        f"{args.result_boundary_target_amortized_prior_current_batch_weight} "
+        "amortized_prior_current_batch_routes="
+        f"{args.result_boundary_target_amortized_prior_current_batch_routes} "
+        "amortized_prior_current_batch_min_confidence="
+        f"{args.result_boundary_target_amortized_prior_current_batch_min_confidence} "
         "amortized_prior_bootstrap_memory_routes="
         f"{args.result_boundary_target_amortized_prior_bootstrap_memory_routes} "
         "amortized_prior_bootstrap_memory_min_confidence="

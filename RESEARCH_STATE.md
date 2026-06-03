@@ -174,9 +174,9 @@ Active directions:
 
 ## Next 1-3 Experiments
 
-1. Break family 14's per-calculator target/prior scaling: shared/global prior,
-   shared target discovery, or credit that removes prompt-memory target tables
-   and answer-derived candidate scoring.
+1. Test direct current-batch shared-prior target supply as the next non-memory
+   target-formation gate, then move to shared/global target discovery or credit
+   that removes prompt-memory target tables and answer-derived candidate scoring.
 2. Keep source objectives aimed at actual handoff/readout geometry,
    not one-metric recovery triggers or cheap selectors.
 3. Any further forced-margin, assignment-cost, or result-boundary transfer work

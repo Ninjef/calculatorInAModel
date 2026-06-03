@@ -734,6 +734,93 @@ def test_candidate_evidence_prior_update_accounts_scored_targets() -> None:
     )
 
 
+def test_current_batch_prior_targets_filter_routes_and_confidence() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_current_batch_prior_targets", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    class SumPrior(torch.nn.Module):
+        operand_vocab_size = 10
+        result_vocab_size = 19
+
+        def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+            logits = torch.full((a.shape[0], 19), -5.0, device=a.device)
+            logits.scatter_(1, (a + b).unsqueeze(-1), 5.0)
+            return logits
+
+    cfg = _small_calculator_cfg(hook_count=4, hook_routing="left_operand_mod")
+    cfg.calculator_action_head = "result_space"
+    model = TinyGPT(cfg)
+    prior = overfit_script.init_result_boundary_amortized_prior(
+        operand_vocab_size=10,
+        result_vocab_size=19,
+        hidden_size=8,
+        feature_mode="numeric",
+        lr=1e-3,
+        min_entries=1,
+        replay_batch_size=1,
+        device="cpu",
+    )
+    prior.model = SumPrior()
+    x = torch.tensor(
+        [
+            [0, PLUS_ID, 2, EQ_ID, 0, 0, 0, 0],
+            [1, PLUS_ID, 2, EQ_ID, 0, 0, 0, 0],
+            [1, PLUS_ID, 3, EQ_ID, 0, 0, 0, 0],
+            [2, PLUS_ID, 2, EQ_ID, 0, 0, 0, 0],
+            [5, PLUS_ID, 2, EQ_ID, 0, 0, 0, 0],
+        ]
+    )
+    batch = ArithmeticBatch(
+        x=x,
+        y=torch.zeros_like(x),
+        loss_mask=torch.zeros_like(x, dtype=torch.bool),
+    )
+
+    loss, metrics = overfit_script.result_boundary_amortized_prior_current_batch_loss(
+        model,
+        prior,
+        batch,
+        num_digits=1,
+        route_ids={1},
+        min_confidence=0.9,
+    )
+
+    assert loss.item() > 0
+    assert metrics[
+        "result_boundary_target_amortized_prior_current_batch_count"
+    ] == 3.0
+    assert metrics[
+        "result_boundary_target_amortized_prior_current_batch_route_fraction"
+    ] == pytest.approx(3 / 5)
+    assert metrics[
+        "result_boundary_target_amortized_prior_current_batch_pseudo_accuracy"
+    ] == 1.0
+    assert metrics[
+        "result_boundary_target_amortized_prior_current_batch_pseudo_confidence"
+    ] > 0.9
+
+    zero_loss, zero_metrics = (
+        overfit_script.result_boundary_amortized_prior_current_batch_loss(
+            model,
+            prior,
+            batch,
+            num_digits=1,
+            route_ids={1},
+            min_confidence=1.0,
+        )
+    )
+    assert zero_loss.item() == pytest.approx(0.0)
+    assert zero_metrics[
+        "result_boundary_target_amortized_prior_current_batch_count"
+    ] == 0.0
+
+
 def test_candidate_evidence_refresh_scores_only_eligible_routes() -> None:
     script_path = Path("scripts/overfit_one_batch.py")
     spec = importlib.util.spec_from_file_location(

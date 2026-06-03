@@ -1021,6 +1021,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/205-current-batch-prior-targets-can-supply-shared-prior-supervision-without-prompt-memory-writ",
+      "target": "researchMemory/hypotheses/phase7/205-current-batch-prior-targets-can-supply-shared-prior-supervision-without-prompt-memory-writ.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1248,6 +1253,16 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-03-background-candidate-evidence-refresh-tooling.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-03-background-evidence-refresh-route-excluded-source.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-03-current-batch-prior-target-tooling.md",
       "type": "supported_by"
     },
     {
@@ -3314,6 +3329,13 @@
       "source_path": "researchMemory/hypotheses/phase7/204-periodic-strategy-review-closes-local-proxy-polishing-as-the-next-step.md",
       "status": "REVIEW",
       "title": "Periodic strategy review closes local proxy polishing as the next step."
+    },
+    {
+      "id": "doc/205-current-batch-prior-targets-can-supply-shared-prior-supervision-without-prompt-memory-writ",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/205-current-batch-prior-targets-can-supply-shared-prior-supervision-without-prompt-memory-writ.md",
+      "status": "TOOLING",
+      "title": "Current-batch prior targets can supply shared-prior supervision without prompt-memory writes."
     },
     {
       "id": "doc/phase7-direction-memory",

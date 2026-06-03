@@ -12277,3 +12277,42 @@ Interpretation:
 - Close the refresh variant too: do not run refresh batch/every/weight ladders
   as novelty. The next mechanism needs genuinely shared/global target formation
   or less-prescriptive credit, not more route-excluded patching.
+
+## 2026-06-03 Current-Batch Prior Target Tooling
+
+Purpose: add a direct shared-prior target-supply path that does not write
+prompt-memory entries and does not use a separately sampled replay pool.
+
+Implementation:
+
+- Added `--result-boundary-target-amortized-prior-current-batch-weight`.
+- Added `--result-boundary-target-amortized-prior-current-batch-routes`.
+- Added `--result-boundary-target-amortized-prior-current-batch-min-confidence`.
+- Added `result_boundary_amortized_prior_current_batch_loss`, which applies
+  detached prior pseudo-targets to selected live-batch examples.
+- Added per-step metrics for objective/loss/count/fraction, route fraction,
+  pseudo-accuracy, and confidence.
+- Added a unit test for route filtering and confidence gating.
+
+Smoke:
+
+```text
+runs/codex_smoke_current_batch_prior/2026-06-02_201642_616704_model-c-op0-19-fullgrid-streamb8-heldout0.25-gumbel_concrete_interface-result_space-inlr0.03-uplr0.0003-rbt0.1-hard_best_result-rbtt1-rbtchunk64-rbts2-rbtuniq-rbtonlineh-aff7f9ea18/model-c-2digit-seed2
+```
+
+Smoke result:
+
+- Final exact-match was `0/16`; this was a wiring smoke only.
+- Current-batch prior objective fired on both logged steps.
+- Step `0`: objective `0.3661`, selected count `2`, route fraction `0.25`.
+- Step `5`: objective `0.3689`, selected count `3`, route fraction `0.375`.
+
+Verification:
+
+- `python3 -m py_compile scripts/overfit_one_batch.py`
+- `python3 -m pytest tests/test_model.py -k "amortized_prior or candidate_evidence or current_batch_prior or route_exclusion"` -> `5 passed, 156 deselected`
+- `git diff --check`
+
+Next: run a real source gate that uses direct current-batch prior targets as a
+non-memory target supply mechanism. Require heldout and excluded-route quality
+before trusted handoff.

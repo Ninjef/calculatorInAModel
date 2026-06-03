@@ -406,9 +406,13 @@ Memory:
   `267,216` forced evals: final `0.6300`, best snapshot `0.6800`, heldout
   `0.3625`, prior train/heldout `0.5063`/`0.3875`, and excluded route 1
   `0.3505-0.5217`. Do not run route-weight, bootstrap, candidate-evidence, or
-  refresh weight/timing/batch ladders. Next work should leave the route-excluded
-  tweak branch and form shared/global targets earlier, learn targets jointly
-  across routes, or remove per-route prompt-memory/candidate-scoring dependence.
+  refresh weight/timing/batch ladders. A direct current-batch prior-target
+  objective is now wired: it applies detached shared-prior targets to eligible
+  live-batch examples, optionally route/confidence filtered, without
+  prompt-memory writes or separate replay-pool sampling. A tiny smoke only
+  proves the objective fires. Next work should test that as a real source gate
+  or otherwise form shared/global targets earlier, learn targets jointly across
+  routes, or remove per-route prompt-memory/candidate-scoring dependence.
 
 Representative evidence:
 
@@ -441,6 +445,8 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-06-03-candidate-evidence-prior-tooling.md`
 - `aiAgentWorkHistory/phase7/2026-06-03-candidate-evidence-route-excluded-source.md`
 - `aiAgentWorkHistory/phase7/2026-06-03-background-candidate-evidence-refresh-tooling.md`
+- `aiAgentWorkHistory/phase7/2026-06-03-background-evidence-refresh-route-excluded-source.md`
+- `aiAgentWorkHistory/phase7/2026-06-03-current-batch-prior-target-tooling.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`
