@@ -593,6 +593,95 @@ def test_subset_arithmetic_batch_by_routes_filters_global_pool() -> None:
     assert filtered.x[:, 0].tolist() == [1, 3, 5]
 
 
+def test_prior_bootstrap_memory_adds_route_targets_without_refitting_prior() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_prior_bootstrap_memory", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    class SumPrior(torch.nn.Module):
+        operand_vocab_size = 10
+        result_vocab_size = 19
+
+        def forward(self, a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+            logits = torch.full((a.shape[0], 19), -10.0, device=a.device)
+            logits.scatter_(1, (a + b).unsqueeze(-1), 10.0)
+            return logits
+
+    model = TinyGPT(
+        _small_calculator_cfg(hook_count=4, hook_routing="left_operand_mod")
+    )
+    memory = overfit_script.init_result_boundary_prompt_hard_memory(
+        model,
+        target_mode="zero_improvement",
+        expected_prompt_count=1,
+    )
+    candidate_key = tuple([0, PLUS_ID, 2, EQ_ID, 0, 0, 0, 0])
+    memory.entries[candidate_key] = {"best_result": 2, "best_loss": 0.25}
+    prior = overfit_script.init_result_boundary_amortized_prior(
+        operand_vocab_size=10,
+        result_vocab_size=19,
+        hidden_size=8,
+        feature_mode="numeric",
+        lr=1e-3,
+        min_entries=1,
+        replay_batch_size=1,
+        device="cpu",
+    )
+    prior.model = SumPrior()
+    x = torch.tensor(
+        [
+            [0, PLUS_ID, 2, EQ_ID, 0, 0, 0, 0],
+            [1, PLUS_ID, 2, EQ_ID, 0, 0, 0, 0],
+            [1, PLUS_ID, 2, EQ_ID, 0, 0, 0, 0],
+            [2, PLUS_ID, 2, EQ_ID, 0, 0, 0, 0],
+            [5, PLUS_ID, 2, EQ_ID, 0, 0, 0, 0],
+        ]
+    )
+    batch = ArithmeticBatch(
+        x=x,
+        y=torch.zeros_like(x),
+        loss_mask=torch.zeros_like(x, dtype=torch.bool),
+    )
+
+    metrics = overfit_script.bootstrap_prompt_hard_memory_from_amortized_prior(
+        model,
+        batch,
+        memory,
+        prior,
+        num_digits=1,
+        route_ids={1},
+        min_confidence=0.9,
+        max_updates_per_step=0,
+    )
+
+    assert metrics[
+        "result_boundary_target_amortized_prior_bootstrap_memory_update_count"
+    ] == 2.0
+    assert metrics[
+        "result_boundary_target_amortized_prior_bootstrap_memory_pseudo_accuracy"
+    ] == 1.0
+    bootstrapped = [
+        entry for entry in memory.entries.values() if entry.get("prior_bootstrap") == 1
+    ]
+    assert [entry["best_result"] for entry in bootstrapped] == [3, 7]
+    assert all(entry["best_loss"] == float("inf") for entry in bootstrapped)
+
+    fit_batch = overfit_script.prompt_memory_entry_batch(
+        memory,
+        num_digits=1,
+        device="cpu",
+        include_prior_bootstrap=False,
+    )
+    assert fit_batch is not None
+    _, _, y = fit_batch
+    assert y.tolist() == [2]
+
+
 def test_shared_calculator_output_projection_ties_extra_hooks() -> None:
     independent = TinyGPT(_small_calculator_cfg(hook_count=4))
     shared = TinyGPT(_small_calculator_cfg(hook_count=4, share_output_proj=True))

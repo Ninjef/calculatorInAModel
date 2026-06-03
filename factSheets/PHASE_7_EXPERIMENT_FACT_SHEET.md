@@ -11983,3 +11983,49 @@ Interpretation:
   shared/global target discovery, route-shared prior training on candidate
   evidence before hard memory freezes, or a less-prescriptive credit signal that
   removes per-route prompt-memory tables and answer-derived candidate scoring.
+
+## 2026-06-03 Prior-Bootstrap Prompt Memory Tooling
+
+Purpose: add a stronger shared-target mechanism for the route-excluded source
+gate. Instead of only replaying prior pseudo-targets against model logits, the
+new path can write high-confidence shared-prior predictions into prompt memory
+for routes whose direct candidate-scored target discovery is disabled.
+
+Implementation:
+
+- Added `--result-boundary-target-amortized-prior-bootstrap-memory-routes`.
+- Added `--result-boundary-target-amortized-prior-bootstrap-memory-min-confidence`.
+- Added `--result-boundary-target-amortized-prior-bootstrap-memory-min-train-accuracy`.
+- Added `--result-boundary-target-amortized-prior-bootstrap-memory-max-updates-per-step`.
+- Bootstrapped prompt-memory entries are marked with `prior_bootstrap=1`.
+- Prior fitting excludes bootstrapped entries, so the prior stays grounded in
+  candidate-scored evidence from directly scored routes rather than fitting its
+  own pseudo-labels.
+- Streaming duplicate prompt rows are deduplicated by key before bootstrap
+  updates and before the per-step cap is applied.
+
+Smoke:
+
+```text
+runs/2026-06-03_prior_bootstrap_memory_smoke/2026-06-02_182454_691291_model-c-op0-2-fullgrid-streamb8-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk16-rbts4-rbtuniq-rbttopk2-rbton-5b7322ec44/model-c-2digit-seed8
+```
+
+Smoke result:
+
+- This was a wiring smoke, not a source gate; final exact-match was `0/40`.
+- Final prompt-memory entries were `5` against `4` expected direct entries.
+- Final prior-bootstrap entries were `3`.
+- The training curve recorded bootstrap metrics, including step-0 `2` unique
+  candidates and `2` updates.
+- The intentionally permissive confidence threshold produced low-confidence,
+  incorrect pseudo-labels at step 0, so real source gates should use conservative
+  prior train-accuracy and confidence gates.
+
+Verification:
+
+- `python3 -m py_compile scripts/overfit_one_batch.py`
+- `python3 -m pytest tests/test_model.py -k "prior_bootstrap_memory or subset_arithmetic_batch_by_routes or prompt_keyed_online_hard_memory or streaming_heldout_split or amortized_prior or route_exclusion"` -> `7 passed, 151 deselected`
+- `git diff --check`
+
+Next: run a real op19 route-excluded source gate with conservative
+prior-bootstrap gates and require heldout/excluded-route quality before handoff.

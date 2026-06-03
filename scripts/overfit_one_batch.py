@@ -156,6 +156,10 @@ class TrainConfig:
     result_boundary_target_amortized_prior_train_replay_weight: float
     result_boundary_target_amortized_prior_route_replay_routes: str
     result_boundary_target_amortized_prior_route_replay_weight: float
+    result_boundary_target_amortized_prior_bootstrap_memory_routes: str
+    result_boundary_target_amortized_prior_bootstrap_memory_min_confidence: float
+    result_boundary_target_amortized_prior_bootstrap_memory_min_train_accuracy: float
+    result_boundary_target_amortized_prior_bootstrap_memory_max_updates_per_step: int
     result_policy_entropy_weight: float
     result_policy_batch_diversity_weight: float
     result_policy_improvement_assignment_weight: float
@@ -305,6 +309,7 @@ class ResultBoundaryPromptHardMemory:
     scoring_bottleneck_mode: str
     expected_prompt_count: int | None = None
     forced_eval_count: int = 0
+    prior_bootstrap_count: int = 0
 
 
 class OperandResultPrior(torch.nn.Module):
@@ -3709,18 +3714,133 @@ def prompt_memory_entry_batch(
     *,
     num_digits: int,
     device: str | torch.device,
+    include_prior_bootstrap: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor] | None:
     if not memory.entries:
         return None
     xs: list[list[int]] = []
     targets: list[int] = []
     for key, entry in memory.entries.items():
+        if not include_prior_bootstrap and int(entry.get("prior_bootstrap", 0)):
+            continue
         xs.append(list(key))
         targets.append(int(entry["best_result"]))
+    if not xs:
+        return None
     x = torch.tensor(xs, dtype=torch.long, device=device)
     a, b = fixed_width_operands_from_batch(x, num_digits=num_digits)
     y = torch.tensor(targets, dtype=torch.long, device=device)
     return a, b, y
+
+
+@torch.no_grad()
+def bootstrap_prompt_hard_memory_from_amortized_prior(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    memory: ResultBoundaryPromptHardMemory,
+    prior: ResultBoundaryAmortizedPrior,
+    *,
+    num_digits: int,
+    route_ids: set[int],
+    min_confidence: float,
+    max_updates_per_step: int,
+) -> dict[str, float]:
+    if not route_ids:
+        return {
+            "result_boundary_target_amortized_prior_bootstrap_memory_candidate_count": 0.0,
+            "result_boundary_target_amortized_prior_bootstrap_memory_update_count": 0.0,
+            "result_boundary_target_amortized_prior_bootstrap_memory_confidence": float(
+                "nan"
+            ),
+            "result_boundary_target_amortized_prior_bootstrap_memory_pseudo_accuracy": float(
+                "nan"
+            ),
+            "result_boundary_target_amortized_prior_bootstrap_memory_entries": float(
+                memory.prior_bootstrap_count
+            ),
+        }
+    if not 0.0 <= min_confidence <= 1.0:
+        raise ValueError("prior-bootstrap memory confidence must be in [0, 1]")
+    if max_updates_per_step < 0:
+        raise ValueError("prior-bootstrap memory update cap must be non-negative")
+    route_fn = getattr(model, "_calculator_hook_routes", None)
+    if route_fn is None:
+        raise ValueError("prior-bootstrap memory requires a routed calculator model")
+    hook_count = int(getattr(model.cfg, "calculator_hook_count", 1))
+    if max(route_ids) >= hook_count:
+        raise ValueError("prior-bootstrap memory references a route outside hook count")
+    routes = route_fn(batch.x, hook_count)
+    if routes is None:
+        raise ValueError("prior-bootstrap memory requires non-trivial routing")
+    route_mask = torch.zeros(batch.x.shape[0], device=batch.x.device, dtype=torch.bool)
+    for route_id in route_ids:
+        route_mask = route_mask | (routes == int(route_id))
+    keys = prompt_memory_keys(batch)
+    unseen = torch.tensor(
+        [key not in memory.entries for key in keys],
+        device=batch.x.device,
+        dtype=torch.bool,
+    )
+    a, b = fixed_width_operands_from_batch(batch.x, num_digits=num_digits)
+    prior_logits = prior.model(a.to(batch.x.device), b.to(batch.x.device))
+    prior_probabilities = prior_logits.softmax(dim=-1)
+    prior_confidence, prior_targets = prior_probabilities.max(dim=-1)
+    candidate_mask = route_mask & unseen & (prior_confidence >= min_confidence)
+    raw_candidate_indices = torch.nonzero(candidate_mask, as_tuple=False).flatten()
+    unique_candidate_values: list[int] = []
+    seen_candidate_keys: set[tuple[int, ...]] = set()
+    for raw_index in raw_candidate_indices.detach().cpu().tolist():
+        key = keys[int(raw_index)]
+        if key in seen_candidate_keys or key in memory.entries:
+            continue
+        seen_candidate_keys.add(key)
+        unique_candidate_values.append(int(raw_index))
+    candidate_count = len(unique_candidate_values)
+    if max_updates_per_step > 0:
+        unique_candidate_values = unique_candidate_values[:max_updates_per_step]
+    candidate_indices = torch.tensor(
+        unique_candidate_values,
+        dtype=torch.long,
+        device=batch.x.device,
+    )
+    true_sum = (a + b).to(prior_targets.device)
+    for index in candidate_indices.detach().cpu().tolist():
+        key = keys[int(index)]
+        memory.entries[key] = {
+            "best_result": int(prior_targets[int(index)].item()),
+            "best_loss": float("inf"),
+            "prior_bootstrap": 1,
+            "prior_confidence": float(prior_confidence[int(index)].item()),
+        }
+        memory.prior_bootstrap_count += 1
+    if int(candidate_indices.numel()) == 0:
+        mean_confidence = float("nan")
+        pseudo_accuracy = float("nan")
+    else:
+        selected_confidence = prior_confidence.index_select(0, candidate_indices)
+        selected_targets = prior_targets.index_select(0, candidate_indices)
+        selected_true_sum = true_sum.index_select(0, candidate_indices)
+        mean_confidence = float(selected_confidence.mean().item())
+        pseudo_accuracy = float(
+            (selected_targets == selected_true_sum).float().mean().item()
+        )
+    return {
+        "result_boundary_target_amortized_prior_bootstrap_memory_candidate_count": float(
+            candidate_count
+        ),
+        "result_boundary_target_amortized_prior_bootstrap_memory_update_count": float(
+            candidate_indices.numel()
+        ),
+        "result_boundary_target_amortized_prior_bootstrap_memory_confidence": (
+            mean_confidence
+        ),
+        "result_boundary_target_amortized_prior_bootstrap_memory_pseudo_accuracy": (
+            pseudo_accuracy
+        ),
+        "result_boundary_target_amortized_prior_bootstrap_memory_entries": float(
+            memory.prior_bootstrap_count
+        ),
+    }
 
 
 def target_stratified_prior_fit_indices(
@@ -3795,6 +3915,7 @@ def train_result_boundary_amortized_prior(
         memory,
         num_digits=num_digits,
         device=device,
+        include_prior_bootstrap=False,
     )
     if entry_batch is None:
         return {
@@ -9442,6 +9563,9 @@ def run_variant(
     result_boundary_amortized_prior_route_replay_routes = parse_route_id_set(
         args.result_boundary_target_amortized_prior_route_replay_routes
     )
+    result_boundary_amortized_prior_bootstrap_memory_routes = parse_route_id_set(
+        args.result_boundary_target_amortized_prior_bootstrap_memory_routes
+    )
     if (
         result_boundary_amortized_prior_route_replay_routes
         and args.result_boundary_target_amortized_prior_route_replay_weight > 0
@@ -9777,6 +9901,18 @@ def run_variant(
         ),
         result_boundary_target_amortized_prior_route_replay_weight=(
             args.result_boundary_target_amortized_prior_route_replay_weight
+        ),
+        result_boundary_target_amortized_prior_bootstrap_memory_routes=(
+            args.result_boundary_target_amortized_prior_bootstrap_memory_routes
+        ),
+        result_boundary_target_amortized_prior_bootstrap_memory_min_confidence=(
+            args.result_boundary_target_amortized_prior_bootstrap_memory_min_confidence
+        ),
+        result_boundary_target_amortized_prior_bootstrap_memory_min_train_accuracy=(
+            args.result_boundary_target_amortized_prior_bootstrap_memory_min_train_accuracy
+        ),
+        result_boundary_target_amortized_prior_bootstrap_memory_max_updates_per_step=(
+            args.result_boundary_target_amortized_prior_bootstrap_memory_max_updates_per_step
         ),
         result_policy_entropy_weight=args.result_policy_entropy_weight,
         result_policy_batch_diversity_weight=(
@@ -11105,6 +11241,45 @@ def run_variant(
                 prior_entries = prior_train_metrics[
                     "result_boundary_target_amortized_prior_entries"
                 ]
+                bootstrap_min_train_accuracy = (
+                    args.result_boundary_target_amortized_prior_bootstrap_memory_min_train_accuracy
+                )
+                bootstrap_prior_train_accuracy = prior_train_metrics[
+                    "result_boundary_target_amortized_prior_train_accuracy"
+                ]
+                bootstrap_train_accuracy_met = (
+                    bootstrap_min_train_accuracy <= 0
+                    or bootstrap_prior_train_accuracy >= bootstrap_min_train_accuracy
+                )
+                result_boundary_target_metrics[
+                    "result_boundary_target_amortized_prior_bootstrap_memory_train_accuracy_met"
+                ] = float(bootstrap_train_accuracy_met)
+                if (
+                    result_boundary_amortized_prior_bootstrap_memory_routes
+                    and prior_entries
+                    >= args.result_boundary_target_amortized_prior_min_entries
+                    and result_boundary_amortized_prior.train_updates > 0
+                    and bootstrap_train_accuracy_met
+                ):
+                    bootstrap_memory_metrics = (
+                        bootstrap_prompt_hard_memory_from_amortized_prior(
+                            model,
+                            batch,
+                            result_boundary_prompt_hard_memory,
+                            result_boundary_amortized_prior,
+                            num_digits=num_digits,
+                            route_ids=(
+                                result_boundary_amortized_prior_bootstrap_memory_routes
+                            ),
+                            min_confidence=(
+                                args.result_boundary_target_amortized_prior_bootstrap_memory_min_confidence
+                            ),
+                            max_updates_per_step=(
+                                args.result_boundary_target_amortized_prior_bootstrap_memory_max_updates_per_step
+                            ),
+                        )
+                    )
+                    result_boundary_target_metrics.update(bootstrap_memory_metrics)
                 if (
                     prior_entries
                     >= args.result_boundary_target_amortized_prior_min_entries
@@ -12523,6 +12698,22 @@ def run_variant(
         if amortized_prior_route_replay_pool_batch is not None
         else 0
     )
+    metrics["result_boundary_target_amortized_prior_bootstrap_memory_routes"] = (
+        args.result_boundary_target_amortized_prior_bootstrap_memory_routes
+    )
+    metrics[
+        "result_boundary_target_amortized_prior_bootstrap_memory_min_confidence"
+    ] = args.result_boundary_target_amortized_prior_bootstrap_memory_min_confidence
+    metrics[
+        "result_boundary_target_amortized_prior_bootstrap_memory_min_train_accuracy"
+    ] = (
+        args.result_boundary_target_amortized_prior_bootstrap_memory_min_train_accuracy
+    )
+    metrics[
+        "result_boundary_target_amortized_prior_bootstrap_memory_max_updates_per_step"
+    ] = (
+        args.result_boundary_target_amortized_prior_bootstrap_memory_max_updates_per_step
+    )
     if result_boundary_prompt_hard_memory is not None:
         metrics["result_boundary_target_prompt_memory_entries"] = len(
             result_boundary_prompt_hard_memory.entries
@@ -12533,6 +12724,9 @@ def run_variant(
         metrics["result_boundary_target_online_memory_forced_eval_count"] = (
             result_boundary_prompt_hard_memory.forced_eval_count
         )
+        metrics[
+            "result_boundary_target_amortized_prior_bootstrap_memory_entries"
+        ] = result_boundary_prompt_hard_memory.prior_bootstrap_count
     if result_boundary_amortized_prior is not None:
         metrics["result_boundary_target_amortized_prior_updates"] = (
             result_boundary_amortized_prior.train_updates
@@ -13957,6 +14151,45 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--result-boundary-target-amortized-prior-bootstrap-memory-routes",
+        default="",
+        help=(
+            "Comma-separated routed hook ids whose unseen prompt-memory entries "
+            "may be bootstrapped from high-confidence amortized-prior "
+            "pseudo-targets. This supplies shared-prior targets without scoring "
+            "candidate results on those routes."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-bootstrap-memory-min-confidence",
+        type=float,
+        default=0.0,
+        help=(
+            "Minimum amortized-prior softmax confidence required before writing "
+            "a prior-bootstrap prompt-memory entry. Used only when bootstrap "
+            "routes are configured."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-bootstrap-memory-min-train-accuracy",
+        type=float,
+        default=0.0,
+        help=(
+            "Minimum candidate-evidence memory accuracy of the amortized prior "
+            "before prior-bootstrap prompt-memory entries may be written. "
+            "0 disables this gate."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-bootstrap-memory-max-updates-per-step",
+        type=int,
+        default=0,
+        help=(
+            "Maximum prior-bootstrap memory entries to add per training step. "
+            "0 means no per-step cap."
+        ),
+    )
+    parser.add_argument(
         "--result-policy-entropy-weight",
         type=float,
         default=0.0,
@@ -15322,6 +15555,26 @@ def main() -> None:
                 "--result-boundary-target-amortized-prior-route-replay-routes "
                 "includes a route outside --calculator-hook-count"
             )
+    try:
+        parsed_amortized_prior_bootstrap_memory_routes = parse_route_id_set(
+            args.result_boundary_target_amortized_prior_bootstrap_memory_routes
+        )
+    except ValueError as exc:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-bootstrap-memory-routes must "
+            "be a comma-separated list of non-negative route ids"
+        ) from exc
+    if parsed_amortized_prior_bootstrap_memory_routes:
+        if args.calculator_hook_routing == "all":
+            raise ValueError(
+                "--result-boundary-target-amortized-prior-bootstrap-memory-routes "
+                "requires non-trivial calculator hook routing"
+            )
+        if max(parsed_amortized_prior_bootstrap_memory_routes) >= args.calculator_hook_count:
+            raise ValueError(
+                "--result-boundary-target-amortized-prior-bootstrap-memory-routes "
+                "includes a route outside --calculator-hook-count"
+            )
     if args.result_boundary_target_amortized_prior_weight < 0:
         raise ValueError(
             "--result-boundary-target-amortized-prior-weight must be non-negative"
@@ -15431,6 +15684,32 @@ def main() -> None:
             "--result-boundary-target-amortized-prior-route-replay-weight "
             "must be non-negative"
         )
+    if not (
+        0.0
+        <= args.result_boundary_target_amortized_prior_bootstrap_memory_min_confidence
+        <= 1.0
+    ):
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-bootstrap-memory-min-confidence "
+            "must be in [0, 1]"
+        )
+    if not (
+        0.0
+        <= args.result_boundary_target_amortized_prior_bootstrap_memory_min_train_accuracy
+        <= 1.0
+    ):
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-bootstrap-memory-min-train-accuracy "
+            "must be in [0, 1]"
+        )
+    if (
+        args.result_boundary_target_amortized_prior_bootstrap_memory_max_updates_per_step
+        < 0
+    ):
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-bootstrap-memory-max-updates-per-step "
+            "must be non-negative"
+        )
     if args.result_boundary_target_amortized_prior_weight > 0:
         if not args.result_boundary_target_online_hard_memory:
             raise ValueError(
@@ -15470,6 +15749,14 @@ def main() -> None:
         raise ValueError(
             "--result-boundary-target-amortized-prior-route-replay-weight "
             "requires --result-boundary-target-amortized-prior-route-replay-routes"
+        )
+    if (
+        parsed_amortized_prior_bootstrap_memory_routes
+        and args.result_boundary_target_amortized_prior_weight <= 0
+    ):
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-bootstrap-memory-routes "
+            "requires --result-boundary-target-amortized-prior-weight > 0"
         )
     if args.streaming_train_batch_size < 0:
         raise ValueError("--streaming-train-batch-size must be non-negative")
@@ -16298,6 +16585,29 @@ def main() -> None:
                         "w"
                         f"{args.result_boundary_target_amortized_prior_route_replay_weight:g}"
                     )
+                if args.result_boundary_target_amortized_prior_bootstrap_memory_routes:
+                    suffix_parts.append(
+                        "rbtpriorboot"
+                        f"{args.result_boundary_target_amortized_prior_bootstrap_memory_routes}"
+                        "c"
+                        f"{args.result_boundary_target_amortized_prior_bootstrap_memory_min_confidence:g}"
+                    )
+                    if (
+                        args.result_boundary_target_amortized_prior_bootstrap_memory_min_train_accuracy
+                        > 0
+                    ):
+                        suffix_parts.append(
+                            "rbtpriorboottacc"
+                            f"{args.result_boundary_target_amortized_prior_bootstrap_memory_min_train_accuracy:g}"
+                        )
+                    if (
+                        args.result_boundary_target_amortized_prior_bootstrap_memory_max_updates_per_step
+                        > 0
+                    ):
+                        suffix_parts.append(
+                            "rbtpriorbootcap"
+                            f"{args.result_boundary_target_amortized_prior_bootstrap_memory_max_updates_per_step}"
+                        )
         if args.result_boundary_target_min_probability_floor > 0:
             suffix_parts.append(
                 "rbtfloor"
@@ -16684,7 +16994,15 @@ def main() -> None:
         "amortized_prior_route_replay_routes="
         f"{args.result_boundary_target_amortized_prior_route_replay_routes} "
         "amortized_prior_route_replay_weight="
-        f"{args.result_boundary_target_amortized_prior_route_replay_weight}"
+        f"{args.result_boundary_target_amortized_prior_route_replay_weight} "
+        "amortized_prior_bootstrap_memory_routes="
+        f"{args.result_boundary_target_amortized_prior_bootstrap_memory_routes} "
+        "amortized_prior_bootstrap_memory_min_confidence="
+        f"{args.result_boundary_target_amortized_prior_bootstrap_memory_min_confidence} "
+        "amortized_prior_bootstrap_memory_min_train_accuracy="
+        f"{args.result_boundary_target_amortized_prior_bootstrap_memory_min_train_accuracy} "
+        "amortized_prior_bootstrap_memory_max_updates_per_step="
+        f"{args.result_boundary_target_amortized_prior_bootstrap_memory_max_updates_per_step}"
     )
     print(
         "additive semantic distillation: "
