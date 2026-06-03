@@ -12155,22 +12155,22 @@ runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fitfull_every2_stop1p
 
 Results:
 
-| Metric | No bootstrap | Route replay w2 | Prior bootstrap | Candidate evidence |
-| --- | ---: | ---: | ---: | ---: |
-| Final eval exact / calculator-result accuracy | `0.7875` | `0.8175` | `0.7700` | `0.7725` |
-| Best snapshot normal / calculator-result accuracy | `0.8075` | `0.8075` | `0.7825` | `0.8000` |
-| Final snapshot normal / calculator-result accuracy | n/a | `0.8075` | `0.7800` | `0.8000` |
-| Final controls: injection-zero / forced-zero / forced-random | `0.0475 / 0.0025 / 0.0025` | `0.0475 / 0.0025 / 0.0025` | `0.0475 / 0.0025 / 0.0025` | `0.0475 / 0.0025 / 0.0025` |
-| Train prompt exact / calculator-result accuracy | `0.840625` | `0.85625` | `0.8125` | `0.80625` |
-| Heldout prompt exact / calculator-result accuracy | `0.5625` | `0.5750` | `0.5625` | `0.5375` |
-| Prior train / heldout accuracy | `0.7781 / 0.5625` | `0.7750 / 0.5750` | `0.7781 / 0.5625` | `0.7156 / 0.5375` |
-| Excluded route 1 train prompt calc | n/a | `0.6701` | `0.6392` | `0.6495` |
-| Excluded route 1 heldout prompt calc | `0.7391` | `0.7391` | `0.7391` | `0.6522` |
-| Excluded route 1 diagnostic calc | `0.8000` | `0.8000` | `0.7714` | `0.7429` |
-| Prompt-memory entries / expected direct entries | `223 / 223` | `223 / 223` | `300 / 223` | `223 / 223` |
-| Candidate-evidence prior updates / examples | n/a | n/a | n/a | `32 / 1060` |
-| Forced-result evals | `37,896` | `58,800` | `37,896` | `33,816` |
-| Prior updates | `2,501` | `2,501` | `2,501` | `2,501` |
+| Metric | No bootstrap | Route replay w2 | Prior bootstrap | Candidate evidence | Background refresh |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Final eval exact / calculator-result accuracy | `0.7875` | `0.8175` | `0.7700` | `0.7725` | `0.6300` |
+| Best snapshot normal / calculator-result accuracy | `0.8075` | `0.8075` | `0.7825` | `0.8000` | `0.6800` |
+| Final snapshot normal / calculator-result accuracy | n/a | `0.8075` | `0.7800` | `0.8000` | `0.6475` |
+| Final controls: injection-zero / forced-zero / forced-random | `0.0475 / 0.0025 / 0.0025` | `0.0475 / 0.0025 / 0.0025` | `0.0475 / 0.0025 / 0.0025` | `0.0475 / 0.0025 / 0.0025` | `0.0475 / 0.0025 / 0.0025` |
+| Train prompt exact / calculator-result accuracy | `0.840625` | `0.85625` | `0.8125` | `0.80625` | `0.684375` |
+| Heldout prompt exact / calculator-result accuracy | `0.5625` | `0.5750` | `0.5625` | `0.5375` | `0.3625` |
+| Prior train / heldout accuracy | `0.7781 / 0.5625` | `0.7750 / 0.5750` | `0.7781 / 0.5625` | `0.7156 / 0.5375` | `0.50625 / 0.3875` |
+| Excluded route 1 train prompt calc | n/a | `0.6701` | `0.6392` | `0.6495` | `0.3505` |
+| Excluded route 1 heldout prompt calc | `0.7391` | `0.7391` | `0.7391` | `0.6522` | `0.5217` |
+| Excluded route 1 diagnostic calc | `0.8000` | `0.8000` | `0.7714` | `0.7429` | `0.4857` |
+| Prompt-memory entries / expected direct entries | `223 / 223` | `223 / 223` | `300 / 223` | `223 / 223` | `223 / 223` |
+| Candidate/background evidence updates / examples | n/a | n/a | n/a | `32 / 1060` | `501 / 11056` |
+| Forced-result evals | `37,896` | `58,800` | `37,896` | `33,816` | `42,144 + 267,216 refresh` |
+| Prior updates | `2,501` | `2,501` | `2,501` | `2,501` | `2,501` |
 
 Candidate-evidence timing:
 
@@ -12238,3 +12238,42 @@ Verification:
 Next: run a real op19 route-excluded source where evidence refresh scores only
 non-excluded routes and prior replay trains all routes. Treat the smoke only as
 tooling evidence.
+
+## 2026-06-03 Background Evidence Refresh Route-Excluded Source
+
+Purpose: test whether fresh background candidate-evidence refresh can train the
+shared amortized prior strongly enough to cover a route excluded from direct
+prompt-memory target discovery.
+
+Run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fitfull_every2_stop1pat100_exclroute1_evref1_b32_e10_src5000/2026-06-02_194056_045602_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-3cc8bf63d3/model-c-2digit-seed9
+```
+
+Result:
+
+- Mixed-negative. Final eval exact/calc was `252/400 = 0.6300`.
+- Best/final snapshot normal was `0.6800`/`0.6475`, with final controls
+  `0.0475` injection-zero, `0.0025` forced-zero, and `0.0025` forced-random.
+- Prompt train/heldout were `0.684375`/`0.3625`.
+- Prior train/heldout were only `0.50625`/`0.3875`; prior confidence stayed low
+  at `0.2332`/`0.2203`.
+- Excluded route 1 stayed weak: train `0.3505`, heldout `0.5217`, diagnostic
+  `0.4857`.
+- Prompt memory filled only the score-eligible direct entries (`223/223`), with
+  score-eligible/update-excluded fractions `0.59375`/`0.40625`.
+- Background refresh fired heavily: `501` refresh updates over `11,056`
+  examples and `267,216` refresh forced evals. Online prompt-memory scoring
+  added `42,144` forced evals; prior replay still made `2,501` updates.
+- No trusted handoff was run because source heldout and excluded-route quality
+  missed.
+
+Interpretation:
+
+- Fresh background evidence did not repair the shared-prior bottleneck. It
+  increased candidate-scoring cost and degraded prompt/prior generalization
+  versus the no-refresh and candidate-evidence sources.
+- Close the refresh variant too: do not run refresh batch/every/weight ladders
+  as novelty. The next mechanism needs genuinely shared/global target formation
+  or less-prescriptive credit, not more route-excluded patching.

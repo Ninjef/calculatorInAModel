@@ -1011,6 +1011,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/203-background-evidence-refresh-does-not-fix-the-op19-route-excluded-source-gate",
+      "target": "researchMemory/hypotheses/phase7/203-background-evidence-refresh-does-not-fix-the-op19-route-excluded-source-gate.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -3285,6 +3290,13 @@
       "source_path": "researchMemory/hypotheses/phase7/202-background-candidate-evidence-refresh-can-train-the-shared-prior-without-prompt-memory-wri.md",
       "status": "TOOLING",
       "title": "Background candidate-evidence refresh can train the shared prior without prompt-memory writes."
+    },
+    {
+      "id": "doc/203-background-evidence-refresh-does-not-fix-the-op19-route-excluded-source-gate",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/203-background-evidence-refresh-does-not-fix-the-op19-route-excluded-source-gate.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Background evidence refresh does not fix the op19 route-excluded source gate."
     },
     {
       "id": "doc/phase7-direction-memory",

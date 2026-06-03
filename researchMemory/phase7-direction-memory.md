@@ -400,14 +400,15 @@ Memory:
   on the real source (`32` updates over `1060` examples) but still missed:
   final `0.7725`, best snapshot `0.8000`, heldout `0.5375`, prior
   train/heldout `0.7156`/`0.5375`, and excluded route 1 `0.6495-0.7429`.
-  Do not run route-weight, bootstrap, or candidate-evidence weight/timing
-  ladders. Next work should leave the route-excluded tweak branch and form
-  shared/global targets earlier, learn targets jointly across routes, or remove
-  per-route prompt-memory/candidate-scoring dependence.
-  Background candidate-evidence refresh tooling now exists for the next gate:
-  it can keep scoring fresh train-pool prompts into the shared prior without
-  writing prompt-memory entries and can exclude heldout routes from evidence
-  scoring, but it has only passed a tiny smoke so far.
+  Background candidate-evidence refresh then scored fresh train-pool prompts
+  into the shared prior without prompt-memory writes, but the real op19 gate
+  missed harder despite `501` refresh updates over `11,056` examples and
+  `267,216` forced evals: final `0.6300`, best snapshot `0.6800`, heldout
+  `0.3625`, prior train/heldout `0.5063`/`0.3875`, and excluded route 1
+  `0.3505-0.5217`. Do not run route-weight, bootstrap, candidate-evidence, or
+  refresh weight/timing/batch ladders. Next work should leave the route-excluded
+  tweak branch and form shared/global targets earlier, learn targets jointly
+  across routes, or remove per-route prompt-memory/candidate-scoring dependence.
 
 Representative evidence:
 

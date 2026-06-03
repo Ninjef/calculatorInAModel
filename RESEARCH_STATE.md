@@ -1,4 +1,4 @@
-# Research State (Last updated: 2026-06-02)
+# Research State (Last updated: 2026-06-03)
 Keep near `200` lines; move stale context to reviews, memories, fact sheets, or work logs.
 ## Overarching Goal
 Prove that a model can be trained from scratch to use a non-differentiable
@@ -138,8 +138,8 @@ Active directions:
   prior fitting still scale linearly (`24.8M` candidate+prior examples at 16
   op29 calculators). Route-heldout diag passed (`0.933-0.979`), but op19
   route-excluded source reached only `0.7875` final; route-prior replay nudged
-  final to `0.8175`, while prior-bootstrap/candidate-evidence fell to
-  `0.770`/`0.7725`. Heldout stayed weak; stop route-excluded tweak ladders.
+  final to `0.8175`, while prior-bootstrap/candidate-evidence/background
+  refresh fell to `0.770`/`0.7725`/`0.630`; heldout/prior heldout stayed weak.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 clears op19/op29 staged gates but still scores candidates.
