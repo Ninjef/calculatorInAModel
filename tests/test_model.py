@@ -734,6 +734,76 @@ def test_candidate_evidence_prior_update_accounts_scored_targets() -> None:
     )
 
 
+def test_candidate_evidence_refresh_scores_only_eligible_routes() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_candidate_evidence_refresh", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    cfg = _small_calculator_cfg(hook_count=4, hook_routing="left_operand_mod")
+    cfg.calculator_action_head = "result_space"
+    model = TinyGPT(cfg)
+    prior = overfit_script.init_result_boundary_amortized_prior(
+        operand_vocab_size=10,
+        result_vocab_size=19,
+        hidden_size=8,
+        feature_mode="numeric",
+        lr=1e-3,
+        min_entries=1,
+        replay_batch_size=1,
+        device="cpu",
+    )
+    x = torch.tensor(
+        [
+            [0, PLUS_ID, 1, EQ_ID, 0, 0, 0, 0],
+            [1, PLUS_ID, 1, EQ_ID, 0, 0, 0, 0],
+            [2, PLUS_ID, 1, EQ_ID, 0, 0, 0, 0],
+            [3, PLUS_ID, 1, EQ_ID, 0, 0, 0, 0],
+        ]
+    )
+    batch = ArithmeticBatch(
+        x=x,
+        y=torch.zeros_like(x),
+        loss_mask=torch.zeros_like(x, dtype=torch.bool),
+    )
+
+    metrics = overfit_script.train_result_boundary_amortized_prior_from_scored_candidates(
+        model,
+        batch,
+        prior,
+        num_digits=1,
+        chunk_size=4,
+        sample_count=3,
+        unique_sampling=True,
+        policy_topk_count=0,
+        target_mode="hard_best_result",
+        weight=1.0,
+        exclude_routes={1},
+    )
+
+    assert metrics[
+        "result_boundary_target_amortized_prior_evidence_refresh_count"
+    ] == 3.0
+    assert metrics[
+        "result_boundary_target_amortized_prior_evidence_refresh_examples"
+    ] == 3.0
+    assert metrics[
+        "result_boundary_target_amortized_prior_evidence_refresh_updates"
+    ] == 1.0
+    assert metrics[
+        "result_boundary_target_amortized_prior_evidence_refresh_score_eligible_fraction"
+    ] == pytest.approx(0.75)
+    assert metrics[
+        "result_boundary_target_amortized_prior_evidence_refresh_batch_forced_eval_count"
+    ] == 9.0
+    assert prior.candidate_evidence_forced_eval_count == 9
+    assert prior.evidence_refresh_forced_eval_count == 9
+
+
 def test_shared_calculator_output_projection_ties_extra_hooks() -> None:
     independent = TinyGPT(_small_calculator_cfg(hook_count=4))
     shared = TinyGPT(_small_calculator_cfg(hook_count=4, share_output_proj=True))

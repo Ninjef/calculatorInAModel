@@ -12194,3 +12194,47 @@ Interpretation:
 - Close the route-excluded tweak branch: do not run candidate-evidence
   weight/timing ladders, route-replay ladders, or bootstrap threshold/cap
   ladders. The next work should change target formation itself.
+
+## 2026-06-03 Background Candidate-Evidence Refresh Tooling
+
+Purpose: create a target-formation mechanism that is not another prompt-memory
+write path. The shared amortized prior can now keep receiving candidate-scored
+evidence from fresh train-pool prompts after prompt memory would otherwise
+freeze, while optionally excluding selected routed hooks from evidence scoring.
+
+Implementation:
+
+- Added `--result-boundary-target-amortized-prior-evidence-refresh-weight`.
+- Added `--result-boundary-target-amortized-prior-evidence-refresh-batch-size`.
+- Added `--result-boundary-target-amortized-prior-evidence-refresh-every`.
+- Added `--result-boundary-target-amortized-prior-evidence-refresh-exclude-routes`.
+- Added `train_result_boundary_amortized_prior_from_scored_candidates`, which
+  scores sampled candidate results, keeps only positive zero-improvement
+  candidates when applicable, and updates the shared prior without modifying
+  prompt memory.
+- Added separated cumulative counters for evidence-refresh updates, examples,
+  and forced-result evals.
+- Added a unit test verifying that refresh scoring respects route exclusion.
+
+Smoke:
+
+```text
+runs/2026-06-03_prior_evidence_refresh_smoke_final/2026-06-02_193543_504098_model-c-op0-2-fullgrid-streamb8-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk16-rbts4-rbtuniq-rbttopk2-rbton-b987cd16ea/model-c-2digit-seed15
+```
+
+Smoke result:
+
+- Final exact-match was `0/20`; this was a wiring smoke, not a source gate.
+- Evidence-refresh updates/examples were `2/5`.
+- Evidence-refresh forced evals were `76`.
+- Route `1` was excluded from evidence scoring.
+- Final metrics and training-curve rows included refresh counters.
+
+Verification:
+
+- `python3 -m py_compile scripts/overfit_one_batch.py`
+- `python3 -m pytest tests/test_model.py -k "candidate_evidence_refresh or candidate_evidence_prior_update or prior_bootstrap_memory or subset_arithmetic_batch_by_routes or prompt_keyed_online_hard_memory or streaming_heldout_split or amortized_prior or route_exclusion"` -> `9 passed, 151 deselected`
+
+Next: run a real op19 route-excluded source where evidence refresh scores only
+non-excluded routes and prior replay trains all routes. Treat the smoke only as
+tooling evidence.

@@ -404,6 +404,10 @@ Memory:
   ladders. Next work should leave the route-excluded tweak branch and form
   shared/global targets earlier, learn targets jointly across routes, or remove
   per-route prompt-memory/candidate-scoring dependence.
+  Background candidate-evidence refresh tooling now exists for the next gate:
+  it can keep scoring fresh train-pool prompts into the shared prior without
+  writing prompt-memory entries and can exclude heldout routes from evidence
+  scoring, but it has only passed a tiny smoke so far.
 
 Representative evidence:
 
@@ -435,6 +439,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-06-03-prior-bootstrap-route-excluded-source.md`
 - `aiAgentWorkHistory/phase7/2026-06-03-candidate-evidence-prior-tooling.md`
 - `aiAgentWorkHistory/phase7/2026-06-03-candidate-evidence-route-excluded-source.md`
+- `aiAgentWorkHistory/phase7/2026-06-03-background-candidate-evidence-refresh-tooling.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`

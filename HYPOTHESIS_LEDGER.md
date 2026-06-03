@@ -1240,3 +1240,9 @@ Conclusion: Ran the full op19 four-hook shared-output route-excluded source with
 Do not repeat: Do not run candidate-evidence weight, same-seed, or timing ladders as novelty. The evidence target path fired, but prompt memory filled by step `50`, candidate-evidence updates were only `32`, and the live prior still generalized poorly.
 Next allowed test: Leave the route-excluded tweak branch and move to a stronger shared/global target mechanism, joint target formation across routes, or a less-prescriptive credit signal that removes per-route prompt-memory target tables and answer-derived candidate scoring.
 Source: `aiAgentWorkHistory/phase7/2026-06-03-candidate-evidence-route-excluded-source.md`
+
+TOOLING: Background candidate-evidence refresh can train the shared prior without prompt-memory writes.
+Conclusion: Added `--result-boundary-target-amortized-prior-evidence-refresh-*` flags so the run can periodically score fresh train-pool prompts and update the shared amortized prior without adding prompt-memory entries. The refresh can exclude routed hooks from evidence scoring while prior replay still trains those routes. A tiny route-excluded smoke with route `1` excluded recorded refresh updates/examples `2/5` and refresh forced evals `76`, with final metrics and training-curve refresh fields populated.
+Do not repeat: Do not treat the tiny smoke as source-quality evidence, and do not use this to reopen route-weight/bootstrap/candidate-evidence timing ladders.
+Next allowed test: Run a real op19 route-excluded source where background evidence refresh scores only non-excluded routes and prior replay trains all routes, then require heldout/excluded-route quality before any trusted handoff.
+Source: `aiAgentWorkHistory/phase7/2026-06-03-background-candidate-evidence-refresh-tooling.md`

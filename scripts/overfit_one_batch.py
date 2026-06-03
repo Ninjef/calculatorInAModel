@@ -155,6 +155,10 @@ class TrainConfig:
     result_boundary_target_amortized_prior_stop_patience: int
     result_boundary_target_amortized_prior_train_replay_weight: float
     result_boundary_target_amortized_prior_candidate_evidence_weight: float
+    result_boundary_target_amortized_prior_evidence_refresh_weight: float
+    result_boundary_target_amortized_prior_evidence_refresh_batch_size: int
+    result_boundary_target_amortized_prior_evidence_refresh_every: int
+    result_boundary_target_amortized_prior_evidence_refresh_exclude_routes: str
     result_boundary_target_amortized_prior_route_replay_routes: str
     result_boundary_target_amortized_prior_route_replay_weight: float
     result_boundary_target_amortized_prior_bootstrap_memory_routes: str
@@ -382,6 +386,10 @@ class ResultBoundaryAmortizedPrior:
     train_full_fit_examples: int = 0
     candidate_evidence_updates: int = 0
     candidate_evidence_examples: int = 0
+    candidate_evidence_forced_eval_count: int = 0
+    evidence_refresh_updates: int = 0
+    evidence_refresh_examples: int = 0
+    evidence_refresh_forced_eval_count: int = 0
     fit_converged_steps: int = 0
     fit_stopped: bool = False
     quality_gate_update_cap_reached: bool = False
@@ -3993,6 +4001,169 @@ def train_result_boundary_amortized_prior_on_candidate_evidence(
             prior.candidate_evidence_examples
         ),
     }
+
+
+def train_result_boundary_amortized_prior_from_scored_candidates(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    prior: ResultBoundaryAmortizedPrior,
+    *,
+    num_digits: int,
+    chunk_size: int,
+    sample_count: int,
+    unique_sampling: bool,
+    policy_topk_count: int,
+    target_mode: str,
+    weight: float,
+    exclude_routes: set[int] | None = None,
+) -> dict[str, float]:
+    if sample_count < 1:
+        raise ValueError("candidate-evidence refresh requires sampled candidates")
+    if policy_topk_count < 0:
+        raise ValueError("candidate-evidence refresh policy top-k must be non-negative")
+    if policy_topk_count > sample_count:
+        raise ValueError(
+            "candidate-evidence refresh policy top-k cannot exceed sample count"
+        )
+    if weight <= 0:
+        return {
+            "result_boundary_target_amortized_prior_evidence_refresh_count": 0.0,
+            "result_boundary_target_amortized_prior_evidence_refresh_accuracy": float(
+                "nan"
+            ),
+            "result_boundary_target_amortized_prior_evidence_refresh_forced_eval_count": float(
+                prior.evidence_refresh_forced_eval_count
+            ),
+            "result_boundary_target_amortized_prior_evidence_refresh_batch_forced_eval_count": 0.0,
+            "result_boundary_target_amortized_prior_evidence_refresh_score_eligible_fraction": float(
+                "nan"
+            ),
+        }
+    with torch.no_grad():
+        result_logits, _, _, _ = calculator_read_result_logits(model, batch)
+        result_vocab_size = result_logits.shape[-1]
+        learned_result = result_logits.argmax(dim=-1)
+        true_a, true_b = fixed_width_operands_from_batch(
+            batch.x, num_digits=num_digits
+        )
+        true_sum = (true_a + true_b).to(result_logits.device)
+        eligible_mask = routed_prompt_memory_score_eligible_mask(
+            model, batch, exclude_routes or set()
+        )
+        if not bool(eligible_mask.any().item()):
+            return {
+                "result_boundary_target_amortized_prior_evidence_refresh_count": 0.0,
+                "result_boundary_target_amortized_prior_evidence_refresh_accuracy": float(
+                    "nan"
+                ),
+                "result_boundary_target_amortized_prior_evidence_refresh_forced_eval_count": float(
+                    prior.evidence_refresh_forced_eval_count
+                ),
+                "result_boundary_target_amortized_prior_evidence_refresh_batch_forced_eval_count": 0.0,
+                "result_boundary_target_amortized_prior_evidence_refresh_score_eligible_fraction": 0.0,
+            }
+        score_indices = torch.nonzero(eligible_mask, as_tuple=False).squeeze(-1)
+        score_batch = ArithmeticBatch(
+            x=batch.x.index_select(0, score_indices),
+            y=batch.y.index_select(0, score_indices),
+            loss_mask=batch.loss_mask.index_select(0, score_indices),
+        )
+        score_logits = result_logits.index_select(0, score_indices)
+        score_learned = learned_result.index_select(0, score_indices)
+        score_a = true_a.index_select(0, score_indices)
+        score_b = true_b.index_select(0, score_indices)
+        score_true = true_sum.index_select(0, score_indices)
+        priority_candidates = None
+        if policy_topk_count > 0:
+            priority_candidates = score_logits.detach().topk(
+                k=min(policy_topk_count, result_vocab_size), dim=-1
+            ).indices
+        candidates = sample_improvement_assignment_candidates(
+            score_learned.detach(),
+            result_count=result_vocab_size,
+            sample_count=sample_count,
+            unique=unique_sampling,
+            priority_candidates=priority_candidates,
+        )
+        forced_mode = "none" if target_mode == "additive_zero_improvement" else None
+        candidate_losses = score_forced_result_candidate_classes(
+            model,
+            score_batch,
+            candidates,
+            chunk_size=chunk_size,
+            calculator_bottleneck_mode=forced_mode,
+        )
+        candidate_best_losses, candidate_best_indices = candidate_losses.min(dim=-1)
+        candidate_best_results = candidates.gather(
+            1, candidate_best_indices.unsqueeze(-1)
+        ).squeeze(-1)
+        if target_mode in {"zero_improvement", "additive_zero_improvement"}:
+            score_zero_losses = score_injection_zero_answer_losses(
+                model,
+                score_batch,
+                calculator_bottleneck_mode=forced_mode,
+            )
+            positive_candidates = candidate_best_losses < score_zero_losses
+        else:
+            positive_candidates = torch.ones_like(candidate_best_losses, dtype=torch.bool)
+        evidence_indices = torch.nonzero(
+            positive_candidates, as_tuple=False
+        ).flatten()
+        if int(evidence_indices.numel()) > 0:
+            evidence_a = score_a.index_select(0, evidence_indices)
+            evidence_b = score_b.index_select(0, evidence_indices)
+            evidence_targets = candidate_best_results.index_select(
+                0, evidence_indices
+            ).detach()
+            evidence_true_sum = score_true.index_select(0, evidence_indices)
+        else:
+            evidence_a = score_a[:0]
+            evidence_b = score_b[:0]
+            evidence_targets = candidate_best_results[:0].detach()
+            evidence_true_sum = score_true[:0]
+        batch_forced_eval_count = int(score_indices.numel() * sample_count)
+    previous_updates = prior.candidate_evidence_updates
+    previous_examples = prior.candidate_evidence_examples
+    metrics = train_result_boundary_amortized_prior_on_candidate_evidence(
+        prior,
+        evidence_a,
+        evidence_b,
+        evidence_targets,
+        evidence_true_sum,
+        weight=weight,
+    )
+    prior.evidence_refresh_updates += (
+        prior.candidate_evidence_updates - previous_updates
+    )
+    prior.evidence_refresh_examples += (
+        prior.candidate_evidence_examples - previous_examples
+    )
+    prior.candidate_evidence_forced_eval_count += batch_forced_eval_count
+    prior.evidence_refresh_forced_eval_count += batch_forced_eval_count
+    refresh_metrics = {
+        key.replace(
+            "result_boundary_target_amortized_prior_candidate_evidence_",
+            "result_boundary_target_amortized_prior_evidence_refresh_",
+            1,
+        ): value
+        for key, value in metrics.items()
+    }
+    refresh_metrics[
+        "result_boundary_target_amortized_prior_evidence_refresh_forced_eval_count"
+    ] = float(prior.evidence_refresh_forced_eval_count)
+    refresh_metrics[
+        "result_boundary_target_amortized_prior_evidence_refresh_updates"
+    ] = float(prior.evidence_refresh_updates)
+    refresh_metrics[
+        "result_boundary_target_amortized_prior_evidence_refresh_examples"
+    ] = float(prior.evidence_refresh_examples)
+    refresh_metrics[
+        "result_boundary_target_amortized_prior_evidence_refresh_batch_forced_eval_count"
+    ] = float(batch_forced_eval_count)
+    refresh_metrics[
+        "result_boundary_target_amortized_prior_evidence_refresh_score_eligible_fraction"
+    ] = float(eligible_mask.float().mean().item())
+    return refresh_metrics
 
 
 def train_result_boundary_amortized_prior(
@@ -9696,6 +9867,11 @@ def run_variant(
     result_boundary_amortized_prior_bootstrap_memory_routes = parse_route_id_set(
         args.result_boundary_target_amortized_prior_bootstrap_memory_routes
     )
+    result_boundary_amortized_prior_evidence_refresh_exclude_routes = (
+        parse_route_id_set(
+            args.result_boundary_target_amortized_prior_evidence_refresh_exclude_routes
+        )
+    )
     if (
         result_boundary_amortized_prior_route_replay_routes
         and args.result_boundary_target_amortized_prior_route_replay_weight > 0
@@ -10028,6 +10204,18 @@ def run_variant(
         ),
         result_boundary_target_amortized_prior_candidate_evidence_weight=(
             args.result_boundary_target_amortized_prior_candidate_evidence_weight
+        ),
+        result_boundary_target_amortized_prior_evidence_refresh_weight=(
+            args.result_boundary_target_amortized_prior_evidence_refresh_weight
+        ),
+        result_boundary_target_amortized_prior_evidence_refresh_batch_size=(
+            args.result_boundary_target_amortized_prior_evidence_refresh_batch_size
+        ),
+        result_boundary_target_amortized_prior_evidence_refresh_every=(
+            args.result_boundary_target_amortized_prior_evidence_refresh_every
+        ),
+        result_boundary_target_amortized_prior_evidence_refresh_exclude_routes=(
+            args.result_boundary_target_amortized_prior_evidence_refresh_exclude_routes
         ),
         result_boundary_target_amortized_prior_route_replay_routes=(
             args.result_boundary_target_amortized_prior_route_replay_routes
@@ -11422,6 +11610,45 @@ def run_variant(
                         )
                     )
                     result_boundary_target_metrics.update(bootstrap_memory_metrics)
+                if (
+                    args.result_boundary_target_amortized_prior_evidence_refresh_weight
+                    > 0
+                    and streaming_train_pool_batch is not None
+                    and step
+                    % args.result_boundary_target_amortized_prior_evidence_refresh_every
+                    == 0
+                ):
+                    evidence_refresh_batch = sample_arithmetic_batch_from_pool(
+                        streaming_train_pool_batch,
+                        batch_size=(
+                            args.result_boundary_target_amortized_prior_evidence_refresh_batch_size
+                        ),
+                        rng=rng,
+                    )
+                    evidence_refresh_metrics = (
+                        train_result_boundary_amortized_prior_from_scored_candidates(
+                            model,
+                            evidence_refresh_batch,
+                            result_boundary_amortized_prior,
+                            num_digits=num_digits,
+                            chunk_size=args.result_boundary_target_chunk_size,
+                            sample_count=args.result_boundary_target_sample_count,
+                            unique_sampling=(
+                                args.result_boundary_target_unique_sampling
+                            ),
+                            policy_topk_count=(
+                                args.result_boundary_target_policy_topk_count
+                            ),
+                            target_mode=args.result_boundary_target_mode,
+                            weight=(
+                                args.result_boundary_target_amortized_prior_evidence_refresh_weight
+                            ),
+                            exclude_routes=(
+                                result_boundary_amortized_prior_evidence_refresh_exclude_routes
+                            ),
+                        )
+                    )
+                    result_boundary_target_metrics.update(evidence_refresh_metrics)
                 if (
                     prior_entries
                     >= args.result_boundary_target_amortized_prior_min_entries
@@ -12832,6 +13059,18 @@ def run_variant(
     metrics["result_boundary_target_amortized_prior_candidate_evidence_weight"] = (
         args.result_boundary_target_amortized_prior_candidate_evidence_weight
     )
+    metrics["result_boundary_target_amortized_prior_evidence_refresh_weight"] = (
+        args.result_boundary_target_amortized_prior_evidence_refresh_weight
+    )
+    metrics[
+        "result_boundary_target_amortized_prior_evidence_refresh_batch_size"
+    ] = args.result_boundary_target_amortized_prior_evidence_refresh_batch_size
+    metrics["result_boundary_target_amortized_prior_evidence_refresh_every"] = (
+        args.result_boundary_target_amortized_prior_evidence_refresh_every
+    )
+    metrics[
+        "result_boundary_target_amortized_prior_evidence_refresh_exclude_routes"
+    ] = args.result_boundary_target_amortized_prior_evidence_refresh_exclude_routes
     metrics["result_boundary_target_amortized_prior_route_replay_routes"] = (
         args.result_boundary_target_amortized_prior_route_replay_routes
     )
@@ -12882,6 +13121,18 @@ def run_variant(
         metrics[
             "result_boundary_target_amortized_prior_candidate_evidence_examples"
         ] = result_boundary_amortized_prior.candidate_evidence_examples
+        metrics[
+            "result_boundary_target_amortized_prior_candidate_evidence_forced_eval_count"
+        ] = result_boundary_amortized_prior.candidate_evidence_forced_eval_count
+        metrics[
+            "result_boundary_target_amortized_prior_evidence_refresh_updates"
+        ] = result_boundary_amortized_prior.evidence_refresh_updates
+        metrics[
+            "result_boundary_target_amortized_prior_evidence_refresh_examples"
+        ] = result_boundary_amortized_prior.evidence_refresh_examples
+        metrics[
+            "result_boundary_target_amortized_prior_evidence_refresh_forced_eval_count"
+        ] = result_boundary_amortized_prior.evidence_refresh_forced_eval_count
         prior_train_eval = evaluate_result_boundary_amortized_prior(
             result_boundary_amortized_prior,
             streaming_train_pairs,
@@ -14290,6 +14541,46 @@ def parse_args() -> argparse.Namespace:
             "current batch's positive candidate-scored result targets before "
             "prompt memory freezes. This uses already-scored candidates and "
             "adds no forced-result evaluations."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-evidence-refresh-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "When positive, periodically score fresh train-pool prompts and "
+            "train the amortized prior on the resulting positive candidate "
+            "targets without writing prompt-memory entries. This makes the "
+            "shared prior a target-formation path instead of only replaying "
+            "frozen prompt memory."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-evidence-refresh-batch-size",
+        type=int,
+        default=0,
+        help=(
+            "Fresh train-pool batch size for amortized-prior evidence refresh. "
+            "Used only when evidence-refresh weight is positive."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-evidence-refresh-every",
+        type=int,
+        default=1,
+        help=(
+            "Run amortized-prior evidence refresh every N training steps when "
+            "its weight and batch size are positive."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-evidence-refresh-exclude-routes",
+        type=str,
+        default="",
+        help=(
+            "Comma-separated routed hook ids excluded from background "
+            "candidate-evidence scoring. Prior replay may still train those "
+            "routes from the shared prior."
         ),
     )
     parser.add_argument(
@@ -15726,6 +16017,15 @@ def main() -> None:
             "--result-boundary-target-amortized-prior-bootstrap-memory-routes must "
             "be a comma-separated list of non-negative route ids"
         ) from exc
+    try:
+        parsed_amortized_prior_evidence_refresh_exclude_routes = parse_route_id_set(
+            args.result_boundary_target_amortized_prior_evidence_refresh_exclude_routes
+        )
+    except ValueError as exc:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-evidence-refresh-exclude-routes "
+            "must be a comma-separated list of non-negative route ids"
+        ) from exc
     if parsed_amortized_prior_bootstrap_memory_routes:
         if args.calculator_hook_routing == "all":
             raise ValueError(
@@ -15735,6 +16035,20 @@ def main() -> None:
         if max(parsed_amortized_prior_bootstrap_memory_routes) >= args.calculator_hook_count:
             raise ValueError(
                 "--result-boundary-target-amortized-prior-bootstrap-memory-routes "
+                "includes a route outside --calculator-hook-count"
+            )
+    if parsed_amortized_prior_evidence_refresh_exclude_routes:
+        if args.calculator_hook_routing == "all":
+            raise ValueError(
+                "--result-boundary-target-amortized-prior-evidence-refresh-exclude-routes "
+                "requires non-trivial calculator hook routing"
+            )
+        if (
+            max(parsed_amortized_prior_evidence_refresh_exclude_routes)
+            >= args.calculator_hook_count
+        ):
+            raise ValueError(
+                "--result-boundary-target-amortized-prior-evidence-refresh-exclude-routes "
                 "includes a route outside --calculator-hook-count"
             )
     if args.result_boundary_target_amortized_prior_weight < 0:
@@ -15846,6 +16160,21 @@ def main() -> None:
             "--result-boundary-target-amortized-prior-candidate-evidence-weight "
             "must be non-negative"
         )
+    if args.result_boundary_target_amortized_prior_evidence_refresh_weight < 0:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-evidence-refresh-weight "
+            "must be non-negative"
+        )
+    if args.result_boundary_target_amortized_prior_evidence_refresh_batch_size < 0:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-evidence-refresh-batch-size "
+            "must be non-negative"
+        )
+    if args.result_boundary_target_amortized_prior_evidence_refresh_every < 1:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-evidence-refresh-every "
+            "must be positive"
+        )
     if args.result_boundary_target_amortized_prior_route_replay_weight < 0:
         raise ValueError(
             "--result-boundary-target-amortized-prior-route-replay-weight "
@@ -15909,6 +16238,22 @@ def main() -> None:
             "--result-boundary-target-amortized-prior-candidate-evidence-weight "
             "requires --result-boundary-target-amortized-prior-weight > 0"
         )
+    if args.result_boundary_target_amortized_prior_evidence_refresh_weight > 0:
+        if args.result_boundary_target_amortized_prior_weight <= 0:
+            raise ValueError(
+                "--result-boundary-target-amortized-prior-evidence-refresh-weight "
+                "requires --result-boundary-target-amortized-prior-weight > 0"
+            )
+        if args.result_boundary_target_amortized_prior_evidence_refresh_batch_size <= 0:
+            raise ValueError(
+                "--result-boundary-target-amortized-prior-evidence-refresh-weight "
+                "requires --result-boundary-target-amortized-prior-evidence-refresh-batch-size > 0"
+            )
+        if args.streaming_train_batch_size <= 0:
+            raise ValueError(
+                "--result-boundary-target-amortized-prior-evidence-refresh-weight "
+                "requires --streaming-train-batch-size > 0"
+            )
     if (
         args.result_boundary_target_amortized_prior_route_replay_weight > 0
         and args.result_boundary_target_amortized_prior_weight <= 0
@@ -16759,6 +17104,25 @@ def main() -> None:
                         f"{args.result_boundary_target_amortized_prior_candidate_evidence_weight:g}"
                     )
                 if (
+                    args.result_boundary_target_amortized_prior_evidence_refresh_weight
+                    > 0
+                ):
+                    suffix_parts.append(
+                        "rbtpriorevref"
+                        f"{args.result_boundary_target_amortized_prior_evidence_refresh_weight:g}"
+                        "b"
+                        f"{args.result_boundary_target_amortized_prior_evidence_refresh_batch_size}"
+                        "e"
+                        f"{args.result_boundary_target_amortized_prior_evidence_refresh_every}"
+                    )
+                    if (
+                        args.result_boundary_target_amortized_prior_evidence_refresh_exclude_routes
+                    ):
+                        suffix_parts.append(
+                            "rbtpriorevrefexcl"
+                            f"{args.result_boundary_target_amortized_prior_evidence_refresh_exclude_routes}"
+                        )
+                if (
                     args.result_boundary_target_amortized_prior_route_replay_weight
                     > 0
                 ):
@@ -17176,6 +17540,14 @@ def main() -> None:
         f"{args.result_boundary_target_amortized_prior_train_replay_weight} "
         "amortized_prior_candidate_evidence_weight="
         f"{args.result_boundary_target_amortized_prior_candidate_evidence_weight} "
+        "amortized_prior_evidence_refresh_weight="
+        f"{args.result_boundary_target_amortized_prior_evidence_refresh_weight} "
+        "amortized_prior_evidence_refresh_batch_size="
+        f"{args.result_boundary_target_amortized_prior_evidence_refresh_batch_size} "
+        "amortized_prior_evidence_refresh_every="
+        f"{args.result_boundary_target_amortized_prior_evidence_refresh_every} "
+        "amortized_prior_evidence_refresh_exclude_routes="
+        f"{args.result_boundary_target_amortized_prior_evidence_refresh_exclude_routes} "
         "amortized_prior_route_replay_routes="
         f"{args.result_boundary_target_amortized_prior_route_replay_routes} "
         "amortized_prior_route_replay_weight="

@@ -1006,6 +1006,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/202-background-candidate-evidence-refresh-can-train-the-shared-prior-without-prompt-memory-wri",
+      "target": "researchMemory/hypotheses/phase7/202-background-candidate-evidence-refresh-can-train-the-shared-prior-without-prompt-memory-wri.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1228,6 +1233,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-03-candidate-evidence-route-excluded-source.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-03-background-candidate-evidence-refresh-tooling.md",
       "type": "supported_by"
     },
     {
@@ -3268,6 +3278,13 @@
       "source_path": "researchMemory/hypotheses/phase7/201-candidate-evidence-prior-updates-do-not-fix-the-op19-route-excluded-source-gate.md",
       "status": "MIXED-NEGATIVE",
       "title": "Candidate-evidence prior updates do not fix the op19 route-excluded source gate."
+    },
+    {
+      "id": "doc/202-background-candidate-evidence-refresh-can-train-the-shared-prior-without-prompt-memory-wri",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/202-background-candidate-evidence-refresh-can-train-the-shared-prior-without-prompt-memory-wri.md",
+      "status": "TOOLING",
+      "title": "Background candidate-evidence refresh can train the shared prior without prompt-memory writes."
     },
     {
       "id": "doc/phase7-direction-memory",
