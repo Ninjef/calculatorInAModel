@@ -12316,3 +12316,11 @@ Verification:
 Next: run a real source gate that uses direct current-batch prior targets as a
 non-memory target supply mechanism. Require heldout and excluded-route quality
 before trusted handoff.
+
+Review decision:
+
+- `researchReviews/2026-06-03-current-batch-prior-target-review.md` allows one
+  predeclared real source gate for current-batch shared-prior targets because
+  the path is live-batch and non-memory.
+- If that gate misses, do not run weight/confidence/route/cadence/seed ladders;
+  move to genuinely shared/global target learning or less-prescriptive credit.

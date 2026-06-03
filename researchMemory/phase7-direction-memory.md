@@ -410,9 +410,11 @@ Memory:
   objective is now wired: it applies detached shared-prior targets to eligible
   live-batch examples, optionally route/confidence filtered, without
   prompt-memory writes or separate replay-pool sampling. A tiny smoke only
-  proves the objective fires. Next work should test that as a real source gate
-  or otherwise form shared/global targets earlier, learn targets jointly across
-  routes, or remove per-route prompt-memory/candidate-scoring dependence.
+  proves the objective fires. One predeclared source gate is allowed because
+  this is a non-memory live-batch target path; if it misses heldout/excluded
+  route quality, close it and form shared/global targets earlier, learn targets
+  jointly across routes, or remove per-route prompt-memory/candidate-scoring
+  dependence.
 
 Representative evidence:
 
@@ -447,6 +449,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-06-03-background-candidate-evidence-refresh-tooling.md`
 - `aiAgentWorkHistory/phase7/2026-06-03-background-evidence-refresh-route-excluded-source.md`
 - `aiAgentWorkHistory/phase7/2026-06-03-current-batch-prior-target-tooling.md`
+- `researchReviews/2026-06-03-current-batch-prior-target-review.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`

@@ -1026,6 +1026,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/206-current-batch-prior-targets-are-allowed-as-one-real-gate-not-a-new-ladder-family",
+      "target": "researchMemory/hypotheses/phase7/206-current-batch-prior-targets-are-allowed-as-one-real-gate-not-a-new-ladder-family.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1263,6 +1268,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-03-current-batch-prior-target-tooling.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "researchReviews/2026-06-03-current-batch-prior-target-review.md",
       "type": "supported_by"
     },
     {
@@ -3336,6 +3346,13 @@
       "source_path": "researchMemory/hypotheses/phase7/205-current-batch-prior-targets-can-supply-shared-prior-supervision-without-prompt-memory-writ.md",
       "status": "TOOLING",
       "title": "Current-batch prior targets can supply shared-prior supervision without prompt-memory writes."
+    },
+    {
+      "id": "doc/206-current-batch-prior-targets-are-allowed-as-one-real-gate-not-a-new-ladder-family",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/206-current-batch-prior-targets-are-allowed-as-one-real-gate-not-a-new-ladder-family.md",
+      "status": "REVIEW",
+      "title": "Current-batch prior targets are allowed as one real gate, not a new ladder family."
     },
     {
       "id": "doc/phase7-direction-memory",
