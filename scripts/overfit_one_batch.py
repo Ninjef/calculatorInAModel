@@ -154,6 +154,7 @@ class TrainConfig:
     result_boundary_target_amortized_prior_stop_require_train_accuracy: float
     result_boundary_target_amortized_prior_stop_patience: int
     result_boundary_target_amortized_prior_train_replay_weight: float
+    result_boundary_target_amortized_prior_candidate_evidence_weight: float
     result_boundary_target_amortized_prior_route_replay_routes: str
     result_boundary_target_amortized_prior_route_replay_weight: float
     result_boundary_target_amortized_prior_bootstrap_memory_routes: str
@@ -379,6 +380,8 @@ class ResultBoundaryAmortizedPrior:
     train_updates: int = 0
     train_fit_examples: int = 0
     train_full_fit_examples: int = 0
+    candidate_evidence_updates: int = 0
+    candidate_evidence_examples: int = 0
     fit_converged_steps: int = 0
     fit_stopped: bool = False
     quality_gate_update_cap_reached: bool = False
@@ -3901,6 +3904,97 @@ def deterministic_prior_validation_mask(
     return mask
 
 
+def train_result_boundary_amortized_prior_on_candidate_evidence(
+    prior: ResultBoundaryAmortizedPrior,
+    a: torch.Tensor,
+    b: torch.Tensor,
+    targets: torch.Tensor,
+    true_sum: torch.Tensor,
+    *,
+    weight: float,
+) -> dict[str, float]:
+    if weight <= 0:
+        return {
+            "result_boundary_target_amortized_prior_candidate_evidence_loss": float(
+                "nan"
+            ),
+            "result_boundary_target_amortized_prior_candidate_evidence_objective": 0.0,
+            "result_boundary_target_amortized_prior_candidate_evidence_count": 0.0,
+            "result_boundary_target_amortized_prior_candidate_evidence_accuracy": float(
+                "nan"
+            ),
+            "result_boundary_target_amortized_prior_candidate_evidence_confidence": float(
+                "nan"
+            ),
+            "result_boundary_target_amortized_prior_candidate_evidence_updates": float(
+                prior.candidate_evidence_updates
+            ),
+            "result_boundary_target_amortized_prior_candidate_evidence_examples": float(
+                prior.candidate_evidence_examples
+            ),
+        }
+    if targets.numel() < 1:
+        return {
+            "result_boundary_target_amortized_prior_candidate_evidence_loss": float(
+                "nan"
+            ),
+            "result_boundary_target_amortized_prior_candidate_evidence_objective": 0.0,
+            "result_boundary_target_amortized_prior_candidate_evidence_count": 0.0,
+            "result_boundary_target_amortized_prior_candidate_evidence_accuracy": float(
+                "nan"
+            ),
+            "result_boundary_target_amortized_prior_candidate_evidence_confidence": float(
+                "nan"
+            ),
+            "result_boundary_target_amortized_prior_candidate_evidence_updates": float(
+                prior.candidate_evidence_updates
+            ),
+            "result_boundary_target_amortized_prior_candidate_evidence_examples": float(
+                prior.candidate_evidence_examples
+            ),
+        }
+    logits = prior.model(a.to(targets.device), b.to(targets.device))
+    evidence_loss = torch.nn.functional.cross_entropy(logits, targets.long())
+    evidence_objective = weight * evidence_loss
+    prior.optimizer.zero_grad(set_to_none=True)
+    evidence_objective.backward()
+    prior.optimizer.step()
+    prior.candidate_evidence_updates += 1
+    prior.candidate_evidence_examples += int(targets.numel())
+    with torch.no_grad():
+        refreshed_logits = prior.model(a.to(targets.device), b.to(targets.device))
+        probabilities = refreshed_logits.softmax(dim=-1)
+        predictions = probabilities.argmax(dim=-1)
+        confidence = probabilities.max(dim=-1).values
+        target_accuracy = (targets == true_sum.to(targets.device)).float().mean()
+    return {
+        "result_boundary_target_amortized_prior_candidate_evidence_loss": float(
+            evidence_loss.detach().item()
+        ),
+        "result_boundary_target_amortized_prior_candidate_evidence_objective": float(
+            evidence_objective.detach().item()
+        ),
+        "result_boundary_target_amortized_prior_candidate_evidence_count": float(
+            targets.numel()
+        ),
+        "result_boundary_target_amortized_prior_candidate_evidence_accuracy": float(
+            target_accuracy.item()
+        ),
+        "result_boundary_target_amortized_prior_candidate_evidence_confidence": float(
+            confidence.mean().item()
+        ),
+        "result_boundary_target_amortized_prior_candidate_evidence_prior_accuracy": float(
+            (predictions == targets).float().mean().item()
+        ),
+        "result_boundary_target_amortized_prior_candidate_evidence_updates": float(
+            prior.candidate_evidence_updates
+        ),
+        "result_boundary_target_amortized_prior_candidate_evidence_examples": float(
+            prior.candidate_evidence_examples
+        ),
+    }
+
+
 def train_result_boundary_amortized_prior(
     prior: ResultBoundaryAmortizedPrior,
     memory: ResultBoundaryPromptHardMemory,
@@ -4530,6 +4624,8 @@ def result_boundary_prompt_hard_memory_loss(
     policy_topk_count: int,
     freeze_when_full: bool,
     memory_update_exclude_routes: set[int] | None = None,
+    amortized_prior_candidate_evidence: ResultBoundaryAmortizedPrior | None = None,
+    amortized_prior_candidate_evidence_weight: float = 0.0,
 ) -> tuple[torch.Tensor, dict[str, float]]:
     if sample_count < 1:
         raise ValueError(
@@ -4580,6 +4676,7 @@ def result_boundary_prompt_hard_memory_loss(
     positive_fraction = float("nan")
     scored_results = 0
     forced_eval_count = 0
+    candidate_evidence_metrics: dict[str, float] = {}
     if bool(score_mask.any().item()):
         score_indices = torch.nonzero(score_mask, as_tuple=False).squeeze(-1)
         score_batch = ArithmeticBatch(
@@ -4589,6 +4686,8 @@ def result_boundary_prompt_hard_memory_loss(
         )
         score_logits = result_logits.index_select(0, score_indices)
         score_learned = learned_result.index_select(0, score_indices)
+        score_a = true_a.index_select(0, score_indices)
+        score_b = true_b.index_select(0, score_indices)
         score_true = true_sum.index_select(0, score_indices)
         priority_candidates = None
         if policy_topk_count > 0:
@@ -4624,6 +4723,35 @@ def result_boundary_prompt_hard_memory_loss(
         else:
             score_zero_losses = None
             positive_candidates = torch.ones_like(candidate_best_losses, dtype=torch.bool)
+        if (
+            amortized_prior_candidate_evidence is not None
+            and amortized_prior_candidate_evidence_weight > 0
+        ):
+            evidence_indices = torch.nonzero(
+                positive_candidates, as_tuple=False
+            ).flatten()
+            if int(evidence_indices.numel()) > 0:
+                evidence_a = score_a.index_select(0, evidence_indices)
+                evidence_b = score_b.index_select(0, evidence_indices)
+                evidence_targets = candidate_best_results.index_select(
+                    0, evidence_indices
+                ).detach()
+                evidence_true_sum = score_true.index_select(0, evidence_indices)
+            else:
+                evidence_a = score_a[:0]
+                evidence_b = score_b[:0]
+                evidence_targets = candidate_best_results[:0].detach()
+                evidence_true_sum = score_true[:0]
+            candidate_evidence_metrics = (
+                train_result_boundary_amortized_prior_on_candidate_evidence(
+                    amortized_prior_candidate_evidence,
+                    evidence_a,
+                    evidence_b,
+                    evidence_targets,
+                    evidence_true_sum,
+                    weight=amortized_prior_candidate_evidence_weight,
+                )
+            )
         existing_losses = best_losses.index_select(0, score_indices)
         score_update = positive_candidates & (candidate_best_losses < existing_losses)
         update_mask[score_indices] = score_update
@@ -4699,7 +4827,7 @@ def result_boundary_prompt_hard_memory_loss(
     finite_zero = (
         torch.isfinite(zero_losses) if zero_losses is not None else torch.zeros_like(seen)
     )
-    return target_loss, {
+    metrics = {
         "result_boundary_target_loss": float(target_loss.detach().item()),
         "result_boundary_target_mode": memory.target_mode,
         "result_boundary_target_scoring_bottleneck_mode": memory.scoring_bottleneck_mode,
@@ -4789,6 +4917,8 @@ def result_boundary_prompt_hard_memory_loss(
             (learned_result == true_sum).float().mean().item()
         ),
     }
+    metrics.update(candidate_evidence_metrics)
+    return target_loss, metrics
 
 
 def cached_result_boundary_target_loss(
@@ -9896,6 +10026,9 @@ def run_variant(
         result_boundary_target_amortized_prior_train_replay_weight=(
             args.result_boundary_target_amortized_prior_train_replay_weight
         ),
+        result_boundary_target_amortized_prior_candidate_evidence_weight=(
+            args.result_boundary_target_amortized_prior_candidate_evidence_weight
+        ),
         result_boundary_target_amortized_prior_route_replay_routes=(
             args.result_boundary_target_amortized_prior_route_replay_routes
         ),
@@ -11030,6 +11163,15 @@ def run_variant(
                     ),
                     memory_update_exclude_routes=(
                         result_boundary_memory_update_exclude_routes
+                    ),
+                    amortized_prior_candidate_evidence=(
+                        result_boundary_amortized_prior
+                        if args.result_boundary_target_amortized_prior_candidate_evidence_weight
+                        > 0
+                        else None
+                    ),
+                    amortized_prior_candidate_evidence_weight=(
+                        args.result_boundary_target_amortized_prior_candidate_evidence_weight
                     ),
                 )
             else:
@@ -12687,6 +12829,9 @@ def run_variant(
     metrics["result_boundary_target_amortized_prior_train_replay_weight"] = (
         args.result_boundary_target_amortized_prior_train_replay_weight
     )
+    metrics["result_boundary_target_amortized_prior_candidate_evidence_weight"] = (
+        args.result_boundary_target_amortized_prior_candidate_evidence_weight
+    )
     metrics["result_boundary_target_amortized_prior_route_replay_routes"] = (
         args.result_boundary_target_amortized_prior_route_replay_routes
     )
@@ -12731,6 +12876,12 @@ def run_variant(
         metrics["result_boundary_target_amortized_prior_updates"] = (
             result_boundary_amortized_prior.train_updates
         )
+        metrics[
+            "result_boundary_target_amortized_prior_candidate_evidence_updates"
+        ] = result_boundary_amortized_prior.candidate_evidence_updates
+        metrics[
+            "result_boundary_target_amortized_prior_candidate_evidence_examples"
+        ] = result_boundary_amortized_prior.candidate_evidence_examples
         prior_train_eval = evaluate_result_boundary_amortized_prior(
             result_boundary_amortized_prior,
             streaming_train_pairs,
@@ -14128,6 +14279,17 @@ def parse_args() -> argparse.Namespace:
             "streaming train pool. Heldout replay uses the base amortized-prior "
             "weight; train replay is useful when heldout-only replay would damage "
             "seen-prompt behavior."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-candidate-evidence-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "When positive, update the amortized prior directly from the "
+            "current batch's positive candidate-scored result targets before "
+            "prompt memory freezes. This uses already-scored candidates and "
+            "adds no forced-result evaluations."
         ),
     )
     parser.add_argument(
@@ -15679,6 +15841,11 @@ def main() -> None:
             "--result-boundary-target-amortized-prior-train-replay-weight "
             "must be non-negative"
         )
+    if args.result_boundary_target_amortized_prior_candidate_evidence_weight < 0:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-candidate-evidence-weight "
+            "must be non-negative"
+        )
     if args.result_boundary_target_amortized_prior_route_replay_weight < 0:
         raise ValueError(
             "--result-boundary-target-amortized-prior-route-replay-weight "
@@ -15732,6 +15899,14 @@ def main() -> None:
     ):
         raise ValueError(
             "--result-boundary-target-amortized-prior-train-replay-weight "
+            "requires --result-boundary-target-amortized-prior-weight > 0"
+        )
+    if (
+        args.result_boundary_target_amortized_prior_candidate_evidence_weight > 0
+        and args.result_boundary_target_amortized_prior_weight <= 0
+    ):
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-candidate-evidence-weight "
             "requires --result-boundary-target-amortized-prior-weight > 0"
         )
     if (
@@ -16576,6 +16751,14 @@ def main() -> None:
                         f"{args.result_boundary_target_amortized_prior_train_replay_weight:g}"
                     )
                 if (
+                    args.result_boundary_target_amortized_prior_candidate_evidence_weight
+                    > 0
+                ):
+                    suffix_parts.append(
+                        "rbtpriorcandev"
+                        f"{args.result_boundary_target_amortized_prior_candidate_evidence_weight:g}"
+                    )
+                if (
                     args.result_boundary_target_amortized_prior_route_replay_weight
                     > 0
                 ):
@@ -16991,6 +17174,8 @@ def main() -> None:
         f"{args.result_boundary_target_amortized_prior_stop_patience} "
         "amortized_prior_train_replay_weight="
         f"{args.result_boundary_target_amortized_prior_train_replay_weight} "
+        "amortized_prior_candidate_evidence_weight="
+        f"{args.result_boundary_target_amortized_prior_candidate_evidence_weight} "
         "amortized_prior_route_replay_routes="
         f"{args.result_boundary_target_amortized_prior_route_replay_routes} "
         "amortized_prior_route_replay_weight="

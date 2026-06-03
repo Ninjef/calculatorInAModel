@@ -12091,3 +12091,52 @@ Interpretation:
   should form shared/global targets earlier, train the shared prior on candidate
   evidence before route memory freezes, learn targets jointly across routes, or
   replace answer-derived candidate scoring.
+
+## 2026-06-03 Candidate-Evidence Prior Tooling
+
+Purpose: add the next route-excluded shared-target mechanism recommended by the
+route-excluded branch review. Instead of waiting for prompt memory to fill and
+then fitting the numeric prior from frozen entries, the shared prior can now
+train directly on the current batch's positive candidate-scored result targets
+while those targets are first discovered.
+
+Implementation:
+
+- Added `--result-boundary-target-amortized-prior-candidate-evidence-weight`.
+- When positive, `result_boundary_prompt_hard_memory_loss` sends the already
+  scored positive candidate targets to the amortized prior before prompt memory
+  freezing can hide them.
+- The update uses the existing candidate scorer's forced-result evaluations; it
+  adds no new candidate scoring path.
+- Added candidate-evidence metrics for loss, weighted objective, target count,
+  target-vs-true accuracy, prior confidence, prior-vs-target accuracy, update
+  count, and example count.
+- Added validation that candidate-evidence weight is non-negative and requires
+  `--result-boundary-target-amortized-prior-weight > 0`.
+
+Smoke:
+
+```text
+runs/2026-06-03_prior_candidate_evidence_smoke/2026-06-02_185909_784821_model-c-op0-2-fullgrid-streamb8-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk16-rbts4-rbtuniq-rbttopk2-rbton-f447dfc864/model-c-2digit-seed10
+```
+
+Smoke result:
+
+- Final exact-match was `13/40 = 0.325`; this was a wiring smoke, not a source
+  gate.
+- Final candidate-evidence prior counters were `27` updates over `81` examples.
+- Logged rows showed nonzero candidate-evidence batches, e.g. step `20` had
+  `6` candidate-evidence targets, `1.0` target-vs-true accuracy, `19` cumulative
+  updates, and `60` cumulative examples.
+- The final forced-result eval counter was `668`, coming from the configured
+  candidate scorer.
+
+Verification:
+
+- `python3 -m py_compile scripts/overfit_one_batch.py`
+- `python3 -m pytest tests/test_model.py -k "candidate_evidence_prior_update or prior_bootstrap_memory or subset_arithmetic_batch_by_routes or prompt_keyed_online_hard_memory or streaming_heldout_split or amortized_prior or route_exclusion"` -> `8 passed, 151 deselected`
+
+Next: run a real op19 route-excluded source gate with candidate-evidence prior
+updates enabled, then judge it on heldout/excluded-route quality before any
+trusted handoff. Do not count this smoke as evidence that the mechanism improves
+source quality.

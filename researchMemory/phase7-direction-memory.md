@@ -397,8 +397,13 @@ Memory:
   `0.7825`, heldout `0.5625`, prior train/heldout `0.7781`/`0.5625`, and
   excluded route 1 still `0.6392-0.7714`. These are partial shared-prior
   positives, not trusted sources; do not run route-weight or bootstrap
-  threshold/cap ladders. Next work should form shared/global targets earlier or
-  remove per-route prompt-memory/candidate-scoring dependence.
+  threshold/cap ladders. Candidate-evidence prior updates are now wired as a
+  next-source mechanism: the shared prior can train directly on already-scored
+  positive candidate targets before prompt memory freezes, with no extra
+  forced-result evaluations beyond the existing candidate scorer. This is
+  tooling only until a real route-excluded source gate runs. Next work should
+  use that gate or otherwise form shared/global targets earlier, not rerun
+  route-weight/bootstrap ladders.
 
 Representative evidence:
 
@@ -428,6 +433,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-06-02-op19-route-excluded-shared-prior-source.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-route-weighted-prior-replay-source.md`
 - `aiAgentWorkHistory/phase7/2026-06-03-prior-bootstrap-route-excluded-source.md`
+- `aiAgentWorkHistory/phase7/2026-06-03-candidate-evidence-prior-tooling.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`

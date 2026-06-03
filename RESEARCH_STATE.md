@@ -139,7 +139,7 @@ Active directions:
   op29 calculators). Route-heldout diag passed (`0.933-0.979`), but op19
   route-excluded source reached only `0.7875` final; extra route-prior replay
   nudged final to `0.8175`, while prior-bootstrap prompt memory fell to `0.770`.
-  Heldout/excluded route stayed weak; next: shared/global targets or no scoring.
+  Heldout/excluded route stayed weak; candidate-evidence prior updates are now wired for the next source gate, but no source result exists yet.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 clears op19/op29 staged gates but still scores candidates.

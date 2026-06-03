@@ -1228,3 +1228,9 @@ Conclusion: Added and then tested high-confidence prior-bootstrap prompt-memory 
 Do not repeat: Do not run bootstrap confidence, train-accuracy, cap, or same op19 route-excluded variants as novelty. The failure is not lack of route-target writes after a weak prior has already formed.
 Next allowed test: Move away from post-hoc prompt-memory target bootstrapping toward a genuinely different shared/global target mechanism: train the shared prior on candidate evidence before route memory freezes, learn shared targets jointly across routes, or replace answer-derived candidate scoring with a less-prescriptive credit signal.
 Source: `aiAgentWorkHistory/phase7/2026-06-03-prior-bootstrap-route-excluded-source.md`
+
+TOOLING: Candidate-evidence prior updates are wired for the next route-excluded source gate.
+Conclusion: Added `--result-boundary-target-amortized-prior-candidate-evidence-weight`, which trains the shared amortized prior directly on already-scored positive candidate targets during prompt-memory target discovery, before prompt memory freezes. A tiny op2 route-excluded smoke produced `27` candidate-evidence prior updates over `81` examples and confirmed the metrics path. This is not source-quality evidence and no handoff was run.
+Do not repeat: Do not treat the tiny smoke as evidence that candidate-evidence prior updates improve route-excluded source quality, and do not run route-weight/bootstrap threshold ladders instead of the new source gate.
+Next allowed test: Run a real op19 route-excluded source with candidate-evidence prior updates enabled, then require heldout prompt quality and excluded-route quality before any trusted handoff.
+Source: `aiAgentWorkHistory/phase7/2026-06-03-candidate-evidence-prior-tooling.md`

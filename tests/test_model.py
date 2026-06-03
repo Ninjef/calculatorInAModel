@@ -682,6 +682,58 @@ def test_prior_bootstrap_memory_adds_route_targets_without_refitting_prior() -> 
     assert y.tolist() == [2]
 
 
+def test_candidate_evidence_prior_update_accounts_scored_targets() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_candidate_evidence_prior", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    prior = overfit_script.init_result_boundary_amortized_prior(
+        operand_vocab_size=10,
+        result_vocab_size=19,
+        hidden_size=8,
+        feature_mode="numeric",
+        lr=1e-3,
+        min_entries=1,
+        replay_batch_size=1,
+        device="cpu",
+    )
+    a = torch.tensor([0, 1, 2])
+    b = torch.tensor([1, 2, 3])
+    true_sum = a + b
+    targets = torch.tensor([1, 3, 7])
+
+    metrics = overfit_script.train_result_boundary_amortized_prior_on_candidate_evidence(
+        prior,
+        a,
+        b,
+        targets,
+        true_sum,
+        weight=0.5,
+    )
+
+    assert metrics[
+        "result_boundary_target_amortized_prior_candidate_evidence_count"
+    ] == 3.0
+    assert metrics[
+        "result_boundary_target_amortized_prior_candidate_evidence_updates"
+    ] == 1.0
+    assert metrics[
+        "result_boundary_target_amortized_prior_candidate_evidence_examples"
+    ] == 3.0
+    assert metrics[
+        "result_boundary_target_amortized_prior_candidate_evidence_accuracy"
+    ] == pytest.approx(2 / 3)
+    assert (
+        metrics["result_boundary_target_amortized_prior_candidate_evidence_loss"]
+        > 0
+    )
+
+
 def test_shared_calculator_output_projection_ties_extra_hooks() -> None:
     independent = TinyGPT(_small_calculator_cfg(hook_count=4))
     shared = TinyGPT(_small_calculator_cfg(hook_count=4, share_output_proj=True))
