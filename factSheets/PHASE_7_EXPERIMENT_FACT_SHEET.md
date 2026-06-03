@@ -12029,3 +12029,65 @@ Verification:
 
 Next: run a real op19 route-excluded source gate with conservative
 prior-bootstrap gates and require heldout/excluded-route quality before handoff.
+
+## 2026-06-03 Prior-Bootstrap Route-Excluded Source
+
+Purpose: test whether prior-bootstrap prompt memory can improve the op19
+route-excluded shared-prior source by letting the shared numeric prior write
+durable prompt-memory targets for route 1 without candidate scoring that route.
+
+Configuration delta from the previous no-bootstrap op19 route-excluded source:
+
+- Added `--result-boundary-target-amortized-prior-bootstrap-memory-routes 1`.
+- Added `--result-boundary-target-amortized-prior-bootstrap-memory-min-confidence 0.30`.
+- Added `--result-boundary-target-amortized-prior-bootstrap-memory-min-train-accuracy 0.75`.
+- Added `--result-boundary-target-amortized-prior-bootstrap-memory-max-updates-per-step 8`.
+- Did not use the extra route-replay objective.
+
+Run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fitfull_every2_stop1pat100_exclroute1_priorboot1c30tacc75_cap8_src5000/2026-06-02_183002_336175_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-520af39691/model-c-2digit-seed9
+```
+
+Results:
+
+| Metric | No bootstrap | Route replay w2 | Prior bootstrap |
+| --- | ---: | ---: | ---: |
+| Final eval exact / calculator-result accuracy | `0.7875` | `0.8175` | `0.7700` |
+| Best snapshot normal / calculator-result accuracy | `0.8075` | `0.8075` | `0.7825` |
+| Final snapshot normal / calculator-result accuracy | n/a | `0.8075` | `0.7800` |
+| Final controls: injection-zero / forced-zero / forced-random | `0.0475 / 0.0025 / 0.0025` | `0.0475 / 0.0025 / 0.0025` | `0.0475 / 0.0025 / 0.0025` |
+| Train prompt exact / calculator-result accuracy | `0.840625` | `0.85625` | `0.8125` |
+| Heldout prompt exact / calculator-result accuracy | `0.5625` | `0.5750` | `0.5625` |
+| Prior train / heldout accuracy | `0.7781 / 0.5625` | `0.7750 / 0.5750` | `0.7781 / 0.5625` |
+| Excluded route 1 train prompt calc | n/a | `0.6701` | `0.6392` |
+| Excluded route 1 heldout prompt calc | `0.7391` | `0.7391` | `0.7391` |
+| Excluded route 1 diagnostic calc | `0.8000` | `0.8000` | `0.7714` |
+| Prompt-memory entries / expected direct entries | `223 / 223` | `223 / 223` | `300 / 223` |
+| Prior-bootstrap entries | n/a | n/a | `77` |
+| Forced-result evals | `37,896` | `58,800` | `37,896` |
+| Prior updates | `2,501` | `2,501` | `2,501` |
+
+Bootstrap timing:
+
+- The prior train-accuracy gate opened late, after the direct-route prompt
+  memory had long been full. At logged step `4500`, prior train accuracy was
+  `0.7444` and the gate was still closed. At logged step `4600`, prior train
+  accuracy was `0.7534`, bootstrap entries totaled `62`, and the logged update
+  had confidence `0.4341` with pseudo-accuracy `1.0`.
+- Final prior-bootstrap entries reached `77`.
+
+Interpretation:
+
+- Mixed-negative. Prior-bootstrap prompt memory writes excluded-route targets
+  without extra candidate scoring, but this conservative gate did not improve
+  the source. It underperformed both the no-bootstrap route-excluded source and
+  the route-replay source.
+- Heldout prompt quality, excluded route 1 heldout quality, and the amortized
+  prior stayed essentially unchanged.
+- No trusted handoff was run because the source gate missed.
+- Do not run bootstrap threshold/cap ladders as novelty. The next mechanism
+  should form shared/global targets earlier, train the shared prior on candidate
+  evidence before route memory freezes, learn targets jointly across routes, or
+  replace answer-derived candidate scoring.

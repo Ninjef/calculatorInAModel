@@ -991,6 +991,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/199-prior-bootstrap-prompt-memory-writes-excluded-route-targets-but-does-not-improve-the-op19",
+      "target": "researchMemory/hypotheses/phase7/199-prior-bootstrap-prompt-memory-writes-excluded-route-targets-but-does-not-improve-the-op19-.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1198,6 +1203,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-02-route-weighted-prior-replay-source.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-03-prior-bootstrap-route-excluded-source.md",
       "type": "supported_by"
     },
     {
@@ -3217,6 +3227,13 @@
       "source_path": "researchMemory/hypotheses/phase7/198-extra-route-weighted-prior-replay-only-marginally-improves-the-op19-route-excluded-source-.md",
       "status": "MIXED-NEGATIVE",
       "title": "Extra route-weighted prior replay only marginally improves the op19 route-excluded source and does not fix the shared-prior bottleneck."
+    },
+    {
+      "id": "doc/199-prior-bootstrap-prompt-memory-writes-excluded-route-targets-but-does-not-improve-the-op19",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/199-prior-bootstrap-prompt-memory-writes-excluded-route-targets-but-does-not-improve-the-op19-.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Prior-bootstrap prompt memory writes excluded-route targets but does not improve the op19 route-excluded source gate."
     },
     {
       "id": "doc/phase7-direction-memory",

@@ -391,9 +391,13 @@ Memory:
   was run. Extra route-weighted prior replay for route 1 is now implemented and
   verified, but route replay weight `2.0` only nudged final source accuracy to
   `0.8175`; heldout was `0.5750`, excluded route 1 was still `0.7391-0.8000`,
-  and prior train/heldout stayed weak (`0.7750`/`0.5750`). This is a partial
-  shared-prior positive, not a trusted source; do not run route-weight ladders.
-  Next work should change the objective toward explicit shared/global targets or
+  and prior train/heldout stayed weak (`0.7750`/`0.5750`). Prior-bootstrap prompt
+  memory for route 1 then wrote `77` excluded-route entries under train-accuracy
+  and confidence gates, but missed harder: final `0.7700`, best snapshot
+  `0.7825`, heldout `0.5625`, prior train/heldout `0.7781`/`0.5625`, and
+  excluded route 1 still `0.6392-0.7714`. These are partial shared-prior
+  positives, not trusted sources; do not run route-weight or bootstrap
+  threshold/cap ladders. Next work should form shared/global targets earlier or
   remove per-route prompt-memory/candidate-scoring dependence.
 
 Representative evidence:
@@ -423,6 +427,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-06-02-route-excluded-shared-prior-preflight.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op19-route-excluded-shared-prior-source.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-route-weighted-prior-replay-source.md`
+- `aiAgentWorkHistory/phase7/2026-06-03-prior-bootstrap-route-excluded-source.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`
