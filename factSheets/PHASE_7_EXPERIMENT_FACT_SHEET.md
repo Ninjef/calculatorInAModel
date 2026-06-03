@@ -12140,3 +12140,57 @@ Next: run a real op19 route-excluded source gate with candidate-evidence prior
 updates enabled, then judge it on heldout/excluded-route quality before any
 trusted handoff. Do not count this smoke as evidence that the mechanism improves
 source quality.
+
+## 2026-06-03 Candidate-Evidence Route-Excluded Source
+
+Purpose: test whether candidate-evidence prior updates fix the full op19
+route-excluded shared-prior source gate by training the amortized prior directly
+from already-scored positive candidate targets before prompt memory freezes.
+
+Run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fitfull_every2_stop1pat100_exclroute1_candev1_src5000/2026-06-02_190424_817657_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-e085eed8de/model-c-2digit-seed9
+```
+
+Results:
+
+| Metric | No bootstrap | Route replay w2 | Prior bootstrap | Candidate evidence |
+| --- | ---: | ---: | ---: | ---: |
+| Final eval exact / calculator-result accuracy | `0.7875` | `0.8175` | `0.7700` | `0.7725` |
+| Best snapshot normal / calculator-result accuracy | `0.8075` | `0.8075` | `0.7825` | `0.8000` |
+| Final snapshot normal / calculator-result accuracy | n/a | `0.8075` | `0.7800` | `0.8000` |
+| Final controls: injection-zero / forced-zero / forced-random | `0.0475 / 0.0025 / 0.0025` | `0.0475 / 0.0025 / 0.0025` | `0.0475 / 0.0025 / 0.0025` | `0.0475 / 0.0025 / 0.0025` |
+| Train prompt exact / calculator-result accuracy | `0.840625` | `0.85625` | `0.8125` | `0.80625` |
+| Heldout prompt exact / calculator-result accuracy | `0.5625` | `0.5750` | `0.5625` | `0.5375` |
+| Prior train / heldout accuracy | `0.7781 / 0.5625` | `0.7750 / 0.5750` | `0.7781 / 0.5625` | `0.7156 / 0.5375` |
+| Excluded route 1 train prompt calc | n/a | `0.6701` | `0.6392` | `0.6495` |
+| Excluded route 1 heldout prompt calc | `0.7391` | `0.7391` | `0.7391` | `0.6522` |
+| Excluded route 1 diagnostic calc | `0.8000` | `0.8000` | `0.7714` | `0.7429` |
+| Prompt-memory entries / expected direct entries | `223 / 223` | `223 / 223` | `300 / 223` | `223 / 223` |
+| Candidate-evidence prior updates / examples | n/a | n/a | n/a | `32 / 1060` |
+| Forced-result evals | `37,896` | `58,800` | `37,896` | `33,816` |
+| Prior updates | `2,501` | `2,501` | `2,501` | `2,501` |
+
+Candidate-evidence timing:
+
+- Prompt memory reached `223` direct entries by step `50`.
+- Candidate-evidence updates totaled only `32`, with `1060` evidence examples.
+- The logged step-0 candidate-evidence batch had `33` targets, target-vs-true
+  accuracy `0.8788`, confidence `0.0382`, and prior-vs-target accuracy
+  `0.0606`.
+- The logged step-25 batch had `28` targets, cumulative `26` updates and `849`
+  examples, target-vs-true accuracy `0.8929`, confidence `0.0454`, and
+  prior-vs-target accuracy `0.2143`.
+
+Interpretation:
+
+- Mixed-negative. Candidate-evidence prior updates fired, but they did not
+  improve the live op19 route-excluded source gate.
+- Heldout prompts, prior heldout, and excluded route 1 all worsened versus the
+  route-replay run and did not clear the no-bootstrap baseline.
+- No trusted handoff was run because source heldout/excluded-route quality
+  missed.
+- Close the route-excluded tweak branch: do not run candidate-evidence
+  weight/timing ladders, route-replay ladders, or bootstrap threshold/cap
+  ladders. The next work should change target formation itself.

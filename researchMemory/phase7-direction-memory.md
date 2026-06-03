@@ -396,14 +396,14 @@ Memory:
   and confidence gates, but missed harder: final `0.7700`, best snapshot
   `0.7825`, heldout `0.5625`, prior train/heldout `0.7781`/`0.5625`, and
   excluded route 1 still `0.6392-0.7714`. These are partial shared-prior
-  positives, not trusted sources; do not run route-weight or bootstrap
-  threshold/cap ladders. Candidate-evidence prior updates are now wired as a
-  next-source mechanism: the shared prior can train directly on already-scored
-  positive candidate targets before prompt memory freezes, with no extra
-  forced-result evaluations beyond the existing candidate scorer. This is
-  tooling only until a real route-excluded source gate runs. Next work should
-  use that gate or otherwise form shared/global targets earlier, not rerun
-  route-weight/bootstrap ladders.
+  positives, not trusted sources. Candidate-evidence prior updates then fired
+  on the real source (`32` updates over `1060` examples) but still missed:
+  final `0.7725`, best snapshot `0.8000`, heldout `0.5375`, prior
+  train/heldout `0.7156`/`0.5375`, and excluded route 1 `0.6495-0.7429`.
+  Do not run route-weight, bootstrap, or candidate-evidence weight/timing
+  ladders. Next work should leave the route-excluded tweak branch and form
+  shared/global targets earlier, learn targets jointly across routes, or remove
+  per-route prompt-memory/candidate-scoring dependence.
 
 Representative evidence:
 
@@ -434,6 +434,7 @@ Representative evidence:
 - `aiAgentWorkHistory/phase7/2026-06-02-route-weighted-prior-replay-source.md`
 - `aiAgentWorkHistory/phase7/2026-06-03-prior-bootstrap-route-excluded-source.md`
 - `aiAgentWorkHistory/phase7/2026-06-03-candidate-evidence-prior-tooling.md`
+- `aiAgentWorkHistory/phase7/2026-06-03-candidate-evidence-route-excluded-source.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-many-calculator-assignment-scaling-accounting.md`
 - `aiAgentWorkHistory/phase7/2026-05-30-same-layer-multi-hook-forward-support.md`
 - `aiAgentWorkHistory/phase7/2026-06-02-op29-eval-only-target-stratified-prior-stress.md`

@@ -1001,6 +1001,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/201-candidate-evidence-prior-updates-do-not-fix-the-op19-route-excluded-source-gate",
+      "target": "researchMemory/hypotheses/phase7/201-candidate-evidence-prior-updates-do-not-fix-the-op19-route-excluded-source-gate.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1218,6 +1223,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-03-candidate-evidence-prior-tooling.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-03-candidate-evidence-route-excluded-source.md",
       "type": "supported_by"
     },
     {
@@ -3251,6 +3261,13 @@
       "source_path": "researchMemory/hypotheses/phase7/200-candidate-evidence-prior-updates-are-wired-for-the-next-route-excluded-source-gate.md",
       "status": "TOOLING",
       "title": "Candidate-evidence prior updates are wired for the next route-excluded source gate."
+    },
+    {
+      "id": "doc/201-candidate-evidence-prior-updates-do-not-fix-the-op19-route-excluded-source-gate",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/201-candidate-evidence-prior-updates-do-not-fix-the-op19-route-excluded-source-gate.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Candidate-evidence prior updates do not fix the op19 route-excluded source gate."
     },
     {
       "id": "doc/phase7-direction-memory",

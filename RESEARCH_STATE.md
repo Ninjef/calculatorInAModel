@@ -137,9 +137,9 @@ Active directions:
   cheaper than repeated top-k assignment, but per-calculator prompt memory and
   prior fitting still scale linearly (`24.8M` candidate+prior examples at 16
   op29 calculators). Route-heldout diag passed (`0.933-0.979`), but op19
-  route-excluded source reached only `0.7875` final; extra route-prior replay
-  nudged final to `0.8175`, while prior-bootstrap prompt memory fell to `0.770`.
-  Heldout/excluded route stayed weak; candidate-evidence prior updates are now wired for the next source gate, but no source result exists yet.
+  route-excluded source reached only `0.7875` final; route-prior replay nudged
+  final to `0.8175`, while prior-bootstrap/candidate-evidence fell to
+  `0.770`/`0.7725`. Heldout stayed weak; stop route-excluded tweak ladders.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 clears op19/op29 staged gates but still scores candidates.

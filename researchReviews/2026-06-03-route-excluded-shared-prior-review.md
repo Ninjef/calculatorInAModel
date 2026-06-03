@@ -9,6 +9,7 @@ Review the recent route-excluded shared-prior branch:
 - Full op19 route-excluded source.
 - Extra route-weighted prior replay.
 - Prior-bootstrap prompt-memory source.
+- Candidate-evidence prior source.
 
 ## Findings
 
@@ -19,28 +20,29 @@ That means there is shareable structure, not just route memorization.
 
 The live source gate is the bottleneck. Route 1 can learn somewhat with no
 direct target discovery, but the full op19 source misses: no-bootstrap final
-`0.7875`, route-replay final `0.8175`, and prior-bootstrap final `0.7700`.
-Heldout prompts remain around `0.5625-0.5750`, and excluded route 1 heldout
-stays `0.7391`.
+`0.7875`, route-replay final `0.8175`, prior-bootstrap final `0.7700`, and
+candidate-evidence prior final `0.7725`. Heldout prompts remain weak
+(`0.5375-0.5750`), and excluded route 1 is not reliably rescued.
 
 Post-hoc pressure on a weak prior is not the right lever. Extra replay only
-increases pressure on model logits, and bootstrap writes route targets only
-after the prior becomes barely adequate. Neither changes the shared-prior
-formation problem.
+increases pressure on model logits, bootstrap writes route targets only after
+the prior becomes barely adequate, and candidate-evidence updates arrive too
+briefly before prompt memory fills. None changes the shared-prior formation
+problem enough to clear heldout source quality.
 
 Do not keep running small variants of this branch:
 
 - No route-replay weight ladders.
 - No bootstrap confidence/train-accuracy/cap ladders.
+- No candidate-evidence weight/timing ladders.
 - No more short op9 route-excluded preflights.
 - No route-heldout diagnostic route/seed ladders.
 
 ## Direction
 
 The next route-scaling test needs a mechanism that changes how shared targets
-are formed, not how an already-weak prior is replayed or copied:
+are formed, not how an already-weak prior is replayed, copied, or briefly fit:
 
-- Train the shared prior on candidate evidence before prompt memory freezes.
 - Learn shared/global targets jointly across routes rather than adding them
   after per-route memories are mostly settled.
 - Replace answer-derived candidate scoring with a less-prescriptive credit
