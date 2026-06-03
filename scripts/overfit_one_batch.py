@@ -154,6 +154,8 @@ class TrainConfig:
     result_boundary_target_amortized_prior_stop_require_train_accuracy: float
     result_boundary_target_amortized_prior_stop_patience: int
     result_boundary_target_amortized_prior_train_replay_weight: float
+    result_boundary_target_amortized_prior_route_replay_routes: str
+    result_boundary_target_amortized_prior_route_replay_weight: float
     result_policy_entropy_weight: float
     result_policy_batch_diversity_weight: float
     result_policy_improvement_assignment_weight: float
@@ -2931,6 +2933,42 @@ def sample_arithmetic_batch_from_pool(
         dtype=torch.long,
         device=batch.x.device,
     )
+    return subset_arithmetic_batch(batch, indices)
+
+
+def concat_arithmetic_batches(batches: list[ArithmeticBatch]) -> ArithmeticBatch:
+    if not batches:
+        raise ValueError("cannot concatenate an empty arithmetic batch list")
+    return ArithmeticBatch(
+        x=torch.cat([batch.x for batch in batches], dim=0),
+        y=torch.cat([batch.y for batch in batches], dim=0),
+        loss_mask=torch.cat([batch.loss_mask for batch in batches], dim=0),
+    )
+
+
+def subset_arithmetic_batch_by_routes(
+    model: TinyGPT,
+    batch: ArithmeticBatch,
+    *,
+    route_ids: set[int],
+) -> ArithmeticBatch | None:
+    if not route_ids:
+        return None
+    route_fn = getattr(model, "_calculator_hook_routes", None)
+    if route_fn is None:
+        raise ValueError("route-filtered replay requires a routed calculator model")
+    hook_count = int(getattr(model.cfg, "calculator_hook_count", 1))
+    if max(route_ids) >= hook_count:
+        raise ValueError("route-filtered replay references a route outside hook count")
+    routes = route_fn(batch.x, hook_count)
+    if routes is None:
+        raise ValueError("route-filtered replay requires non-trivial routing")
+    mask = torch.zeros_like(routes, dtype=torch.bool)
+    for route_id in route_ids:
+        mask = mask | (routes == int(route_id))
+    if not bool(mask.any().item()):
+        return None
+    indices = torch.nonzero(mask, as_tuple=False).flatten()
     return subset_arithmetic_batch(batch, indices)
 
 
@@ -9359,6 +9397,7 @@ def run_variant(
     streaming_heldout_indices = None
     streaming_train_pairs: list[tuple[int, int]] = []
     streaming_heldout_pairs: list[tuple[int, int]] = []
+    amortized_prior_route_replay_pool_batch = None
     if args.exhaustive_grid_batch:
         exhaustive_grid_batch = make_exhaustive_range_batch(
             num_digits=num_digits,
@@ -9400,6 +9439,26 @@ def run_variant(
     result_boundary_memory_update_exclude_routes = parse_route_id_set(
         args.result_boundary_target_memory_update_exclude_routes
     )
+    result_boundary_amortized_prior_route_replay_routes = parse_route_id_set(
+        args.result_boundary_target_amortized_prior_route_replay_routes
+    )
+    if (
+        result_boundary_amortized_prior_route_replay_routes
+        and args.result_boundary_target_amortized_prior_route_replay_weight > 0
+    ):
+        route_replay_source_batches: list[ArithmeticBatch] = []
+        if streaming_train_pool_batch is not None:
+            route_replay_source_batches.append(streaming_train_pool_batch)
+        if streaming_heldout_pool_batch is not None:
+            route_replay_source_batches.append(streaming_heldout_pool_batch)
+        if not route_replay_source_batches and exhaustive_grid_batch is not None:
+            route_replay_source_batches.append(exhaustive_grid_batch)
+        if route_replay_source_batches:
+            amortized_prior_route_replay_pool_batch = subset_arithmetic_batch_by_routes(
+                model,
+                concat_arithmetic_batches(route_replay_source_batches),
+                route_ids=result_boundary_amortized_prior_route_replay_routes,
+            )
     if args.result_boundary_target_cache:
         if exhaustive_grid_batch is None:
             raise ValueError(
@@ -9712,6 +9771,12 @@ def run_variant(
         ),
         result_boundary_target_amortized_prior_train_replay_weight=(
             args.result_boundary_target_amortized_prior_train_replay_weight
+        ),
+        result_boundary_target_amortized_prior_route_replay_routes=(
+            args.result_boundary_target_amortized_prior_route_replay_routes
+        ),
+        result_boundary_target_amortized_prior_route_replay_weight=(
+            args.result_boundary_target_amortized_prior_route_replay_weight
         ),
         result_policy_entropy_weight=args.result_policy_entropy_weight,
         result_policy_batch_diversity_weight=(
@@ -11118,6 +11183,43 @@ def run_variant(
                         result_boundary_target_metrics[
                             "result_boundary_target_amortized_prior_heldout_replay_objective"
                         ] = float(heldout_prior_objective.detach().item())
+                    if (
+                        args.result_boundary_target_amortized_prior_route_replay_weight
+                        > 0
+                        and amortized_prior_route_replay_pool_batch is not None
+                    ):
+                        route_prior_batch = sample_arithmetic_batch_from_pool(
+                            amortized_prior_route_replay_pool_batch,
+                            batch_size=replay_batch_size,
+                            rng=rng,
+                        )
+                        (
+                            route_prior_model_loss,
+                            route_prior_model_metrics,
+                        ) = result_boundary_amortized_prior_model_loss(
+                            model,
+                            result_boundary_amortized_prior,
+                            route_prior_batch,
+                            num_digits=num_digits,
+                        )
+                        route_prior_objective = (
+                            args.result_boundary_target_amortized_prior_weight
+                            * args.result_boundary_target_amortized_prior_route_replay_weight
+                            * route_prior_model_loss
+                        )
+                        loss = loss + route_prior_objective
+                        result_boundary_target_metrics.update(
+                            prefixed_result_boundary_amortized_prior_replay_metrics(
+                                route_prior_model_metrics,
+                                split="route",
+                            )
+                        )
+                        result_boundary_target_metrics[
+                            "result_boundary_target_amortized_prior_route_replay_objective"
+                        ] = float(route_prior_objective.detach().item())
+                        result_boundary_target_metrics[
+                            "result_boundary_target_amortized_prior_route_replay_pool_count"
+                        ] = int(amortized_prior_route_replay_pool_batch.x.shape[0])
         if use_result_policy_stabilization:
             current_result_policy_entropy_weight = (
                 result_policy_stabilization_weight(
@@ -12409,6 +12511,17 @@ def run_variant(
     )
     metrics["result_boundary_target_amortized_prior_train_replay_weight"] = (
         args.result_boundary_target_amortized_prior_train_replay_weight
+    )
+    metrics["result_boundary_target_amortized_prior_route_replay_routes"] = (
+        args.result_boundary_target_amortized_prior_route_replay_routes
+    )
+    metrics["result_boundary_target_amortized_prior_route_replay_weight"] = (
+        args.result_boundary_target_amortized_prior_route_replay_weight
+    )
+    metrics["result_boundary_target_amortized_prior_route_replay_pool_count"] = (
+        int(amortized_prior_route_replay_pool_batch.x.shape[0])
+        if amortized_prior_route_replay_pool_batch is not None
+        else 0
     )
     if result_boundary_prompt_hard_memory is not None:
         metrics["result_boundary_target_prompt_memory_entries"] = len(
@@ -13824,6 +13937,26 @@ def parse_args() -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--result-boundary-target-amortized-prior-route-replay-routes",
+        default="",
+        help=(
+            "Comma-separated routed hook ids that should receive an extra "
+            "amortized-prior replay objective sampled from the global prompt "
+            "pool. This does not add candidate scoring or prompt-memory updates "
+            "for those routes."
+        ),
+    )
+    parser.add_argument(
+        "--result-boundary-target-amortized-prior-route-replay-weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Additional multiplier for the route-filtered prior replay objective. "
+            "Use with --result-boundary-target-amortized-prior-route-replay-routes "
+            "to emphasize calculators whose direct target discovery is disabled."
+        ),
+    )
+    parser.add_argument(
         "--result-policy-entropy-weight",
         type=float,
         default=0.0,
@@ -15169,6 +15302,26 @@ def main() -> None:
                 "--result-boundary-target-memory-update-exclude-routes includes "
                 "a route outside --calculator-hook-count"
             )
+    try:
+        parsed_amortized_prior_route_replay_routes = parse_route_id_set(
+            args.result_boundary_target_amortized_prior_route_replay_routes
+        )
+    except ValueError as exc:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-route-replay-routes must "
+            "be a comma-separated list of non-negative route ids"
+        ) from exc
+    if parsed_amortized_prior_route_replay_routes:
+        if args.calculator_hook_routing == "all":
+            raise ValueError(
+                "--result-boundary-target-amortized-prior-route-replay-routes "
+                "requires non-trivial calculator hook routing"
+            )
+        if max(parsed_amortized_prior_route_replay_routes) >= args.calculator_hook_count:
+            raise ValueError(
+                "--result-boundary-target-amortized-prior-route-replay-routes "
+                "includes a route outside --calculator-hook-count"
+            )
     if args.result_boundary_target_amortized_prior_weight < 0:
         raise ValueError(
             "--result-boundary-target-amortized-prior-weight must be non-negative"
@@ -15273,6 +15426,11 @@ def main() -> None:
             "--result-boundary-target-amortized-prior-train-replay-weight "
             "must be non-negative"
         )
+    if args.result_boundary_target_amortized_prior_route_replay_weight < 0:
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-route-replay-weight "
+            "must be non-negative"
+        )
     if args.result_boundary_target_amortized_prior_weight > 0:
         if not args.result_boundary_target_online_hard_memory:
             raise ValueError(
@@ -15296,6 +15454,22 @@ def main() -> None:
         raise ValueError(
             "--result-boundary-target-amortized-prior-train-replay-weight "
             "requires --result-boundary-target-amortized-prior-weight > 0"
+        )
+    if (
+        args.result_boundary_target_amortized_prior_route_replay_weight > 0
+        and args.result_boundary_target_amortized_prior_weight <= 0
+    ):
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-route-replay-weight "
+            "requires --result-boundary-target-amortized-prior-weight > 0"
+        )
+    if (
+        args.result_boundary_target_amortized_prior_route_replay_weight > 0
+        and not parsed_amortized_prior_route_replay_routes
+    ):
+        raise ValueError(
+            "--result-boundary-target-amortized-prior-route-replay-weight "
+            "requires --result-boundary-target-amortized-prior-route-replay-routes"
         )
     if args.streaming_train_batch_size < 0:
         raise ValueError("--streaming-train-batch-size must be non-negative")
@@ -16114,6 +16288,16 @@ def main() -> None:
                         "rbtpriortrain"
                         f"{args.result_boundary_target_amortized_prior_train_replay_weight:g}"
                     )
+                if (
+                    args.result_boundary_target_amortized_prior_route_replay_weight
+                    > 0
+                ):
+                    suffix_parts.append(
+                        "rbtpriorroute"
+                        f"{args.result_boundary_target_amortized_prior_route_replay_routes}"
+                        "w"
+                        f"{args.result_boundary_target_amortized_prior_route_replay_weight:g}"
+                    )
         if args.result_boundary_target_min_probability_floor > 0:
             suffix_parts.append(
                 "rbtfloor"
@@ -16496,7 +16680,11 @@ def main() -> None:
         "amortized_prior_stop_patience="
         f"{args.result_boundary_target_amortized_prior_stop_patience} "
         "amortized_prior_train_replay_weight="
-        f"{args.result_boundary_target_amortized_prior_train_replay_weight}"
+        f"{args.result_boundary_target_amortized_prior_train_replay_weight} "
+        "amortized_prior_route_replay_routes="
+        f"{args.result_boundary_target_amortized_prior_route_replay_routes} "
+        "amortized_prior_route_replay_weight="
+        f"{args.result_boundary_target_amortized_prior_route_replay_weight}"
     )
     print(
         "additive semantic distillation: "

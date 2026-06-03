@@ -555,6 +555,44 @@ def test_routed_calculator_only_invokes_present_hooks() -> None:
     )
 
 
+def test_subset_arithmetic_batch_by_routes_filters_global_pool() -> None:
+    script_path = Path("scripts/overfit_one_batch.py")
+    spec = importlib.util.spec_from_file_location(
+        "overfit_route_replay_pool", script_path
+    )
+    assert spec is not None
+    assert spec.loader is not None
+    overfit_script = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(overfit_script)
+
+    model = TinyGPT(
+        _small_calculator_cfg(hook_count=4, hook_routing="left_operand_mod")
+    )
+    x = torch.tensor(
+        [
+            [0, PLUS_ID, 1, EQ_ID, 0, 0, 0, 0],
+            [1, PLUS_ID, 1, EQ_ID, 0, 0, 0, 0],
+            [2, PLUS_ID, 1, EQ_ID, 0, 0, 0, 0],
+            [3, PLUS_ID, 1, EQ_ID, 0, 0, 0, 0],
+            [5, PLUS_ID, 1, EQ_ID, 0, 0, 0, 0],
+        ]
+    )
+    batch = ArithmeticBatch(
+        x=x,
+        y=torch.zeros_like(x),
+        loss_mask=torch.zeros_like(x, dtype=torch.bool),
+    )
+
+    filtered = overfit_script.subset_arithmetic_batch_by_routes(
+        model,
+        batch,
+        route_ids={1, 3},
+    )
+
+    assert filtered is not None
+    assert filtered.x[:, 0].tolist() == [1, 3, 5]
+
+
 def test_shared_calculator_output_projection_ties_extra_hooks() -> None:
     independent = TinyGPT(_small_calculator_cfg(hook_count=4))
     shared = TinyGPT(_small_calculator_cfg(hook_count=4, share_output_proj=True))

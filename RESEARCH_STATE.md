@@ -136,10 +136,10 @@ Active directions:
   fit examples. Many-calculator accounting shows candidate scoring is much
   cheaper than repeated top-k assignment, but per-calculator prompt memory and
   prior fitting still scale linearly (`24.8M` candidate+prior examples at 16
-  op29 calculators). Route-heldout diag passed (`0.933-0.979`), but full op19
-  route-excluded source reached only `0.7875` final / `0.8075` snapshot, heldout
-  `0.5625`, and excluded route 1 `0.730-0.800`; no handoff. Next: stronger
-  shared/global targets or replace answer-derived candidate scoring.
+  op29 calculators). Route-heldout diag passed (`0.933-0.979`), but op19
+  route-excluded source reached only `0.7875` final, and extra route-prior replay
+  only nudged it to `0.8175` while heldout/excluded route stayed weak; no handoff.
+  Next: stronger shared/global targets or replace answer-derived candidate scoring.
 - Lower-cost assignment is useful only when it changes scalability; uniform
   sampling, fixed refresh, and unique-uniform sampling are insufficient.
   Topk8+unique24 clears op19/op29 staged gates but still scores candidates.

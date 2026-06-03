@@ -986,6 +986,11 @@
       "type": "defined_in"
     },
     {
+      "source": "doc/198-extra-route-weighted-prior-replay-only-marginally-improves-the-op19-route-excluded-source",
+      "target": "researchMemory/hypotheses/phase7/198-extra-route-weighted-prior-replay-only-marginally-improves-the-op19-route-excluded-source-.md",
+      "type": "defined_in"
+    },
+    {
       "source": "doc/phase7-direction-memory",
       "target": "researchMemory/phase7-direction-memory.md",
       "type": "defined_in"
@@ -1188,6 +1193,11 @@
     {
       "source": "direction/hard-improvement-assignment",
       "target": "aiAgentWorkHistory/phase7/2026-06-02-op19-route-excluded-shared-prior-source.md",
+      "type": "supported_by"
+    },
+    {
+      "source": "direction/hard-improvement-assignment",
+      "target": "aiAgentWorkHistory/phase7/2026-06-02-route-weighted-prior-replay-source.md",
       "type": "supported_by"
     },
     {
@@ -3200,6 +3210,13 @@
       "source_path": "researchMemory/hypotheses/phase7/197-the-full-op19-route-excluded-shared-prior-source-learns-causally-but-misses-the-source-gat.md",
       "status": "MIXED-POSITIVE",
       "title": "The full op19 route-excluded shared-prior source learns causally but misses the source gate."
+    },
+    {
+      "id": "doc/198-extra-route-weighted-prior-replay-only-marginally-improves-the-op19-route-excluded-source",
+      "kind": "hypothesis_memory",
+      "source_path": "researchMemory/hypotheses/phase7/198-extra-route-weighted-prior-replay-only-marginally-improves-the-op19-route-excluded-source-.md",
+      "status": "MIXED-NEGATIVE",
+      "title": "Extra route-weighted prior replay only marginally improves the op19 route-excluded source and does not fix the shared-prior bottleneck."
     },
     {
       "id": "doc/phase7-direction-memory",

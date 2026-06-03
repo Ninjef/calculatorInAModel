@@ -11923,3 +11923,63 @@ Interpretation:
   route-balanced/global replay, shared target discovery across calculators, or a
   less-prescriptive credit mechanism that removes per-route prompt-memory tables
   and answer-derived candidate scoring.
+
+## 2026-06-02 Route-Weighted Prior Replay Source
+
+Purpose: test whether a stronger replay objective on the excluded route can turn
+the partial op19 route-excluded shared-prior signal into a valid source.
+
+Implementation:
+
+- Added `--result-boundary-target-amortized-prior-route-replay-routes`.
+- Added `--result-boundary-target-amortized-prior-route-replay-weight`.
+- The route replay objective samples from the global train/heldout prompt pool
+  filtered to the selected routed hook ids. It trains result logits to detached
+  prior pseudo-targets, but it does not add candidate scoring or prompt-memory
+  updates for those routes.
+- Added route-filtering helper coverage and ran a smoke test:
+  `runs/2026-06-02_route_replay_smoke/.../model-c-2digit-seed5`.
+  The smoke training curve recorded route replay objective `7.2753` and route
+  replay pool count `3`.
+
+Full source run:
+
+```text
+runs/ohm_semdist_hooks4_shareout_streamb64_heldout20_prior_fitfull_every2_stop1pat100_exclroute1_routereplay1w2_src5000/2026-06-02_175525_793893_model-c-op0-19-fullgrid-streamb64-heldout0.2-gumbel_concrete_interface-result_space-inlr0.01-uplr0.0003-rbt1-zero_improvement-rbtt1-rbtchunk64-rbts24-rbtuniq-rbttopk8-rb-1b6e8a4258/model-c-2digit-seed9
+```
+
+Configuration delta from the previous op19 route-excluded source:
+
+- Added `--result-boundary-target-amortized-prior-route-replay-routes 1`.
+- Added `--result-boundary-target-amortized-prior-route-replay-weight 2.0`.
+
+Results:
+
+| Metric | Prior op19 route-excluded | Route replay route 1 weight 2 |
+| --- | ---: | ---: |
+| Final eval exact / calculator-result accuracy | `0.7875` | `0.8175` |
+| Best snapshot normal / calculator-result accuracy | `0.8075` | `0.8075` |
+| Snapshot injection-zero / forced-zero / forced-random | `0.0475 / 0.0025 / 0.0025` | `0.0475 / 0.0025 / 0.0025` |
+| Train prompt exact / calculator-result accuracy | `0.840625` | `0.85625` |
+| Heldout prompt exact / calculator-result accuracy | `0.5625` | `0.5750` |
+| Prompt-memory entries / expected | `223 / 223` | `223 / 223` |
+| Forced-result evals | `37,896` | `58,800` |
+| Prior updates | `2,501` | `2,501` |
+| Prior train / heldout accuracy | `0.7781 / 0.5625` | `0.7750 / 0.5750` |
+| Snapshot excluded route 1 calc | `0.7304` | `0.7391` |
+| 128-sample diagnostic excluded route 1 calc | `0.8000` | `0.8000` |
+| Heldout excluded route 1 calc | `0.7391` | `0.7391` |
+| Route replay pool count | n/a | `120` |
+
+Interpretation:
+
+- Mixed-negative as a mechanism. Extra route-weighted prior replay is wired and
+  produces a small final source lift, but it does not improve the excluded route
+  or the weak prior enough to clear the source gate.
+- No trusted handoff was run.
+- Do not run route-replay weight ladders as novelty. The blocker is the
+  target/prior mechanism, not simply insufficient replay pressure on route 1.
+- Next work should change how shared targets are learned: explicit
+  shared/global target discovery, route-shared prior training on candidate
+  evidence before hard memory freezes, or a less-prescriptive credit signal that
+  removes per-route prompt-memory tables and answer-derived candidate scoring.
